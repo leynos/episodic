@@ -6,12 +6,12 @@ This module owns only pair-specific matching and score accounting.
 """
 
 import typing as typ
-from collections import (
-    abc as cabc,  # noqa: TC003 - annotations are evaluated on import by supported Python versions.
-)
 
 from .models import Expectation, Fragment, Lane, LaneScore, PairFinding
 from .parsers import parse_nose_pairs, parse_pychase_pairs, parse_pyscn_pairs
+
+if typ.TYPE_CHECKING:
+    from collections import abc as cabc
 
 __all__ = (
     "Expectation",
@@ -41,15 +41,20 @@ class _MutableLaneCounts(typ.TypedDict):
 type _LaneCounts = dict[Lane, _MutableLaneCounts]
 
 
-def _finding_key(finding: PairFinding) -> _PairKey:
-    """Build an unordered location key identifying one reported pair."""
+def _pair_key(first: Fragment, second: Fragment) -> _PairKey:
+    """Build an unordered location key for two fragments."""
     members = sorted(
         (
             (fragment.path, fragment.start_line, fragment.end_line)
-            for fragment in (finding.first, finding.second)
+            for fragment in (first, second)
         ),
     )
     return (members[0], members[1])
+
+
+def _finding_key(finding: PairFinding) -> _PairKey:
+    """Build an unordered location key identifying one reported pair."""
+    return _pair_key(finding.first, finding.second)
 
 
 def _match_expectation(
@@ -120,13 +125,7 @@ def _reject_duplicate_expectations(
     identifiers: set[str] = set()
     pairs: set[_PairKey] = set()
     for expectation in expectations:
-        members = sorted(
-            (
-                (fragment.path, fragment.start_line, fragment.end_line)
-                for fragment in (expectation.first, expectation.second)
-            ),
-        )
-        pair_key = (members[0], members[1])
+        pair_key = _pair_key(expectation.first, expectation.second)
         if expectation.identifier in identifiers or pair_key in pairs:
             msg = f"duplicate expectation: {expectation.identifier}"
             raise ValueError(msg)

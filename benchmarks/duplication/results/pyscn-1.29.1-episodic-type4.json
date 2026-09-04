@@ -32,9 +32,10 @@
     ]
    },
    "raw_report": "pyscn-1.29.1-episodic-type4-gate.json",
+   "raw_report_sha256": "44de00288c29899e6cca613a6fc302be440aa4d62750939a99216686c5cba194",
    "clone_pairs": 18,
    "type4_pairs": 18
   }
  ],
- "adjudication": "All 18 gate-strength pairs are intentional idiom parallels, dominated by the api/resources REST handler cluster; the spot-checked generation_persistence.py~storage/generation_runs.py pair (0.974) is the load-with-optional-lock idiom over two different domain entities. With the corpus's only true Type-4 at 0.77 ranking beneath false parallels at 0.93-1.0, no threshold plus allowlist yields a lane with an expected true-positive rate above zero."
+ "adjudication": "The gate-strength run covers the parseable portion of episodic/: episodic/api/authorization.py and episodic/canonical/prompts.py were excluded after parse errors. All 18 reported pairs in that qualified scope are intentional idiom parallels, dominated by the api/resources REST handler cluster; the spot-checked generation_persistence.py~storage/generation_runs.py pair (0.974) is the load-with-optional-lock idiom over two different domain entities. With the corpus's only true Type-4 at 0.77 ranking beneath false parallels at 0.93-1.0, no threshold plus allowlist yields a lane with an expected true-positive rate above zero."
 }

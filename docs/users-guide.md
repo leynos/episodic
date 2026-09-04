@@ -197,11 +197,11 @@ timestamp. The public HTTP endpoints for creating and reviewing these resources
 are still planned; this release establishes the domain model and in-memory
 reference port used by those later endpoints.
 
-Poll a generation run until its status is `succeeded`, `failed`, or `cancelled`.
-Terminal runs always have `current_node: null` and a non-null `ended_at`; the
-event log retains the node where execution stopped. Non-terminal runs may
-report their current orchestration node, and clients should continue polling
-until a terminal status is returned.
+Poll a generation run until its status is `succeeded`, `failed`, or
+`cancelled`. Terminal runs always have `current_node: null` and a non-null
+`ended_at`; the event log retains the node where execution stopped.
+Non-terminal runs may report their current orchestration node, and clients
+should continue polling until a terminal status is returned.
 
 #### Failure behaviour
 

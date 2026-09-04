@@ -8,6 +8,7 @@ and expectation classification so benchmark results remain comparable across
 detector runs.
 """
 
+import re
 import typing as typ
 
 import pytest
@@ -17,7 +18,6 @@ from benchmarks.duplication.score import (
     Fragment,
     Lane,
     PairFinding,
-    parse_pychase_pairs,
     parse_pyscn_pairs,
     score_findings,
 )
@@ -141,11 +141,15 @@ class TestParsePyscnPairs:
         )
 
     @pytest.mark.parametrize(
-        ("payload", "expected_error"),
+        ("payload", "expected_error", "diagnostic"),
         [
-            ([], TypeError),
-            ({"clone": []}, TypeError),
-            ({"clone": {"clone_pairs": [{"type": "x"}]}}, TypeError),
+            ([], TypeError, "pyscn payload must be a JSON object"),
+            ({"clone": []}, TypeError, "pyscn clone must be a JSON object"),
+            (
+                {"clone": {"clone_pairs": [{"type": "x"}]}},
+                TypeError,
+                "pyscn clone_pairs[0] type must be an integer",
+            ),
             (
                 {
                     "clone": {
@@ -172,15 +176,20 @@ class TestParsePyscnPairs:
                     }
                 },
                 ValueError,
+                "pyscn clone_pairs[0] similarity must be between 0.0 and 1.0",
             ),
         ],
         ids=["root-not-object", "clone-not-object", "type-not-int", "similarity-range"],
     )
     def test_rejects_malformed_reports(
-        self, tmp_path: Path, payload: object, expected_error: type[Exception]
+        self,
+        tmp_path: Path,
+        payload: object,
+        expected_error: type[Exception],
+        diagnostic: str,
     ) -> None:
         """Shape violations raise instead of silently dropping findings."""
-        with pytest.raises(expected_error):
+        with pytest.raises(expected_error, match=re.escape(diagnostic)):
             parse_pyscn_pairs(payload, corpus_root=tmp_path)
 
     def test_rejects_paths_outside_corpus_root(self, tmp_path: Path) -> None:
@@ -211,64 +220,6 @@ class TestParsePyscnPairs:
         }
         with pytest.raises(ValueError, match="outside corpus root"):
             parse_pyscn_pairs(payload, corpus_root=tmp_path)
-
-
-class TestParsePychasePairs:
-    """PyChase candidate report parsing."""
-
-    def test_parses_candidates_in_report_order(self, tmp_path: Path) -> None:
-        """Candidates normalize into syntactic-lane findings."""
-        payload = {
-            "candidates": [
-                {
-                    "score": 0.925,
-                    "left": {
-                        "file": "pkg/a.py",
-                        "start_line": 4,
-                        "end_line": 12,
-                        "qualname": "alpha",
-                    },
-                    "right": {
-                        "file": "pkg/b.py",
-                        "start_line": 15,
-                        "end_line": 23,
-                        "qualname": "beta",
-                    },
-                }
-            ]
-        }
-        findings = parse_pychase_pairs(payload, corpus_root=tmp_path)
-        assert findings[0].first == _fragment("pkg/a.py", 4, 12), "left member"
-        assert findings[0].second == _fragment("pkg/b.py", 15, 23), "right member"
-        assert findings[0].lane is Lane.SYNTACTIC_CLONE, "candidate lane"
-        assert findings[0].similarity == 0.925, "candidate score"
-
-    @pytest.mark.parametrize(
-        ("payload", "expected_error"),
-        [
-            ([], TypeError),
-            ({"candidates": [{"score": "high"}]}, TypeError),
-            (
-                {
-                    "candidates": [
-                        {
-                            "score": 1.0,
-                            "left": {"file": "a.py", "start_line": 0, "end_line": 2},
-                            "right": {"file": "b.py", "start_line": 1, "end_line": 2},
-                        }
-                    ]
-                },
-                ValueError,
-            ),
-        ],
-        ids=["root-not-object", "score-not-number", "line-not-positive"],
-    )
-    def test_rejects_malformed_reports(
-        self, tmp_path: Path, payload: object, expected_error: type[Exception]
-    ) -> None:
-        """Shape violations raise instead of silently dropping findings."""
-        with pytest.raises(expected_error):
-            parse_pychase_pairs(payload, corpus_root=tmp_path)
 
 
 class TestScoreFindings:

@@ -40,14 +40,14 @@ Accepted design decisions relevant to current implementation work:
 
 The transport-free validators in `episodic.canonical.validation` belong to the
 canonical domain layer. They provide dependency-free, side-effect-free
-argument-shape checks that adapters may call at their boundaries; domain-
-specific validation remains with the domain type it guards. In particular,
-`validate_async_callable(callback, attribute_name)` requires a callable whose
-invocation returns an awaitable and raises `TypeError` otherwise. The health
-port uses it in `ProbeHealthObserver.from_checks`, while the API dependency
-boundary uses it for readiness probes, authorization decisions, and shutdown
-hooks. Keep this module free of adapter imports so the dependency direction
-remains inward.
+argument-shape checks that adapters may call at their boundaries;
+domain-specific validation remains with the domain type it guards. In
+particular, `validate_async_callable(callback, attribute_name)` requires a
+callable whose invocation returns an awaitable and raises `TypeError`
+otherwise. The health port uses it in `ProbeHealthObserver.from_checks`, while
+the API dependency boundary uses it for readiness probes, authorization
+decisions, and shutdown hooks. Keep this module free of adapter imports so the
+dependency direction remains inward.
 
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
@@ -281,6 +281,18 @@ repository-local cache and freshness metadata are untracked. The helper
 replaces the cache only when the authoritative copy is newer and can reuse a
 valid cached copy while offline. A clean checkout with an unavailable network
 retains the reviewed, tracked `typos.toml` policy.
+
+### Atomic spelling-cache writes
+
+`scripts/typos_rollout_cache.py` provides `atomic_write` for replacing
+generated cache files through a temporary sibling and `Path.replace`. Its
+`AtomicWriteOptions` value object controls the policy: the defaults create
+missing parent directories, do not preserve an existing destination mode, and
+do not call `fsync`. The spelling rollout uses those defaults. The duplication
+allowlist writer disables parent creation, preserves the destination mode, and
+syncs temporary file contents before replacement and parent-directory metadata
+after replacement because it updates the existing repository `pyproject.toml`
+under its own lock.
 
 Do not edit generated entries in `typos.toml`. Put only repository-specific
 proper nouns, quoted upstream titles, fixtures, stems or exclusions in

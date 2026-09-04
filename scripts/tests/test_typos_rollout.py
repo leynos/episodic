@@ -434,12 +434,31 @@ def test_atomic_write_preserves_an_existing_destination_mode(
     )
 
 
+def test_atomic_write_preserves_mode_only_when_a_destination_exists(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """Mode preservation must not require an initial destination."""
+    cache, _rollout, _generator = rollout_modules
+    destination = tmp_path / "new" / "config.toml"
+
+    cache.atomic_write(
+        destination,
+        b"new\n",
+        options=cache.AtomicWriteOptions(preserve_mode=True),
+    )
+
+    assert destination.read_bytes() == b"new\n", (
+        "A missing destination must still be created when preserving modes."
+    )
+
+
 def test_atomic_write_syncs_the_temporary_file_when_requested(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Requesting a sync fsyncs the temporary replacement exactly once."""
+    """Requesting a sync fsyncs the temporary file and parent directory."""
     cache, _rollout, _generator = rollout_modules
     destination = tmp_path / "config.toml"
     synced: list[int] = []
@@ -456,5 +475,5 @@ def test_atomic_write_syncs_the_temporary_file_when_requested(
         options=cache.AtomicWriteOptions(sync_file=True),
     )
 
-    assert len(synced) == 1, "Exactly one fsync must cover the temporary replacement."
+    assert len(synced) == 2, "File and parent directory must each be fsynced."
     assert destination.read_bytes() == b"payload\n", "The write must still complete."

@@ -17,7 +17,6 @@ and matching rules; ``scripts/nose_detector.py`` owns the detector itself.
 
 from __future__ import annotations
 
-import os
 import sys
 import tomllib
 from collections import abc as cabc
@@ -30,7 +29,7 @@ from duplication_allowlist import (
     load_allowlist,
     validate_key,
 )
-from nose_detector import PYPROJECT, REPO_ROOT, load_settings, run_detector
+from nose_detector import PYPROJECT, load_settings, run_detector
 from nose_schema import Finding, GateConfigError, GateExecutionError
 
 app = cyclopts.App(help="Run or configure the code-duplication gate.")
@@ -73,7 +72,18 @@ def partition_findings(
 
 
 def detect_findings() -> list[Finding]:
-    """Run the pinned detector with the repository's ``[tool.nose]`` settings."""
+    """Run the pinned detector with the repository's ``[tool.nose]`` settings.
+
+    Returns
+    -------
+    list[Finding]
+        Normalized duplication families emitted by the pinned detector.
+
+    Notes
+    -----
+    Configuration and execution errors from the settings loader and detector
+    propagate to the CLI boundary.
+    """
     return run_detector(load_settings(PYPROJECT))
 
 
@@ -115,7 +125,7 @@ def _detect_findings(detector: FindingDetector) -> list[Finding]:
         return detector()
     except GateConfigError:
         raise
-    except (OSError, RuntimeError) as error:
+    except OSError as error:
         msg = f"nose detector failed: {error}"
         raise GateExecutionError(msg) from error
     except (TypeError, ValueError) as error:
@@ -133,8 +143,18 @@ def _check_inputs(
 
 @app.command
 def check() -> None:
-    """Run the blocking duplication gate and exit non-zero on findings."""
-    os.chdir(REPO_ROOT)
+    """Run the blocking duplication gate and exit non-zero on findings.
+
+    The command reads the repository's fixed ``pyproject.toml`` path and the
+    detector executes with an explicit repository working directory; it does
+    not mutate the caller's process directory.
+
+    Raises
+    ------
+    SystemExit
+        With status 1 for blocking findings or status 2 for malformed
+        configuration.
+    """
     try:
         allowlist, findings = _check_inputs(
             allowlist_reader=load_allowlist,
@@ -181,7 +201,7 @@ def allow(
         for key in keys:
             validate_key(key, context=f"'{key}'")
         append_allow_entry(PYPROJECT, keys=keys, reason=reason)
-    except GateConfigError as error:
+    except (GateConfigError, OSError) as error:
         print(f"configuration error: {error}", file=sys.stderr)
         raise SystemExit(2) from error
     print(f"recorded duplication exception for {' ~ '.join(keys)}")

@@ -62,16 +62,22 @@ jobs:
           key: nose-${{ runner.os }}-${{ env.NOSE_VERSION }}
 
       - name: Install nose duplication detector
+        env:
+          BINSTALL_VERSION: "v1.22.0"
+          BINSTALL_SHA256: "df2921254924066627685ee09f6c8b9acd7acef68a338668f879d2b033c09458"
         run: |
           if [ "$(.tools/nose/nose --version 2>/dev/null)" = "nose ${NOSE_VERSION}" ]; then
             echo "nose ${NOSE_VERSION} restored from cache"
             exit 0
           fi
-          curl -fsSL --proto '=https' --tlsv1.2 \
-            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
-            | bash
+          binstall_archive="$(mktemp)"
+          binstall_directory="$(mktemp -d)"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$binstall_archive" \
+            "https://github.com/cargo-bins/cargo-binstall/releases/download/${BINSTALL_VERSION}/cargo-binstall-x86_64-unknown-linux-musl.tgz"
+          echo "${BINSTALL_SHA256}  ${binstall_archive}" | sha256sum -c -
+          tar -xzf "$binstall_archive" -C "$binstall_directory"
           mkdir -p .tools/nose
-          cargo binstall --no-confirm --install-path .tools/nose \
+          "$binstall_directory/cargo-binstall" --no-confirm --install-path .tools/nose \
             --git https://github.com/corca-ai/nose "nose-cli@${NOSE_VERSION}"
           .tools/nose/nose --version
 

@@ -17,9 +17,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE_PATH = _REPO_ROOT / "Makefile"
 CI_WORKFLOW_PATH = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
 PYPROJECT_PATH = _REPO_ROOT / "pyproject.toml"
+NOSE_TOOL = "nose"
 
 pytestmark = pytest.mark.skipif(
-    not (MAKEFILE_PATH.exists() and CI_WORKFLOW_PATH.exists()),
+    not (
+        MAKEFILE_PATH.exists() and CI_WORKFLOW_PATH.exists() and PYPROJECT_PATH.exists()
+    ),
     reason=(
         "Makefile or CI workflow not present in this working copy (for "
         "example inside a mutation-testing sandbox that does not copy the "
@@ -32,20 +35,15 @@ pytestmark = pytest.mark.skipif(
 VERSION_RE = re.compile(r"\d+(?:\.\d+)+(?:[a-zA-Z0-9.+-]*)")
 
 
-def _makefile_pin(tool: str) -> str:
-    """Extract a tool's pinned version from the Makefile.
-
-    Parameters
-    ----------
-    tool : str
-        Tool name as used in the ``<TOOL>_VERSION`` Makefile variable.
+def _makefile_pin() -> str:
+    """Extract the nose pinned version from the Makefile.
 
     Returns
     -------
     str
-        The version string assigned to ``<TOOL>_VERSION``.
+        The version string assigned to ``NOSE_VERSION``.
     """
-    variable = f"{tool.upper()}_VERSION"
+    variable = f"{NOSE_TOOL.upper()}_VERSION"
     text = MAKEFILE_PATH.read_text(encoding="utf-8")
     match = re.search(
         rf"^{re.escape(variable)}\s*\??=\s*(\S+)\s*$", text, flags=re.MULTILINE
@@ -54,27 +52,21 @@ def _makefile_pin(tool: str) -> str:
     return match.group(1)
 
 
-def _ci_pin(tool: str) -> str:
-    """Extract a tool's pinned version from the CI workflow.
-
-    Parameters
-    ----------
-    tool : str
-        Tool name as pinned by a ``<TOOL>_VERSION`` workflow environment
-        variable.
+def _ci_pin() -> str:
+    """Extract the nose pinned version from the CI workflow.
 
     Returns
     -------
     str
-        The version string pinned in ci.yml.
+        The version string pinned in ci.yml as ``NOSE_VERSION``.
     """
-    variable = f"{tool.upper()}_VERSION"
+    variable = f"{NOSE_TOOL.upper()}_VERSION"
     text = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
     matches = re.findall(
         rf'^\s*{re.escape(variable)}:\s*"([^"]*)"\s*$', text, flags=re.MULTILINE
     )
-    assert matches, f'ci.yml does not pin {tool} via {variable}: "..."'
-    assert len(matches) == 1, f"ci.yml pins {tool} more than once: {matches}"
+    assert matches, f'ci.yml does not pin {NOSE_TOOL} via {variable}: "..."'
+    assert len(matches) == 1, f"ci.yml pins {NOSE_TOOL} more than once: {matches}"
     return matches[0]
 
 
@@ -90,61 +82,60 @@ def _gate_pin() -> str:
     return match.group(1)
 
 
-@pytest.mark.parametrize("tool", ["nose"])
-def test_makefile_and_ci_pin_the_same_version(tool: str) -> None:
-    """The Makefile and ci.yml must pin each tool to the same version."""
-    makefile_version = _makefile_pin(tool)
-    ci_version = _ci_pin(tool)
-    assert VERSION_RE.fullmatch(makefile_version), (
-        f"Makefile {tool.upper()}_VERSION does not look like a version: "
-        f"{makefile_version!r}"
-    )
-    assert makefile_version == ci_version, (
-        f"{tool} version drift: Makefile pins {makefile_version} but "
-        f"ci.yml installs {ci_version}"
-    )
+class TestToolchainPins:
+    """The coordinated pins for the nose duplication detector."""
 
+    def test_makefile_and_ci_pin_the_same_version(self) -> None:
+        """The Makefile and ci.yml must pin nose to the same version."""
+        makefile_version = _makefile_pin()
+        ci_version = _ci_pin()
+        assert VERSION_RE.fullmatch(makefile_version), (
+            f"Makefile {NOSE_TOOL.upper()}_VERSION does not look like a version: "
+            f"{makefile_version!r}"
+        )
+        assert makefile_version == ci_version, (
+            f"{NOSE_TOOL} version drift: Makefile pins {makefile_version} but "
+            f"ci.yml installs {ci_version}"
+        )
 
-def test_gate_verifies_the_pinned_detector_version() -> None:
-    """The gate's ``[tool.nose]`` pin must match the installed version."""
-    makefile_version = _makefile_pin("nose")
-    gate_version = _gate_pin()
-    assert VERSION_RE.fullmatch(gate_version), (
-        f"[tool.nose] version does not look like a version: {gate_version!r}"
+    def test_gate_verifies_the_pinned_detector_version(self) -> None:
+        """The gate's ``[tool.nose]`` pin must match the installed version."""
+        makefile_version = _makefile_pin()
+        gate_version = _gate_pin()
+        assert VERSION_RE.fullmatch(gate_version), (
+            f"[tool.nose] version does not look like a version: {gate_version!r}"
+        )
+        assert makefile_version == gate_version, (
+            f"{NOSE_TOOL} version drift: Makefile pins {makefile_version} but the "
+            f"gate verifies {gate_version}"
+        )
+
+    @pytest.mark.parametrize(
+        "usage_re",
+        [
+            r"'nose-cli@\$\(NOSE_VERSION\)'",
+            r'"nose \$\(NOSE_VERSION\)"',
+        ],
+        ids=["binstall-install", "version-check"],
     )
-    assert makefile_version == gate_version, (
-        f"nose version drift: Makefile pins {makefile_version} but the gate "
-        f"verifies {gate_version}"
-    )
+    def test_makefile_commands_use_the_pinned_version(self, usage_re: str) -> None:
+        """The Makefile's tool invocations must reference the version variable."""
+        text = MAKEFILE_PATH.read_text(encoding="utf-8")
+        assert re.search(usage_re, text), (
+            f"the Makefile defines {NOSE_TOOL.upper()}_VERSION but its "
+            f"{NOSE_TOOL} command does not reference it (expected pattern {usage_re})"
+        )
 
-
-@pytest.mark.parametrize(
-    ("tool", "usage_re"),
-    [
-        ("nose", r"'nose-cli@\$\(NOSE_VERSION\)'"),
-        ("nose", r'"nose \$\(NOSE_VERSION\)"'),
-    ],
-    ids=["binstall-install", "version-check"],
-)
-def test_makefile_commands_use_the_pinned_version(tool: str, usage_re: str) -> None:
-    """The Makefile's tool invocations must reference the version variable.
-
-    A pin that exists but is not referenced by the corresponding command
-    would silently install or accept whatever version is available.
-    """
-    text = MAKEFILE_PATH.read_text(encoding="utf-8")
-    assert re.search(usage_re, text), (
-        f"the Makefile defines {tool.upper()}_VERSION but its {tool} "
-        f"command does not reference it (expected pattern {usage_re})"
-    )
-
-
-def test_ci_installs_the_pinned_detector_with_binstall() -> None:
-    """CI must install nose through the pinned cargo-binstall command."""
-    text = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert "cargo binstall --no-confirm --install-path .tools/nose" in text, (
-        "ci.yml must install nose with cargo binstall into .tools/nose"
-    )
-    assert '"nose-cli@${NOSE_VERSION}"' in text, (
-        "ci.yml's nose install must reference the NOSE_VERSION pin"
-    )
+    def test_ci_installs_the_pinned_detector_with_binstall(self) -> None:
+        """CI must install nose through the pinned cargo-binstall command."""
+        text = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+        assert 'cargo-binstall" --no-confirm --install-path .tools/nose' in text, (
+            "ci.yml must install nose with cargo binstall into .tools/nose"
+        )
+        assert '"nose-cli@${NOSE_VERSION}"' in text, (
+            "ci.yml's nose install must reference the NOSE_VERSION pin"
+        )
+        assert "BINSTALL_VERSION" in text, "ci.yml must pin the cargo-binstall release."
+        assert "BINSTALL_SHA256" in text, (
+            "ci.yml must verify the cargo-binstall release."
+        )

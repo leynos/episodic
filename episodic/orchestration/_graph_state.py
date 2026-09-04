@@ -85,22 +85,7 @@ class GenerationGraphState:
 def _require_request_and_planner(
     state: GenerationGraphState,
 ) -> tuple[dto.GenerationOrchestrationRequest, dto.PlannerResult]:
-    """Return the request and planner result, rejecting missing state values.
-
-    The execute, suspend, and finish paths all require both values, so the
-    guard lives here rather than being repeated per node. ``request`` is
-    checked first so callers report the earliest missing value.
-
-    Returns
-    -------
-    tuple[dto.GenerationOrchestrationRequest, dto.PlannerResult]
-        The request and planner result attached to ``state``.
-
-    Raises
-    ------
-    ValueError
-        If either required state value is missing.
-    """
+    """Return required request and planner state values."""
     request = state.request
     if request is None:
         msg = "missing required state value: request"

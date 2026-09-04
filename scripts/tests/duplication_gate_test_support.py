@@ -5,12 +5,16 @@ import os
 import shutil
 import subprocess  # noqa: S404 - support invokes fixed test commands.
 import sys
+import typing as typ
 from pathlib import Path
 
 import duplication_allowlist as allowlist
 import duplication_gate as gate
 import nose_detector as detector
 import nose_schema as schema
+
+if typ.TYPE_CHECKING:
+    from collections import abc as cabc
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -133,11 +137,13 @@ def stub_settings() -> detector.NoseSettings:
     )
 
 
-def stub_runner(*, version: str = "nose 0.20.0", report: object = None):  # noqa: ANN201 - returns a closure over test doubles.
+def stub_runner(
+    *, version: str = "nose 0.20.0", report: object = None
+) -> detector.CommandRunner:
     """Build a command runner double answering version and query commands."""
     payload = STUB_REPORT if report is None else report
 
-    def run(command: list[str] | tuple[str, ...]) -> str:
+    def run(command: cabc.Sequence[str]) -> str:
         if "--version" in command:
             return f"{version}\n"
         return json.dumps(payload)

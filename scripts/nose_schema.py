@@ -78,7 +78,25 @@ class Finding:
 
 
 def require_table(value: object, *, context: str) -> cabc.Mapping[str, object]:
-    """Validate one TOML table before configuration logic consumes it."""
+    """Validate one TOML table before configuration logic consumes it.
+
+    Parameters
+    ----------
+    value : object
+        Candidate TOML value.
+    context : str
+        Configuration path used in an invalid-value diagnostic.
+
+    Returns
+    -------
+    collections.abc.Mapping[str, object]
+        The validated table with string keys.
+
+    Raises
+    ------
+    GateConfigError
+        If ``value`` is not a table with string keys.
+    """
     if not isinstance(value, cabc.Mapping) or not all(
         isinstance(key, str) for key in value
     ):
@@ -88,7 +106,25 @@ def require_table(value: object, *, context: str) -> cabc.Mapping[str, object]:
 
 
 def require_string(value: object, *, context: str) -> str:
-    """Validate one required non-empty configuration string."""
+    """Validate one required non-empty configuration string.
+
+    Parameters
+    ----------
+    value : object
+        Candidate configuration value.
+    context : str
+        Configuration path used in an invalid-value diagnostic.
+
+    Returns
+    -------
+    str
+        The validated string.
+
+    Raises
+    ------
+    GateConfigError
+        If ``value`` is not a non-empty string.
+    """
     if not _is_non_empty_string(value):
         msg = f"{context} must be a non-empty string"
         raise GateConfigError(msg)
@@ -96,7 +132,25 @@ def require_string(value: object, *, context: str) -> str:
 
 
 def require_string_tuple(value: object, *, context: str) -> tuple[str, ...]:
-    """Validate one configuration array of non-empty strings."""
+    """Validate one configuration array of non-empty strings.
+
+    Parameters
+    ----------
+    value : object
+        Candidate configuration value.
+    context : str
+        Configuration path used in an invalid-value diagnostic.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The validated configuration strings in input order.
+
+    Raises
+    ------
+    GateConfigError
+        If ``value`` is not an array of non-empty strings.
+    """
     if not isinstance(value, cabc.Sequence) or isinstance(value, (str, bytes)):
         msg = f"{context} must be an array of strings"
         raise GateConfigError(msg)
@@ -114,7 +168,25 @@ def _is_integer(value: object) -> typ.TypeIs[int]:
 
 
 def require_positive_int(value: object, *, context: str) -> int:
-    """Validate one required positive configuration integer."""
+    """Validate one required positive configuration integer.
+
+    Parameters
+    ----------
+    value : object
+        Candidate configuration value.
+    context : str
+        Configuration path used in an invalid-value diagnostic.
+
+    Returns
+    -------
+    int
+        The validated positive integer.
+
+    Raises
+    ------
+    GateConfigError
+        If ``value`` is not a positive integer.
+    """
     if not _is_integer(value) or value < 1:
         msg = f"{context} must be a positive integer"
         raise GateConfigError(msg)

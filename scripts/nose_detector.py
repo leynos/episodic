@@ -33,6 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 DEFAULT_NOSE_BIN = REPO_ROOT / ".tools" / "nose" / "nose"
 INSTALL_HINT = "run `make install-nose` to install the pinned detector"
+COMMAND_TIMEOUT_SECONDS = 120
 
 type CommandRunner = cabc.Callable[[cabc.Sequence[str]], str]
 
@@ -261,7 +262,11 @@ def _run_command(command: cabc.Sequence[str]) -> str:
             check=False,
             capture_output=True,
             text=True,
+            timeout=COMMAND_TIMEOUT_SECONDS,
         )
+    except subprocess.TimeoutExpired as error:
+        msg = f"{command[0]} timed out after {COMMAND_TIMEOUT_SECONDS} seconds"
+        raise GateExecutionError(msg) from error
     except OSError as error:
         msg = f"cannot run {command[0]}: {error}: {INSTALL_HINT}"
         raise GateExecutionError(msg) from error

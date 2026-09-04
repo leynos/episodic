@@ -224,6 +224,36 @@ class TestRunDetector:
             "Named locations must carry their unit name into the report."
         )
 
+    def test_orders_equal_values_by_location_label(self) -> None:
+        """Equal-value families sort lexicographically by their location labels."""
+        report = {
+            "families": [
+                {
+                    "witness": "copy-paste",
+                    "value": 5.0,
+                    "locations": [
+                        {"file": "episodic/z.py", "start": 1, "end": 2, "name": None},
+                        {"file": "episodic/y.py", "start": 1, "end": 2, "name": None},
+                    ],
+                },
+                {
+                    "witness": "copy-paste",
+                    "value": 5.0,
+                    "locations": [
+                        {"file": "episodic/b.py", "start": 1, "end": 2, "name": None},
+                        {"file": "episodic/a.py", "start": 1, "end": 2, "name": None},
+                    ],
+                },
+            ]
+        }
+
+        findings = detector.normalize_findings(report)
+
+        assert [finding.label for finding in findings] == [
+            "episodic/b.py:1-2 ~ episodic/a.py:1-2",
+            "episodic/z.py:1-2 ~ episodic/y.py:1-2",
+        ], "Equal values must order by normalized location label."
+
     @pytest.mark.parametrize(
         ("value", "expected"),
         [
@@ -337,3 +367,17 @@ class TestRunDetector:
 
         with pytest.raises(detector.GateExecutionError, match="not valid JSON"):
             detector.run_detector(stub_settings(), runner=runner)
+
+
+def test_run_command_reports_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A slow detector becomes an actionable execution error."""
+
+    def timeout(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        raise detector.subprocess.TimeoutExpired(["nose", "query"], 120)
+
+    monkeypatch.setattr(detector.subprocess, "run", timeout)
+
+    with pytest.raises(
+        detector.GateExecutionError, match="timed out after 120 seconds"
+    ):
+        detector._run_command(("nose", "query"))

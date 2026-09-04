@@ -11,8 +11,6 @@ of its keys, so a new copy in an unlisted file still blocks the gate. Every
 entry records a reason so exceptions stay reviewable in version control.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import fcntl
 import tomllib
