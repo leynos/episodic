@@ -22,7 +22,7 @@ maintainers must remove when they become stale.
   unsuppressed dead-code findings remain.
 - Contributors remove genuine dead code and use
   `make skylos-allow NAME=... REASON=...` only for intentional named
-  exceptions; the target rejects missing names or reasons.
+  exceptions; the target rejects a missing symbol or reason.
 - Framework callbacks, protocol implementations, and compatibility re-exports
   remain live through precise, reasoned configuration rather than bulk
   baselines or unexplained inline suppressions.
