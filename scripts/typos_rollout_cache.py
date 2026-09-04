@@ -8,7 +8,7 @@ import tempfile
 import typing as typ
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class RefreshResult:
     """Describe whether the untracked shared dictionary cache changed."""
 
@@ -35,7 +35,7 @@ class RemoteResponse(typ.Protocol):
         ...
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class AtomicWriteOptions:
     """Configure atomic replacement behaviour."""
 
@@ -65,7 +65,7 @@ def atomic_write(
     """
     if options.create_parents:
         path.parent.mkdir(parents=True, exist_ok=True)
-    mode = path.stat().st_mode if options.preserve_mode else None
+    mode = path.stat().st_mode if options.preserve_mode and path.exists() else None
     with tempfile.NamedTemporaryFile(
         delete=False, dir=path.parent, prefix=f".{path.name}."
     ) as stream:
@@ -78,5 +78,11 @@ def atomic_write(
         if mode is not None:
             temporary.chmod(mode)
         temporary.replace(path)
+        if options.sync_file:
+            directory_descriptor = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
     finally:
         temporary.unlink(missing_ok=True)

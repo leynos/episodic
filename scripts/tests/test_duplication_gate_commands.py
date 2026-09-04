@@ -7,6 +7,7 @@ import sys
 import textwrap
 import tomllib
 import typing as typ
+from pathlib import Path
 
 import pytest
 from duplication_gate_test_support import (
@@ -19,9 +20,6 @@ from duplication_gate_test_support import (
     run_gate_command,
     write_stub_nose,
 )
-
-if typ.TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _finding() -> detector.Finding:
@@ -41,12 +39,12 @@ class TestGateCommands:
 
     def test_check_reports_blocking_findings(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """The check command emits the blocking report and status one."""
-        monkeypatch.chdir(typ.cast("Path", tmp_path))
+        monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(gate, "load_allowlist", lambda _path: ())
         monkeypatch.setattr(gate, "detect_findings", lambda: [_finding()])
         with pytest.raises(SystemExit) as error:
@@ -85,9 +83,6 @@ class TestGateCommands:
         [
             pytest.param(OSError("unreadable configuration"), id="allowlist-io"),
             pytest.param(OSError("detector executable unavailable"), id="detector-io"),
-            pytest.param(
-                RuntimeError("detector runtime failed"), id="detector-runtime"
-            ),
         ],
     )
     def test_check_inputs_wrap_environment_failures(self, error: Exception) -> None:
@@ -150,9 +145,9 @@ class TestGateCommands:
                 id="os-error",
             ),
             pytest.param(
-                tomllib.TOMLDecodeError("bad table"),
+                tomllib.TOMLDecodeError("bad table", "", 0),
                 gate.GateExecutionError,
-                "cannot load duplication allowlist: bad table",
+                "cannot load duplication allowlist: bad table (at end of document)",
                 id="toml-error",
             ),
         ],
@@ -184,12 +179,6 @@ class TestGateCommands:
                 id="os-error",
             ),
             pytest.param(
-                RuntimeError("detector runtime failed"),
-                gate.GateExecutionError,
-                "nose detector failed: detector runtime failed",
-                id="runtime-error",
-            ),
-            pytest.param(
                 TypeError("families must be an array"),
                 gate.GateConfigError,
                 "families must be an array",
@@ -219,6 +208,18 @@ class TestGateCommands:
 
         assert str(raised.value) == expected_message, "Diagnostic must name the cause."
         assert raised.value.__cause__ is error, "The original error must be the cause."
+
+    def test_detect_findings_does_not_wrap_runtime_errors(self) -> None:
+        """Programming faults from a detector are not reclassified as I/O failures."""
+        error = RuntimeError("detector runtime failed")
+
+        def detect() -> list[detector.Finding]:
+            raise error
+
+        with pytest.raises(RuntimeError) as raised:
+            gate._detect_findings(detect)
+
+        assert raised.value is error, "Runtime errors must propagate unchanged."
 
     def test_read_allowlist_passes_configuration_errors_through(self) -> None:
         """An allowlist configuration error is not rewrapped."""
@@ -266,6 +267,9 @@ class TestGateCommands:
         assert capsys.readouterr().err == (
             "configuration error: nose report families must be an array\n"
         ), "Schema errors must use the configuration diagnostic."
+        assert Path.cwd() == tmp_path, (
+            "The check command must not change its caller's working directory."
+        )
 
     def test_check_reports_a_version_mismatch(
         self,
@@ -308,6 +312,27 @@ class TestGateCommands:
             "configuration error: duplication_gate.allow[0] "
             "requires a non-empty reason\n"
         ), "Malformed allows must use the configuration diagnostic."
+
+    def test_allow_reports_write_failures(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A filesystem failure while recording an allow exits cleanly."""
+        write_error = OSError("read-only filesystem")
+
+        def fail_write(*_args: object, **_kwargs: object) -> None:
+            raise write_error
+
+        monkeypatch.setattr(gate, "append_allow_entry", fail_write)
+
+        with pytest.raises(SystemExit) as exit_error:
+            gate.allow(first="episodic/a.py", reason="reviewed exception")
+
+        assert exit_error.value.code == 2, "Write failures must return two."
+        assert capsys.readouterr().err == (
+            "configuration error: read-only filesystem\n"
+        ), "Write failures must use the configuration diagnostic."
 
     def test_allow_rejects_malformed_keys(
         self,
@@ -395,6 +420,11 @@ class TestGateCommands:
 
     def test_real_check_cli_passes(self) -> None:
         """The checked-in gate runs successfully through its real CLI boundary."""
+        settings = detector.load_settings(REPOSITORY_ROOT / "pyproject.toml")
+        try:
+            detector.resolve_binary(settings)
+        except detector.GateExecutionError as error:  # pragma: no cover
+            pytest.skip(str(error))
         result = subprocess.run(  # noqa: S603 - fixed repository gate command.
             [
                 sys.executable,

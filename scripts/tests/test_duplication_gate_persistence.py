@@ -78,6 +78,14 @@ class TestAppendAllowEntry:
         assert pyproject.read_text(encoding="utf-8") == original, (
             "Failed replacement must preserve the original TOML."
         )
+        temporary_siblings = [
+            path
+            for path in tmp_path.glob(".pyproject.toml.*")
+            if path.name != ".pyproject.toml.duplication-gate.lock"
+        ]
+        assert temporary_siblings == [], (
+            "Failed replacement must remove its temporary sibling."
+        )
         allowlist.append_allow_entry(
             pyproject,
             keys=("episodic/a.py",),

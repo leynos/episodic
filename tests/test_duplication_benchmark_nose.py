@@ -6,6 +6,7 @@ addition to the report-shape validation and path normalization shared with the
 other duplication benchmark parsers.
 """
 
+import re
 import typing as typ
 
 import pytest
@@ -92,10 +93,10 @@ class TestParseNosePairs:
         assert findings[0].lane is Lane.SYNTACTIC_CLONE, f"{witness} lane"
 
     @pytest.mark.parametrize(
-        ("payload", "expected_error"),
+        ("payload", "expected_error", "diagnostic"),
         [
-            ([], TypeError),
-            ({"families": {}}, TypeError),
+            ([], TypeError, "nose payload must be a JSON object"),
+            ({"families": {}}, TypeError, "nose families must be a JSON array"),
             (
                 {
                     "families": [
@@ -110,8 +111,13 @@ class TestParseNosePairs:
                     ]
                 },
                 TypeError,
+                "nose families[0] witness must be a string",
             ),
-            ({"families": [_nose_family(mean_score=1.5)]}, ValueError),
+            (
+                {"families": [_nose_family(mean_score=1.5)]},
+                ValueError,
+                "nose families[0] metrics.mean_score must be between 0.0 and 1.0",
+            ),
             (
                 {
                     "families": [
@@ -119,6 +125,7 @@ class TestParseNosePairs:
                     ]
                 },
                 ValueError,
+                "nose families[0] must contain at least two locations",
             ),
             (
                 {
@@ -132,6 +139,7 @@ class TestParseNosePairs:
                     ]
                 },
                 ValueError,
+                "nose families[0].locations[0] start must not exceed end",
             ),
         ],
         ids=[
@@ -144,10 +152,14 @@ class TestParseNosePairs:
         ],
     )
     def test_rejects_malformed_reports(
-        self, tmp_path: Path, payload: object, expected_error: type[Exception]
+        self,
+        tmp_path: Path,
+        payload: object,
+        expected_error: type[Exception],
+        diagnostic: str,
     ) -> None:
         """Shape violations raise instead of silently dropping findings."""
-        with pytest.raises(expected_error):
+        with pytest.raises(expected_error, match=re.escape(diagnostic)):
             parse_nose_pairs(payload, corpus_root=tmp_path)
 
     def test_rejects_paths_outside_corpus_root(self, tmp_path: Path) -> None:

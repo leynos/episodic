@@ -5,7 +5,6 @@ import shutil
 import subprocess  # noqa: S404 - tests exercise the real Make target.
 import sys
 import typing as typ
-from pathlib import Path
 
 import pytest
 from duplication_gate_test_support import (
@@ -14,6 +13,9 @@ from duplication_gate_test_support import (
     copied_gate_workspace,
     gate_environment,
 )
+
+if typ.TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -26,7 +28,7 @@ class _MakeAllowRequest:
 
 
 def _make_allow(
-    workspace: object,
+    workspace: Path,
     *,
     request: _MakeAllowRequest,
     environment: dict[str, str] | None = None,
@@ -48,10 +50,9 @@ def _make_allow(
         command.append(f"SECOND={request.second}")
     if request.reason is not None:
         command.append(f"REASON={request.reason}")
-    workspace_path = Path(typ.cast("Path", workspace))
     return subprocess.run(  # noqa: S603 - fixed Make target and copied workspace.
         command,
-        cwd=workspace_path,
+        cwd=workspace,
         env=gate_environment() if environment is None else environment,
         check=False,
         capture_output=True,
@@ -71,13 +72,13 @@ class TestMakeDuplicationAllow:
     )
     def test_make_duplication_allow_rejects_missing_and_ambient_values(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         first: str | None,
         reason: str | None,
         expected_error: str,
     ) -> None:
         """Only command-line values satisfy the Make target's required inputs."""
-        workspace, _script = copied_gate_workspace(typ.cast("Path", tmp_path))
+        workspace, _script = copied_gate_workspace(tmp_path)
         environment = {
             **gate_environment(),
             "FIRST": "episodic/ambient.py",
@@ -107,13 +108,13 @@ class TestMakeDuplicationAllow:
     )
     def test_make_duplication_allow_round_trips_quoted_values(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         second: str | None,
         expected_keys: tuple[str, ...],
     ) -> None:
         """The Make target forwards unit and member inputs as literal arguments."""
-        workspace, _script = copied_gate_workspace(typ.cast("Path", tmp_path))
-        marker = typ.cast("Path", tmp_path) / "injected-command"
+        workspace, _script = copied_gate_workspace(tmp_path)
+        marker = tmp_path / "injected-command"
         reason = f'kept literally: "$(touch {marker})"; $HOME'
         result = _make_allow(
             workspace,

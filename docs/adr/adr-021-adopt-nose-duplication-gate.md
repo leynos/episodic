@@ -36,7 +36,7 @@ favour of the incumbent.
 - `make lint` and the standalone `make duplication` target depend on
   `make install-nose`, which installs `nose-cli` at `NOSE_VERSION` into
   `.tools/nose` using `cargo-binstall`'s git mode against
-  `https://github.com/corca-ai/nose`, because the crate is not published on
+  <https://github.com/corca-ai/nose>, because the crate is not published on
   crates.io and binstall must resolve the GitHub release artefact instead. The
   target is a no-op when the installed binary already reports the pinned
   version, and CI caches `.tools/nose` on a key carrying the runner operating
