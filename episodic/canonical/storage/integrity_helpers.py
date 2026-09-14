@@ -96,7 +96,26 @@ def is_revision_conflict_integrity_error(
 
 
 def is_source_document_duplicate_integrity_error(exc: IntegrityError) -> bool:
-    """Return whether ``exc`` is the deterministic source-document ID conflict."""
+    """Return whether ``exc`` is the deterministic source-document ID conflict.
+
+    Parameters
+    ----------
+    exc : sqlalchemy.exc.IntegrityError
+        Integrity error to classify.
+
+    Returns
+    -------
+    bool
+        ``True`` for a duplicate ``source_documents.id`` write; otherwise
+        ``False``.
+
+    Notes
+    -----
+    PostgreSQL reports the ``source_documents_pkey`` constraint name. SQLite
+    does not surface a constraint name, so it is matched via the
+    ``"UNIQUE constraint failed: source_documents.id"`` driver-message
+    fallback.
+    """
     if constraint_name(exc) == "source_documents_pkey":
         return True
     return "UNIQUE constraint failed: source_documents.id" in str(exc.orig)

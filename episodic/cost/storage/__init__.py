@@ -11,7 +11,8 @@ async with session_factory() as session:
 ```
 """
 
-from .adapters import SqlAlchemyCostLedgerStore, SqlAlchemyMeteringCounterStore
+from .adapters import SqlAlchemyCostLedgerStore
+from .metering import SqlAlchemyMeteringCounterStore
 from .models import (
     CostLedgerEntryRecord,
     MeteringCounterEventRecord,

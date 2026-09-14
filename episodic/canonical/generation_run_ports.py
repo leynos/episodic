@@ -164,7 +164,13 @@ class GenerationEventLog(typ.Protocol):
         *,
         after_seq: EventSeq | None = None,
     ) -> int:
-        """Count events for a run after an optional sequence cursor."""
+        """Count events for a run after an optional sequence cursor.
+
+        Raises
+        ------
+        RunNotFound
+            If ``run_id`` does not identify a stored generation run.
+        """
         raise NotImplementedError
 
 
