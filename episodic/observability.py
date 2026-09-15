@@ -17,21 +17,30 @@ services across the codebase wire against:
   ``representation``, and ``pagination``; it drops all other attributes
   because callers may attach sensitive operation metadata.
 
-:class:`episodic.metrics_ports.BoundedMetricsPort` is a deliberately narrower
-structural subtype with ``dict[str, str]`` labels, retained because feature-
-specific ports (such as :class:`episodic.qa.chrono.ChronoMetricsPort`)
-historically extend it. Any adapter that satisfies :class:`MetricsPort` also
-satisfies :class:`BoundedMetricsPort` for callers that build their label
-dicts as concrete ``dict`` instances.
+:class:`episodic.metrics_ports.BoundedMetricsPort` is a narrower structural
+subtype with ``dict[str, str]`` labels for feature-specific ports. Any
+adapter that satisfies :class:`MetricsPort` also satisfies
+:class:`BoundedMetricsPort` for callers that build concrete ``dict`` labels.
 """
 
 import dataclasses as dc
-import logging
+import json
 import time
 import typing as typ
 
+from episodic.logging import LoggerHandle, get_logger, log_info
+
 if typ.TYPE_CHECKING:
     from collections import abc as cabc
+
+
+def _emit_structured_event(
+    logger: LoggerHandle,
+    event: str,
+    **fields: object,
+) -> None:
+    """Emit one JSON-encoded observability event through the logging port."""
+    log_info(logger, "%s", json.dumps({"event": event, **fields}, sort_keys=True))
 
 
 class MetricsPort(typ.Protocol):
@@ -155,9 +164,7 @@ class NoopValueMetrics(NoopMetrics):
 class StructuredLogMetrics:
     """Production metrics adapter that emits bounded structured observations."""
 
-    logger: "_StructuredLogSink" = dc.field(  # noqa: UP037  # Defined below its adapter.
-        default_factory=lambda: logging.getLogger(__name__),
-    )
+    logger: LoggerHandle = dc.field(default_factory=lambda: get_logger(__name__))
 
     def increment_counter(
         self,
@@ -166,7 +173,9 @@ class StructuredLogMetrics:
         labels: cabc.Mapping[str, str],
     ) -> None:
         """Emit one bounded counter observation."""
-        self.logger.info("metric_counter", extra={"metric_name": name, **labels})
+        _emit_structured_event(
+            self.logger, "metric_counter", metric_name=name, **labels
+        )
 
     def observe_latency_ms(
         self,
@@ -197,9 +206,12 @@ class StructuredLogMetrics:
         labels: cabc.Mapping[str, str],
     ) -> None:
         """Emit a structured scalar metric event."""
-        self.logger.info(
+        _emit_structured_event(
+            self.logger,
             event_name,
-            extra={"metric_name": name, "value": str(value), **labels},
+            metric_name=name,
+            value=str(value),
+            **labels,
         )
 
 
@@ -248,19 +260,6 @@ class NoopTracer:
         return _NOOP_SPAN
 
 
-class _StructuredLogSink(typ.Protocol):
-    """Logger surface required by :class:`StructuredLogTracer`."""
-
-    def info(
-        self,
-        message: str,
-        /,
-        *,
-        extra: cabc.Mapping[str, str],
-    ) -> None:
-        """Emit an INFO-level structured event."""
-
-
 _SAFE_SPAN_ATTRIBUTES = frozenset({
     "operation",
     "outcome",
@@ -274,7 +273,7 @@ _SAFE_SPAN_ATTRIBUTES = frozenset({
 class _StructuredLogSpan:
     """Complete a structured-log span with allow-listed attributes only."""
 
-    logger: _StructuredLogSink
+    logger: LoggerHandle
     name: str
     attributes: dict[str, str]
 
@@ -291,9 +290,11 @@ class _StructuredLogSpan:
         """Log completion without suppressing an operation exception."""
         del exc_value, traceback
         event = "trace_span_completed" if exc_type is None else "trace_span_failed"
-        self.logger.info(
+        _emit_structured_event(
+            self.logger,
             event,
-            extra={"span_name": self.name, **self.attributes},
+            span_name=self.name,
+            **self.attributes,
         )
         return False
 
@@ -312,9 +313,7 @@ class StructuredLogTracer:
     paths, and other sensitive metadata from log records.
     """
 
-    logger: _StructuredLogSink = dc.field(
-        default_factory=lambda: logging.getLogger(__name__),
-    )
+    logger: LoggerHandle = dc.field(default_factory=lambda: get_logger(__name__))
 
     def start_span(
         self,
@@ -328,9 +327,11 @@ class StructuredLogTracer:
             for key, value in attributes.items()
             if key in _SAFE_SPAN_ATTRIBUTES
         }
-        self.logger.info(
+        _emit_structured_event(
+            self.logger,
             "trace_span_started",
-            extra={"span_name": name, **safe_attributes},
+            span_name=name,
+            **safe_attributes,
         )
         return _StructuredLogSpan(
             logger=self.logger,

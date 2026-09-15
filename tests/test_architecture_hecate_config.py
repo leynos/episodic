@@ -14,6 +14,7 @@ import pytest
 from architecture_hecate_config import (
     BARREL_OUTBOUND_FIXTURE,
     HECATE_TIMEOUT_SECONDS,
+    LOGGING_PORT_FIXTURE,
     REPO_ROOT,
     HecateInvocationError,
     run_hecate_fixture_check,
@@ -104,6 +105,31 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
         "application",
         "domain",
     ], "outbound_adapter group must allow outbound, application, and domain imports"
+
+
+def test_external_logging_fixture_config_enforces_the_port_boundary(
+    tmp_path: Path,
+) -> None:
+    """The opt-in fixture policy tracks external imports and isolates femtologging."""
+    package = f"tests.fixtures.architecture.{LOGGING_PORT_FIXTURE}"
+    config = _read_fixture_config(
+        tmp_path,
+        LOGGING_PORT_FIXTURE,
+        policy_variant="external_logging",
+    )
+
+    assert _hecate_config(config)["include_external_packages"] is True, (
+        "external logging fixtures must analyse third-party imports"
+    )
+    assert _group_prefixes(config, "logging_port") == [f"{package}.logging"], (
+        "logging port must match before generic fixture groups"
+    )
+    assert _group_prefixes(config, "logging_backend") == ["femtologging"], (
+        "femtologging must have a dedicated backend group"
+    )
+    assert "logging_backend" not in _group_allowed(config, "inbound_adapter"), (
+        "inbound adapters must not import the raw logging backend"
+    )
 
 
 @pytest.mark.parametrize(
@@ -277,9 +303,18 @@ def test_production_check_uses_injected_python(
     )
 
 
-def _read_fixture_config(tmp_path: Path, package_name: str) -> dict[str, object]:
+def _read_fixture_config(
+    tmp_path: Path,
+    package_name: str,
+    *,
+    policy_variant: typ.Literal["default", "external_logging"] = "default",
+) -> dict[str, object]:
     """Write and parse the fixture Hecate config."""
-    config_path = write_fixture_config(tmp_path, package_name)
+    config_path = write_fixture_config(
+        tmp_path,
+        package_name,
+        policy_variant=policy_variant,
+    )
     return tomllib.loads(config_path.read_text(encoding="utf-8"))
 
 

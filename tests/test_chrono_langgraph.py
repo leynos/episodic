@@ -2,6 +2,7 @@
 
 import asyncio
 import dataclasses as dc
+import json
 import typing as typ
 
 import pytest
@@ -97,21 +98,23 @@ async def test_chrono_node_logs_missing_request(
     errors: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
 
     def capture_error(
+        logger: object,
         msg: str,
         *args: object,
         **kwargs: object,
     ) -> None:
+        del logger
         errors.append((msg, args, kwargs))
 
-    monkeypatch.setattr("episodic.qa.chrono_langgraph._log.error", capture_error)
+    monkeypatch.setattr("episodic.qa.chrono_langgraph.log_error", capture_error)
     with pytest.raises(KeyError, match="chrono_request"):
         await graph.ainvoke(ChronoGraphState())
 
     assert errors == [
         (
-            "Chrono graph node missing required request; has_chrono_result=%s",
-            (False,),
-            {"extra": {"has_chrono_result": False}},
+            "%s",
+            ('{"event": "chrono_graph_request_missing", "has_chrono_result": false}',),
+            {},
         )
     ], "Expected values to match"
 
@@ -157,26 +160,36 @@ async def test_chrono_node_logs_evaluation_failure(
     exceptions: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
 
     def capture_exception(
+        logger: object,
         msg: str,
         *args: object,
         **kwargs: object,
     ) -> None:
+        del logger
         exceptions.append((msg, args, kwargs))
 
     monkeypatch.setattr(
-        "episodic.qa.chrono_langgraph._log.exception",
+        "episodic.qa.chrono_langgraph.log_exception",
         capture_exception,
     )
     with pytest.raises(ValueError, match="bad TEI"):
         await graph.ainvoke(ChronoGraphState(chrono_request=request))
 
-    assert exceptions == [
+    expected_error_event = json.dumps(
+        {
+            "event": "chrono_graph_evaluation_failed",
+            "input_character_count": len(request.script_tei_xml),
+        },
+        sort_keys=True,
+    )
+    expected_exceptions = [
         (
-            "Chrono graph node evaluation failed; input_character_count=%s",
-            (len(request.script_tei_xml),),
-            {"extra": {"input_character_count": len(request.script_tei_xml)}},
+            "%s",
+            (expected_error_event,),
+            {},
         )
-    ], "Expected values to match"
+    ]
+    assert exceptions == expected_exceptions, "Expected values to match"
 
 
 @pytest.mark.asyncio
