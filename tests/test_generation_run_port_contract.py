@@ -26,6 +26,7 @@ from episodic.canonical.generation_run_ports import (
     GenerationEventLog,
     GenerationRunPort,
     GenerationRunRepository,
+    GenerationRunStatusUpdate,
     event_seq,
 )
 from tests.test_generation_run_port_contract_support import NoopGenerationRunPort
@@ -263,7 +264,9 @@ class TestGenerationRunRepository:
         status: GenerationRunStatus,
     ) -> None:
         """Terminal runs cannot be reclaimed for execution."""
-        run = await store.create_run(dc.replace(make_generation_run(), status=status))
+        run = await store.create_run(
+            dc.replace(make_generation_run(), status=status, ended_at=NOW)
+        )
 
         with pytest.raises(RunAlreadyTerminal, match="generation run is already"):
             await store.claim_run_for_execution(
@@ -272,6 +275,37 @@ class TestGenerationRunRepository:
                 started_at=NOW,
                 lease_expires_at=NOW + dt.timedelta(minutes=5),
             )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("current_node", "ended_at", "message"),
+        [
+            ("complete", NOW, "terminal generation runs must not have a current node"),
+            (None, None, "terminal generation runs must have an end time"),
+        ],
+    )
+    async def test_update_run_status_rejects_invalid_terminal_lifecycle(
+        self,
+        store: InMemoryGenerationRunStore,
+        current_node: str | None,
+        ended_at: dt.datetime | None,
+        message: str,
+    ) -> None:
+        """The in-memory adapter rejects terminal lifecycle invariant breaks."""
+        run = await store.create_run(make_generation_run())
+
+        with pytest.raises(ValueError, match=message):
+            await store.update_run_status(
+                run.id,
+                update=GenerationRunStatusUpdate(
+                    status=GenerationRunStatus.SUCCEEDED,
+                    current_node=current_node,
+                    ended_at=ended_at,
+                ),
+            )
+        assert await store.get_run(run.id) == run, (
+            "Invalid terminal update must not persist."
+        )
 
 
 class TestGenerationEventLog:

@@ -378,3 +378,102 @@ def test_remote_freshness_uses_dates_and_falls_back_on_invalid_values(
         {"last_modified": "invalid"}, {"Last-Modified": "invalid"}
     )
     assert not rollout._remote_is_not_newer({}, {"Last-Modified": "invalid"})
+
+
+def test_atomic_write_creates_parent_directories_by_default(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """The default options create missing destination directories."""
+    cache, _rollout, _generator = rollout_modules
+    destination = tmp_path / "missing" / "nested" / "config.toml"
+
+    cache.atomic_write(destination, b"payload\n")
+
+    assert destination.read_bytes() == b"payload\n", (
+        "The destination must hold the replacement content."
+    )
+
+
+def test_atomic_write_without_parent_creation_requires_the_directory(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """Disabling parent creation surfaces a missing destination directory."""
+    cache, _rollout, _generator = rollout_modules
+    destination = tmp_path / "missing" / "config.toml"
+
+    with pytest.raises(FileNotFoundError):
+        cache.atomic_write(
+            destination,
+            b"payload\n",
+            options=cache.AtomicWriteOptions(create_parents=False),
+        )
+    assert not destination.exists(), "A failed write must not create the destination."
+
+
+def test_atomic_write_preserves_an_existing_destination_mode(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """Mode preservation copies the destination's permissions onto the replacement."""
+    cache, _rollout, _generator = rollout_modules
+    destination = tmp_path / "config.toml"
+    destination.write_bytes(b"old\n")
+    destination.chmod(0o640)
+
+    cache.atomic_write(
+        destination,
+        b"new\n",
+        options=cache.AtomicWriteOptions(preserve_mode=True),
+    )
+
+    assert destination.read_bytes() == b"new\n", "The content must be replaced."
+    assert destination.stat().st_mode & 0o777 == 0o640, (
+        "Mode preservation must retain the destination's permission bits."
+    )
+
+
+def test_atomic_write_preserves_mode_only_when_a_destination_exists(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """Mode preservation must not require an initial destination."""
+    cache, _rollout, _generator = rollout_modules
+    destination = tmp_path / "new" / "config.toml"
+
+    cache.atomic_write(
+        destination,
+        b"new\n",
+        options=cache.AtomicWriteOptions(preserve_mode=True),
+    )
+
+    assert destination.read_bytes() == b"new\n", (
+        "A missing destination must still be created when preserving modes."
+    )
+
+
+def test_atomic_write_syncs_the_temporary_file_when_requested(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requesting a sync fsyncs the temporary file and parent directory."""
+    cache, _rollout, _generator = rollout_modules
+    destination = tmp_path / "config.toml"
+    synced: list[int] = []
+    real_fsync = os.fsync
+
+    def record_fsync(descriptor: int) -> None:
+        synced.append(descriptor)
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(cache.os, "fsync", record_fsync)
+    cache.atomic_write(
+        destination,
+        b"payload\n",
+        options=cache.AtomicWriteOptions(sync_file=True),
+    )
+
+    assert len(synced) == 2, "File and parent directory must each be fsynced."
+    assert destination.read_bytes() == b"payload\n", "The write must still complete."

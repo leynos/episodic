@@ -16,15 +16,14 @@ import uuid
 import tei_rapporteur as tei
 
 from episodic.canonical.domain import (
-    ApprovalState,
     CanonicalEpisode,
-    EpisodeStatus,
     EpisodeTeiUpdate,
     IngestionJob,
     IntakeState,
     TeiHeader,
 )
 from episodic.canonical.entity_protocols import SourceDocumentProjectionResult
+from episodic.canonical.episode_factory import build_draft_episode
 from episodic.canonical.generation_persistence_projection import (
     source_document_from_attachment,
 )
@@ -132,9 +131,9 @@ async def _materialise_or_reuse_episode(
         title=request.title,
         now=now,
     )
-    episode = _build_placeholder_episode(
+    episode = build_draft_episode(
         episode_id=episode_id,
-        job=job,
+        series_profile_id=job.series_profile_id,
         header=header,
         now=now,
     )
@@ -328,27 +327,6 @@ def _placeholder_tei_xml(title: str) -> str:
     document = tei.from_dict(payload)
     document.validate()
     return tei.emit_xml(document)
-
-
-def _build_placeholder_episode(
-    *,
-    episode_id: uuid.UUID,
-    job: IngestionJob,
-    header: TeiHeader,
-    now: dt.datetime,
-) -> CanonicalEpisode:
-    """Build a placeholder canonical episode."""
-    return CanonicalEpisode(
-        id=episode_id,
-        series_profile_id=job.series_profile_id,
-        tei_header_id=header.id,
-        title=header.title,
-        tei_xml=header.raw_xml,
-        status=EpisodeStatus.DRAFT,
-        approval_state=ApprovalState.DRAFT,
-        created_at=now,
-        updated_at=now,
-    )
 
 
 async def _upload_for_source(

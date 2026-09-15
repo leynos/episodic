@@ -1,0 +1,1884 @@
+{
+  "clone": {
+    "clones": [
+      {
+        "id": 17,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/handlers.py",
+          "start_line": 44,
+          "end_line": 88,
+          "start_col": 0,
+          "end_col": 59
+        },
+        "content": "async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared handler signature for resource adapters\n    uow_factory: UowFactory,\n    entity_id: str,\n    id_field_name: str,\n    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],\n    serializer_fn: cabc.Callable[[EntityT, int], JsonPayload],\n) -\u003e tuple[JsonPayload, str]:\n    \"\"\"Handle fetch-by-identifier endpoint behaviour.\n\n    Parameters\n    ----------\n    uow_factory : UowFactory\n        Factory that creates unit-of-work instances.\n    entity_id : str\n        Raw entity identifier from the request path.\n    id_field_name : str\n        Name of the identifier field used for validation messages.\n    service_fn : cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]\n        Service function that returns an entity and its revision.\n    serializer_fn : cabc.Callable[[EntityT, int], JsonPayload]\n        Serializer that converts the entity payload to response JSON.\n\n    Returns\n    -------\n    tuple[JsonPayload, str]\n        Serialized response payload and HTTP status code.\n\n    Raises\n    ------\n    falcon.HTTPBadRequest\n        If ``entity_id`` is not a valid UUID.\n    falcon.HTTPNotFound\n        If the requested entity does not exist.\n    \"\"\"  # noqa: DOC502  # Indirect exceptions form part of this public contract.\n    parsed_entity_id = parse_uuid(entity_id, id_field_name)\n    try:\n        async with uow_factory() as uow:\n            entity, revision = await service_fn(\n                uow,\n                entity_id=parsed_entity_id,\n            )\n    except EntityNotFoundError as exc:\n        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)\n        raise not_found from exc\n    return serializer_fn(entity, revision), falcon.HTTP_200",
+        "hash": "7d7ae06bb5426a76",
+        "size": 78,
+        "line_count": 45,
+        "complexity": 0
+      },
+      {
+        "id": 19,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/handlers.py",
+          "start_line": 194,
+          "end_line": 257,
+          "start_col": 0,
+          "end_col": 59
+        },
+        "content": "async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared handler signature for resource adapters\n    uow_factory: UowFactory,\n    entity_id: str,\n    id_field_name: str,\n    payload: JsonPayload,\n    required_fields: tuple[str, ...],\n    request_builder: cabc.Callable[\n        [uuid.UUID, JsonPayload],\n        UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,\n    ],\n    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],\n    serializer_fn: cabc.Callable[[EntityT, int], JsonPayload],\n) -\u003e tuple[JsonPayload, str]:\n    \"\"\"Handle optimistic-lock update endpoint behaviour.\n\n    Parameters\n    ----------\n    uow_factory : UowFactory\n        Factory that creates unit-of-work instances.\n    entity_id : str\n        Raw entity identifier from the request path.\n    id_field_name : str\n        Name of the identifier field used for validation messages.\n    payload : JsonPayload\n        Parsed request payload.\n    required_fields : tuple[str, ...]\n        Required payload field names for the update operation.\n    request_builder : cabc.Callable[\n        [uuid.UUID, JsonPayload],\n        UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,\n    ]\n        Builder that creates a typed update request object.\n    service_fn : cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]\n        Service function that executes the update and returns entity/revision.\n    serializer_fn : cabc.Callable[[EntityT, int], JsonPayload]\n        Serializer that converts the updated entity to response JSON.\n\n    Returns\n    -------\n    tuple[JsonPayload, str]\n        Serialized response payload and HTTP status code.\n\n    Raises\n    ------\n    falcon.HTTPBadRequest\n        If the identifier, required fields, or update payload are invalid.\n    falcon.HTTPNotFound\n        If the target entity does not exist.\n    falcon.HTTPConflict\n        If the expected revision does not match the persisted revision.\n    \"\"\"  # noqa: DOC502  # Indirect exceptions form part of this public contract.\n    parsed_entity_id = parse_uuid(entity_id, id_field_name)\n    _require_payload_fields(payload, required_fields)\n    update_request = request_builder(parsed_entity_id, payload)\n    try:\n        async with uow_factory() as uow:\n            entity, revision = await service_fn(uow, request=update_request)\n    except (EntityNotFoundError, RevisionConflictError) as exc:\n        _raise_mapped_update_error(\n            exc,\n            entity_id=parsed_entity_id,\n            expected_revision=update_request.expected_revision,\n        )\n    return serializer_fn(entity, revision), falcon.HTTP_200",
+        "hash": "9b1761b7c85ecf69",
+        "size": 109,
+        "line_count": 64,
+        "complexity": 0
+      },
+      {
+        "id": 34,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/episode_tei.py",
+          "start_line": 42,
+          "end_line": 116,
+          "start_col": 4,
+          "end_col": 52
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        episode_id: str,\n    ) -\u003e None:\n        \"\"\"Return generated TEI using the requested representation.\n\n        Parameters\n        ----------\n        req : falcon.Request\n            Request whose ``Accept`` and ``If-None-Match`` headers select and\n            condition the representation.\n        resp : falcon.Response\n            Response to populate with JSON metadata or an XML attachment.\n        episode_id : str\n            Episode UUID from the route path.\n\n        Raises\n        ------\n        falcon.HTTPBadRequest\n            If ``episode_id`` is not a valid UUID (HTTP 400).\n        falcon.HTTPNotFound\n            If the episode is absent or has no generated TEI (HTTP 404).\n        falcon.HTTPNotAcceptable\n            If ``Accept`` excludes both supported media types (HTTP 406).\n\n        Notes\n        -----\n        JSON metadata (``application/json``) is the default representation.\n        ``application/tei+xml`` selects the generated XML attachment. A\n        matching or wildcard ``If-None-Match`` validator returns HTTP 304 with\n        no response body.\n        \"\"\"  # noqa: DOC501, DOC502  # Indirect exceptions form part of this public contract.\n        with self._tracer.start_span(\n            \"episode_tei.read\",\n            attributes={\"operation\": \"episode_tei.read\"},\n        ) as span:\n            try:\n                parsed_episode_id = parse_uuid(episode_id, \"episode_id\")\n            except falcon.HTTPError:\n                span.set_attribute(\"outcome\", \"rejected\")\n                span.set_attribute(\"failure_category\", \"invalid_input\")\n                raise\n            async with self._uow_factory() as uow:\n                episode = await uow.episodes.get(parsed_episode_id)\n                run = (\n                    None\n                    if episode is None or episode.last_generation_run_id is None\n                    else await uow.generation_runs.get_run(\n                        episode.last_generation_run_id\n                    )\n                )\n            actor = principal_id(req)\n            if actor is None:\n                span.set_attribute(\"outcome\", \"not_found\")\n                span.set_attribute(\"failure_category\", \"episode.not_found\")\n                raise _tei_not_found(parsed_episode_id)\n            if not _has_accessible_draft(episode, run, actor):\n                span.set_attribute(\"outcome\", \"not_found\")\n                span.set_attribute(\"failure_category\", \"episode.not_found\")\n                raise _tei_not_found(parsed_episode_id)\n            episode = typ.cast(\"CanonicalEpisode\", episode)\n            try:\n                media_type = negotiate_tei_media_type(req.accept)\n            except falcon.HTTPNotAcceptable:\n                span.set_attribute(\"outcome\", \"rejected\")\n                span.set_attribute(\"failure_category\", \"not_acceptable\")\n                raise\n            span.set_attribute(\"representation\", media_type)\n            if media_type == _TEI_MEDIA_TYPE:\n                _apply_tei_attachment(req, resp, episode)\n            else:\n                _apply_tei_json(req, resp, episode)\n            span.set_attribute(\"outcome\", \"success\")",
+        "hash": "ad948d77ee672529",
+        "size": 181,
+        "line_count": 75,
+        "complexity": 0
+      },
+      {
+        "id": 52,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/generation_runs.py",
+          "start_line": 298,
+          "end_line": 334,
+          "start_col": 4,
+          "end_col": 52
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        run_id: str,\n    ) -\u003e None:\n        \"\"\"Return the current generation-run state.\"\"\"\n        with self._tracer.start_span(\n            \"generation_run.read\",\n            attributes={\"operation\": \"generation_run.read\"},\n        ) as span:\n            try:\n                parsed_run_id = parse_uuid(run_id, \"run_id\")\n            except falcon.HTTPError:\n                span.set_attribute(\"outcome\", \"rejected\")\n                span.set_attribute(\"failure_category\", \"invalid_input\")\n                raise\n            actor = principal_id(req)\n            if actor is None:\n                span.set_attribute(\"outcome\", \"not_found\")\n                span.set_attribute(\"failure_category\", \"run.not_found\")\n                raise _run_not_found(parsed_run_id)\n            async with self._uow_factory() as uow:\n                run = await uow.generation_runs.get_run(parsed_run_id)\n            if run is None:\n                span.set_attribute(\"outcome\", \"not_found\")\n                span.set_attribute(\"failure_category\", \"run.not_found\")\n                raise _run_not_found(parsed_run_id)\n            if run.actor != actor:\n                span.set_attribute(\"outcome\", \"not_found\")\n                span.set_attribute(\"failure_category\", \"run.not_found\")\n                raise _run_not_found(parsed_run_id)\n            resp.media = serialize_generation_run(run)\n            resp.status = falcon.HTTP_200\n            if not run.status.is_terminal():\n                resp.set_header(\"Retry-After\", _RETRY_AFTER)\n            span.set_attribute(\"outcome\", \"success\")",
+        "hash": "f02e0baa71fc5621",
+        "size": 149,
+        "line_count": 37,
+        "complexity": 0
+      },
+      {
+        "id": 66,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_bindings.py",
+          "start_line": 72,
+          "end_line": 101,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_get(self, req: falcon.Request, resp: falcon.Response) -\u003e None:\n        \"\"\"List reusable reference bindings for one target context.\"\"\"\n        params = require_query_params(req, \"target_kind\", \"target_id\")\n        page = parse_pagination(req)\n        target_kind = typ.cast(\n            \"ReferenceBindingTargetKind\",\n            parse_enum_param(req, \"target_kind\", ReferenceBindingTargetKind),\n        )\n\n        try:\n            async with self._uow_factory() as uow:\n                bindings, total = await list_reference_bindings_paged(\n                    uow,\n                    request=ReferenceBindingListRequest(\n                        target_kind=target_kind.value,\n                        target_id=str(parse_uuid(params[\"target_id\"], \"target_id\")),\n                        limit=page.limit,\n                        offset=page.offset,\n                    ),\n                )\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-binding\") from exc\n\n        resp.media = {\n            \"items\": [serialize_reference_binding(item) for item in bindings],\n            \"limit\": page.limit,\n            \"offset\": page.offset,\n            \"total\": total,\n        }\n        resp.status = falcon.HTTP_200",
+        "hash": "ae5743e0dd6edd84",
+        "size": 105,
+        "line_count": 30,
+        "complexity": 0
+      },
+      {
+        "id": 68,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_bindings.py",
+          "start_line": 110,
+          "end_line": 129,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        binding_id: str,\n    ) -\u003e None:\n        \"\"\"Fetch one reusable reference binding by identifier.\"\"\"\n        del req\n\n        try:\n            async with self._uow_factory() as uow:\n                binding = await get_reference_binding(\n                    uow,\n                    binding_id=str(parse_uuid(binding_id, \"binding_id\")),\n                )\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-binding\") from exc\n\n        resp.media = serialize_reference_binding(binding)\n        resp.status = falcon.HTTP_200",
+        "hash": "de88cf3c53480915",
+        "size": 57,
+        "line_count": 20,
+        "complexity": 0
+      },
+      {
+        "id": 71,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_documents.py",
+          "start_line": 79,
+          "end_line": 103,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_post(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        profile_id: str,\n    ) -\u003e None:\n        \"\"\"Create one reusable reference document for a series profile.\"\"\"\n        payload = require_payload_dict(await req.get_media())\n        _require_fields(payload, \"kind\", \"lifecycle_state\", \"metadata\")\n\n        data = ReferenceDocumentCreateData(\n            owner_series_profile_id=str(parse_uuid(profile_id, \"profile_id\")),\n            kind=typ.cast(\"str\", payload[\"kind\"]),\n            lifecycle_state=typ.cast(\"str\", payload[\"lifecycle_state\"]),\n            metadata=typ.cast(\"dict[str, object]\", payload[\"metadata\"]),\n        )\n\n        try:\n            async with self._uow_factory() as uow:\n                document = await create_reference_document(uow, data=data)\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-document\") from exc\n\n        resp.media = serialize_reference_document(document)\n        resp.status = falcon.HTTP_201",
+        "hash": "74e2b371e68d9e07",
+        "size": 99,
+        "line_count": 25,
+        "complexity": 0
+      },
+      {
+        "id": 72,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_documents.py",
+          "start_line": 106,
+          "end_line": 138,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        profile_id: str,\n    ) -\u003e None:\n        \"\"\"List reusable reference documents for one series profile.\"\"\"\n        page = parse_pagination(req)\n        kind = parse_enum_param(req, \"kind\", ReferenceDocumentKind)\n\n        try:\n            async with self._uow_factory() as uow:\n                documents, total = await list_reference_documents_paged(\n                    uow,\n                    request=ReferenceDocumentListRequest(\n                        owner_series_profile_id=str(\n                            parse_uuid(profile_id, \"profile_id\")\n                        ),\n                        kind=None if kind is None else kind.value,\n                        limit=page.limit,\n                        offset=page.offset,\n                    ),\n                )\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-document\") from exc\n\n        resp.media = {\n            \"items\": [serialize_reference_document(item) for item in documents],\n            \"limit\": page.limit,\n            \"offset\": page.offset,\n            \"total\": total,\n        }\n        resp.status = falcon.HTTP_200",
+        "hash": "cc91b2aee7e29715",
+        "size": 100,
+        "line_count": 33,
+        "complexity": 0
+      },
+      {
+        "id": 74,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_documents.py",
+          "start_line": 148,
+          "end_line": 168,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        profile_id: str,\n        document_id: str,\n    ) -\u003e None:\n        \"\"\"Fetch one reusable reference document by identifier.\"\"\"\n        del req\n        try:\n            async with self._uow_factory() as uow:\n                document = await get_reference_document(\n                    uow,\n                    document_id=str(parse_uuid(document_id, \"document_id\")),\n                    owner_series_profile_id=str(parse_uuid(profile_id, \"profile_id\")),\n                )\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-document\") from exc\n\n        resp.media = serialize_reference_document(document)\n        resp.status = falcon.HTTP_200",
+        "hash": "7088336101511e3b",
+        "size": 67,
+        "line_count": 21,
+        "complexity": 0
+      },
+      {
+        "id": 75,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_documents.py",
+          "start_line": 171,
+          "end_line": 200,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_patch(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        profile_id: str,\n        document_id: str,\n    ) -\u003e None:\n        \"\"\"Update one reusable reference document with optimistic locking.\"\"\"\n        payload = require_payload_dict(await req.get_media())\n        _require_fields(payload, \"lifecycle_state\", \"metadata\")\n\n        request = ReferenceDocumentUpdateRequest(\n            document_id=str(parse_uuid(document_id, \"document_id\")),\n            owner_series_profile_id=str(parse_uuid(profile_id, \"profile_id\")),\n            expected_lock_version=_parse_expected_lock_version(payload),\n            lifecycle_state=typ.cast(\"str\", payload[\"lifecycle_state\"]),\n            metadata=typ.cast(\"dict[str, object]\", payload[\"metadata\"]),\n        )\n\n        try:\n            async with self._uow_factory() as uow:\n                updated = await update_reference_document(\n                    uow,\n                    request=request,\n                )\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-document\") from exc\n\n        resp.media = serialize_reference_document(updated)\n        resp.status = falcon.HTTP_200",
+        "hash": "7751f9578d7b46fc",
+        "size": 104,
+        "line_count": 30,
+        "complexity": 0
+      },
+      {
+        "id": 77,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_documents.py",
+          "start_line": 210,
+          "end_line": 240,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_post(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        profile_id: str,\n        document_id: str,\n    ) -\u003e None:\n        \"\"\"Create one immutable revision for a reusable reference document.\"\"\"\n        payload = require_payload_dict(await req.get_media())\n        _require_fields(payload, \"content\", \"content_hash\")\n\n        data = ReferenceDocumentRevisionData(\n            content=typ.cast(\"dict[str, object]\", payload[\"content\"]),\n            content_hash=typ.cast(\"str\", payload[\"content_hash\"]),\n            author=typ.cast(\"str | None\", payload.get(\"author\")),\n            change_note=typ.cast(\"str | None\", payload.get(\"change_note\")),\n        )\n\n        try:\n            async with self._uow_factory() as uow:\n                revision = await create_reference_document_revision(\n                    uow,\n                    document_id=str(parse_uuid(document_id, \"document_id\")),\n                    owner_series_profile_id=str(parse_uuid(profile_id, \"profile_id\")),\n                    data=data,\n                )\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-document\") from exc\n\n        resp.media = serialize_reference_document_revision(revision)\n        resp.status = falcon.HTTP_201",
+        "hash": "2392015d07fdff95",
+        "size": 118,
+        "line_count": 31,
+        "complexity": 0
+      },
+      {
+        "id": 78,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_documents.py",
+          "start_line": 243,
+          "end_line": 277,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        profile_id: str,\n        document_id: str,\n    ) -\u003e None:\n        \"\"\"List immutable revisions for one reusable reference document.\"\"\"\n        page = parse_pagination(req)\n\n        try:\n            async with self._uow_factory() as uow:\n                revisions, total = await list_reference_document_revisions_paged(\n                    uow,\n                    request=ReferenceDocumentRevisionListRequest(\n                        document_id=str(parse_uuid(document_id, \"document_id\")),\n                        owner_series_profile_id=str(\n                            parse_uuid(profile_id, \"profile_id\")\n                        ),\n                        limit=page.limit,\n                        offset=page.offset,\n                    ),\n                )\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-document\") from exc\n\n        resp.media = {\n            \"items\": [\n                serialize_reference_document_revision(item) for item in revisions\n            ],\n            \"limit\": page.limit,\n            \"offset\": page.offset,\n            \"total\": total,\n        }\n        resp.status = falcon.HTTP_200",
+        "hash": "f152a675ef27cde5",
+        "size": 95,
+        "line_count": 35,
+        "complexity": 0
+      },
+      {
+        "id": 80,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/reference_documents.py",
+          "start_line": 286,
+          "end_line": 313,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        revision_id: str,\n    ) -\u003e None:\n        \"\"\"Fetch one immutable revision by identifier.\"\"\"\n        owner_series_profile_id = parse_optional_uuid_param(\n            req,\n            \"owner_series_profile_id\",\n        )\n\n        try:\n            async with self._uow_factory() as uow:\n                revision = await get_reference_document_revision(\n                    uow,\n                    revision_id=str(parse_uuid(revision_id, \"revision_id\")),\n                    owner_series_profile_id=(\n                        None\n                        if owner_series_profile_id is None\n                        else str(owner_series_profile_id)\n                    ),\n                )\n        except ReferenceDocumentError as exc:\n            raise map_reference_error(exc, context=\"reference-document\") from exc\n\n        resp.media = serialize_reference_document_revision(revision)\n        resp.status = falcon.HTTP_200",
+        "hash": "0abeaf2c8ca0258b",
+        "size": 73,
+        "line_count": 28,
+        "complexity": 0
+      },
+      {
+        "id": 95,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/source_intake.py",
+          "start_line": 144,
+          "end_line": 159,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        upload_id: str,\n    ) -\u003e None:\n        \"\"\"Return one upload metadata envelope.\"\"\"\n        parsed_upload_id = parse_uuid(upload_id, \"upload_id\")\n        async with self._uow_factory() as uow:\n            try:\n                upload = await get_upload(uow, parsed_upload_id)\n                _require_upload_owner(upload.owner_principal_id, principal_id(req))\n            except SourceIntakeError as exc:\n                raise map_source_intake_error(exc) from exc\n        resp.media = serialize_upload(upload)\n        resp.status = falcon.HTTP_200",
+        "hash": "62cb80ad35271275",
+        "size": 60,
+        "line_count": 16,
+        "complexity": 0
+      },
+      {
+        "id": 103,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/api/resources/source_intake.py",
+          "start_line": 309,
+          "end_line": 335,
+          "start_col": 4,
+          "end_col": 37
+        },
+        "content": "    async def on_get(\n        self,\n        req: falcon.Request,\n        resp: falcon.Response,\n        ingestion_job_id: str,\n    ) -\u003e None:\n        \"\"\"List source attachments for one ingestion job.\"\"\"\n        parsed_job_id = parse_uuid(ingestion_job_id, \"ingestion_job_id\")\n        pagination = parse_pagination(req)\n        async with self._uow_factory() as uow:\n            try:\n                job = await get_ingestion_job_status(uow, parsed_job_id)\n                _require_ingestion_job_owner(job, principal_id(req))\n                page = await list_ingestion_job_sources(\n                    uow,\n                    parsed_job_id,\n                    pagination,\n                )\n            except SourceIntakeError as exc:\n                raise map_source_intake_error(exc) from exc\n        resp.media = {\n            \"items\": [serialize_ingestion_job_source(source) for source in page.items],\n            \"limit\": page.pagination.limit,\n            \"offset\": page.pagination.offset,\n            \"total\": page.total,\n        }\n        resp.status = falcon.HTTP_200",
+        "hash": "4109909d5e85d8d2",
+        "size": 90,
+        "line_count": 27,
+        "complexity": 0
+      },
+      {
+        "id": 191,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/canonical/generation_persistence.py",
+          "start_line": 198,
+          "end_line": 213,
+          "start_col": 0,
+          "end_col": 14
+        },
+        "content": "async def _load_ready_ingestion_job(\n    uow: CanonicalUnitOfWork,\n    ingestion_job_id: uuid.UUID,\n    *,\n    should_lock: bool,\n) -\u003e IngestionJob:\n    \"\"\"Load a ready ingestion job, optionally retaining its row lock.\"\"\"\n    if should_lock:\n        job = await uow.ingestion_jobs.get_for_update(ingestion_job_id)\n    else:\n        job = await uow.ingestion_jobs.get(ingestion_job_id)\n    if job is None:\n        raise IngestionJobNotFoundError(str(ingestion_job_id))\n    if job.intake_state is not IntakeState.READY_FOR_GENERATION:\n        raise IngestionJobNotReadyError(ingestion_job_id)\n    return job",
+        "hash": "1d19887ac28f4424",
+        "size": 55,
+        "line_count": 16,
+        "complexity": 0
+      },
+      {
+        "id": 313,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/canonical/storage/generation_runs.py",
+          "start_line": 60,
+          "end_line": 81,
+          "start_col": 4,
+          "end_col": 21
+        },
+        "content": "    async def _require_mutable_run(\n        self,\n        run_id: uuid.UUID,\n        *,\n        lock: bool = False,\n    ) -\u003e GenerationRunRecord:\n        \"\"\"Return a non-terminal run record or raise the domain error.\"\"\"\n        if lock:\n            result = await self._session.execute(\n                sa\n                .select(GenerationRunRecord)\n                .where(GenerationRunRecord.id == run_id)\n                .with_for_update()\n            )\n            record = result.scalar_one_or_none()\n        else:\n            record = await self._get_record(run_id)\n        if record is None:\n            raise RunNotFound(run_id)\n        if record.status.is_terminal():\n            raise RunAlreadyTerminal(run_id)\n        return record",
+        "hash": "6c2ec7ee02ad698e",
+        "size": 66,
+        "line_count": 22,
+        "complexity": 0
+      },
+      {
+        "id": 314,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/canonical/storage/generation_runs.py",
+          "start_line": 83,
+          "end_line": 99,
+          "start_col": 4,
+          "end_col": 38
+        },
+        "content": "    async def _get_by_idempotency_key(\n        self,\n        idempotency_principal_id: str | None,\n        idempotency_key: str,\n    ) -\u003e GenerationRun | None:\n        \"\"\"Return the first run for an idempotency key.\"\"\"\n        result = await self._session.execute(\n            sa.select(GenerationRunRecord).where(\n                GenerationRunRecord.idempotency_principal_id\n                == normalise_idempotency_principal(idempotency_principal_id),\n                GenerationRunRecord.idempotency_key == idempotency_key,\n            )\n        )\n        record = result.scalar_one_or_none()\n        if record is None:\n            return None\n        return run_from_record(record)",
+        "hash": "a2ac2e1cc129be61",
+        "size": 53,
+        "line_count": 17,
+        "complexity": 0
+      },
+      {
+        "id": 355,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/canonical/storage/repositories.py",
+          "start_line": 112,
+          "end_line": 129,
+          "start_col": 4,
+          "end_col": 77
+        },
+        "content": "    async def list(\n        self,\n        *,\n        limit: int | None = None,\n        offset: int = 0,\n    ) -\u003e cabc.Sequence[SeriesProfile]:\n        \"\"\"List all series profiles.\"\"\"\n        statement = (\n            sa\n            .select(SeriesProfileRecord)\n            .where(sa.true())\n            .order_by(SeriesProfileRecord.created_at, SeriesProfileRecord.id)\n            .offset(offset)\n        )\n        if limit is not None:\n            statement = statement.limit(limit)\n        result = await self._session.execute(statement)\n        return [_series_profile_from_record(row) for row in result.scalars()]",
+        "hash": "8230b23b83b852e9",
+        "size": 69,
+        "line_count": 18,
+        "complexity": 0
+      },
+      {
+        "id": 361,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/canonical/storage/repository_base.py",
+          "start_line": 73,
+          "end_line": 94,
+          "start_col": 4,
+          "end_col": 56
+        },
+        "content": "    async def _list_paginated[RecordT, DomainT](  # noqa: PLR0913  # filters and pagination bounds are independent inputs\n        self,\n        record_type: type[RecordT],\n        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.\n        order_by_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.\n        mapper: cabc.Callable[[RecordT], DomainT],\n        *,\n        limit: int | None = None,\n        offset: int = 0,\n    ) -\u003e list[DomainT]:\n        \"\"\"List mapped records with ordering and optional limit/offset paging.\"\"\"\n        statement = (\n            sa\n            .select(record_type)\n            .where(where_clause)\n            .order_by(order_by_clause)\n            .offset(offset)\n        )\n        if limit is not None:\n            statement = statement.limit(limit)\n        result = await self._session.execute(statement)\n        return [mapper(row) for row in result.scalars()]",
+        "hash": "29449eb4fd928b04",
+        "size": 87,
+        "line_count": 22,
+        "complexity": 0
+      },
+      {
+        "id": 383,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/canonical/storage/workflow_checkpoints.py",
+          "start_line": 107,
+          "end_line": 126,
+          "start_col": 4,
+          "end_col": 38
+        },
+        "content": "    async def get_by_idempotency_key(\n        self,\n        idempotency_key: str,\n    ) -\u003e WorkflowCheckpoint | None:\n        \"\"\"Return the checkpoint for an idempotency key.\"\"\"\n        result = await self._session.execute(\n            select(WorkflowCheckpointRecord).where(\n                WorkflowCheckpointRecord.idempotency_key == idempotency_key\n            )\n        )\n        record = result.scalar_one_or_none()\n        _log_event(\n            \"debug\",\n            \"sql_checkpoint_store.get_by_idempotency_key\",\n            idempotency_key=idempotency_key,\n            found=record is not None,\n        )\n        if record is None:\n            return None\n        return _map_checkpoint(record)",
+        "hash": "ab96fd4879695694",
+        "size": 51,
+        "line_count": 20,
+        "complexity": 0
+      },
+      {
+        "id": 537,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/llm/openai_chat.py",
+          "start_line": 46,
+          "end_line": 83,
+          "start_col": 0,
+          "end_col": 74
+        },
+        "content": "def is_openai_choice_payload(payload: object) -\u003e bool:\n    \"\"\"Validate one OpenAI chat completion choice.\n\n    Parameters\n    ----------\n    payload : object\n        Candidate choice object from a provider ``choices`` list.\n\n    Returns\n    -------\n    bool\n        ``True`` when *payload* is a mapping with a message containing\n        non-empty string content and an optional string or ``None``\n        ``finish_reason``.\n\n    Examples\n    --------\n    \u003e\u003e\u003e is_openai_choice_payload({\"message\": {\"content\": \"Hello\"}})\n    True\n    \u003e\u003e\u003e is_openai_choice_payload({\"message\": {\"content\": \"   \"}})\n    False\n    \"\"\"\n    if not _is_string_keyed_mapping(payload):\n        return False\n    payload_mapping = typ.cast(\"cabc.Mapping[str, object]\", payload)\n\n    message = payload_mapping.get(\"message\")\n    if not _is_string_keyed_mapping(message):\n        return False\n    message_mapping = typ.cast(\"cabc.Mapping[str, object]\", message)\n\n    content = message_mapping.get(\"content\")\n    if not isinstance(content, str) or not content.strip():\n        return False\n\n    if \"finish_reason\" not in payload_mapping:\n        return True\n    return isinstance(payload_mapping[\"finish_reason\"], (str, type(None)))",
+        "hash": "b7c1576091fa02ea",
+        "size": 81,
+        "line_count": 38,
+        "complexity": 0
+      },
+      {
+        "id": 538,
+        "type": 0,
+        "location": {
+          "file_path": "episodic/llm/openai_chat.py",
+          "start_line": 157,
+          "end_line": 174,
+          "start_col": 0,
+          "end_col": 59
+        },
+        "content": "def _has_blank_first_choice_message_content(payload: object) -\u003e bool:\n    \"\"\"Return whether the first choice has blank message content.\"\"\"\n    if not _is_string_keyed_mapping(payload):\n        return False\n    payload_mapping = typ.cast(\"cabc.Mapping[str, object]\", payload)\n    choices = payload_mapping.get(\"choices\")\n    if not isinstance(choices, list) or not choices:\n        return False\n    first_choice = choices[0]\n    if not _is_string_keyed_mapping(first_choice):\n        return False\n    choice_mapping = typ.cast(\"cabc.Mapping[str, object]\", first_choice)\n    message = choice_mapping.get(\"message\")\n    if not _is_string_keyed_mapping(message):\n        return False\n    message_mapping = typ.cast(\"cabc.Mapping[str, object]\", message)\n    content = message_mapping.get(\"content\")\n    return isinstance(content, str) and not content.strip()",
+        "hash": "50beded6db333202",
+        "size": 99,
+        "line_count": 18,
+        "complexity": 0
+      }
+    ],
+    "clone_pairs": [
+      {
+        "id": 1,
+        "clone1": {
+          "id": 66,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_bindings.py",
+            "start_line": 72,
+            "end_line": 101,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "ae5743e0dd6edd84",
+          "size": 105,
+          "line_count": 30,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 72,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 106,
+            "end_line": 138,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "cc91b2aee7e29715",
+          "size": 100,
+          "line_count": 33,
+          "complexity": 0
+        },
+        "similarity": 0.9972988554925681,
+        "distance": 32.9,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 2,
+        "clone1": {
+          "id": 80,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 286,
+            "end_line": 313,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "0abeaf2c8ca0258b",
+          "size": 73,
+          "line_count": 28,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 95,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/source_intake.py",
+            "start_line": 144,
+            "end_line": 159,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "62cb80ad35271275",
+          "size": 60,
+          "line_count": 16,
+          "complexity": 0
+        },
+        "similarity": 0.9880729036112533,
+        "distance": 32.800000000000004,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 3,
+        "clone1": {
+          "id": 72,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 106,
+            "end_line": 138,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "cc91b2aee7e29715",
+          "size": 100,
+          "line_count": 33,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 103,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/source_intake.py",
+            "start_line": 309,
+            "end_line": 335,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "4109909d5e85d8d2",
+          "size": 90,
+          "line_count": 27,
+          "complexity": 0
+        },
+        "similarity": 0.983537423754739,
+        "distance": 50.900000000000006,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 4,
+        "clone1": {
+          "id": 71,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 79,
+            "end_line": 103,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "74e2b371e68d9e07",
+          "size": 99,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 77,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 210,
+            "end_line": 240,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "2392015d07fdff95",
+          "size": 118,
+          "line_count": 31,
+          "complexity": 0
+        },
+        "similarity": 0.9807404787679442,
+        "distance": 37.800000000000004,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 5,
+        "clone1": {
+          "id": 74,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 148,
+            "end_line": 168,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "7088336101511e3b",
+          "size": 67,
+          "line_count": 21,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 80,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 286,
+            "end_line": 313,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "0abeaf2c8ca0258b",
+          "size": 73,
+          "line_count": 28,
+          "complexity": 0
+        },
+        "similarity": 0.9743684806548324,
+        "distance": 23.299999999999997,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 6,
+        "clone1": {
+          "id": 191,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/canonical/generation_persistence.py",
+            "start_line": 198,
+            "end_line": 213,
+            "start_col": 0,
+            "end_col": 14
+          },
+          "hash": "1d19887ac28f4424",
+          "size": 55,
+          "line_count": 16,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 313,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/canonical/storage/generation_runs.py",
+            "start_line": 60,
+            "end_line": 81,
+            "start_col": 4,
+            "end_col": 21
+          },
+          "hash": "6c2ec7ee02ad698e",
+          "size": 66,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "similarity": 0.974235088108765,
+        "distance": 39.5,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 7,
+        "clone1": {
+          "id": 66,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_bindings.py",
+            "start_line": 72,
+            "end_line": 101,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "ae5743e0dd6edd84",
+          "size": 105,
+          "line_count": 30,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 78,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 243,
+            "end_line": 277,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "f152a675ef27cde5",
+          "size": 95,
+          "line_count": 35,
+          "complexity": 0
+        },
+        "similarity": 0.9647925654875734,
+        "distance": 35.199999999999996,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 8,
+        "clone1": {
+          "id": 68,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_bindings.py",
+            "start_line": 110,
+            "end_line": 129,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "de88cf3c53480915",
+          "size": 57,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 95,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/source_intake.py",
+            "start_line": 144,
+            "end_line": 159,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "62cb80ad35271275",
+          "size": 60,
+          "line_count": 16,
+          "complexity": 0
+        },
+        "similarity": 0.9616863179704284,
+        "distance": 27.7,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 9,
+        "clone1": {
+          "id": 355,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/canonical/storage/repositories.py",
+            "start_line": 112,
+            "end_line": 129,
+            "start_col": 4,
+            "end_col": 77
+          },
+          "hash": "8230b23b83b852e9",
+          "size": 69,
+          "line_count": 18,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 361,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/canonical/storage/repository_base.py",
+            "start_line": 73,
+            "end_line": 94,
+            "start_col": 4,
+            "end_col": 56
+          },
+          "hash": "29449eb4fd928b04",
+          "size": 87,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "similarity": 0.95222028946863,
+        "distance": 35.2,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 10,
+        "clone1": {
+          "id": 314,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/canonical/storage/generation_runs.py",
+            "start_line": 83,
+            "end_line": 99,
+            "start_col": 4,
+            "end_col": 38
+          },
+          "hash": "a2ac2e1cc129be61",
+          "size": 53,
+          "line_count": 17,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 383,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/canonical/storage/workflow_checkpoints.py",
+            "start_line": 107,
+            "end_line": 126,
+            "start_col": 4,
+            "end_col": 38
+          },
+          "hash": "ab96fd4879695694",
+          "size": 51,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "similarity": 0.9442559778647974,
+        "distance": 25.6,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 11,
+        "clone1": {
+          "id": 17,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/handlers.py",
+            "start_line": 44,
+            "end_line": 88,
+            "start_col": 0,
+            "end_col": 59
+          },
+          "hash": "7d7ae06bb5426a76",
+          "size": 78,
+          "line_count": 45,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 19,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/handlers.py",
+            "start_line": 194,
+            "end_line": 257,
+            "start_col": 0,
+            "end_col": 59
+          },
+          "hash": "9b1761b7c85ecf69",
+          "size": 109,
+          "line_count": 64,
+          "complexity": 0
+        },
+        "similarity": 0.9438786465246456,
+        "distance": 45.5,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 12,
+        "clone1": {
+          "id": 71,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 79,
+            "end_line": 103,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "74e2b371e68d9e07",
+          "size": 99,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 95,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/source_intake.py",
+            "start_line": 144,
+            "end_line": 159,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "62cb80ad35271275",
+          "size": 60,
+          "line_count": 16,
+          "complexity": 0
+        },
+        "similarity": 0.9378968275272936,
+        "distance": 61.60000000000001,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 13,
+        "clone1": {
+          "id": 537,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/llm/openai_chat.py",
+            "start_line": 46,
+            "end_line": 83,
+            "start_col": 0,
+            "end_col": 74
+          },
+          "hash": "b7c1576091fa02ea",
+          "size": 81,
+          "line_count": 38,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 538,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/llm/openai_chat.py",
+            "start_line": 157,
+            "end_line": 174,
+            "start_col": 0,
+            "end_col": 59
+          },
+          "hash": "50beded6db333202",
+          "size": 99,
+          "line_count": 18,
+          "complexity": 0
+        },
+        "similarity": 0.937693864832327,
+        "distance": 55,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 14,
+        "clone1": {
+          "id": 34,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/episode_tei.py",
+            "start_line": 42,
+            "end_line": 116,
+            "start_col": 4,
+            "end_col": 52
+          },
+          "hash": "ad948d77ee672529",
+          "size": 181,
+          "line_count": 75,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 52,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/generation_runs.py",
+            "start_line": 298,
+            "end_line": 334,
+            "start_col": 4,
+            "end_col": 52
+          },
+          "hash": "f02e0baa71fc5621",
+          "size": 149,
+          "line_count": 37,
+          "complexity": 0
+        },
+        "similarity": 0.9325583152316612,
+        "distance": 96,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 15,
+        "clone1": {
+          "id": 71,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 79,
+            "end_line": 103,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "74e2b371e68d9e07",
+          "size": 99,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 80,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 286,
+            "end_line": 313,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "0abeaf2c8ca0258b",
+          "size": 73,
+          "line_count": 28,
+          "complexity": 0
+        },
+        "similarity": 0.9274278025787897,
+        "distance": 61.59999999999997,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 16,
+        "clone1": {
+          "id": 74,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 148,
+            "end_line": 168,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "7088336101511e3b",
+          "size": 67,
+          "line_count": 21,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 75,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 171,
+            "end_line": 200,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "7751f9578d7b46fc",
+          "size": 104,
+          "line_count": 30,
+          "complexity": 0
+        },
+        "similarity": 0.9147379479892238,
+        "distance": 52.29999999999998,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 17,
+        "clone1": {
+          "id": 95,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/source_intake.py",
+            "start_line": 144,
+            "end_line": 159,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "62cb80ad35271275",
+          "size": 60,
+          "line_count": 16,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 103,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/source_intake.py",
+            "start_line": 309,
+            "end_line": 335,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "4109909d5e85d8d2",
+          "size": 90,
+          "line_count": 27,
+          "complexity": 0
+        },
+        "similarity": 0.9134327829612305,
+        "distance": 37.50000000000001,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 18,
+        "clone1": {
+          "id": 71,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 79,
+            "end_line": 103,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "74e2b371e68d9e07",
+          "size": 99,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 74,
+          "type": 4,
+          "location": {
+            "file_path": "episodic/api/resources/reference_documents.py",
+            "start_line": 148,
+            "end_line": 168,
+            "start_col": 4,
+            "end_col": 37
+          },
+          "hash": "7088336101511e3b",
+          "size": 67,
+          "line_count": 21,
+          "complexity": 0
+        },
+        "similarity": 0.9080371768790413,
+        "distance": 61.29999999999998,
+        "type": 4,
+        "confidence": 0.85
+      }
+    ],
+    "clone_groups": [
+      {
+        "id": 1,
+        "clones": [
+          {
+            "id": 191,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/canonical/generation_persistence.py",
+              "start_line": 198,
+              "end_line": 213,
+              "start_col": 0,
+              "end_col": 14
+            },
+            "hash": "1d19887ac28f4424",
+            "size": 55,
+            "line_count": 16,
+            "complexity": 0
+          },
+          {
+            "id": 313,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/canonical/storage/generation_runs.py",
+              "start_line": 60,
+              "end_line": 81,
+              "start_col": 4,
+              "end_col": 21
+            },
+            "hash": "6c2ec7ee02ad698e",
+            "size": 66,
+            "line_count": 22,
+            "complexity": 0
+          }
+        ],
+        "type": 4,
+        "similarity": 0.974235088108765,
+        "size": 2
+      },
+      {
+        "id": 0,
+        "clones": [
+          {
+            "id": 66,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_bindings.py",
+              "start_line": 72,
+              "end_line": 101,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "ae5743e0dd6edd84",
+            "size": 105,
+            "line_count": 30,
+            "complexity": 0
+          },
+          {
+            "id": 68,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_bindings.py",
+              "start_line": 110,
+              "end_line": 129,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "de88cf3c53480915",
+            "size": 57,
+            "line_count": 20,
+            "complexity": 0
+          },
+          {
+            "id": 71,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_documents.py",
+              "start_line": 79,
+              "end_line": 103,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "74e2b371e68d9e07",
+            "size": 99,
+            "line_count": 25,
+            "complexity": 0
+          },
+          {
+            "id": 72,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_documents.py",
+              "start_line": 106,
+              "end_line": 138,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "cc91b2aee7e29715",
+            "size": 100,
+            "line_count": 33,
+            "complexity": 0
+          },
+          {
+            "id": 74,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_documents.py",
+              "start_line": 148,
+              "end_line": 168,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "7088336101511e3b",
+            "size": 67,
+            "line_count": 21,
+            "complexity": 0
+          },
+          {
+            "id": 75,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_documents.py",
+              "start_line": 171,
+              "end_line": 200,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "7751f9578d7b46fc",
+            "size": 104,
+            "line_count": 30,
+            "complexity": 0
+          },
+          {
+            "id": 77,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_documents.py",
+              "start_line": 210,
+              "end_line": 240,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "2392015d07fdff95",
+            "size": 118,
+            "line_count": 31,
+            "complexity": 0
+          },
+          {
+            "id": 78,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_documents.py",
+              "start_line": 243,
+              "end_line": 277,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "f152a675ef27cde5",
+            "size": 95,
+            "line_count": 35,
+            "complexity": 0
+          },
+          {
+            "id": 80,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/reference_documents.py",
+              "start_line": 286,
+              "end_line": 313,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "0abeaf2c8ca0258b",
+            "size": 73,
+            "line_count": 28,
+            "complexity": 0
+          },
+          {
+            "id": 95,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/source_intake.py",
+              "start_line": 144,
+              "end_line": 159,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "62cb80ad35271275",
+            "size": 60,
+            "line_count": 16,
+            "complexity": 0
+          },
+          {
+            "id": 103,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/source_intake.py",
+              "start_line": 309,
+              "end_line": 335,
+              "start_col": 4,
+              "end_col": 37
+            },
+            "hash": "4109909d5e85d8d2",
+            "size": 90,
+            "line_count": 27,
+            "complexity": 0
+          }
+        ],
+        "type": 4,
+        "similarity": 0.9543357969729098,
+        "size": 11
+      },
+      {
+        "id": 2,
+        "clones": [
+          {
+            "id": 355,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/canonical/storage/repositories.py",
+              "start_line": 112,
+              "end_line": 129,
+              "start_col": 4,
+              "end_col": 77
+            },
+            "hash": "8230b23b83b852e9",
+            "size": 69,
+            "line_count": 18,
+            "complexity": 0
+          },
+          {
+            "id": 361,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/canonical/storage/repository_base.py",
+              "start_line": 73,
+              "end_line": 94,
+              "start_col": 4,
+              "end_col": 56
+            },
+            "hash": "29449eb4fd928b04",
+            "size": 87,
+            "line_count": 22,
+            "complexity": 0
+          }
+        ],
+        "type": 4,
+        "similarity": 0.95222028946863,
+        "size": 2
+      },
+      {
+        "id": 3,
+        "clones": [
+          {
+            "id": 314,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/canonical/storage/generation_runs.py",
+              "start_line": 83,
+              "end_line": 99,
+              "start_col": 4,
+              "end_col": 38
+            },
+            "hash": "a2ac2e1cc129be61",
+            "size": 53,
+            "line_count": 17,
+            "complexity": 0
+          },
+          {
+            "id": 383,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/canonical/storage/workflow_checkpoints.py",
+              "start_line": 107,
+              "end_line": 126,
+              "start_col": 4,
+              "end_col": 38
+            },
+            "hash": "ab96fd4879695694",
+            "size": 51,
+            "line_count": 20,
+            "complexity": 0
+          }
+        ],
+        "type": 4,
+        "similarity": 0.9442559778647974,
+        "size": 2
+      },
+      {
+        "id": 4,
+        "clones": [
+          {
+            "id": 17,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/handlers.py",
+              "start_line": 44,
+              "end_line": 88,
+              "start_col": 0,
+              "end_col": 59
+            },
+            "hash": "7d7ae06bb5426a76",
+            "size": 78,
+            "line_count": 45,
+            "complexity": 0
+          },
+          {
+            "id": 19,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/handlers.py",
+              "start_line": 194,
+              "end_line": 257,
+              "start_col": 0,
+              "end_col": 59
+            },
+            "hash": "9b1761b7c85ecf69",
+            "size": 109,
+            "line_count": 64,
+            "complexity": 0
+          }
+        ],
+        "type": 4,
+        "similarity": 0.9438786465246456,
+        "size": 2
+      },
+      {
+        "id": 5,
+        "clones": [
+          {
+            "id": 537,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/llm/openai_chat.py",
+              "start_line": 46,
+              "end_line": 83,
+              "start_col": 0,
+              "end_col": 74
+            },
+            "hash": "b7c1576091fa02ea",
+            "size": 81,
+            "line_count": 38,
+            "complexity": 0
+          },
+          {
+            "id": 538,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/llm/openai_chat.py",
+              "start_line": 157,
+              "end_line": 174,
+              "start_col": 0,
+              "end_col": 59
+            },
+            "hash": "50beded6db333202",
+            "size": 99,
+            "line_count": 18,
+            "complexity": 0
+          }
+        ],
+        "type": 4,
+        "similarity": 0.937693864832327,
+        "size": 2
+      },
+      {
+        "id": 6,
+        "clones": [
+          {
+            "id": 34,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/episode_tei.py",
+              "start_line": 42,
+              "end_line": 116,
+              "start_col": 4,
+              "end_col": 52
+            },
+            "hash": "ad948d77ee672529",
+            "size": 181,
+            "line_count": 75,
+            "complexity": 0
+          },
+          {
+            "id": 52,
+            "type": 4,
+            "location": {
+              "file_path": "episodic/api/resources/generation_runs.py",
+              "start_line": 298,
+              "end_line": 334,
+              "start_col": 4,
+              "end_col": 52
+            },
+            "hash": "f02e0baa71fc5621",
+            "size": 149,
+            "line_count": 37,
+            "complexity": 0
+          }
+        ],
+        "type": 4,
+        "similarity": 0.9325583152316612,
+        "size": 2
+      }
+    ],
+    "statistics": {
+      "total_fragments": 670,
+      "total_clones": 23,
+      "total_clone_pairs": 18,
+      "total_clone_groups": 7,
+      "clones_by_type": {
+        "Type-4": 18
+      },
+      "average_similarity": 0.9520484303169857,
+      "lines_analyzed": 35671,
+      "nodes_analyzed": 80828,
+      "files_analyzed": 196
+    },
+    "request": {
+      "paths": [
+        "episodic/__init__.py",
+        "episodic/api/__init__.py",
+        "episodic/api/app.py",
+        "episodic/api/authorization.py",
+        "episodic/api/dependencies.py",
+        "episodic/api/errors.py",
+        "episodic/api/handlers.py",
+        "episodic/api/helpers.py",
+        "episodic/api/resources/__init__.py",
+        "episodic/api/resources/base.py",
+        "episodic/api/resources/episode_tei.py",
+        "episodic/api/resources/episode_templates.py",
+        "episodic/api/resources/generation_runs.py",
+        "episodic/api/resources/health.py",
+        "episodic/api/resources/reference_bindings.py",
+        "episodic/api/resources/reference_documents.py",
+        "episodic/api/resources/resolved_bindings.py",
+        "episodic/api/resources/series_profiles.py",
+        "episodic/api/resources/source_intake.py",
+        "episodic/api/runtime.py",
+        "episodic/api/runtime_config.py",
+        "episodic/api/serializers.py",
+        "episodic/api/source_idempotency.py",
+        "episodic/api/source_intake_support.py",
+        "episodic/api/types.py",
+        "episodic/asyncio_tasks.py",
+        "episodic/benchmarks/__init__.py",
+        "episodic/benchmarks/interpreters.py",
+        "episodic/canonical/__init__.py",
+        "episodic/canonical/adapters/__init__.py",
+        "episodic/canonical/adapters/_coercion.py",
+        "episodic/canonical/adapters/generation_checkpoints.py",
+        "episodic/canonical/adapters/generation_runs.py",
+        "episodic/canonical/adapters/normalizer.py",
+        "episodic/canonical/adapters/resolver.py",
+        "episodic/canonical/adapters/weighting.py",
+        "episodic/canonical/briefs.py",
+        "episodic/canonical/constraints.py",
+        "episodic/canonical/domain.py",
+        "episodic/canonical/entity_protocols.py",
+        "episodic/canonical/episode_errors.py",
+        "episodic/canonical/episode_factory.py",
+        "episodic/canonical/generation_persistence.py",
+        "episodic/canonical/generation_persistence_projection.py",
+        "episodic/canonical/generation_persistence_types.py",
+        "episodic/canonical/generation_quality.py",
+        "episodic/canonical/generation_run_errors.py",
+        "episodic/canonical/generation_run_ports.py",
+        "episodic/canonical/hashing.py",
+        "episodic/canonical/health.py",
+        "episodic/canonical/history_protocols.py",
+        "episodic/canonical/idempotency.py",
+        "episodic/canonical/idempotency_service.py",
+        "episodic/canonical/ingestion.py",
+        "episodic/canonical/ingestion_ports.py",
+        "episodic/canonical/ingestion_service.py",
+        "episodic/canonical/ingestion_sources.py",
+        "episodic/canonical/object_store.py",
+        "episodic/canonical/pagination.py",
+        "episodic/canonical/ports.py",
+        "episodic/canonical/profile_templates/__init__.py",
+        "episodic/canonical/profile_templates/_brief_loaders.py",
+        "episodic/canonical/profile_templates/_brief_reference_documents.py",
+        "episodic/canonical/profile_templates/_brief_serializers.py",
+        "episodic/canonical/profile_templates/brief.py",
+        "episodic/canonical/profile_templates/helpers.py",
+        "episodic/canonical/profile_templates/services/__init__.py",
+        "episodic/canonical/profile_templates/services/_generic.py",
+        "episodic/canonical/profile_templates/services/_typed.py",
+        "episodic/canonical/profile_templates/types.py",
+        "episodic/canonical/prompts.py",
+        "episodic/canonical/provenance.py",
+        "episodic/canonical/reference_documents/__init__.py",
+        "episodic/canonical/reference_documents/_binding_creation.py",
+        "episodic/canonical/reference_documents/_binding_queries.py",
+        "episodic/canonical/reference_documents/_binding_validation.py",
+        "episodic/canonical/reference_documents/bindings.py",
+        "episodic/canonical/reference_documents/documents.py",
+        "episodic/canonical/reference_documents/helpers.py",
+        "episodic/canonical/reference_documents/resolution.py",
+        "episodic/canonical/reference_documents/revisions.py",
+        "episodic/canonical/reference_documents/services.py",
+        "episodic/canonical/reference_documents/snapshots.py",
+        "episodic/canonical/reference_documents/types.py",
+        "episodic/canonical/reference_protocols.py",
+        "episodic/canonical/services.py",
+        "episodic/canonical/source_intake_errors.py",
+        "episodic/canonical/source_intake_runtime.py",
+        "episodic/canonical/source_intake_service.py",
+        "episodic/canonical/source_intake_types.py",
+        "episodic/canonical/storage/__init__.py",
+        "episodic/canonical/storage/alembic_helpers.py",
+        "episodic/canonical/storage/compression.py",
+        "episodic/canonical/storage/entity_mappers.py",
+        "episodic/canonical/storage/entity_models.py",
+        "episodic/canonical/storage/episode_repository.py",
+        "episodic/canonical/storage/filesystem_object_store.py",
+        "episodic/canonical/storage/generation_run_mappers.py",
+        "episodic/canonical/storage/generation_run_models.py",
+        "episodic/canonical/storage/generation_run_storage_runtime.py",
+        "episodic/canonical/storage/generation_runs.py",
+        "episodic/canonical/storage/history_mappers.py",
+        "episodic/canonical/storage/history_models.py",
+        "episodic/canonical/storage/history_repositories.py",
+        "episodic/canonical/storage/ingestion_job_repositories.py",
+        "episodic/canonical/storage/integrity_helpers.py",
+        "episodic/canonical/storage/mappers.py",
+        "episodic/canonical/storage/migration_check.py",
+        "episodic/canonical/storage/models.py",
+        "episodic/canonical/storage/models_base.py",
+        "episodic/canonical/storage/profile_models.py",
+        "episodic/canonical/storage/reference_document_schema.py",
+        "episodic/canonical/storage/reference_mappers.py",
+        "episodic/canonical/storage/reference_models.py",
+        "episodic/canonical/storage/reference_repositories.py",
+        "episodic/canonical/storage/repositories.py",
+        "episodic/canonical/storage/repository_base.py",
+        "episodic/canonical/storage/source_intake_mappers.py",
+        "episodic/canonical/storage/source_intake_models.py",
+        "episodic/canonical/storage/source_intake_repositories.py",
+        "episodic/canonical/storage/source_intake_repository_runtime.py",
+        "episodic/canonical/storage/uow.py",
+        "episodic/canonical/storage/workflow_checkpoint_models.py",
+        "episodic/canonical/storage/workflow_checkpoints.py",
+        "episodic/canonical/tei.py",
+        "episodic/canonical/unit_of_work_protocols.py",
+        "episodic/canonical/upload_protocols.py",
+        "episodic/canonical/uploads.py",
+        "episodic/canonical/validation.py",
+        "episodic/compat.py",
+        "episodic/concurrent_interpreters.py",
+        "episodic/cost/__init__.py",
+        "episodic/cost/_time.py",
+        "episodic/cost/engine.py",
+        "episodic/cost/ports.py",
+        "episodic/cost/pricing_catalogue/__init__.py",
+        "episodic/cost/pricing_catalogue/file_loader.py",
+        "episodic/cost/recorder.py",
+        "episodic/cost/storage/__init__.py",
+        "episodic/cost/storage/adapters.py",
+        "episodic/cost/storage/models.py",
+        "episodic/generation/__init__.py",
+        "episodic/generation/chapter_marker_common.py",
+        "episodic/generation/chapter_marker_generator.py",
+        "episodic/generation/chapter_marker_models.py",
+        "episodic/generation/chapter_marker_segments.py",
+        "episodic/generation/chapter_marker_tei.py",
+        "episodic/generation/chapter_markers.py",
+        "episodic/generation/draft_script.py",
+        "episodic/generation/guest_bios.py",
+        "episodic/generation/launcher.py",
+        "episodic/generation/launcher_support.py",
+        "episodic/generation/show_notes.py",
+        "episodic/generation/tei_payload.py",
+        "episodic/llm/__init__.py",
+        "episodic/llm/openai_adapter.py",
+        "episodic/llm/openai_api/__init__.py",
+        "episodic/llm/openai_api/adapter.py",
+        "episodic/llm/openai_api/request.py",
+        "episodic/llm/openai_api/response.py",
+        "episodic/llm/openai_api/utils.py",
+        "episodic/llm/openai_chat.py",
+        "episodic/llm/openai_client.py",
+        "episodic/llm/openai_responses.py",
+        "episodic/llm/openai_validation.py",
+        "episodic/llm/ports.py",
+        "episodic/logging.py",
+        "episodic/metrics_ports.py",
+        "episodic/observability.py",
+        "episodic/orchestration/__init__.py",
+        "episodic/orchestration/_action_result_dto.py",
+        "episodic/orchestration/_checkpoint_dto.py",
+        "episodic/orchestration/_checkpoint_payload.py",
+        "episodic/orchestration/_checkpoint_resume.py",
+        "episodic/orchestration/_dto.py",
+        "episodic/orchestration/_graph_state.py",
+        "episodic/orchestration/_guest_bios_executor.py",
+        "episodic/orchestration/_planning_orchestrator.py",
+        "episodic/orchestration/_protocols.py",
+        "episodic/orchestration/_result_dto.py",
+        "episodic/orchestration/_routing_executor.py",
+        "episodic/orchestration/_show_notes_executor.py",
+        "episodic/orchestration/_types.py",
+        "episodic/orchestration/_usage.py",
+        "episodic/orchestration/checkpoints.py",
+        "episodic/orchestration/generation.py",
+        "episodic/orchestration/langgraph.py",
+        "episodic/qa/__init__.py",
+        "episodic/qa/chrono.py",
+        "episodic/qa/chrono_langgraph.py",
+        "episodic/qa/langgraph.py",
+        "episodic/qa/pedante/__init__.py",
+        "episodic/qa/pedante/parsing.py",
+        "episodic/qa/pedante/types.py",
+        "episodic/worker/__init__.py",
+        "episodic/worker/runtime.py",
+        "episodic/worker/tasks.py",
+        "episodic/worker/topology.py"
+      ],
+      "recursive": true,
+      "include_patterns": [
+        "**/*.py"
+      ],
+      "exclude_patterns": [
+        "test_*.py",
+        "*_test.py",
+        "**/tests/**",
+        "**/test/**",
+        "**/testing/**",
+        "**/migrations/**"
+      ],
+      "min_lines": 13,
+      "min_nodes": 50,
+      "similarity_threshold": 0.9,
+      "max_edit_distance": 50,
+      "ignore_literals": false,
+      "ignore_identifiers": false,
+      "skip_docstrings": true,
+      "type1_threshold": 0.85,
+      "type2_threshold": 0.75,
+      "type3_threshold": 0.7,
+      "type4_threshold": 0.65,
+      "enable_dfa": true,
+      "output_format": "json",
+      "output_path": "",
+      "no_open": false,
+      "show_details": false,
+      "show_content": false,
+      "sort_by": "similarity",
+      "group_clones": true,
+      "group_mode": "connected",
+      "group_threshold": 0.65,
+      "k_core_k": 2,
+      "min_similarity": 0,
+      "max_similarity": 1,
+      "clone_types": [
+        4
+      ],
+      "config_path": "/tmp/nose-eval/pyscn-strict.toml",
+      "timeout": 0,
+      "lsh_enabled": "auto",
+      "lsh_auto_threshold": 500,
+      "lsh_similarity_threshold": 0.5,
+      "lsh_bands": 32,
+      "lsh_rows": 4,
+      "lsh_hashes": 128
+    },
+    "duration_ms": 910,
+    "success": true,
+    "errors": [
+      "[episodic/api/authorization.py] Parse error: syntax errors found in source code",
+      "[episodic/canonical/prompts.py] Parse error: syntax errors found in source code"
+    ]
+  },
+  "suggestions": [
+    {
+      "category": "clone",
+      "severity": "critical",
+      "effort": "hard",
+      "title": "Extract duplicated code (Type-4 semantic, 11 fragments)",
+      "description": "Semantically similar code with different structure. Evaluate whether a common abstraction is appropriate.",
+      "steps": [
+        "Analyze whether the 11 fragments serve the same purpose",
+        "If so, design a common abstraction (base class, strategy pattern, or utility)",
+        "Refactor incrementally — start with 2 fragments, then extend"
+      ],
+      "file_path": "episodic/api/resources/reference_bindings.py",
+      "start_line": 72,
+      "metric_value": "95% similarity"
+    },
+    {
+      "category": "clone",
+      "severity": "warning",
+      "effort": "hard",
+      "title": "Extract duplicated code (Type-4 semantic, 2 fragments)",
+      "description": "Semantically similar code with different structure. Evaluate whether a common abstraction is appropriate.",
+      "steps": [
+        "Analyze whether the 2 fragments serve the same purpose",
+        "If so, design a common abstraction (base class, strategy pattern, or utility)",
+        "Refactor incrementally — start with 2 fragments, then extend"
+      ],
+      "file_path": "episodic/canonical/generation_persistence.py",
+      "start_line": 198,
+      "metric_value": "97% similarity"
+    },
+    {
+      "category": "clone",
+      "severity": "warning",
+      "effort": "hard",
+      "title": "Extract duplicated code (Type-4 semantic, 2 fragments)",
+      "description": "Semantically similar code with different structure. Evaluate whether a common abstraction is appropriate.",
+      "steps": [
+        "Analyze whether the 2 fragments serve the same purpose",
+        "If so, design a common abstraction (base class, strategy pattern, or utility)",
+        "Refactor incrementally — start with 2 fragments, then extend"
+      ],
+      "file_path": "episodic/canonical/storage/repositories.py",
+      "start_line": 112,
+      "metric_value": "95% similarity"
+    },
+    {
+      "category": "clone",
+      "severity": "warning",
+      "effort": "hard",
+      "title": "Extract duplicated code (Type-4 semantic, 2 fragments)",
+      "description": "Semantically similar code with different structure. Evaluate whether a common abstraction is appropriate.",
+      "steps": [
+        "Analyze whether the 2 fragments serve the same purpose",
+        "If so, design a common abstraction (base class, strategy pattern, or utility)",
+        "Refactor incrementally — start with 2 fragments, then extend"
+      ],
+      "file_path": "episodic/canonical/storage/generation_runs.py",
+      "start_line": 83,
+      "metric_value": "94% similarity"
+    },
+    {
+      "category": "clone",
+      "severity": "warning",
+      "effort": "hard",
+      "title": "Extract duplicated code (Type-4 semantic, 2 fragments)",
+      "description": "Semantically similar code with different structure. Evaluate whether a common abstraction is appropriate.",
+      "steps": [
+        "Analyze whether the 2 fragments serve the same purpose",
+        "If so, design a common abstraction (base class, strategy pattern, or utility)",
+        "Refactor incrementally — start with 2 fragments, then extend"
+      ],
+      "file_path": "episodic/api/handlers.py",
+      "start_line": 44,
+      "metric_value": "94% similarity"
+    },
+    {
+      "category": "clone",
+      "severity": "warning",
+      "effort": "hard",
+      "title": "Extract duplicated code (Type-4 semantic, 2 fragments)",
+      "description": "Semantically similar code with different structure. Evaluate whether a common abstraction is appropriate.",
+      "steps": [
+        "Analyze whether the 2 fragments serve the same purpose",
+        "If so, design a common abstraction (base class, strategy pattern, or utility)",
+        "Refactor incrementally — start with 2 fragments, then extend"
+      ],
+      "file_path": "episodic/llm/openai_chat.py",
+      "start_line": 46,
+      "metric_value": "94% similarity"
+    },
+    {
+      "category": "clone",
+      "severity": "warning",
+      "effort": "hard",
+      "title": "Extract duplicated code (Type-4 semantic, 2 fragments)",
+      "description": "Semantically similar code with different structure. Evaluate whether a common abstraction is appropriate.",
+      "steps": [
+        "Analyze whether the 2 fragments serve the same purpose",
+        "If so, design a common abstraction (base class, strategy pattern, or utility)",
+        "Refactor incrementally — start with 2 fragments, then extend"
+      ],
+      "file_path": "episodic/api/resources/episode_tei.py",
+      "start_line": 42,
+      "metric_value": "93% similarity"
+    }
+  ],
+  "summary": {
+    "total_files": 0,
+    "analyzed_files": 0,
+    "skipped_files": 0,
+    "complexity_enabled": false,
+    "dead_code_enabled": false,
+    "clone_enabled": true,
+    "cbo_enabled": false,
+    "mock_data_enabled": false,
+    "deps_enabled": false,
+    "arch_enabled": false,
+    "communities_enabled": false,
+    "deps_total_modules": 0,
+    "deps_modules_in_cycles": 0,
+    "deps_max_depth": 0,
+    "deps_main_sequence_deviation": 0,
+    "arch_compliance": 0,
+    "community_count": 0,
+    "community_modularity": 0,
+    "community_bridge_modules": 0,
+    "community_internal_edges": 0,
+    "community_cross_edges": 0,
+    "total_functions": 0,
+    "functions_parsed": 0,
+    "average_complexity": 0,
+    "average_cognitive_complexity": 0,
+    "average_nesting_depth": 0,
+    "high_complexity_count": 0,
+    "dead_code_count": 0,
+    "critical_dead_code": 0,
+    "warning_dead_code": 0,
+    "info_dead_code": 0,
+    "total_clones": 23,
+    "clone_pairs": 18,
+    "clone_groups": 7,
+    "code_duplication_percentage": 3.4328358208955225,
+    "cbo_classes": 0,
+    "high_coupling_classes": 0,
+    "medium_coupling_classes": 0,
+    "average_coupling": 0,
+    "lcom_enabled": false,
+    "lcom_classes": 0,
+    "high_lcom_classes": 0,
+    "medium_lcom_classes": 0,
+    "average_lcom": 0,
+    "mock_data_count": 0,
+    "mock_data_error_count": 0,
+    "mock_data_warning_count": 0,
+    "mock_data_info_count": 0,
+    "health_score": 98,
+    "grade": "A",
+    "complexity_score": 100,
+    "dead_code_score": 100,
+    "duplication_score": 90,
+    "coupling_score": 100,
+    "cohesion_score": 100,
+    "dependency_score": 100,
+    "architecture_score": 0,
+    "community_score": 100,
+    "community_risk_score": 0
+  },
+  "generated_at": "2026-08-28T00:55:28.912468878+02:00",
+  "duration_ms": 913,
+  "version": "1.29.1"
+}

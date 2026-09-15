@@ -80,7 +80,7 @@ async def _recover_expired_lease(
             run_id,
             update=GenerationRunStatusUpdate(
                 status=GenerationRunStatus.FAILED,
-                current_node="failed",
+                current_node=None,
                 ended_at=NOW,
                 error_message="Generation lease expired; failed manually.",
                 error_category="launcher.lease_expired",

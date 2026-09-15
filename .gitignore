@@ -6,6 +6,7 @@ __pycache__/
 .coverage
 .ruff_cache/
 .skylos/
+.tools/
 .uv-cache/
 .uv-tools/
 .typos-oxendict-base.json
@@ -21,3 +22,5 @@ __pycache__/
 .grepai/
 *.swo
 *~
+.pyscn/
+.*.duplication-gate.lock
