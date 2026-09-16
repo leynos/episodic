@@ -11,6 +11,9 @@
     "MD029": { "style": "ordered" }
   },
   "ignores": [
+    // The repository has remote branches whose names end in `.md`; the
+    // action must not read their reflogs as documents.
+    ".git/**",
     "**/.venv/**",
     ".node_modules/**",
     "**/node_modules/**",
