@@ -270,13 +270,15 @@ def test_chrono_estimator_propagates_tei_validation_errors(
     warnings: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
 
     def capture_warning(
+        logger: object,
         msg: str,
         *args: object,
         **kwargs: object,
     ) -> None:
+        del logger
         warnings.append((msg, args, kwargs))
 
-    monkeypatch.setattr("episodic.qa.chrono._log.warning", capture_warning)
+    monkeypatch.setattr("episodic.qa.chrono.log_warning", capture_warning)
     with pytest.raises(ValueError, match=message):
         ChronoRuntimeEstimator(metrics=metrics, clock=clock).estimate(request)
 

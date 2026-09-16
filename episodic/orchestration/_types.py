@@ -3,32 +3,40 @@
 import enum
 import json
 
-from episodic.logging import getLogger
+from episodic.logging import (
+    getLogger,
+    log_debug,
+    log_error,
+    log_info,
+    log_warning,
+)
 
 _log = getLogger(__name__)
 
 
 def _log_event(level: str, message: str, **fields: object) -> None:
-    """Emit one structured log event with a JSON fallback.
-
-    Logger convenience methods (``debug``, ``info``, ...) only accept
-    ``exc_info`` / ``stack_info`` besides the message. Structured fields are
-    serialized into one JSON message when needed.
-    """
-    log_method = getattr(_log, level)
-    allowed_kwargs = {
-        k: v for k, v in fields.items() if k in {"exc_info", "stack_info"}
+    """Emit one structured log event through the logging port."""
+    exc_info = fields.get("exc_info")
+    extra_fields = {
+        key: value
+        for key, value in fields.items()
+        if key not in {"exc_info", "stack_info"}
     }
-    extra_fields = {k: v for k, v in fields.items() if k not in allowed_kwargs}
     if extra_fields:
-        payload = {"event": message, **extra_fields}
-        log_method(json.dumps(payload, sort_keys=True), **allowed_kwargs)
-        return
-    try:
-        log_method(message, **allowed_kwargs)
-    except TypeError:
-        payload = {"event": message}
-        log_method(json.dumps(payload, sort_keys=True), **allowed_kwargs)
+        message = json.dumps({"event": message, **extra_fields}, sort_keys=True)
+
+    match level:
+        case "debug":
+            log_debug(_log, message, exc_info=exc_info)
+        case "info":
+            log_info(_log, message, exc_info=exc_info)
+        case "warning":
+            log_warning(_log, message, exc_info=exc_info)
+        case "error":
+            log_error(_log, message, exc_info=exc_info)
+        case _:
+            msg = f"Unsupported orchestration log level: ${level!r}"
+            raise ValueError(msg)
 
 
 class ActionKind(enum.StrEnum):

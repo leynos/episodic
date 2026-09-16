@@ -33,11 +33,11 @@ from episodic.llm.ports import (
     LLMTokenBudget,
     LLMTokenBudgetExceededError,
 )
-from episodic.logging import getLogger
+from episodic.logging import LoggerHandle, getLogger, log_error
 
-_log = getLogger(__name__)
+_log: LoggerHandle = getLogger(__name__)
 
-_log_override: contextvars.ContextVar[typ.Any | None] = contextvars.ContextVar(
+_log_override: contextvars.ContextVar[LoggerHandle | None] = contextvars.ContextVar(
     "openai_adapter_log_override", default=None
 )
 
@@ -108,7 +108,9 @@ def _operation_label(operation: LLMProviderOperation | str | None) -> str:
 def _log_error_event(message: str, **fields: object) -> None:
     """Emit one JSON-encoded ERROR event with bounded diagnostic fields."""
     effective_log = _log_override.get() or _log
-    effective_log.error(json.dumps({"event": message, **fields}, sort_keys=True))
+    log_error(
+        effective_log, "%s", json.dumps({"event": message, **fields}, sort_keys=True)
+    )
 
 
 def _is_positive_int(value: object) -> bool:
