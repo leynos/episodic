@@ -5,19 +5,10 @@ API: ``{"code": "...", "message": "...", "details": {...}}``. Resource
 adapters use these helpers to map domain exceptions to Falcon HTTP errors and
 attach envelope metadata before Falcon serialises the response.
 
-Examples
---------
->>> http_error(
-...     falcon.HTTPBadRequest(description="Invalid limit."),
-...     code="validation_error",
-... )
-HTTPBadRequest(...)
->>> validation_error("Invalid UUID.", field="profile_id", constraint="uuid")
-HTTPBadRequest(...)
->>> try:
-...     raise EntityNotFoundError("Profile not found.")
-... except EntityNotFoundError as exc:
-...     raise map_profile_template_error(exc, entity_id="profile-1") from exc
+Only unmapped exceptions that become HTTP ``500`` responses are logged here.
+Mapped ``400``, ``404``, and ``409`` outcomes are expected results and are
+deferred to request-level logging.
+
 """
 
 import collections.abc as cabc
@@ -47,6 +38,7 @@ from episodic.canonical.source_intake_service import (
     UploadNotReadyError,
     UploadSizeMismatchError,
 )
+from episodic.logging import get_logger, log_error
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.profile_templates.types import ProfileTemplateError
@@ -54,6 +46,8 @@ if typ.TYPE_CHECKING:
     from .types import JsonPayload
 
 type _HttpErrorFactory = cabc.Callable[..., falcon.HTTPError]
+
+logger = get_logger(__name__)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -241,6 +235,14 @@ def map_profile_template_error(
                 details=details,
             )
         case _:
+            log_error(
+                logger,
+                "Unmapped profile/template error: type=%s code=%s entity_id=%s",
+                type(exc).__name__,
+                exc.code,
+                exc.entity_id,
+                exc_info=True,
+            )
             return http_error(
                 falcon.HTTPInternalServerError(description=str(exc)),
                 code=exc.code,
@@ -297,6 +299,13 @@ def map_reference_error(
                 code="conflict",
             )
     msg = f"Unexpected {context} error."
+    log_error(
+        logger,
+        "Unmapped reference error: context=%s type=%s",
+        context,
+        type(exc).__name__,
+        exc_info=True,
+    )
     return http_error(
         falcon.HTTPInternalServerError(description=msg),
         code="internal_error",
@@ -309,6 +318,12 @@ def map_source_intake_error(exc: SourceIntakeError) -> falcon.HTTPError:
     for error_type, factory, code in mapping:
         if isinstance(exc, error_type):
             return http_error(factory(description=str(exc)), code=code)
+    log_error(
+        logger,
+        "Unmapped source-intake error: type=%s",
+        type(exc).__name__,
+        exc_info=True,
+    )
     return http_error(
         falcon.HTTPInternalServerError(description="Unexpected source-intake error."),
         code="internal_error",
@@ -364,7 +379,7 @@ def _status_code(exc: falcon.HTTPError) -> int:
         return exc.status
     try:
         return int(exc.status.split(" ", maxsplit=1)[0])
-    except IndexError, ValueError:  # parsed as tuple in Python 3
+    except IndexError, ValueError:
         return 500
 
 
