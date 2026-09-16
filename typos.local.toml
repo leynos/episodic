@@ -7,7 +7,7 @@ stems = []
 
 [words]
 # External product names, SQL syntax and an infrastructure acronym.
-accepted = ["ANALYZE", "Astroid", "Center", "Hashi", "RTO"]
+accepted = ["ANALYZE", "Astroid", "Hashi", "RTO"]
 
 [words.corrections]
 

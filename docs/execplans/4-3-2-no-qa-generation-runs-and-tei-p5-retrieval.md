@@ -612,7 +612,7 @@ when any of the following is breached.
   binding (`unknown variant sp`) but accepts body `utterance` payloads, which
   emit as TEI `<u who="...">` elements. Impact: Milestone 3 uses
   `tei_rapporteur.from_dict` with `utterance`/`paragraph` blocks for the
-  minimal draft script, preserving TEI validation without hand-written XML.
+  minimal draft script, preserving TEI validation without handwritten XML.
 - Observation: `ingestion_jobs.target_episode_id` has a foreign key to
   `episodes.id`, so an intake job cannot point at an episode id that the
   materialization step has not created yet. Impact: M3 materialization treats a
