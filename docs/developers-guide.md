@@ -176,33 +176,22 @@ dynamic boundary disappears.
 
 ## Spelling policy
 
-`make all` and `make markdownlint` enforce en-GB-oxendict spelling using the
-`TYPOS_VERSION` pin in the `Makefile`. The gate tests the policy helper,
-refreshes the shared base dictionary, generates `typos.toml`, and scans tracked
-Markdown files.
+Run `make spelling` to enforce en-GB-oxendict spelling; `make all` and
+`make markdownlint` run it too. The gate is the shared `typos-config-builder`
+release pinned by `TYPOS_CONFIG_BUILDER_VERSION` in the `Makefile`.
 
-The application targets Python 3.14, while the shared helper retains a Python
-3.13 compatibility contract for the wider estate. Project Ruff excludes the
-four spelling-policy files; `spelling-helper-test` applies its separately
-pinned, isolated Ruff format and lint checks with `--target-version py313`
-before running the helper tests under Python 3.13.
+`typos.toml` is generated output. The gate regenerates it from the live shared
+dictionary and the `typos.local.toml` overlay on every run, so a word added to
+the shared dictionary needs no change here. Because the dictionary is live,
+`typos.toml` must never be drift checked in continuous integration.
 
-The shared dictionary is maintained in `leynos/agent-helper-scripts`. Its
-repository-local cache and freshness metadata are untracked. The helper
-replaces the cache only when the authoritative copy is newer and can reuse a
-valid cached copy while offline. A clean checkout with an unavailable network
-retains the reviewed, tracked `typos.toml` policy.
+Do not edit generated entries in `typos.toml`; any edits are overwritten on the
+next run. Put only narrow repository-specific proper nouns, identifiers, quoted
+upstream titles, fixtures, stems or exclusions in `typos.local.toml`.
 
-Do not edit generated entries in `typos.toml`. Put only repository-specific
-proper nouns, quoted upstream titles, fixtures, stems or exclusions in
-`typos.local.toml`, then regenerate with:
-
-```bash
-uv run scripts/generate_typos_config.py
-```
-
-Keep upstream API spellings in inline or fenced code where practical. The
-spelling gate deliberately ignores code spans and fenced code blocks.
+Keep upstream API spellings in fenced code where practical. The gate ignores
+fenced code blocks but still checks inline code spans, so an identifier that
+must appear inline needs its own `typos.local.toml` pattern.
 
 ## Workflow pins and Dependabot
 
