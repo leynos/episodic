@@ -194,13 +194,15 @@ Designing the Celery worker fleet requires tuning based on the workload type.
 
 2. **CPU Bound Queues (The “Compute” Workers):**
 
-- _Tasks:_ PDF parsing (OCR), Image resizing, Local Embedding generation, Data
-  analysis (Pandas/Polars).
-- _Configuration:_ Use the `prefork` (default) execution pool. This spawns
-  separate OS-level processes, bypassing the Python GIL and utilizing
-  multi-core processors effectively.
-- _Concurrency:_ Set to `autoscale` or strictly limit to the number of physical
-  CPU cores to prevent context switching thrashing.
+   - _Tasks:_ PDF parsing (OCR), Image resizing, Local Embedding generation,
+     Data
+     analysis (Pandas/Polars).
+   - _Configuration:_ Use the `prefork` (default) execution pool. This spawns
+     separate OS-level processes, bypassing the Python GIL and utilizing
+     multi-core processors effectively.
+   - _Concurrency:_ Set to `autoscale` or strictly limit to the number of
+     physical
+     CPU cores to prevent context switching thrashing.
 
 By segregating these workloads into different queues (e.g., `queue='io_tasks'`
 vs `queue='cpu_tasks'`) and assigning specialized workers to consume them, the
