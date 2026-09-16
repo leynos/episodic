@@ -282,11 +282,15 @@ replaces the cache only when the authoritative copy is newer and can reuse a
 valid cached copy while offline. A clean checkout with an unavailable network
 retains the reviewed, tracked `typos.toml` policy.
 
-### Atomic spelling-cache writes
+### Atomic writes
 
-`scripts/typos_rollout_cache.py` provides `atomic_write` for replacing
-generated cache files through a temporary sibling and `Path.replace`. Its
-`AtomicWriteOptions` value object controls the policy: the defaults create
+`scripts/atomic_write.py` provides `atomic_write` for replacing generated
+files through a temporary sibling and `Path.replace`. It is a neutral
+persistence helper, imported by the spelling rollout, the duplication
+allowlist writer, and the cache module that re-exports it for callers that
+already reach it there.
+
+Its `AtomicWriteOptions` value object controls the policy: the defaults create
 missing parent directories, do not preserve an existing destination mode, and
 do not call `fsync`. The spelling rollout uses those defaults. The duplication
 allowlist writer disables parent creation, preserves the destination mode, and

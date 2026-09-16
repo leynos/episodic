@@ -147,6 +147,7 @@ duplication-test: ## Run the duplication-gate helper tests
 		scripts/tests/test_duplication_gate_make.py \
 		scripts/tests/test_duplication_gate_persistence.py \
 		scripts/tests/test_duplication_gate_properties.py \
+		scripts/tests/test_make_install_nose.py \
 		scripts/tests/test_nose_detector.py
 
 # Accept FIRST/SECOND/REASON (and skylos SYMBOL) only from the make command
@@ -193,16 +194,18 @@ spelling: spelling-helper-test ## Enforce en-GB-oxendict spelling in Markdown pr
 
 spelling-helper-test: ## Validate the shared spelling-policy integration
 	@$(SPELLING_RUFF) format --check --isolated --target-version py313 \
-		scripts/generate_typos_config.py scripts/typos_rollout.py \
-		scripts/typos_rollout_cache.py scripts/tests/test_typos_rollout.py
+		scripts/atomic_write.py scripts/generate_typos_config.py \
+		scripts/typos_rollout.py scripts/typos_rollout_cache.py \
+		scripts/tests/test_typos_rollout.py
 	@$(SPELLING_RUFF) check --isolated --target-version py313 \
-		scripts/generate_typos_config.py scripts/typos_rollout.py \
-		scripts/typos_rollout_cache.py scripts/tests/test_typos_rollout.py
+		scripts/atomic_write.py scripts/generate_typos_config.py \
+		scripts/typos_rollout.py scripts/typos_rollout_cache.py \
+		scripts/tests/test_typos_rollout.py
 	@PYTHONPATH=scripts $(UV_ENV) $(UV) run --no-project --python 3.13 \
 		--with pytest==9.0.2 --with pytest-cov==7.0.0 \
 		python -m pytest -c /dev/null --rootdir=. -p no:cacheprovider \
 		scripts/tests/test_typos_rollout.py \
-		--cov=generate_typos_config --cov=typos_rollout \
+		--cov=atomic_write --cov=generate_typos_config --cov=typos_rollout \
 		--cov=typos_rollout_cache --cov-fail-under=90
 
 nixie: ## Validate Mermaid diagrams

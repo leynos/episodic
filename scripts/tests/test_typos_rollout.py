@@ -1,10 +1,13 @@
 """Tests for the repository spelling-policy scripts."""
 
 import ast
+import dataclasses as dc
 import email.message
 import importlib
 import json
 import os
+import stat
+import sys
 import tomllib
 import types
 import typing as typ
@@ -15,6 +18,10 @@ from pathlib import Path
 import pytest
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parents[1]
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.append(str(SCRIPT_DIRECTORY))
+
+import atomic_write  # noqa: E402 - path set above for the sibling script.
 
 
 def test_rollout_scripts_support_python_313() -> None:
@@ -453,27 +460,54 @@ def test_atomic_write_preserves_mode_only_when_a_destination_exists(
     )
 
 
+@dc.dataclass
+class _OsSpy:
+    """Record what ``atomic_write`` fsyncs, delegating the rest to ``os``.
+
+    ``atomic_write`` closes every descriptor it syncs before it returns, so
+    each descriptor is inspected while it is still open and the ``stat`` result
+    kept; a later ``os.fstat`` on the recorded number would raise ``EBADF``.
+    """
+
+    #: The spy stands in for the whole ``os`` module, so the directory-sync
+    #: helper's ``os.O_RDONLY`` has to resolve here too.
+    O_RDONLY: typ.ClassVar[int] = os.O_RDONLY
+
+    synced: list[os.stat_result] = dc.field(default_factory=list)
+
+    def fsync(self, descriptor: int) -> None:
+        """Record the descriptor's stat, then sync it for real."""
+        self.synced.append(os.fstat(descriptor))
+        os.fsync(descriptor)
+
+    def open(self, path: Path, flags: int) -> int:
+        """Delegate descriptor opening."""
+        return os.open(path, flags)
+
+    def close(self, descriptor: int) -> None:
+        """Delegate descriptor closing."""
+        os.close(descriptor)
+
+
 def test_atomic_write_syncs_the_temporary_file_when_requested(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Requesting a sync fsyncs the temporary file and parent directory."""
+    """Requesting a sync fsyncs the temporary file and the parent directory."""
     cache, _rollout, _generator = rollout_modules
     destination = tmp_path / "config.toml"
-    synced: list[int] = []
-    real_fsync = os.fsync
-
-    def record_fsync(descriptor: int) -> None:
-        synced.append(descriptor)
-        real_fsync(descriptor)
-
-    monkeypatch.setattr(cache.os, "fsync", record_fsync)
+    spy = _OsSpy()
+    monkeypatch.setattr(atomic_write, "os", spy)
     cache.atomic_write(
         destination,
         b"payload\n",
         options=cache.AtomicWriteOptions(sync_file=True),
     )
 
-    assert len(synced) == 2, "File and parent directory must each be fsynced."
+    assert len(spy.synced) == 2, "File and parent directory must each be fsynced."
+    regular_files = [s for s in spy.synced if stat.S_ISREG(s.st_mode)]
+    directories = [s for s in spy.synced if stat.S_ISDIR(s.st_mode)]
+    assert len(regular_files) == 1, "Exactly one fsync must target the temporary file."
+    assert len(directories) == 1, "Exactly one fsync must target the parent directory."
     assert destination.read_bytes() == b"payload\n", "The write must still complete."
