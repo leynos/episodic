@@ -13,6 +13,58 @@ from duplication_gate_test_support import (
 )
 
 
+class TestLoadAllowEntry:
+    """Reading reasoned entries without touching the file."""
+
+    def test_loader_never_reaches_the_writer(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Reading the allowlist must not open, lock, or replace the file."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(
+            "[[tool.duplication_gate.allow]]\n"
+            'unit = "episodic/a.py"\n'
+            'reason = "reviewed"\n',
+            encoding="utf-8",
+        )
+        before = pyproject.stat()
+
+        def refuse(*_args: object, **_kwargs: object) -> None:
+            msg = "the read-only loader must not write"
+            raise AssertionError(msg)
+
+        monkeypatch.setattr(allowlist, "atomic_write", refuse)
+        monkeypatch.setattr(allowlist, "_locked_file", refuse)
+
+        entries = allowlist.load_allowlist(pyproject)
+
+        assert [entry.keys for entry in entries] == [("episodic/a.py",)], (
+            "The loader must return the parsed entries."
+        )
+        after = pyproject.stat()
+        assert (after.st_mtime_ns, after.st_size) == (
+            before.st_mtime_ns,
+            before.st_size,
+        ), "Loading must leave the file untouched."
+        assert list(tmp_path.glob(".pyproject.toml.*")) == [], (
+            "Loading must not leave a lock or temporary sibling behind."
+        )
+
+    def test_loader_creates_no_file_when_the_document_is_absent(
+        self, tmp_path: Path
+    ) -> None:
+        """An absent allowlist loads as empty rather than being created."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "x"\n', encoding="utf-8")
+
+        assert allowlist.load_allowlist(pyproject) == (), (
+            "A document without an allow table must load no entries."
+        )
+        assert list(tmp_path.iterdir()) == [pyproject], (
+            "Loading must not create sibling files."
+        )
+
+
 class TestAppendAllowEntry:
     """Persisting reasoned entries to ``pyproject.toml``."""
 
