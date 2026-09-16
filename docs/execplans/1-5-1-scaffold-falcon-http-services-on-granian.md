@@ -386,14 +386,14 @@ deployment path.
 1. Update the BDD steps so they launch the Granian CLI using the factory
    target:
 
-```shell
-granian episodic.api.runtime:create_app_from_env --interface asgi --factory
-```
+   ```shell
+   granian episodic.api.runtime:create_app_from_env --interface asgi --factory
+   ```
 
-1. Pass the temporary `DATABASE_URL` to the subprocess environment.
-2. Wait for liveness first, then readiness, and capture stderr/stdout to a
+2. Pass the temporary `DATABASE_URL` to the subprocess environment.
+3. Wait for liveness first, then readiness, and capture stderr/stdout to a
    temporary log file for debugging.
-3. Assert the response bodies are deterministic enough for operators to rely
+4. Assert the response bodies are deterministic enough for operators to rely
    on. A suitable minimal shape is:
 
 ```json

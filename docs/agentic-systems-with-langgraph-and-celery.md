@@ -185,21 +185,24 @@ Designing the Celery worker fleet requires tuning based on the workload type.
 
 1. **I/O Bound Queues (The “Network” Workers):**
 
-- _Tasks:_ Web scraping, API calls (MCP tools), Database queries.
-- _Configuration:_ Use the `gevent` or `eventlet` execution pools. These allow
-  a single CPU core to handle hundreds of concurrent connections, maximizing
-  throughput for network-heavy agent tools.
-- _Concurrency:_ High (e.g., 100–500 threads per worker).
+   - _Tasks:_ Web scraping, API calls (MCP tools), Database queries.
+   - _Configuration:_ Use the `gevent` or `eventlet` execution pools. These
+     allow
+     a single CPU core to handle hundreds of concurrent connections, maximizing
+     throughput for network-heavy agent tools.
+   - _Concurrency:_ High (e.g., 100–500 threads per worker).
 
-1. **CPU Bound Queues (The “Compute” Workers):**
+2. **CPU Bound Queues (The “Compute” Workers):**
 
-- _Tasks:_ PDF parsing (OCR), Image resizing, Local Embedding generation, Data
-  analysis (Pandas/Polars).
-- _Configuration:_ Use the `prefork` (default) execution pool. This spawns
-  separate OS-level processes, bypassing the Python GIL and utilizing
-  multi-core processors effectively.
-- _Concurrency:_ Set to `autoscale` or strictly limit to the number of physical
-  CPU cores to prevent context switching thrashing.
+   - _Tasks:_ PDF parsing (OCR), Image resizing, Local Embedding generation,
+     Data
+     analysis (Pandas/Polars).
+   - _Configuration:_ Use the `prefork` (default) execution pool. This spawns
+     separate OS-level processes, bypassing the Python GIL and utilizing
+     multi-core processors effectively.
+   - _Concurrency:_ Set to `autoscale` or strictly limit to the number of
+     physical
+     CPU cores to prevent context switching thrashing.
 
 By segregating these workloads into different queues (e.g., `queue='io_tasks'`
 vs `queue='cpu_tasks'`) and assigning specialized workers to consume them, the
@@ -486,11 +489,11 @@ presented only with the _descriptions_ of these skills.
 
 1. **Level 1 (Discovery):** The agent sees a list of available skills.
 
-- _Prompt:_ “Available skills: …”
+   - _Prompt:_ “Available skills: …”
 
-1. **Level 2 (Activation):** The agent decides it needs a specific skill. It
+2. **Level 2 (Activation):** The agent decides it needs a specific skill. It
    calls a meta-tool, e.g., `enable_skill("DataAnalysis")`.
-2. **Level 3 (Execution):** The system dynamically loads the specific tools
+3. **Level 3 (Execution):** The system dynamically loads the specific tools
    associated with that skill (e.g., `pandas_query`, `generate_chart`) and
    binds them to the LLM for the subsequent turns.
 

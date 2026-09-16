@@ -30,8 +30,8 @@ Three planned capabilities need more than conflict detection:
   events, run events, and user edits as immutable history"; without retained
   revisions, a user edit destroys the pre-edit document.
 - Editorial collaboration and approval workflows need to answer "what changed
-  between revision N and N+1" and to restore a prior revision after a
-  mistaken approval or a destructive edit.
+  between revision N and N+1" and to restore a prior revision after a mistaken
+  approval or a destructive edit.
 
 The repository already has an established shape for retained history:
 `series_profile_history` and `episode_template_history` are append-only rows
@@ -82,8 +82,8 @@ violation translates to the existing revision-conflict error family.
 
 ### Restore
 
-Restoring an earlier revision is a normal forward write: the client submits
-the historical document through the existing update path with the current
+Restoring an earlier revision is a normal forward write: the client submits the
+historical document through the existing update path with the current
 `expected_revision`, producing a new revision whose history row records the
 restore. History rows are never mutated or re-pointed.
 
@@ -99,8 +99,8 @@ restore-as-forward-write transitions.
 Revisions are retained indefinitely in the first implementation. Compression
 via the `zstd` column reduces the storage used by each full-document revision,
 but does not bound total history storage. Global history storage and each
-episode's history size must be monitored. At 80% of provisioned storage or
-2 GiB for one episode, operations must open a review to decide whether archival
+episode's history size must be monitored. At 80% of provisioned storage or 2
+GiB for one episode, operations must open a review to decide whether archival
 or retention is needed through a superseding ADR. No deletion policy is adopted
 by this decision.
 
@@ -114,12 +114,12 @@ by this decision.
   number can never exist without its document, and a document can never be
   recorded for a revision that lost its compare-and-set race.
 - Full-document rows were chosen over diffs: TEI documents are modest (tens
-  of kilobytes), zstd compresses them well, and reconstructing a revision
-  from a diff chain would put correctness of the audit trail at the mercy of
-  every intermediate row.
+  of kilobytes), zstd compresses them well, and reconstructing a revision from
+  a diff chain would put correctness of the audit trail at the mercy of every
+  intermediate row.
 - Restore-as-forward-write preserves the single monotonic revision sequence,
-  keeps optimistic locking sound, and leaves an explicit record that a
-  restore happened.
+  keeps optimistic locking sound, and leaves an explicit record that a restore
+  happened.
 
 ## Consequences
 
@@ -128,8 +128,8 @@ by this decision.
   revision but does not provide a total-storage bound; the monitoring triggers
   above initiate an operational review without authorizing deletion.
 - Roadmap `4.4.4`'s iteration metadata can reference history rows by
-  `(episode_id, tei_revision)` instead of persisting draft summaries alone,
-  and diffing two drafts becomes a read-side concern.
+  `(episode_id, tei_revision)` instead of persisting draft summaries alone, and
+  diffing two drafts becomes a read-side concern.
 - Script projection editing (`2.7.3`) satisfies the immutable-history
   security requirement without additional machinery.
 - The episode GET surface gains a revision parameter, and the TUI/API and

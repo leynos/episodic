@@ -1,9 +1,16 @@
-MDLINT ?= npx -y markdownlint-cli2
+MDLINT ?= $(shell command -v markdownlint-cli2 2>/dev/null || printf '%s' "$$HOME/.bun/bin/markdownlint-cli2")
+# `make fmt` and `make check-fmt` call mdtablefix directly. `--git` selects the
+# Markdown files Git tracks and `--include-untracked` adds the untracked files
+# Git does not ignore, so a new document is formatted before it is staged.
+# Both modes need mdtablefix 0.6.0 or later; CI pins the version at the
+# install-mdtablefix step.
+MDTABLEFIX ?= mdtablefix
+MDTABLEFIX_SELECT = --git --include-untracked
+MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 NIXIE ?= nixie
-MDFORMAT_ALL ?= mdformat-all
 export PATH := $(HOME)/.local/bin:$(HOME)/.bun/bin:$(PATH)
 UV ?= $(shell command -v uv 2>/dev/null || printf '%s/.local/bin/uv' "$$HOME")
-TOOLS = $(MDFORMAT_ALL)
+TOOLS =
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.1
@@ -91,14 +98,15 @@ $(VENV_TOOLS): ## Verify required CLI tools in venv
 	$(call ensure_tool_venv,$@)
 endif
 
-fmt: build $(MDFORMAT_ALL) ## Format sources
+fmt: build ## Format sources
 	$(UV_ENV) $(UV) run ruff format
 	$(UV_ENV) $(UV) run ruff check --select I --fix
-	$(MDFORMAT_ALL)
+	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
+	@unset FORCE_COLOR; $(MDLINT) --fix "**/*.md"
 
 check-fmt: build ## Verify formatting
 	$(UV_ENV) $(UV) run ruff format --check
-	# mdformat-all doesn't currently do checking
+	$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 
 validate: ## Validate the Makefile
 	mbake validate Makefile

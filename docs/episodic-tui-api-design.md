@@ -10,10 +10,10 @@ The TUI itself is implemented in a separate repository. This document focuses
 on the server-side API that the TUI consumes, including abstract TUI
 requirements as motivation and context for the design decisions.
 
-Episode TEI revision history follows [ADR-019: Retrievable episode TEI
-revision history](adr/adr-019-episode-tei-revision-history.md) and the shared
-versioning strategy in [ADR-018: Explicit repository-written versioning and
-history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md).
+Episode TEI revision history follows
+[ADR-019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
+and the shared versioning strategy in
+[ADR-018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md).
 
 ## Motivation
 
@@ -194,12 +194,11 @@ The planned `episode_tei_history` table retains complete TEI documents with
 their revision, content hash, quality status, generation-run identifier, actor,
 and timestamp. Its foreign key to `episodes` uses a restrictive deletion policy
 (`ON DELETE RESTRICT`) so retained audit history cannot be removed by deleting
-the current episode.
-The repository writes `episodes.tei_xml` and `episodes.tei_xml_zstd` together
-with the new history row in one compare-and-set transaction. Compression
-reduces the size of each retained document but does not bound total storage;
-operations monitor global history storage and per-episode size under ADR-019's
-review triggers.
+the current episode. The repository writes `episodes.tei_xml` and
+`episodes.tei_xml_zstd` together with the new history row in one
+compare-and-set transaction. Compression reduces the size of each retained
+document but does not bound total storage; operations monitor global history
+storage and per-episode size under ADR-019's review triggers.
 
 `GET /v1/episodes/{episode_id}/tei/history` returns revision metadata for the
 TUI's history view. Adding `revision=N` to the TEI endpoint retrieves a stored
