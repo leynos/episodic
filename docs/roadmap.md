@@ -352,8 +352,8 @@ manipulation. Completion enables user-friendly script review and patching.
 Retain and expose every persisted episode TEI revision. The current
 `tei_revision` counter detects concurrent writers but keeps only the latest
 document, so superseded drafts and pre-edit documents are unrecoverable.
-Completion answers whether refinement iterations, script edits, and
-editorial recovery can rely on retrievable prior revisions. See
+Completion answers whether refinement iterations, script edits, and editorial
+recovery can rely on retrievable prior revisions. See
 [ADR 018](adr/adr-018-explicit-versioning-and-history-strategy.md) and
 [ADR 019](adr/adr-019-episode-tei-revision-history.md).
 

@@ -517,44 +517,44 @@ Only after all gates pass should this ExecPlan be marked `COMPLETE`.
 1. Update Pedante unit tests and behaviour tests to fail against the current
    single-pass implementation.
 
-```plaintext
-pytest tests/test_pedante.py tests/test_pedante_langgraph.py -q
-pytest tests/steps/test_pedante_steps.py -q
-```
+   ```plaintext
+   pytest tests/test_pedante.py tests/test_pedante_langgraph.py -q
+   pytest tests/steps/test_pedante_steps.py -q
+   ```
 
-1. Add the TEI-backed internal projection and citation-harvesting helpers.
+2. Add the TEI-backed internal projection and citation-harvesting helpers.
 
-```plaintext
-pytest tests/test_pedante.py -q
-```
+   ```plaintext
+   pytest tests/test_pedante.py -q
+   ```
 
-1. Add the claim-catalogue pass and its internal data shape.
+3. Add the claim-catalogue pass and its internal data shape.
 
-```plaintext
-pytest tests/test_pedante.py -q
-```
+   ```plaintext
+   pytest tests/test_pedante.py -q
+   ```
 
-1. Add the verification pass, uncataloged-claim handling, and usage
+4. Add the verification pass, uncataloged-claim handling, and usage
    aggregation.
 
-```plaintext
-pytest tests/test_pedante.py tests/test_pedante_langgraph.py -q
-```
+   ```plaintext
+   pytest tests/test_pedante.py tests/test_pedante_langgraph.py -q
+   ```
 
-1. Update the Vidai Mock fixtures and behavioural steps for the two-pass flow.
+5. Update the Vidai Mock fixtures and behavioural steps for the two-pass flow.
 
-```plaintext
-pytest tests/steps/test_pedante_steps.py -q
-```
+   ```plaintext
+   pytest tests/steps/test_pedante_steps.py -q
+   ```
 
-1. Update the design, user, developer, and ADR documents as needed.
+6. Update the design, user, developer, and ADR documents as needed.
 
-```plaintext
-PATH=/root/.bun/bin:$PATH make markdownlint
-make nixie
-```
+   ```plaintext
+   PATH=/root/.bun/bin:$PATH make markdownlint
+   make nixie
+   ```
 
-1. Run the full Stage G gate sequence.
+7. Run the full Stage G gate sequence.
 
 ## Validation and acceptance
 
