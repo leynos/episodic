@@ -37,6 +37,23 @@ class _SpyLogger:
         self.calls.append((level, message, exc_info, stack_info))
 
     # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
+    def debug(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record a DEBUG-level call."""
+        self._record(
+            episodic_logging.LogLevel.DEBUG,
+            message,
+            exc_info=exc_info,
+            stack_info=stack_info,
+        )
+
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def info(
         self,
         message: str,
@@ -231,6 +248,7 @@ def test_log_wrappers_delegate_through_convenience_methods(
     logger = _SpyLogger()
     err = RuntimeError("boom")
 
+    episodic_logging.log_debug(logger, "Loaded %s documents", 3)
     episodic_logging.log_info(logger, "Loaded %s documents", 3)
     episodic_logging.log_warning(logger, "Potential issue in %s", "ingestion")
     episodic_logging.log_error(
@@ -251,7 +269,7 @@ def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
         TypeError,
         match=r"not enough arguments for format string",
     ):
-        episodic_logging.log_info(logger, "Loaded %s documents for %s", 3)
+        episodic_logging.log_debug(logger, "Loaded %s documents for %s", 3)
 
     assert logger.calls == [], (  # pylint: disable=use-implicit-booleaness-not-comparison  # The explicit empty-list comparison documents the expected collection value.
         "expected no log calls after TypeError"
@@ -265,6 +283,7 @@ def test_log_wrappers_fall_back_to_logger_log_when_needed(
     logger = _LogOnlySpyLogger()
     err = RuntimeError("boom")
 
+    episodic_logging.log_debug(logger, "Loaded %s documents", 3)
     episodic_logging.log_info(logger, "Loaded %s documents", 3)
     episodic_logging.log_warning(logger, "Potential issue in %s", "ingestion")
     episodic_logging.log_error(
