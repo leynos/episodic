@@ -23,7 +23,7 @@ from episodic.canonical.generation_run_ports import (
     GenerationRunStatusUpdate,
     event_seq,
 )
-from episodic.orchestration._types import _log_event
+from episodic.logging import log_event as _log_event
 
 from .generation_checkpoints import InMemoryGenerationCheckpointMixin
 
