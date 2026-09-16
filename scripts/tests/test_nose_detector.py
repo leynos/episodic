@@ -368,16 +368,15 @@ class TestRunDetector:
         with pytest.raises(detector.GateExecutionError, match="not valid JSON"):
             detector.run_detector(stub_settings(), runner=runner)
 
+    def test_run_command_reports_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A slow detector becomes an actionable execution error."""
 
-def test_run_command_reports_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A slow detector becomes an actionable execution error."""
+        def timeout(*_args: object, **_kwargs: object) -> typ.NoReturn:
+            raise detector.subprocess.TimeoutExpired(["nose", "query"], 120)
 
-    def timeout(*_args: object, **_kwargs: object) -> typ.NoReturn:
-        raise detector.subprocess.TimeoutExpired(["nose", "query"], 120)
+        monkeypatch.setattr(detector.subprocess, "run", timeout)
 
-    monkeypatch.setattr(detector.subprocess, "run", timeout)
-
-    with pytest.raises(
-        detector.GateExecutionError, match="timed out after 120 seconds"
-    ):
-        detector._run_command(("nose", "query"))
+        with pytest.raises(
+            detector.GateExecutionError, match="timed out after 120 seconds"
+        ):
+            detector._run_command(("nose", "query"))

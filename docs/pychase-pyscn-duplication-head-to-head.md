@@ -92,11 +92,16 @@ settings; tightened to gate strength it still reported 18, every one of which
 adjudication found to be an intentional idiom parallel rather than a semantic
 clone (both raw reports and their run configurations are retained under
 `benchmarks/duplication/results/` beside the adjudicated summary
-`pyscn-1.29.1-episodic-type4.json`). Combined with the ranking inversion on the
-corpus — the true Type-4 pair at 0.77 beneath control pairs at 0.93 — no
-threshold keeps the true positives while rejecting the parallels, so Type-4
-enforcement through pyscn stays rejected even with an allowlist absorbing the
-known parallels.
+`pyscn-1.29.1-episodic-type4.json`). Those results cover only the parseable
+portion of `episodic/`: pyscn reported parse errors for
+`episodic/api/authorization.py` and `episodic/canonical/prompts.py`, so both
+modules were excluded from the scan and from the 18-pair adjudication, which
+spanned every pair pyscn reported rather than every module in the tree. The
+limitation is recorded in the adjudicated summary itself. Combined with the
+ranking inversion on the corpus — the true Type-4 pair at 0.77 beneath control
+pairs at 0.93 — no threshold keeps the true positives while rejecting the
+parallels, so Type-4 enforcement through pyscn stays rejected even with an
+allowlist absorbing the known parallels.
 
 ## Configuration tuning
 
@@ -232,7 +237,8 @@ them above true ones; broader Type-4 duplication remains a review concern.
   reference for detection quality on Types 1-3, which nose matches.
 - Do not rely on pyscn for semantic (Type-4) duplication. Its semantic detector
   inverted the ranking between a true and a false semantic pair on this corpus,
-  and on `episodic/` reported only intentional parallels at gate strength.
+  and on `episodic/` reported only intentional parallels at gate strength, over
+  the parseable modules alone.
 - Treat nose's exact-equivalence witness as the only machine-checked semantic
   signal. It covers a narrow modelled subset and misses rewrites such as a loop
   against a `sum()` fold, so wider semantic duplication stays a review concern.

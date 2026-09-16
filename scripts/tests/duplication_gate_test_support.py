@@ -43,11 +43,11 @@ def copied_gate_workspace(tmp_path: Path) -> tuple[Path, Path]:
     scripts = workspace / "scripts"
     scripts.mkdir(parents=True)
     for name in (
+        "atomic_write.py",
         "duplication_allowlist.py",
         "duplication_gate.py",
         "nose_detector.py",
         "nose_schema.py",
-        "typos_rollout_cache.py",
     ):
         shutil.copy(REPOSITORY_ROOT / "scripts" / name, scripts / name)
     (workspace / "pyproject.toml").write_text(

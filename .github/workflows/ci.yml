@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege: the workflow only checks out and builds the repository,
+# so `contents: read` covers every step. The CodeScene upload action posts
+# no check runs or commit statuses and uploads its artefact with the
+# default runtime token, so it needs no additional scopes.
+permissions:
+  contents: read
+
 jobs:
   lint-test:
     runs-on: ubuntu-latest

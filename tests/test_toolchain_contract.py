@@ -28,9 +28,9 @@ pytestmark = pytest.mark.skipif(
         MAKEFILE_PATH.exists() and CI_WORKFLOW_PATH.exists() and PYPROJECT_PATH.exists()
     ),
     reason=(
-        "Makefile or CI workflow not present in this working copy (for "
-        "example inside a mutation-testing sandbox that does not copy the "
-        "repository root or .github/)"
+        "Makefile, pyproject.toml, or CI workflow not present in this working "
+        "copy (for example inside a mutation-testing sandbox that does not "
+        "copy the repository root or .github/)"
     ),
 )
 

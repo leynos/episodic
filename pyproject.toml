@@ -56,6 +56,10 @@ dev = [
 line-length = 88
 preview = true
 target-version = "py314"
+extend-exclude = [
+    "scripts/atomic_write.py",
+    "scripts/typos_rollout_cache.py",
+]
 
 [tool.ruff.lint]
 select = [

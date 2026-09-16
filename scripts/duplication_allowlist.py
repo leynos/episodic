@@ -21,8 +21,8 @@ from pathlib import Path, PurePosixPath
 
 import tomlkit
 import tomlkit.items
+from atomic_write import AtomicWriteOptions, atomic_write
 from nose_schema import Finding, GateConfigError, Location
-from typos_rollout_cache import AtomicWriteOptions, atomic_write
 
 _MINIMUM_MEMBER_COUNT = 2
 
