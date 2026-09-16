@@ -52,6 +52,8 @@ or delivery planning.
 
 - [pyscn and Skylos dead-code detection head-to-head](pyscn-skylos-dead-code-head-to-head.md)
   - measured comparison of unused-symbol and unreachable-statement detection.
+- [PyChase and pyscn code-duplication head-to-head](pychase-pyscn-duplication-head-to-head.md)
+  - measured comparison of clone detection and the duplication-gate tuning.
 - [Agentic systems with LangGraph and Celery](agentic-systems-with-langgraph-and-celery.md)
   - background reference for agentic workflow orchestration.
 - [Cost management in LangGraph agentic systems](cost-management-in-langgraph-agentic-systems.md)
@@ -110,6 +112,11 @@ or delivery planning.
 - [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
   - append-only episode TEI history, retrieval, restoration, and operational
     monitoring.
+- [ADR 020: Adopt PyChase duplication gate](adr/adr-020-adopt-pychase-duplication-gate.md)
+  - blocking code-duplication detection and exception policy, superseded by
+    ADR-021.
+- [ADR 021: Adopt nose duplication gate](adr/adr-021-adopt-nose-duplication-gate.md)
+  - current duplication detector, version pinning, and allowlist key policy.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 

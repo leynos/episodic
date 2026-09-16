@@ -265,7 +265,6 @@ async def test_create_app_from_env_wires_database_readiness_probe(
 
 @pytest.mark.asyncio
 async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
-    migrated_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -274,7 +273,7 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
 
     from episodic.api import runtime as runtime_module
 
-    monkeypatch.setenv("DATABASE_URL", migrated_database_url)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example.test/episodic")
     monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path / "objects"))
 
     shutdown_hook_called = False

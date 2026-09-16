@@ -1,13 +1,27 @@
-"""Provide cache support types and atomic writes for the spelling helper."""
+"""Provide cache support types for the spelling helper.
+
+The atomic-write routine these types drive lives in
+:mod:`atomic_write` and is re-exported here so existing importers keep
+working.
+"""
 
 import collections.abc as cabc
 import dataclasses as dc
 import pathlib
-import tempfile
 import typing as typ
 
+from atomic_write import AtomicWriteOptions, atomic_write
 
-@dc.dataclass(frozen=True)
+__all__ = [
+    "AtomicWriteOptions",
+    "CacheTargets",
+    "RefreshResult",
+    "RemoteResponse",
+    "atomic_write",
+]
+
+
+@dc.dataclass(frozen=True, slots=True)
 class RefreshResult:
     """Describe whether the untracked shared dictionary cache changed."""
 
@@ -32,17 +46,3 @@ class RemoteResponse(typ.Protocol):
     def read(self) -> bytes:
         """Read the response body."""
         ...
-
-
-def atomic_write(path: pathlib.Path, content: bytes) -> None:
-    """Write content beside a path and atomically replace the destination."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        delete=False, dir=path.parent, prefix=f".{path.name}."
-    ) as stream:
-        stream.write(content)
-        temporary = pathlib.Path(stream.name)
-    try:
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)

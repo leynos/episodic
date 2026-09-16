@@ -33,6 +33,8 @@ extend-ignore-re = [
     "(?s)```.*?```",
     "--artifact-server-path\\b",
     "<artifact-name>",
+    "Azure\\s+Architecture\\s+Center\\s*\\|\\s*Microsoft\\s+Learn\\b",
+    "GitHub\\s+Flavored\\s+Markdown\\b(?:\\s\\(GFM\\))?",
     "\\bact-artifacts\\b",
     "\\bmaterialise_episode_from_ingestion\\b",
     "\\brust-analyzer\\b",
@@ -698,6 +700,10 @@ extend-ignore-re = [
 "equalizers" = "equalizers"
 "equalizes" = "equalizes"
 "equalizing" = "equalizing"
+"exercize" = "exercise"
+"exercized" = "exercised"
+"exercizes" = "exercises"
+"exercizing" = "exercising"
 "externalisable" = "externalizable"
 "externalisation" = "externalization"
 "externalisations" = "externalizations"
@@ -1547,6 +1553,7 @@ extend-ignore-re = [
 "organizers" = "organizers"
 "organizes" = "organizes"
 "organizing" = "organizing"
+"otherwize" = "otherwise"
 "oxendict" = "oxendict"
 "oxidisable" = "oxidizable"
 "oxidisation" = "oxidization"
@@ -1836,6 +1843,10 @@ extend-ignore-re = [
 "quantizers" = "quantizers"
 "quantizes" = "quantizes"
 "quantizing" = "quantizing"
+"raize" = "raise"
+"raized" = "raised"
+"raizes" = "raises"
+"raizing" = "raising"
 "randomisable" = "randomizable"
 "randomisation" = "randomization"
 "randomisations" = "randomizations"

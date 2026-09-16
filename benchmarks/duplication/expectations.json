@@ -1,0 +1,182 @@
+[
+  {
+    "identifier": "type1-order-total",
+    "lane": "syntactic-clone",
+    "is_clone": true,
+    "first": {
+      "path": "pricing.py",
+      "name": "order_total_price",
+      "start_line": 5,
+      "end_line": 29
+    },
+    "second": {
+      "path": "reporting.py",
+      "name": "order_total_price_copy",
+      "start_line": 5,
+      "end_line": 30
+    },
+    "rationale": "The statement sequences are identical; only the name, docstring, and a comment differ, so this is a Type-1 clone."
+  },
+  {
+    "identifier": "type2-recent-messages",
+    "lane": "syntactic-clone",
+    "is_clone": true,
+    "first": {
+      "path": "pricing.py",
+      "name": "recent_error_messages",
+      "start_line": 32,
+      "end_line": 60
+    },
+    "second": {
+      "path": "reporting.py",
+      "name": "latest_alert_titles",
+      "start_line": 33,
+      "end_line": 62
+    },
+    "rationale": "Every statement corresponds one-to-one with only identifiers renamed, so this is a Type-2 clone."
+  },
+  {
+    "identifier": "type3-summaries",
+    "lane": "syntactic-clone",
+    "is_clone": true,
+    "first": {
+      "path": "pricing.py",
+      "name": "summarize_latencies",
+      "start_line": 63,
+      "end_line": 87
+    },
+    "second": {
+      "path": "reporting.py",
+      "name": "summarize_throughput",
+      "start_line": 65,
+      "end_line": 97
+    },
+    "rationale": "The copy adds a count entry and hoists one expression but keeps the copied bounds-and-total loop, so this is a Type-3 clone."
+  },
+  {
+    "identifier": "type4-weighted-mean",
+    "lane": "semantic-clone",
+    "is_clone": true,
+    "first": {
+      "path": "pricing.py",
+      "name": "weighted_average_score",
+      "start_line": 90,
+      "end_line": 113
+    },
+    "second": {
+      "path": "reporting.py",
+      "name": "mean_weighted_rating",
+      "start_line": 100,
+      "end_line": 122
+    },
+    "rationale": "Both compute the same weighted mean over valid entries, one with a loop and one with comprehensions, so this is a Type-4 clone."
+  },
+  {
+    "identifier": "type2-validate-methods",
+    "lane": "syntactic-clone",
+    "is_clone": true,
+    "first": {
+      "path": "pricing.py",
+      "name": "OrderExporter.validate",
+      "start_line": 119,
+      "end_line": 143
+    },
+    "second": {
+      "path": "reporting.py",
+      "name": "InvoiceExporter.validate",
+      "start_line": 128,
+      "end_line": 153
+    },
+    "rationale": "The method bodies match statement-for-statement with renamed identifiers across two classes, so this is a Type-2 method clone."
+  },
+  {
+    "identifier": "control-parsers",
+    "lane": "syntactic-clone",
+    "is_clone": false,
+    "first": {
+      "path": "controls.py",
+      "name": "parse_duration",
+      "start_line": 9,
+      "end_line": 42
+    },
+    "second": {
+      "path": "controls.py",
+      "name": "parse_ratio",
+      "start_line": 45,
+      "end_line": 80
+    },
+    "rationale": "Both parsers share the strip-guard-branch idiom, but the grammar, units, and error rules differ, so merging them would conflate two formats."
+  },
+  {
+    "identifier": "control-builders",
+    "lane": "syntactic-clone",
+    "is_clone": false,
+    "first": {
+      "path": "controls.py",
+      "name": "build_export_manifest",
+      "start_line": 83,
+      "end_line": 106
+    },
+    "second": {
+      "path": "controls.py",
+      "name": "build_retention_policy",
+      "start_line": 109,
+      "end_line": 132
+    },
+    "rationale": "Both build a dict then patch one key, but the derivations and domain rules are unrelated, so this is incidental structural similarity."
+  },
+  {
+    "identifier": "control-scanners",
+    "lane": "syntactic-clone",
+    "is_clone": false,
+    "first": {
+      "path": "controls.py",
+      "name": "longest_valid_streak",
+      "start_line": 135,
+      "end_line": 156
+    },
+    "second": {
+      "path": "controls.py",
+      "name": "count_state_changes",
+      "start_line": 159,
+      "end_line": 178
+    },
+    "rationale": "Both scan a sequence with two counters, but they compute different statistics with different update rules."
+  },
+  {
+    "identifier": "control-accumulators",
+    "lane": "semantic-clone",
+    "is_clone": false,
+    "first": {
+      "path": "pricing.py",
+      "name": "order_total_price",
+      "start_line": 5,
+      "end_line": 29
+    },
+    "second": {
+      "path": "pricing.py",
+      "name": "weighted_average_score",
+      "start_line": 90,
+      "end_line": 113
+    },
+    "rationale": "Both accumulate over conditionally selected items, but a tax-and-discount total and a weighted mean are semantically unrelated."
+  },
+  {
+    "identifier": "control-summaries",
+    "lane": "semantic-clone",
+    "is_clone": false,
+    "first": {
+      "path": "pricing.py",
+      "name": "summarize_latencies",
+      "start_line": 63,
+      "end_line": 87
+    },
+    "second": {
+      "path": "pricing.py",
+      "name": "weighted_average_score",
+      "start_line": 90,
+      "end_line": 113
+    },
+    "rationale": "Both are numeric folds over a list, but bounds-plus-mean and a weighted mean share no reusable statement structure."
+  }
+]
