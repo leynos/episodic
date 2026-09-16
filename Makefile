@@ -6,10 +6,10 @@ UV ?= $(shell command -v uv 2>/dev/null || printf '%s/.local/bin/uv' "$$HOME")
 TOOLS = $(MDFORMAT_ALL)
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
-TYPOS_VERSION ?= 1.48.0
-TYPOS = $(UV) tool run typos@$(TYPOS_VERSION)
-SPELLING_RUFF_VERSION ?= 0.15.12
-SPELLING_RUFF = $(UV) tool run --from ruff==$(SPELLING_RUFF_VERSION) ruff
+TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.1
+TYPOS_CONFIG_BUILDER = $(UV) tool run --from \
+	"git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_VERSION)" \
+	typos-config-builder
 PYTEST_XDIST_WORKERS ?= 1
 ifeq ($(PYTEST_XDIST_WORKERS),1)
 PYTEST_XDIST_ARGS :=
@@ -41,7 +41,7 @@ SKYLOS = $(UV_ENV) $(UV) tool run --from 'skylos==$(SKYLOS_VERSION)' skylos \
 SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie spelling spelling-helper-test test typecheck \
+        markdownlint nixie spelling test typecheck \
         crosshair check-migrations skylos-allow validate \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
         $(TOOLS) $(VENV_TOOLS)
@@ -131,24 +131,8 @@ crosshair: build ## Verify CrossHair PEP 316 contracts
 markdownlint: spelling ## Lint Markdown files and enforce repository spelling
 	env -u NO_COLOR $(MDLINT) '**/*.md'
 
-spelling: spelling-helper-test ## Enforce en-GB-oxendict spelling in Markdown prose
-	@$(UV_ENV) $(UV) run scripts/generate_typos_config.py
-	@git ls-files -z '*.md' | \
-		xargs -0 -r env $(UV_ENV) $(TYPOS) --config typos.toml --force-exclude
-
-spelling-helper-test: ## Validate the shared spelling-policy integration
-	@$(SPELLING_RUFF) format --check --isolated --target-version py313 \
-		scripts/generate_typos_config.py scripts/typos_rollout.py \
-		scripts/typos_rollout_cache.py scripts/tests/test_typos_rollout.py
-	@$(SPELLING_RUFF) check --isolated --target-version py313 \
-		scripts/generate_typos_config.py scripts/typos_rollout.py \
-		scripts/typos_rollout_cache.py scripts/tests/test_typos_rollout.py
-	@PYTHONPATH=scripts $(UV_ENV) $(UV) run --no-project --python 3.13 \
-		--with pytest==9.0.2 --with pytest-cov==7.0.0 \
-		python -m pytest -c /dev/null --rootdir=. -p no:cacheprovider \
-		scripts/tests/test_typos_rollout.py \
-		--cov=generate_typos_config --cov=typos_rollout \
-		--cov=typos_rollout_cache --cov-fail-under=90
+spelling: ## Enforce en-GB-oxendict spelling
+	$(TYPOS_CONFIG_BUILDER) gate --repository .
 
 nixie: ## Validate Mermaid diagrams
 	$(call ensure_tool,nixie)
