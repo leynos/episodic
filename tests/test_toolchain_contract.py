@@ -8,6 +8,7 @@ change, but letting the two definitions drift silently produces a gate that
 passes locally and fails in CI (or the reverse).
 """
 
+import itertools
 import re
 import typing as typ
 from pathlib import Path
@@ -188,11 +189,34 @@ def _cache_key(step: str) -> str:
     return match.group(1)
 
 
+def _indent_of(line: str) -> int:
+    """Return the leading-whitespace width of ``line``."""
+    return len(line) - len(line.lstrip())
+
+
+def _indented_entries(following_lines: list[str], indent: int) -> tuple[str, ...]:
+    """Collect entries indented deeper than ``indent``, stopping at the block's end.
+
+    Blank lines inside the block are transparent, as they are when reading a
+    YAML block scalar; the first non-blank line at or above ``indent`` ends it.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The entries, in order and with surrounding whitespace removed.
+    """
+    present = (line for line in following_lines if line.strip())
+    deeper = itertools.takewhile(lambda line: _indent_of(line) > indent, present)
+    return tuple(line.strip() for line in deeper)
+
+
 def _block_entries(step: str, field: str) -> tuple[str, ...]:
     """Read one indented block scalar (``field: |``) as a list of entries.
 
     Entries are compared exactly rather than by substring, so a mistyped path
-    that merely contains a correct-looking prefix cannot satisfy a check.
+    that merely contains a correct-looking prefix cannot satisfy a check. The
+    block is delimited by indentation rather than a pattern, because an entry
+    may itself contain spaces (as ``${{ runner.os }}`` does).
 
     Returns
     -------
@@ -207,53 +231,48 @@ def _block_entries(step: str, field: str) -> tuple[str, ...]:
     """
     lines = step.splitlines()
     for index, line in enumerate(lines):
-        if line.strip() != f"{field}: |":
-            continue
-        indent = len(line) - len(line.lstrip())
-        entries: list[str] = []
-        for following in lines[index + 1 :]:
-            if not following.strip():
-                continue
-            if len(following) - len(following.lstrip()) <= indent:
-                break
-            entries.append(following.strip())
-        return tuple(entries)
+        if line.strip() == f"{field}: |":
+            return _indented_entries(lines[index + 1 :], _indent_of(line))
     msg = f"cache step declares no {field}: block:\n{step}"
     raise AssertionError(msg)
 
 
-def _restore_keys(step: str) -> tuple[str, ...]:
-    """Extract the ``restore-keys:`` block entries from a cache step.
+class TestBlockScalarReader:
+    """The indentation reader the cache contract tests parse the workflow with.
 
-    The block scalar is read by indentation rather than by pattern, because a
-    restore key may itself contain spaces (as ``${{ runner.os }}`` does).
-
-    Returns
-    -------
-    tuple[str, ...]
-        The restore-key prefixes, in order.
-
-    Raises
-    ------
-    AssertionError
-        If the step declares no ``restore-keys`` block.
-
+    A cache step's entries are asserted against exactly, so the reader has to
+    find every entry and nothing beyond the block. These cases pin the two
+    ways that can go wrong: stopping early at a blank line inside the block,
+    and running past its end into the following keys.
     """
-    lines = step.splitlines()
-    for index, line in enumerate(lines):
-        if line.strip() != "restore-keys: |":
-            continue
-        indent = len(line) - len(line.lstrip())
-        keys: list[str] = []
-        for following in lines[index + 1 :]:
-            if not following.strip():
-                continue
-            if len(following) - len(following.lstrip()) <= indent:
-                break
-            keys.append(following.strip())
-        return tuple(keys)
-    msg = f"cache step declares no restore-keys:\n{step}"
-    raise AssertionError(msg)
+
+    def test_blank_lines_inside_the_block_are_transparent(self) -> None:
+        """A blank line between entries must not truncate the block."""
+        step = "        path: |\n          .uv-cache\n\n          .uv-tools\n"
+
+        assert _block_entries(step, "path") == (".uv-cache", ".uv-tools"), (
+            "A blank line inside a block scalar must not end the block."
+        )
+
+    def test_the_block_ends_at_the_first_dedented_line(self) -> None:
+        """Entries must not leak in from the lines that follow the block."""
+        step = (
+            "        path: |\n"
+            "          .uv-cache\n"
+            "          .uv-tools\n"
+            "        key: uv-envs-${{ runner.os }}-\n"
+        )
+
+        assert _block_entries(step, "path") == (".uv-cache", ".uv-tools"), (
+            "The block must end at the first line indented no deeper than its key."
+        )
+
+    def test_a_step_without_the_block_is_rejected(self) -> None:
+        """A missing block scalar is an error, not an empty result."""
+        step = "        path: .tools/nose\n        key: nose-${{ runner.os }}\n"
+
+        with pytest.raises(AssertionError, match="declares no path"):
+            _block_entries(step, "path")
 
 
 class TestCiCacheContract:
@@ -288,7 +307,7 @@ class TestCiCacheContract:
     def test_uv_cache_restores_to_the_same_runner_os(self) -> None:
         """A restore-key prefix must not cross operating systems."""
         step = _cache_step("Cache uv tool and script environments")
-        keys = _restore_keys(step)
+        keys = _block_entries(step, "restore-keys")
         assert any("${{ runner.os }}" in key for key in keys), (
             "the uv cache restore key must be scoped to runner.os so a cache "
             f"from another platform cannot be restored; got {keys!r}"

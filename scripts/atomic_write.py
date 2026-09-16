@@ -7,6 +7,8 @@ so the routine lives on its own rather than in whichever module needed it
 first.
 """
 
+import collections.abc as cabc
+import contextlib
 import dataclasses as dc
 import os
 import pathlib
@@ -22,16 +24,23 @@ class AtomicWriteOptions:
     sync_file: bool = False
 
 
-def _fsync_directory(directory: pathlib.Path) -> None:
-    """Open ``directory``, sync its metadata, and close it.
+@contextlib.contextmanager
+def _open_directory(directory: pathlib.Path) -> cabc.Iterator[int]:
+    """Open a directory descriptor for a scoped operation.
 
     Reading a directory needs O_RDONLY, which is not portable to Python's
-    buffered ``open``; the raw descriptor is opened and closed explicitly so
-    the handle is released even when ``os.fsync`` raises.
+    buffered ``open``; the raw descriptor is yielded so the caller's work runs
+    between the open and the guaranteed close. A failure in ``os.open`` itself
+    leaves no descriptor to release.
+
+    Yields
+    ------
+    int
+        The open directory descriptor.
     """
     descriptor = os.open(directory, os.O_RDONLY)
     try:
-        os.fsync(descriptor)
+        yield descriptor
     finally:
         os.close(descriptor)
 
@@ -71,6 +80,7 @@ def atomic_write(
             temporary.chmod(mode)
         temporary.replace(path)
         if options.sync_file:
-            _fsync_directory(path.parent)
+            with _open_directory(path.parent) as descriptor:
+                os.fsync(descriptor)
     finally:
         temporary.unlink(missing_ok=True)
