@@ -12,6 +12,8 @@ Commit work in a single unit-of-work:
 ...     await uow.commit()
 """
 
+from __future__ import annotations
+
 import typing as typ
 
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork

@@ -219,6 +219,9 @@ def test_skylos_allow_rejects_missing_required_value(
     recorder.chmod(0o755)
     make_executable = shutil.which("make")
     assert make_executable is not None, "Expected make to be available for the test."
+    subprocess_environment = dict(os.environ)
+    subprocess_environment.pop("NAME", None)
+    subprocess_environment.pop("REASON", None)
 
     result = subprocess.run(  # noqa: S603 - tests Makefile validation safely
         [
@@ -229,7 +232,7 @@ def test_skylos_allow_rejects_missing_required_value(
             f"SKYLOS={recorder}",
         ],
         cwd=REPOSITORY_ROOT,
-        env={**os.environ, "SKYLOS_CAPTURE": str(capture)},
+        env={**subprocess_environment, "SKYLOS_CAPTURE": str(capture)},
         check=False,
         capture_output=True,
         text=True,
