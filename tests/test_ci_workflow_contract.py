@@ -10,7 +10,7 @@ CI_WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml"
 COVERAGE_WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "coverage-main.yml"
 GENERATE_COVERAGE_ACTION = (
     "leynos/shared-actions/.github/actions/generate-coverage@"
-    "ac272c8de8d34b6b773274f7c1a11041e23cf1eb"
+    "ac272c8273c5baa53a26b4ac96b8ede3e86b7f94"
 )
 UPLOAD_COVERAGE_ACTION = (
     "leynos/shared-actions/.github/actions/upload-codescene-coverage@"
