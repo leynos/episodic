@@ -40,7 +40,7 @@ jobs:
           python-version: '3.14'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
 
       - name: Install VidaiMock
         env:
@@ -70,7 +70,7 @@ jobs:
 
       - name: Upload coverage data to CodeScene
         if: env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@6b5cdc2d4c0bb72cafd5a66d24d248ac25827db9
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@ee58fd34a2d01b7a5059d710119b264cf2f048a4
         with:
           format: cobertura
           path: coverage.xml
