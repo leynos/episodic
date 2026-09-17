@@ -44,10 +44,17 @@ without requiring manual shell `PATH` configuration.
 
 ## Coverage
 
-GitHub Actions reports production coverage to CodeScene. The pull-request and
-main-branch workflows run Slipcover with `--source episodic,alembic`, so the
-coverage percentage measures application and migration code rather than test
-implementation detail. Keep those source paths identical in both workflows.
+The pull-request `Generate coverage` step reads the ratchet baseline published
+by `coverage-main.yml`, but it does not invoke CodeScene or receive
+`CS_ACCESS_TOKEN`. It and the main workflow use the shared coverage action with
+`python-source: episodic,alembic`, so the coverage percentage measures
+application and migration code rather than test implementation detail.
+
+`coverage-main.yml` is the sole publisher: on a push to `main`, or its
+restricted manual dispatch for an automerge commit that did not emit a push
+event, it refreshes that same baseline and uploads `coverage.xml` to CodeScene
+with `mode: upload`. Keep the action pin, source scope, serial pytest setting,
+and ratchet inputs identical between the two workflows.
 
 ## Linting
 
