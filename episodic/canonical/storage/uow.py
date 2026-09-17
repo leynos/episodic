@@ -12,15 +12,25 @@ Commit work in a single unit-of-work:
 ...     await uow.commit()
 """
 
-from __future__ import annotations
+import collections.abc as cabc  # noqa: TC003 - autospec resolves annotations
+from types import TracebackType  # noqa: TC003 - autospec resolves annotations
 
-import typing as typ
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,  # noqa: TC002 - autospec resolves annotations
+)
 
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.cost.storage import SqlAlchemyCostLedgerStore
 from episodic.logging import get_logger
+from episodic.observability import (  # noqa: TC001 - autospec resolves annotations
+    MetricsPort,
+    MonotonicClockPort,
+)
 
 from .episode_repository import SqlAlchemyEpisodeRepository
+from .generation_run_storage_runtime import (  # noqa: TC001 - autospec resolves annotations
+    GenerationRunStorageRuntime,
+)
 from .generation_runs import SqlAlchemyGenerationRunStore
 from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
 from .repositories import (
@@ -42,16 +52,6 @@ from .source_intake_repositories import (
     source_intake_storage_runtime,
 )
 from .workflow_checkpoints import SqlAlchemyWorkflowCheckpointStore
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-    from types import TracebackType
-
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from episodic.observability import MetricsPort, MonotonicClockPort
-
-    from .generation_run_storage_runtime import GenerationRunStorageRuntime
 
 logger = get_logger(__name__)
 
