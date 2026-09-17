@@ -1,10 +1,7 @@
 name: Coverage (main)
 
-# CodeScene accepts `cs-coverage upload` only for analysed branches, so
-# main-branch coverage is uploaded here on push; pull requests only run
-# the coverage generation (and, in a future fast-follow, the
-# changed-line `cs-coverage check` gate) in ci.yml instead. This
-# workflow also keeps the production-coverage baseline current for CodeScene.
+# This workflow owns the production-coverage ratchet and its CodeScene upload.
+# Pull-request CI only reads the ratchet and never receives CodeScene access.
 #
 # workflow_dispatch is required, not optional: merges performed by the
 # automerge workflow's GITHUB_TOKEN do not fire push-event workflows at
@@ -62,11 +59,17 @@ jobs:
         run: make build
 
       - name: Generate coverage
-        # Keep the source scope identical to the pull-request coverage job.
-        run: >-
-          uv run --with 'slipcover==1.0.18' python -m slipcover
-          --source episodic,alembic --branch --xml --out coverage.xml
-          -m pytest -v
+        uses: leynos/shared-actions/.github/actions/generate-coverage@ac272c8de8d34b6b773274f7c1a11041e23cf1eb
+        with:
+          language: python
+          output-path: coverage.xml
+          format: cobertura
+          python-source: episodic,alembic
+          pytest-workers: ''
+          with-ratchet: 'true'
+          # Automerge commits do not emit a push event, so a restricted manual
+          # dispatch must also refresh the same main-owned baseline.
+          publish-baseline: always
 
       - name: Upload coverage data to CodeScene
         if: env.CS_ACCESS_TOKEN != ''
@@ -74,5 +77,6 @@ jobs:
         with:
           format: cobertura
           path: coverage.xml
+          mode: upload
           access-token: ${{ env.CS_ACCESS_TOKEN }}
           installer-checksum: ${{ env.CODESCENE_CLI_SHA256 }}
