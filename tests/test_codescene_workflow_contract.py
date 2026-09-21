@@ -17,6 +17,8 @@ import typing as typ
 from tests.test_codescene_workflow_contract_support import (
     REPOSITORY_ROOT,
     WORKFLOWS_DIRECTORY,
+    Mapping,
+    Step,
     all_workflow_steps,
     load_workflow,
     mapping,
@@ -59,7 +61,7 @@ EXPECTED_UPLOAD_INPUTS = {
 }
 
 
-def _codescene_contacts() -> list[tuple[pl.Path, str, dict[typ.Any, typ.Any]]]:
+def _codescene_contacts() -> list[tuple[pl.Path, str, Step]]:
     """Return steps that call the CodeScene action or its command-line client."""
     contacts = []
     for workflow_path, job_name, step in all_workflow_steps():
@@ -70,7 +72,7 @@ def _codescene_contacts() -> list[tuple[pl.Path, str, dict[typ.Any, typ.Any]]]:
     return contacts
 
 
-def _revision_fixture() -> dict[typ.Any, typ.Any]:
+def _revision_fixture() -> Mapping:
     """Return the offline approved-action and retired-pin record."""
     fixture = json.loads(ACTION_REVISIONS.read_text(encoding="utf-8"))
     return mapping(fixture, subject="approved action revisions fixture")
@@ -262,7 +264,7 @@ def test_retired_pins_do_not_reappear_in_workflows() -> None:
     for workflow_path in workflow_paths():
         text = workflow_path.read_text(encoding="utf-8")
         for pin in retired:
-            assert pin not in text, f"{workflow_path} references retired pin {pin}"
+            assert str(pin) not in text, f"{workflow_path} references retired pin {pin}"
 
 
 def test_the_publisher_serves_no_pull_request() -> None:
@@ -302,7 +304,9 @@ def test_pull_request_workflows_never_receive_the_codescene_token() -> None:
         )
         # A step could reach the service without the action, the client or the
         # token name, for instance by curling the project API. Forbid the host
-        # itself, so the lane is closed rather than only its known doors.
-        assert CODESCENE_HOST not in text, (
+        # itself, so the lane is closed rather than only its known doors. The
+        # comparison folds case because DNS names do; the token check above does
+        # not, because an environment variable name is case-sensitive.
+        assert CODESCENE_HOST not in text.casefold(), (
             f"{path} serves pull requests and must not reference {CODESCENE_HOST}"
         )

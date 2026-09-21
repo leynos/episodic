@@ -14,8 +14,13 @@ import yaml
 
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 WORKFLOWS_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
-Workflow = dict[typ.Any, typ.Any]
-Step = dict[typ.Any, typ.Any]
+
+# A workflow document's keys are not all strings: PyYAML resolves an unquoted
+# `on:` key to the boolean True. Its values are arbitrary YAML. Both are
+# therefore `object`, and every consumer narrows through `mapping`.
+type Mapping = dict[object, object]
+type Workflow = Mapping
+type Step = Mapping
 
 
 def mapping(value: object, *, subject: str) -> Workflow:
@@ -34,7 +39,9 @@ def mapping(value: object, *, subject: str) -> Workflow:
         The value, once it is known to be a mapping.
     """
     assert isinstance(value, dict), f"{subject} must be a mapping, got {value!r}"
-    return value
+    # `dict` is invariant, so narrowing an `object` gives dict[Unknown, Unknown]
+    # rather than the alias. The assertion above is the check the cast stands on.
+    return typ.cast("Workflow", value)
 
 
 def load_workflow(path: pl.Path) -> Workflow:
@@ -119,9 +126,13 @@ def trigger_config(path: pl.Path, event: str) -> Workflow | None:
     workflow = load_workflow(path)
     for key in ("on", True):
         value = workflow.get(key)
-        if isinstance(value, dict) and event in value:
-            configuration = value[event]
-            return configuration if isinstance(configuration, dict) else None
+        if not isinstance(value, dict) or event not in value:
+            continue
+        triggers = typ.cast("Workflow", value)
+        configuration = triggers[event]
+        if not isinstance(configuration, dict):
+            return None
+        return typ.cast("Workflow", configuration)
     return None
 
 
@@ -198,11 +209,14 @@ def all_workflow_steps() -> list[tuple[pl.Path, str, Step]]:
     collected: list[tuple[pl.Path, str, Step]] = []
     for path in workflow_paths():
         for job_name, job in workflow_jobs(path).items():
-            if not isinstance(job, dict) or not isinstance(job.get("steps"), list):
+            if not isinstance(job, dict):
+                continue
+            steps = typ.cast("Workflow", job).get("steps")
+            if not isinstance(steps, list):
                 continue
             collected.extend(
                 (path, str(job_name), mapping(step, subject=f"{path} {job_name} step"))
-                for step in job["steps"]
+                for step in typ.cast("list[object]", steps)
             )
     return collected
 
