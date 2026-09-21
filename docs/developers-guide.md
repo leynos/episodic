@@ -44,10 +44,36 @@ without requiring manual shell `PATH` configuration.
 
 ## Coverage
 
-GitHub Actions reports production coverage to CodeScene. The pull-request and
-main-branch workflows run Slipcover with `--source episodic,alembic`, so the
-coverage percentage measures application and migration code rather than test
-implementation detail. Keep those source paths identical in both workflows.
+The shared `generate-coverage` action measures coverage in both workflows. On
+pull requests, its local ratchet compares total line coverage with the baseline
+the default branch last saved; pull requests never contact CodeScene. The
+default-branch workflow uploads `coverage.xml` in Cobertura format after it has
+been measured, and is the only CodeScene consumer.
+
+The ratchet baseline is stored in the GitHub Actions cache. Its default
+publication mode saves on a push to `main`; this repository also permits a
+manual dispatch on `main` after an automerge that does not emit a push event.
+That job uses `publish-baseline: 'always'` and is restricted to `main`, so a
+feature branch cannot advance the baseline. The first ratcheting run has no
+floor until a default-branch run saves one.
+
+No caller checksum is passed to the upload action. It verifies its downloaded
+archive against the `cli-manifest.json` stored in its pinned revision, so a
+caller-supplied digest would add another value that can become stale.
+
+### Maintain composite action pins
+
+An immutable full SHA prevents a tag from moving, but does not freeze the
+third-party action pins inside a composite action. GitHub can retire one of
+those nested actions after the composite SHA was published, causing a job to
+fail during action preparation before its first step runs.
+
+[`tests/support/approved_action_revisions.json`](../tests/support/approved_action_revisions.json)
+records the nested actions for the approved coverage revisions.
+[`tests/test_codescene_workflow_contract.py`](../tests/test_codescene_workflow_contract.py)
+checks that record without network access and rejects retired pins. Refresh
+the fixture whenever a tracked action pin changes, so the dependency change is
+reviewed with the caller change.
 
 ## Linting
 
