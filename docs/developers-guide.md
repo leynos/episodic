@@ -44,10 +44,67 @@ without requiring manual shell `PATH` configuration.
 
 ## Coverage
 
-GitHub Actions reports production coverage to CodeScene. The pull-request and
-main-branch workflows run Slipcover with `--source episodic,alembic`, so the
-coverage percentage measures application and migration code rather than test
-implementation detail. Keep those source paths identical in both workflows.
+The shared `generate-coverage` action measures coverage in both workflows. On
+pull requests, its local ratchet compares total line coverage with the baseline
+the default branch last saved; pull requests never contact CodeScene. The
+default-branch workflow uploads `coverage.xml` in Cobertura format after it has
+been measured, and is the only CodeScene consumer.
+
+The ratchet baseline is stored in the GitHub Actions cache. Its default
+publication mode saves on a push to `main`; this repository also permits a
+manual dispatch on `main` after an automerge that does not emit a push event.
+That job uses `publish-baseline: 'always'` and is restricted to `main`, so a
+feature branch cannot advance the baseline. The first ratcheting run has no
+floor until a default-branch run saves one.
+
+No caller checksum is passed to the upload action. It verifies its downloaded
+archive against the `cli-manifest.json` stored in its pinned revision, so a
+caller-supplied digest would add another value that can become stale.
+
+### Deferred: production-only coverage scope
+
+The Slipcover invocation this workflow replaced passed
+`--source episodic,alembic`, so the published percentage measured application
+and migration code alone. The shared action's pinned revision offers no
+equivalent input, and an undeclared input is ignored with a warning rather than
+rejected, so the scope cannot be restored by passing one. The measured
+percentage therefore now includes test code, and the ratchet floor starts from
+that wider figure.
+
+Restore the scope by passing `python-source: episodic,alembic` to both
+`Generate coverage` steps once leynos/shared-actions#502 has merged and the pin
+here has moved to a revision on that repository's `main` which declares the
+input. Move both workflows together, because the contract requires one shared
+revision, and expect the first ratcheting run after the move to read a baseline
+measured on the wider scope.
+
+### Keep the publisher off the pull-request path
+
+`coverage-main.yml` answers a push to `main` and a manual dispatch, and nothing
+else. A workflow that both uploads and serves pull requests would be required
+to publish and forbidden from publishing at the same time, so the contract
+asserts that workflow's exact trigger set rather than only the upload step's
+guard. It also asserts that no workflow reachable from a pull request mentions
+`CS_ACCESS_TOKEN`, because a fork's head runs in that lane.
+
+When adding a clause that reads a workflow's triggers, read the key under both
+its quoted spelling and the boolean `True` that PyYAML produces for an unquoted
+`on:`. Every workflow here uses the unquoted form, so a reader that consults
+only the string key sees no events and passes over an empty set.
+
+### Maintain composite action pins
+
+An immutable full SHA prevents a tag from moving, but does not freeze the
+third-party action pins inside a composite action. GitHub can retire one of
+those nested actions after the composite SHA was published, causing a job to
+fail during action preparation before its first step runs.
+
+The [approved-revision fixture](../tests/support/approved_action_revisions.json)
+records the nested actions for the approved coverage revisions. The
+[CodeScene contract](../tests/test_codescene_workflow_contract.py) checks that
+record without network access and rejects retired pins. Refresh the fixture
+whenever a tracked action pin changes, so the dependency change is reviewed
+with the caller change.
 
 ## Linting
 
@@ -228,6 +285,26 @@ def test_uses_pinned_full_sha(caller_step):
 If a workflow's behaviour genuinely depends on a feature only present from a
 particular commit onwards, express that as a comment or a changelog note, not
 as a test assertion on the SHA string.
+
+### Exception: the coverage composites
+
+The two shared coverage actions are the one exception, and the exception is
+deliberate. A composite action's full SHA freezes the composite, not the
+third-party actions nested inside it, so a retired nested pin can break job
+preparation on a revision that never changed. Guarding against that needs a
+record of which revisions have been inspected, which only an allowlist of
+revision values can express.
+
+`generate-coverage` and `upload-codescene-coverage` therefore carry their
+current revisions in
+[`tests/test_codescene_workflow_contract.py`](../tests/test_codescene_workflow_contract.py)
+and in the approved-revision fixture. A Dependabot bump of either action is
+expected to fail the contract until the fixture is refreshed with the new
+revision's nested pins. That failure is the review step, not a chore: it is
+what makes the dependency change visible alongside the caller change.
+
+The exception is narrow. It covers those two actions alone. Every other
+reusable-workflow caller follows the pattern-matching rule above.
 
 ## Falcon HTTP runtime
 

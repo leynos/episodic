@@ -1,10 +1,8 @@
 name: Coverage (main)
 
-# CodeScene accepts `cs-coverage upload` only for analysed branches, so
-# main-branch coverage is uploaded here on push; pull requests only run
-# the coverage generation (and, in a future fast-follow, the
-# changed-line `cs-coverage check` gate) in ci.yml instead. This
-# workflow also keeps the production-coverage baseline current for CodeScene.
+# CodeScene accepts coverage uploads only for analysed branches. This workflow
+# measures and uploads the default branch, while pull requests measure coverage
+# locally with the shared action's ratchet.
 #
 # workflow_dispatch is required, not optional: merges performed by the
 # automerge workflow's GITHUB_TOKEN do not fire push-event workflows at
@@ -18,12 +16,14 @@ on:
 
 jobs:
   coverage-upload:
+    # `publish-baseline: always` below also supports the manual main dispatch
+    # used after an automerge that does not emit a push event. Do not let a
+    # dispatch on another ref advance the baseline.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
-      CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN || '' }}
-      CODESCENE_CLI_SHA256: ${{ vars.CODESCENE_CLI_SHA256 || '' }}
       CARGO_HTTP_MULTIPLEXING: "false"
       CARGO_NET_RETRY: "10"
       # See the note in ci.yml: source-scoped coverage runs uv directly and
@@ -58,21 +58,28 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/vidaimock" --version
 
-      - name: Install code
-        run: make build
-
       - name: Generate coverage
-        # Keep the source scope identical to the pull-request coverage job.
-        run: >-
-          uv run --with 'slipcover==1.0.18' python -m slipcover
-          --source episodic,alembic --branch --xml --out coverage.xml
-          -m pytest -v
+        uses: leynos/shared-actions/.github/actions/generate-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
+        with:
+          language: python
+          format: cobertura
+          output-path: coverage.xml
+          with-ratchet: 'true'
+          publish-baseline: 'always'
+          pytest-workers: ''
 
       - name: Upload coverage data to CodeScene
-        if: env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@6b5cdc2d4c0bb72cafd5a66d24d248ac25827db9
+        env:
+          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+        # The job above already restricts this workflow to main, and the
+        # workflow answers only a main push or a dispatch. Guarding this
+        # step on the push event alone would leave CodeScene with no
+        # coverage for an automerge, which is the case the dispatch exists
+        # to cover.
+        if: github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != ''
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
         with:
           format: cobertura
+          mode: upload
           path: coverage.xml
           access-token: ${{ env.CS_ACCESS_TOKEN }}
-          installer-checksum: ${{ env.CODESCENE_CLI_SHA256 }}
