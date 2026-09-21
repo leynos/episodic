@@ -71,7 +71,12 @@ jobs:
       - name: Upload coverage data to CodeScene
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != ''
+        # The job above already restricts this workflow to main, and the
+        # workflow answers only a main push or a dispatch. Guarding this
+        # step on the push event alone would leave CodeScene with no
+        # coverage for an automerge, which is the case the dispatch exists
+        # to cover.
+        if: github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != ''
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
         with:
           format: cobertura

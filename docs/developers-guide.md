@@ -99,12 +99,12 @@ third-party action pins inside a composite action. GitHub can retire one of
 those nested actions after the composite SHA was published, causing a job to
 fail during action preparation before its first step runs.
 
-[`tests/support/approved_action_revisions.json`](../tests/support/approved_action_revisions.json)
-records the nested actions for the approved coverage revisions.
-[`tests/test_codescene_workflow_contract.py`](../tests/test_codescene_workflow_contract.py)
-checks that record without network access and rejects retired pins. Refresh
-the fixture whenever a tracked action pin changes, so the dependency change is
-reviewed with the caller change.
+The [approved-revision fixture](../tests/support/approved_action_revisions.json)
+records the nested actions for the approved coverage revisions. The
+[CodeScene contract](../tests/test_codescene_workflow_contract.py) checks that
+record without network access and rejects retired pins. Refresh the fixture
+whenever a tracked action pin changes, so the dependency change is reviewed
+with the caller change.
 
 ## Linting
 
@@ -285,6 +285,26 @@ def test_uses_pinned_full_sha(caller_step):
 If a workflow's behaviour genuinely depends on a feature only present from a
 particular commit onwards, express that as a comment or a changelog note, not
 as a test assertion on the SHA string.
+
+### Exception: the coverage composites
+
+The two shared coverage actions are the one exception, and the exception is
+deliberate. A composite action's full SHA freezes the composite, not the
+third-party actions nested inside it, so a retired nested pin can break job
+preparation on a revision that never changed. Guarding against that needs a
+record of which revisions have been inspected, which only an allowlist of
+revision values can express.
+
+`generate-coverage` and `upload-codescene-coverage` therefore carry their
+current revisions in
+[`tests/test_codescene_workflow_contract.py`](../tests/test_codescene_workflow_contract.py)
+and in the approved-revision fixture. A Dependabot bump of either action is
+expected to fail the contract until the fixture is refreshed with the new
+revision's nested pins. That failure is the review step, not a chore: it is
+what makes the dependency change visible alongside the caller change.
+
+The exception is narrow. It covers those two actions alone. Every other
+reusable-workflow caller follows the pattern-matching rule above.
 
 ## Falcon HTTP runtime
 

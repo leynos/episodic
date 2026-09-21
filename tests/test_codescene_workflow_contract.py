@@ -29,8 +29,9 @@ UPLOAD_CODESCENE_ACTION = (
     "leynos/shared-actions/.github/actions/upload-codescene-coverage"
 )
 APPROVED_REVISION = "a5765019912a8ab6882b12db049c7cde635f3a85"
-PUSH_TO_MAIN = "github.event_name == 'push' && github.ref == 'refs/heads/main'"
-UPLOAD_GUARD = f"{PUSH_TO_MAIN} && env.CS_ACCESS_TOKEN != ''"
+ON_MAIN = "github.ref == 'refs/heads/main'"
+UPLOAD_GUARD = f"{ON_MAIN} && env.CS_ACCESS_TOKEN != ''"
+MAIN_PUSH_TRIGGER = {"branches": ["main"]}
 ACTION_REVISIONS = (
     REPOSITORY_ROOT / "tests" / "support" / "approved_action_revisions.json"
 )
@@ -90,6 +91,17 @@ def _workflow_triggers(path: pl.Path) -> frozenset[str]:
         else:
             events.add(str(value))
     return frozenset(events)
+
+
+def _trigger_config(path: pl.Path, event: str) -> dict[typ.Any, typ.Any] | None:
+    """Return one event's configuration from a workflow's trigger mapping."""
+    workflow = _load_workflow(path)
+    for key in ("on", True):
+        value = workflow.get(key)
+        if isinstance(value, dict) and event in value:
+            configuration = value[event]
+            return configuration if isinstance(configuration, dict) else None
+    return None
 
 
 def _workflow_jobs(path: pl.Path) -> dict[typ.Any, typ.Any]:
@@ -166,7 +178,7 @@ def test_workflow_yaml_is_parseable() -> None:
 
 
 def test_codescene_is_contacted_only_from_a_default_branch_push() -> None:
-    """One guarded default-branch upload is the sole CodeScene contact."""
+    """One default-branch-guarded upload is the sole CodeScene contact."""
     contacts = _codescene_contacts()
     assert len(contacts) == 1, f"expected one CodeScene contact, found {contacts!r}"
 
@@ -184,7 +196,7 @@ def test_codescene_is_contacted_only_from_a_default_branch_push() -> None:
         "CodeScene upload must use the approved shared action revision"
     )
     assert upload["if"] == UPLOAD_GUARD, (
-        "upload must be guarded by a main push and token"
+        "upload must be guarded by the default branch and a token"
     )
     assert _mapping(upload["env"], subject="CodeScene upload environment") == {
         "CS_ACCESS_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"
@@ -360,6 +372,9 @@ def test_the_publisher_serves_no_pull_request() -> None:
     assert triggers == frozenset({"push", "workflow_dispatch"}), (
         "the publisher must answer only a main push or a dispatch, got "
         f"{sorted(triggers)}"
+    )
+    assert _trigger_config(COVERAGE_MAIN_WORKFLOW, "push") == MAIN_PUSH_TRIGGER, (
+        "the publisher's push trigger must be restricted to the default branch"
     )
 
 
