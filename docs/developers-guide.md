@@ -61,6 +61,23 @@ No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
 caller-supplied digest would add another value that can become stale.
 
+### Deferred: production-only coverage scope
+
+The Slipcover invocation this workflow replaced passed
+`--source episodic,alembic`, so the published percentage measured application
+and migration code alone. The shared action's pinned revision offers no
+equivalent input, and an undeclared input is ignored with a warning rather than
+rejected, so the scope cannot be restored by passing one. The measured
+percentage therefore now includes test code, and the ratchet floor starts from
+that wider figure.
+
+Restore the scope by passing `python-source: episodic,alembic` to both
+`Generate coverage` steps once leynos/shared-actions#502 has merged and the pin
+here has moved to a revision on that repository's `main` which declares the
+input. Move both workflows together, because the contract requires one shared
+revision, and expect the first ratcheting run after the move to read a baseline
+measured on the wider scope.
+
 ### Keep the publisher off the pull-request path
 
 `coverage-main.yml` answers a push to `main` and a manual dispatch, and nothing

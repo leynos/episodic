@@ -3,6 +3,12 @@
 Pull requests execute arbitrary head-repository code. They enforce coverage
 with the shared generator's local ratchet and never contact CodeScene; only a
 default-branch push may upload the measured report.
+
+The adoption is partial. The replaced Slipcover command scoped coverage to
+``episodic,alembic``; the pinned generator revision declares no equivalent
+input, so no clause here asserts a source scope. Add one alongside a
+``python-source`` input once leynos/shared-actions#502 has merged and the pin
+has moved to a revision that declares it.
 """
 
 import json
