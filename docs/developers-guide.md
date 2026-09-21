@@ -85,7 +85,10 @@ else. A workflow that both uploads and serves pull requests would be required
 to publish and forbidden from publishing at the same time, so the contract
 asserts that workflow's exact trigger set rather than only the upload step's
 guard. It also asserts that no workflow reachable from a pull request mentions
-`CS_ACCESS_TOKEN`, because a fork's head runs in that lane.
+`CS_ACCESS_TOKEN` or the `codescene.io` host, because a fork's head runs in
+that lane. The host clause is the one that closes the lane rather than its
+known doors: a step could reach the project API with a plain `curl`, naming
+neither the shared action, nor the `cs-coverage` client, nor the token.
 
 When adding a clause that reads a workflow's triggers, read the key under both
 its quoted spelling and the boolean `True` that PyYAML produces for an unquoted
