@@ -373,4 +373,5 @@ async def _create_generation_run(
 
 
 def _tei_hash(tei_xml: str) -> str:
+    """Return the prefixed SHA-256 content hash for one TEI payload."""
     return f"sha256:{hashlib.sha256(tei_xml.encode()).hexdigest()}"

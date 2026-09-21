@@ -1,5 +1,6 @@
 """Tests for file-backed pricing catalogue resolution."""
 
+import datetime as dt
 import textwrap
 import typing as typ
 
@@ -144,6 +145,88 @@ async def test_file_pricing_catalogue_rejects_missing_snapshot(
     catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-04T00:00:00Z")
 
     with pytest.raises(LookupError, match="No pricing snapshot"):
+        await catalogue.resolve(
+            "openai",
+            "gpt-4o-mini",
+            "chat_completions",
+            BillingPeriodKey("2026-06"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_file_pricing_catalogue_propagates_effective_from(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The loader carries the snapshot's effective date into the domain."""
+    _write_snapshot(
+        tmp_path,
+        "openai.yaml",
+        """
+        pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f95
+        provider_name: openai
+        model: gpt-4o-mini
+        operation: chat_completions
+        source_kind: provider_rate_card
+        currency: USD
+        billing_period_key: "2026-06"
+        rates_minor_per_metric:
+          input_tokens: 100
+          output_tokens: 200
+        source_metadata:
+          source_url: https://example.test/current
+        retrieved_at: "2026-06-01T00:00:00Z"
+        effective_from: "2026-06-01T00:00:00Z"
+        """,
+    )
+
+    catalogue = FilePricingCatalogue(tmp_path)
+    snapshot = await catalogue.resolve(
+        "openai",
+        "gpt-4o-mini",
+        "chat_completions",
+        BillingPeriodKey("2026-06"),
+    )
+
+    effective_from = snapshot.effective_from
+    assert effective_from is not None, "expected a loaded effective date"
+    assert effective_from == dt.datetime(2026, 6, 1, tzinfo=dt.UTC), (
+        f"expected the parsed YAML effective date, got {effective_from!r}"
+    )
+    assert effective_from.tzinfo is not None, (
+        "the loaded effective date must be timezone-aware"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_value", ["false", "0", "[]", "{}"])
+async def test_file_pricing_catalogue_rejects_invalid_effective_from(
+    tmp_path: pathlib.Path,
+    invalid_value: str,
+) -> None:
+    """Present but non-string effective dates must fail loading."""
+    _write_snapshot(
+        tmp_path,
+        "openai.yaml",
+        f"""
+        pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f96
+        provider_name: openai
+        model: gpt-4o-mini
+        operation: chat_completions
+        source_kind: provider_rate_card
+        currency: USD
+        billing_period_key: "2026-06"
+        rates_minor_per_metric:
+          input_tokens: 100
+          output_tokens: 200
+        source_metadata:
+          source_url: https://example.test/invalid
+        retrieved_at: "2026-06-01T00:00:00Z"
+        effective_from: {invalid_value}
+        """,
+    )
+
+    catalogue = FilePricingCatalogue(tmp_path)
+    with pytest.raises(ValueError, match="effective_from"):
         await catalogue.resolve(
             "openai",
             "gpt-4o-mini",

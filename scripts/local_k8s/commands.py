@@ -1,7 +1,9 @@
 """Command construction for the local Kubernetes preview workflow."""
 
 import dataclasses as dc
+import re
 import subprocess
+import sys
 import typing as typ
 import urllib.parse as urlparse
 
@@ -44,13 +46,22 @@ class CommandRunner:
                 stdout="",
                 stderr="",
             )
-        return subprocess.run(  # noqa: S603 - commands are constructed internally.
-            args,
-            input=input_text,
-            check=check,
-            text=True,
-            capture_output=True,
-        )
+        try:
+            return subprocess.run(  # noqa: S603 - commands are constructed internally.
+                args,
+                input=input_text,
+                check=check,
+                text=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            # Captured output would otherwise vanish into the traceback,
+            # leaving the operator with no diagnostic from the failed tool.
+            if exc.stdout:
+                print(exc.stdout, end="", file=sys.stderr)
+            if exc.stderr:
+                print(exc.stderr, end="", file=sys.stderr)
+            raise
 
 
 def k3d_cluster_create_command(config: PreviewConfig) -> list[str]:
@@ -251,24 +262,64 @@ def kubectl_apply_command(config: PreviewConfig) -> list[str]:
     return [*_kubectl_cmd(config), "apply", "-f", "-"]
 
 
-def kubectl_secret_command(config: PreviewConfig) -> list[str]:
-    """Build the idempotent application Secret creation command."""
-    return [
-        *_kubectl_ns_cmd(config),
-        "create",
-        "secret",
-        "generic",
-        config.secret_name,
-        f"--from-literal=database-url={config.database_url}",
-        "--dry-run=client",
-        "-o",
-        "yaml",
+def secret_manifest(config: PreviewConfig) -> str:
+    """Build the application Secret manifest for one stdin apply.
+
+    The manifest carries the credentials in ``stringData`` so secret
+    values never appear in command arguments, which the runner prints in
+    dry-run mode and which failed commands may echo to stderr.
+
+    Returns
+    -------
+    str
+        Secret manifest YAML for ``kubectl apply -f -`` on stdin.
+    """
+    lines = [
+        "apiVersion: v1",
+        "kind: Secret",
+        "metadata:",
+        f"  name: {_require_dns1123_label(config.secret_name, 'secret_name')}",
+        f"  namespace: {_require_dns1123_label(config.namespace, 'namespace')}",
+        "type: Opaque",
+        "stringData:",
+        f"  database-url: {_yaml_string(config.database_url)}",
+        f"  api-bearer-token: {_yaml_string(config.api_bearer_token)}",
     ]
+    if config.openai_api_key:
+        # The runtime requires the base URL and key together, so the
+        # preview secret only ever writes the pair.
+        lines.extend([
+            f"  openai-base-url: {_yaml_string(config.openai_base_url)}",
+            f"  openai-api-key: {_yaml_string(config.openai_api_key)}",
+        ])
+    return "\n".join(lines) + "\n"
+
+
+_DNS1123_LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
+
+
+def _require_dns1123_label(value: str, field_name: str) -> str:
+    """Return a Kubernetes DNS-1123 label or reject the manifest value."""
+    if not _DNS1123_LABEL.match(value):
+        msg = (
+            f"{field_name} must be a DNS-1123 label "
+            f"(lowercase alphanumerics and hyphens); got {value!r}"
+        )
+        raise ValueError(msg)
+    return value
 
 
 def _yaml_string(value: str) -> str:
-    """Quote a simple scalar for the local manifest."""
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    """Quote a scalar for the local manifest, escaping control characters."""
+    escaped = (
+        value
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+    return '"' + escaped + '"'
 
 
 def local_postgres_manifest(config: PreviewConfig) -> str:

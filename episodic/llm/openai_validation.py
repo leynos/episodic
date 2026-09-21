@@ -1,6 +1,7 @@
 """Shared OpenAI payload validation helpers."""
 
 import collections.abc as cabc
+import dataclasses as dc
 import typing as typ
 
 from episodic.cost.ports import UsageSource
@@ -11,9 +12,17 @@ class OpenAIResponseValidationError(ValueError):
     """Raised when an OpenAI payload fails adapter boundary validation."""
 
 
+class OpenAIUsageDetailError(OpenAIResponseValidationError):
+    """Raised when nested usage details exceed their parent totals."""
+
+
 _INVALID_CHAT_COMPLETION_MESSAGE = (
     "Invalid OpenAI chat completion payload. Expected non-empty string id/model, "
     "a non-empty choices list, and choices with message.content strings."
+)
+_INVALID_USAGE_DETAIL_MESSAGE = (
+    "Invalid OpenAI usage payload. Nested token details must not exceed "
+    "their parent token totals."
 )
 _INVALID_RESPONSES_PAYLOAD_MESSAGE = (
     "Invalid OpenAI Responses payload. Expected non-empty string id/model, "
@@ -196,9 +205,99 @@ def _add_metric_if_present(
     key: str,
     value: int | None,
 ) -> None:
-    """Add a canonical usage metric when the provider reported it."""
-    if value is not None:
+    """Add a canonical usage metric when the provider reported a nonzero count.
+
+    Zero-valued optional metrics carry no cost information, and recording
+    them would require every pricing snapshot to price every modality the
+    provider happens to mention in its usage details.
+    """
+    if value:
         metrics[key] = value
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ChatUsageDetailTotals:
+    """Parent totals and optional nested details from chat usage."""
+
+    prompt_tokens: int
+    completion_tokens: int
+    cached_input: int | None
+    audio_input: int | None
+    audio_output: int | None
+
+    @property
+    def input_detail_tokens(self) -> int:
+        """Return cached and audio input tokens."""
+        return (self.cached_input or 0) + (self.audio_input or 0)
+
+    @property
+    def output_audio_tokens(self) -> int:
+        """Return audio output tokens."""
+        return self.audio_output or 0
+
+
+def _validate_chat_usage_detail_totals(details: _ChatUsageDetailTotals) -> None:
+    """Validate that nested chat usage details fit within parent totals.
+
+    Raises
+    ------
+    OpenAIUsageDetailError
+        If nested token details exceed their parent token totals.
+    """
+    if details.input_detail_tokens > details.prompt_tokens:
+        raise OpenAIUsageDetailError(_INVALID_USAGE_DETAIL_MESSAGE)
+    if details.output_audio_tokens > details.completion_tokens:
+        raise OpenAIUsageDetailError(_INVALID_USAGE_DETAIL_MESSAGE)
+
+
+def _build_chat_usage_metrics(
+    usage_payload: cabc.Mapping[str, object],
+) -> dict[str, int]:
+    """Build mutually exclusive canonical metrics from chat usage details.
+
+    Returns
+    -------
+    dict[str, int]
+        Mutually exclusive canonical usage metrics.
+
+    Raises
+    ------
+    OpenAIResponseValidationError
+        If nested token details exceed their parent token totals.
+    """  # noqa: DOC502  # _validate_chat_usage_detail_totals raises for this helper.
+    prompt_tokens = _extract_token_count(usage_payload, "prompt_tokens")
+    completion_tokens = _extract_token_count(usage_payload, "completion_tokens")
+    cached_input = _extract_nested_token_count(
+        usage_payload,
+        "prompt_tokens_details",
+        "cached_tokens",
+    )
+    audio_input = _extract_nested_token_count(
+        usage_payload,
+        "prompt_tokens_details",
+        "audio_tokens",
+    )
+    audio_output = _extract_nested_token_count(
+        usage_payload,
+        "completion_tokens_details",
+        "audio_tokens",
+    )
+    details = _ChatUsageDetailTotals(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cached_input=cached_input,
+        audio_input=audio_input,
+        audio_output=audio_output,
+    )
+    _validate_chat_usage_detail_totals(details)
+    metrics = {
+        "input_tokens": details.prompt_tokens - details.input_detail_tokens,
+        "output_tokens": details.completion_tokens - details.output_audio_tokens,
+    }
+    _add_metric_if_present(metrics, "cached_input_tokens", cached_input)
+    _add_metric_if_present(metrics, "audio_input_tokens", audio_input)
+    _add_metric_if_present(metrics, "audio_output_tokens", audio_output)
+    return metrics
 
 
 def _normalize_chat_provider_call_usage(
@@ -206,49 +305,28 @@ def _normalize_chat_provider_call_usage(
     usage_payload: cabc.Mapping[str, object] | None,
     finish_reason: str | None,
 ) -> ProviderCallUsage | None:
-    """Convert OpenAI chat usage details into canonical cost metrics."""
+    """Convert OpenAI chat usage details into canonical cost metrics.
+
+    The provider reports cached and audio counts as subsets of the prompt
+    and completion totals, so the canonical metrics are made mutually
+    exclusive: subset counts are subtracted from their parent totals and
+    priced under their own rates. Reasoning tokens are billed at the
+    output rate and stay inside ``output_tokens`` rather than becoming a
+    separately priced metric.
+
+    Returns
+    -------
+    ProviderCallUsage | None
+        Canonical usage metadata, or ``None`` without a usage payload.
+
+    Raises
+    ------
+    OpenAIResponseValidationError
+        If nested token details exceed their parent token totals.
+    """  # noqa: DOC502  # _build_chat_usage_metrics raises for the normalizer.
     if usage_payload is None:
         return None
-    metrics = {
-        "input_tokens": _extract_token_count(usage_payload, "prompt_tokens"),
-        "output_tokens": _extract_token_count(usage_payload, "completion_tokens"),
-    }
-    _add_metric_if_present(
-        metrics,
-        "cached_input_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "prompt_tokens_details",
-            "cached_tokens",
-        ),
-    )
-    _add_metric_if_present(
-        metrics,
-        "audio_input_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "prompt_tokens_details",
-            "audio_tokens",
-        ),
-    )
-    _add_metric_if_present(
-        metrics,
-        "reasoning_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "completion_tokens_details",
-            "reasoning_tokens",
-        ),
-    )
-    _add_metric_if_present(
-        metrics,
-        "audio_output_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "completion_tokens_details",
-            "audio_tokens",
-        ),
-    )
+    metrics = _build_chat_usage_metrics(usage_payload)
     return ProviderCallUsage(
         usage_metrics=metrics,
         usage_source=UsageSource.PROVIDER,
@@ -265,39 +343,47 @@ def _normalize_responses_provider_call_usage(
     usage_payload: cabc.Mapping[str, object] | None,
     finish_reason: str | None,
 ) -> ProviderCallUsage | None:
-    """Convert OpenAI Responses usage details into canonical cost metrics."""
+    """Convert OpenAI Responses usage details into canonical cost metrics.
+
+    Cached input tokens are a subset of the input total, so they are
+    subtracted from ``input_tokens`` and priced under their own rate.
+    Reasoning tokens are billed at the output rate and stay inside
+    ``output_tokens`` rather than becoming a separately priced metric.
+
+    Returns
+    -------
+    ProviderCallUsage | None
+        Canonical usage metadata, or ``None`` without a usage payload.
+
+    Raises
+    ------
+    OpenAIUsageDetailError
+        If nested token details exceed their parent token totals.
+    """
     if usage_payload is None:
         return None
+    input_tokens = _extract_token_count(
+        usage_payload,
+        "input_tokens",
+        error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
+    )
+    output_tokens = _extract_token_count(
+        usage_payload,
+        "output_tokens",
+        error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
+    )
+    cached_input = _extract_nested_token_count(
+        usage_payload,
+        "input_tokens_details",
+        "cached_tokens",
+    )
+    if (cached_input or 0) > input_tokens:
+        raise OpenAIUsageDetailError(_INVALID_USAGE_DETAIL_MESSAGE)
     metrics = {
-        "input_tokens": _extract_token_count(
-            usage_payload,
-            "input_tokens",
-            error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
-        ),
-        "output_tokens": _extract_token_count(
-            usage_payload,
-            "output_tokens",
-            error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
-        ),
+        "input_tokens": input_tokens - (cached_input or 0),
+        "output_tokens": output_tokens,
     }
-    _add_metric_if_present(
-        metrics,
-        "cached_input_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "input_tokens_details",
-            "cached_tokens",
-        ),
-    )
-    _add_metric_if_present(
-        metrics,
-        "reasoning_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "output_tokens_details",
-            "reasoning_tokens",
-        ),
-    )
+    _add_metric_if_present(metrics, "cached_input_tokens", cached_input)
     return ProviderCallUsage(
         usage_metrics=metrics,
         usage_source=UsageSource.PROVIDER,

@@ -77,8 +77,8 @@ async def test_generation_run_store_persists_across_unit_of_work(
         fetched = await uow.generation_runs.get_run(run.id)
         events = await uow.generation_runs.list_events(run.id)
 
-    assert fetched == stored, f"expected stored run {stored!r}, got {fetched!r}"
     assert fetched is not None, f"expected run {run.id} to persist, got {fetched!r}"
+    assert fetched == stored, f"expected stored run {stored!r}, got {fetched!r}"
     assert fetched.quality_mode is QualityMode.DRAFT_WITHOUT_QA, (
         f"expected draft-without-QA quality mode, got {fetched.quality_mode!r}"
     )

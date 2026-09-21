@@ -287,6 +287,7 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
             system_prompt=self.config.system_prompt,
             provider_operation=self.config.provider_operation,
             token_budget=self.config.token_budget,
+            json_response=True,
         )
         try:
             response = await self.llm.generate(llm_request)
