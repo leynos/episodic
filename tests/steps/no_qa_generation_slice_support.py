@@ -268,7 +268,7 @@ def generation_payload(**overrides: object) -> dict[str, object]:
 
 
 def _write_provider_config(provider_dir: Path) -> None:
-    (provider_dir / "draft.yaml").write_text(
+    (provider_dir / "openai.yaml").write_text(
         "\n".join((
             'name: "draft"',
             'matcher: "/v1/chat/completions"',

@@ -123,7 +123,7 @@ def _build_assistant_content_literal() -> str:
 
 def _write_provider_config(provider_dir: Path) -> None:
     """Write the guest-bios provider configuration to Vidai Mock."""
-    provider_file = provider_dir / "guest_bios.yaml"
+    provider_file = provider_dir / "openai.yaml"
     provider_config = {
         "name": "guest_bios",
         "matcher": "/v1/chat/completions",
@@ -245,6 +245,7 @@ def _start_vidaimock_process(
                 str(port),
                 "--config-dir",
                 str(config_dir),
+                "--isolated",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -387,14 +388,11 @@ def assert_prompt_contains_guest_profile(
 def assert_enriched_tei_contains_guest_bios(
     guest_bios_context: GuestBiosBDDContext,
 ) -> None:
-    """Verify generated biographies are formatted in the canonical TEI body."""
-    assert 'type="guest-bios"' in guest_bios_context.enriched_tei_xml, (
-        "Expected collection to contain the value"
+    """Verify generated biographies use the canonical guest-bios body block."""
+    xml = guest_bios_context.enriched_tei_xml
+    ada_reference = 'corresp="urn:episodic:reference-document-revision:rev-ada"'
+    assert 'type="guest-bios"' in xml, "Expected a guest-bios body block."
+    assert ada_reference in xml, "Expected Ada's reference document revision."
+    assert "Ada Lovelace wrote about analytical engines." in xml, (
+        "Expected Ada's generated biography."
     )
-    assert (
-        'corresp="urn:episodic:reference-document-revision:rev-ada"'
-        in guest_bios_context.enriched_tei_xml
-    ), "Expected collection to contain the value"
-    assert "Ada Lovelace wrote about analytical engines." in (
-        guest_bios_context.enriched_tei_xml
-    ), "Expected collection to contain the value"

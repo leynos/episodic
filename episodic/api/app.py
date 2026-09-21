@@ -28,6 +28,7 @@ from .resources import (
     GenerationRunEventsResource,
     GenerationRunResource,
     GenerationRunsResource,
+    GenerationRunsResourceConfig,
     HealthLiveResource,
     HealthReadyResource,
     IngestionJobResource,
@@ -271,12 +272,14 @@ def _register_generation_run_routes(
         GenerationRunsResource(
             uow_factory,
             launcher=dependencies.launcher,
-            max_source_count=(
-                None
-                if dependencies.generation_source_limits is None
-                else dependencies.generation_source_limits.max_source_count
+            config=GenerationRunsResourceConfig(
+                max_source_count=(
+                    None
+                    if dependencies.generation_source_limits is None
+                    else dependencies.generation_source_limits.max_source_count
+                ),
+                tracer=dependencies.tracer,
             ),
-            tracer=dependencies.tracer,
         ),
     )
     app.add_route(

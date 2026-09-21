@@ -5,9 +5,6 @@ import dataclasses as dc
 import json
 import typing as typ
 
-import tei_rapporteur as tei
-
-from episodic.canonical.domain import ReferenceDocumentKind
 from episodic.canonical.reference_documents.resolution import resolve_bindings
 from episodic.llm import (
     LLMPort,
@@ -49,7 +46,7 @@ def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
     """Reject blank or whitespace-only string fields on a dataclass instance."""
     for field_name in field_names:
         value = getattr(instance, field_name)
-        if not isinstance(value, str) or value.strip() == "":
+        if not isinstance(value, str) or not value.strip():
             msg = f"{field_name} must be non-empty."
             raise ValueError(msg)
 
@@ -60,27 +57,6 @@ def _normalize_optional_string(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
-
-
-def _optional_content_string(value: object) -> str | None:
-    """Return a stripped string from untrusted reference payload content."""
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip()
-    return normalized or None
-
-
-def _first_content_string(payload: JsonMapping, *field_names: str) -> str | None:
-    """Return the first non-empty string from the given mapping fields."""
-    for field_name in field_names:
-        if content := _optional_content_string(payload.get(field_name)):
-            return content
-    return None
-
-
-def _json_source_content(payload: JsonMapping) -> str:
-    """Serialize structured reference content for source-grounded prompts."""
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -182,56 +158,6 @@ class GuestBiosGeneratorConfig:
     system_prompt: str = _DEFAULT_SYSTEM_PROMPT
 
 
-def project_guest_bio_sources(
-    resolved_bindings: list[ResolvedBinding],
-) -> tuple[GuestBioSource, ...]:
-    """Project resolved guest-profile bindings into generator source records."""
-    sources: list[GuestBioSource] = []
-    for resolved in resolved_bindings:
-        if resolved.document.kind is not ReferenceDocumentKind.GUEST_PROFILE:
-            continue
-
-        revision_content = resolved.revision.content
-        document_metadata = resolved.document.metadata
-        display_name = _first_content_string(
-            revision_content,
-            "display_name",
-            "name",
-            "title",
-        ) or _first_content_string(document_metadata, "display_name", "name", "title")
-        if display_name is None:
-            display_name = str(resolved.document.id)
-
-        role = _first_content_string(revision_content, "role", "occupation")
-        if role is None:
-            role = _first_content_string(document_metadata, "role", "occupation")
-
-        source_content = _first_content_string(
-            revision_content,
-            "source_content",
-            "profile",
-            "bio",
-            "biography",
-            "summary",
-            "content",
-            "text",
-        )
-        if source_content is None:
-            source_content = _json_source_content(revision_content)
-
-        sources.append(
-            GuestBioSource(
-                display_name=display_name,
-                role=role,
-                reference_document_id=str(resolved.document.id),
-                reference_document_revision_id=str(resolved.revision.id),
-                source_content=source_content,
-            )
-        )
-
-    return tuple(sources)
-
-
 def _decode_object(value: object, field_name: str) -> dict[str, object]:
     """Decode a JSON value as an object or raise a format error."""
     if not isinstance(value, dict):
@@ -242,7 +168,7 @@ def _decode_object(value: object, field_name: str) -> dict[str, object]:
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
     """Require a non-empty string from an LLM payload."""
-    if not isinstance(value, str) or value.strip() == "":
+    if not isinstance(value, str) or not value.strip():
         msg = f"{field_name} must be a non-empty string."
         raise GuestBiosResponseFormatError(msg)
     return value
@@ -398,94 +324,6 @@ class GuestBiosGenerator:
         )
 
 
-def _require_payload_object(value: object, field_name: str) -> dict[str, object]:
-    """Require a mapping inside a TEI payload or raise ValueError."""
-    if not isinstance(value, dict):
-        msg = f"TEI payload field {field_name} must be an object."
-        # _require_payload_object treats this as invalid TEI payload content,
-        # not Python call-site type misuse.
-        raise ValueError(msg)  # noqa: TRY004
-    return typ.cast("dict[str, object]", value)
-
-
-def _require_payload_list(value: object, field_name: str) -> list[object]:
-    """Require a list inside a TEI payload or raise ValueError."""
-    if not isinstance(value, list):
-        msg = f"TEI payload field {field_name} must be a list."
-        # _require_payload_list treats this as invalid TEI payload content,
-        # not Python call-site type misuse.
-        raise ValueError(msg)  # noqa: TRY004
-    return typ.cast("list[object]", value)
-
-
-def _build_text_inline(text: str) -> list[dict[str, str]]:
-    """Build a plain text inline payload for tei_rapporteur."""
-    return [{"type": "text", "value": text}]
-
-
-def _build_item_payload(entry: GuestBioEntry) -> dict[str, object]:
-    """Build one guest-bio list item payload."""
-    item_payload: dict[str, object] = {
-        "label": {"content": _build_text_inline(entry.display_name)},
-        "content": _build_text_inline(entry.bio),
-        "corresp": [entry.get_external_corresp_id()],
-    }
-    if entry.role is not None:
-        item_payload["n"] = entry.role
-    if entry.tei_locator is not None:
-        item_payload["ana"] = [entry.tei_locator]
-    return item_payload
-
-
-def _build_guest_bios_div_payload(
-    entries: tuple[GuestBioEntry, ...],
-) -> dict[str, object]:
-    """Build the canonical TEI body payload for guest biographies."""
-    return {
-        "type": "div",
-        "div_type": "guest-bios",
-        "content": [
-            {
-                "type": "list",
-                "items": [_build_item_payload(entry) for entry in entries],
-            }
-        ],
-    }
-
-
-def _body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
-    """Return the mutable TEI body blocks list from a document payload."""
-    text_payload = _require_payload_object(document_payload.get("text"), "text")
-    body_payload = _require_payload_object(text_payload.get("body"), "text.body")
-    return _require_payload_list(body_payload.get("blocks"), "text.body.blocks")
-
-
-def _is_guest_bios_div_payload(value: object) -> bool:
-    """Return True when a body block payload is the canonical guest-bios div."""
-    if not isinstance(value, dict):
-        return False
-    payload = typ.cast("dict[str, object]", value)
-    return payload.get("type") == "div" and payload.get("div_type") == "guest-bios"
-
-
-def enrich_tei_with_guest_bios(tei_xml: str, result: GuestBiosResult) -> str:
-    """Insert guest biographies into a TEI document body."""
-    if not result.entries:
-        return tei_xml
-
-    document = tei.parse_xml(tei_xml)
-    document_payload = typ.cast("dict[str, object]", tei.to_dict(document))
-    body_blocks = _body_blocks_payload(document_payload)
-    body_blocks[:] = [
-        body_block
-        for body_block in body_blocks
-        if not _is_guest_bios_div_payload(body_block)
-    ]
-    body_blocks.append(_build_guest_bios_div_payload(result.entries))
-    enriched_document = tei.from_dict(document_payload)
-    return tei.emit_xml(enriched_document)
-
-
 async def generate_guest_bios_from_reference_bindings(
     uow: CanonicalUnitOfWork,
     request: GuestBiosEnrichmentRequest,
@@ -494,6 +332,8 @@ async def generate_guest_bios_from_reference_bindings(
     binding_resolver: BindingResolver = resolve_bindings,
 ) -> GuestBiosEnrichmentResult:
     """Resolve guest profile bindings, generate bios, and enrich TEI."""
+    from episodic.generation.guest_bios_sources import project_guest_bio_sources
+
     resolved_bindings = await binding_resolver(
         uow,
         series_profile_id=request.series_profile_id,
@@ -521,3 +361,27 @@ async def generate_guest_bios_from_reference_bindings(
         generation_result=result,
         sources=sources,
     )
+
+
+def enrich_tei_with_guest_bios(tei_xml: str, result: GuestBiosResult) -> str:
+    """Insert guest biographies into a TEI document body.
+
+    Returns
+    -------
+    str
+        Enriched TEI XML, or the original document for an empty result.
+    """
+    from episodic.generation.guest_bios_tei import enrich_tei_with_guest_bios as enrich
+
+    return enrich(tei_xml, result)
+
+
+def project_guest_bio_sources(
+    resolved_bindings: list[ResolvedBinding],
+) -> tuple[GuestBioSource, ...]:
+    """Project resolved guest-profile bindings into immutable prompt sources."""
+    from episodic.generation.guest_bios_sources import (
+        project_guest_bio_sources as project,
+    )
+
+    return project(resolved_bindings)

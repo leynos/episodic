@@ -37,11 +37,9 @@ from .episode_templates import (
     EpisodeTemplateResource,
     EpisodeTemplatesResource,
 )
-from .generation_runs import (
-    GenerationRunEventsResource,
-    GenerationRunResource,
-    GenerationRunsResource,
-)
+from .generation_run_events import GenerationRunEventsResource
+from .generation_run_status import GenerationRunResource
+from .generation_runs import GenerationRunsResource, GenerationRunsResourceConfig
 from .health import HealthLiveResource, HealthReadyResource
 from .reference_bindings import ReferenceBindingResource, ReferenceBindingsResource
 from .reference_documents import (
@@ -73,6 +71,7 @@ __all__ = [
     "GenerationRunEventsResource",
     "GenerationRunResource",
     "GenerationRunsResource",
+    "GenerationRunsResourceConfig",
     "HealthLiveResource",
     "HealthReadyResource",
     "IngestionJobResource",

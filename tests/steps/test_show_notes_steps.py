@@ -116,7 +116,7 @@ def _build_assistant_content_literal() -> str:
 
 def _write_provider_config(provider_dir: Path) -> None:
     """Write the show-notes provider configuration to Vidai Mock."""
-    provider_file = provider_dir / "show_notes.yaml"
+    provider_file = provider_dir / "openai.yaml"
     provider_file.write_text(
         "\n".join((
             'name: "show_notes"',
@@ -232,6 +232,7 @@ def _start_vidaimock_process(
                 str(port),
                 "--config-dir",
                 str(config_dir),
+                "--isolated",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

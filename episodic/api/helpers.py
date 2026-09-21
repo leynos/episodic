@@ -26,15 +26,23 @@ import uuid
 from episodic.canonical.pagination import Pagination
 from episodic.canonical.profile_templates import (
     AuditMetadata,
-    EpisodeTemplateData,
     EpisodeTemplateUpdateFields,
-    SeriesProfileCreateData,
     SeriesProfileUpdateFields,
-    UpdateEpisodeTemplateRequest,
-    UpdateSeriesProfileRequest,
 )
 
 from .errors import validation_error
+from .profile_template_payloads import (
+    build_profile_create_kwargs as build_profile_create_kwargs,
+)
+from .profile_template_payloads import (
+    build_profile_update_request as build_profile_update_request,
+)
+from .profile_template_payloads import (
+    build_template_create_kwargs as build_template_create_kwargs,
+)
+from .profile_template_payloads import (
+    build_template_update_request as build_template_update_request,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -331,135 +339,4 @@ def _build_typed_update_request[DataT, RequestT](
         update_kwargs.expected_revision,
         update_kwargs.data,
         update_kwargs.audit,
-    )
-
-
-def build_profile_create_kwargs(payload: JsonPayload) -> dict[str, object]:
-    """Build service kwargs for creating a series profile.
-
-    Parameters
-    ----------
-    payload : JsonPayload
-        Request payload containing profile create fields and optional audit
-        metadata.
-
-    Returns
-    -------
-    dict[str, object]
-        Keyword arguments for ``create_series_profile``.
-    """
-    slug = _require_field(payload, "slug")
-    title = _require_field(payload, "title")
-    configuration = _require_field(payload, "configuration")
-    data = SeriesProfileCreateData(
-        slug=typ.cast("str", slug),
-        title=typ.cast("str", title),
-        description=typ.cast("str | None", payload.get("description")),
-        configuration=typ.cast("dict[str, object]", configuration),
-        guardrails=_optional_json_object_field(payload, "guardrails") or {},
-    )
-    return {
-        "data": data,
-        "audit": build_audit_metadata(payload),
-    }
-
-
-def build_template_create_kwargs(payload: JsonPayload) -> dict[str, object]:
-    """Build service kwargs for creating an episode template.
-
-    Parameters
-    ----------
-    payload : JsonPayload
-        Request payload containing template create fields and optional audit
-        metadata.
-
-    Returns
-    -------
-    dict[str, object]
-        Keyword arguments for ``create_episode_template``.
-    """
-    raw_series_profile_id = _require_field(payload, "series_profile_id")
-    slug = _require_field(payload, "slug")
-    title = _require_field(payload, "title")
-    structure = _require_field(payload, "structure")
-
-    audit = build_audit_metadata(payload)
-    data = EpisodeTemplateData(
-        slug=typ.cast("str", slug),
-        title=typ.cast("str", title),
-        description=typ.cast("str | None", payload.get("description")),
-        structure=typ.cast("dict[str, object]", structure),
-        guardrails=_optional_json_object_field(payload, "guardrails") or {},
-    )
-    return {
-        "series_profile_id": parse_uuid(
-            typ.cast("str", raw_series_profile_id),
-            "series_profile_id",
-        ),
-        "data": data,
-        "audit": audit,
-    }
-
-
-def build_profile_update_request(
-    entity_id: uuid.UUID,
-    payload: JsonPayload,
-) -> UpdateSeriesProfileRequest:
-    """Build a typed update request for series-profile updates.
-
-    Parameters
-    ----------
-    entity_id : uuid.UUID
-        Identifier of the series profile to update.
-    payload : JsonPayload
-        Request payload containing revision, profile fields, and optional audit
-        metadata.
-
-    Returns
-    -------
-    UpdateSeriesProfileRequest
-        Typed service request value for ``update_series_profile``.
-    """
-    return _build_typed_update_request(
-        entity_id,
-        payload,
-        data_builder=_build_profile_data,
-        request_builder=lambda eid, rev, data, audit: UpdateSeriesProfileRequest(
-            profile_id=eid,
-            expected_revision=rev,
-            data=typ.cast("SeriesProfileUpdateFields", data),
-            audit=audit,
-        ),
-    )
-
-
-def build_template_update_request(
-    entity_id: uuid.UUID,
-    payload: JsonPayload,
-) -> UpdateEpisodeTemplateRequest:
-    """Build a typed update request for episode-template updates.
-
-    Parameters
-    ----------
-    entity_id : uuid.UUID
-        Identifier of the episode template to update.
-    payload : JsonPayload
-        Request payload containing revision, template fields, and optional audit
-        metadata.
-
-    Returns
-    -------
-    UpdateEpisodeTemplateRequest
-        Typed service request value for ``update_episode_template``.
-    """
-    return _build_typed_update_request(
-        entity_id,
-        payload,
-        data_builder=_build_template_fields,
-        request_builder=lambda eid, rev, fields, audit: UpdateEpisodeTemplateRequest(
-            template_id=eid,
-            expected_revision=rev,
-            data=typ.cast("EpisodeTemplateUpdateFields", fields),
-            audit=audit,
-        ),
     )

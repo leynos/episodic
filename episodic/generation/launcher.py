@@ -25,17 +25,12 @@ import dataclasses as dc
 import datetime as dt
 import typing as typ
 
-from episodic.canonical.domain import GenerationRun, GenerationRunStatus
-from episodic.canonical.generation_persistence import (
-    DraftScriptPersistenceRequest,
-    persist_draft_script,
-)
-from episodic.canonical.generation_quality import QaStatus
-from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.reference_documents import resolve_bindings
-from episodic.cost.ports import BillingPeriodKey
-from episodic.cost.recorder import CostProviderOperation
+from episodic.generation.launcher_lifecycle import (
+    persist_success,
+    record_draft_generated,
+    record_failure,
+)
 from episodic.generation.launcher_support import (
     ClaimedRun,
     Clock,
@@ -44,18 +39,14 @@ from episodic.generation.launcher_support import (
     Failure,
     GenerationSourceLimitError,
     GenerationSourceLimits,
-    PersistedTei,
-    ProviderCallRecordRequest,
     SequentialDraftIds,
     classify_failure,
-    draft_generated_payload,
     draft_request,
     project_presenter_profiles,
-    provider_call_record,
     require_episode,
     source_from_document,
 )
-from episodic.logging import get_logger, log_error, log_info
+from episodic.logging import get_logger, log_info
 from episodic.observability import (
     MonotonicClockPort,
     NoopTracer,
@@ -69,7 +60,11 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from episodic.canonical.domain import SourceDocument
+    from episodic.canonical.domain import (
+        GenerationRun,
+        GenerationRunStatus,
+        SourceDocument,
+    )
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import (
@@ -84,7 +79,6 @@ _DEFAULT_MAX_CONCURRENCY = 4
 _DEFAULT_MAX_PENDING_RUNS = 16
 _DEFAULT_LEASE_SECONDS = 900
 _METRIC_TERMINAL_STATES = "generation_run_terminal_total"
-_METRIC_DRAFT_ERRORS = "generation_run_draft_errors_total"
 _METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
 _METRIC_DRAFT_LATENCY = "generation_run_draft_latency_ms"
 _METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
@@ -236,10 +230,9 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
                 await asyncio.shield(self._record_cancellation(run_id))
                 self._cancelled_run_ids.add(run_id)
                 raise
-            else:
-                span.set_attribute("outcome", outcome.outcome)
-                if outcome.failure_category is not None:
-                    span.set_attribute("failure_category", outcome.failure_category)
+            span.set_attribute("outcome", outcome.outcome)
+            if outcome.failure_category is not None:
+                span.set_attribute("failure_category", outcome.failure_category)
 
     async def _execute_run(self, run_id: uuid.UUID) -> _ExecutionOutcome:
         """Execute one generation run while its concurrency permit is held."""
@@ -248,12 +241,12 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             if claimed is None:
                 return _ExecutionOutcome(outcome="not_claimed")
             result = await self._generate(claimed)
-            await self._record_draft_generated(claimed.run.id, result)
-            await self._persist_success(claimed, result)
+            await record_draft_generated(self, claimed.run.id, result)
+            await persist_success(self, claimed, result)
             return _ExecutionOutcome(outcome="completed")
         except Exception as exc:  # noqa: BLE001  # Task boundary must persist unexpected failures.
             failure = classify_failure(exc)
-            await self._record_failure(run_id, failure)
+            await record_failure(self, run_id, failure)
             return _ExecutionOutcome(
                 outcome="failed",
                 failure_category=failure.category,
@@ -261,7 +254,8 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
 
     async def _record_cancellation(self, run_id: uuid.UUID) -> None:
         """Record cancellation consistently before or during execution."""
-        await self._record_failure(
+        await record_failure(
+            self,
             run_id,
             Failure(
                 message="Generation task cancelled during shutdown.",
@@ -361,183 +355,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
                 labels={"quality_mode": claimed.run.quality_mode.value},
             )
 
-    async def _record_draft_generated(
-        self,
-        run_id: uuid.UUID,
-        result: DraftScriptResult,
-    ) -> None:
-        """Record that draft generation returned a provider response."""
-        async with self.uow_factory() as uow:
-            await uow.generation_runs.append_event(
-                run_id,
-                kind="draft.generated",
-                payload=draft_generated_payload(result),
-                occurred_at=self.clock(),
-            )
-            await uow.commit()
-
-    async def _persist_success(
-        self,
-        claimed: ClaimedRun,
-        result: DraftScriptResult,
-    ) -> None:
-        """Persist generated TEI, cost records, and terminal success."""
-        async with self.uow_factory() as uow:
-            updated_episode = await persist_draft_script(
-                uow,
-                DraftScriptPersistenceRequest(
-                    episode_id=claimed.run.episode_id,
-                    generation_run_id=claimed.run.id,
-                    result=result,
-                    expected_revision=claimed.episode.tei_revision,
-                    clock=self.clock,
-                ),
-            )
-            await self._record_success_events_and_costs(
-                uow,
-                claimed,
-                result,
-                PersistedTei(
-                    revision=updated_episode.tei_revision,
-                    content_hash=updated_episode.tei_content_hash,
-                ),
-            )
-            await uow.commit()
-        self._record_terminal_metric(GenerationRunStatus.SUCCEEDED, "none")
-        log_info(
-            logger,
-            "generation_run_launcher.succeeded run_id=%s",
-            claimed.run.id,
-        )
-
-    async def _record_success_events_and_costs(
-        self,
-        uow: CanonicalUnitOfWork,
-        claimed: ClaimedRun,
-        result: DraftScriptResult,
-        persisted_tei: PersistedTei,
-    ) -> None:
-        """Record success-side events, costs, and terminal status."""
-        await uow.generation_runs.append_event(
-            claimed.run.id,
-            kind="tei.persisted",
-            payload={
-                "tei_revision": persisted_tei.revision,
-                "content_hash": persisted_tei.content_hash,
-                "qa_status": QaStatus.SKIPPED.value,
-            },
-            occurred_at=self.clock(),
-        )
-        await self._record_costs(uow, claimed.run.id, result)
-        await uow.generation_runs.append_event(
-            claimed.run.id,
-            kind="run.succeeded",
-            payload={"current_node": "complete"},
-            occurred_at=self.clock(),
-        )
-        await uow.generation_runs.update_run_status(
-            claimed.run.id,
-            update=GenerationRunStatusUpdate(
-                status=GenerationRunStatus.SUCCEEDED,
-                current_node="complete",
-                ended_at=self.clock(),
-            ),
-        )
-
-    async def _record_costs(
-        self,
-        uow: CanonicalUnitOfWork,
-        run_id: uuid.UUID,
-        result: DraftScriptResult,
-    ) -> None:
-        """Record provider-call and roll-up cost entries when configured."""
-        if self.cost_recorder_factory is None:
-            return
-        recorder = self.cost_recorder_factory(uow)
-        if recorder is None:
-            return
-        billing_period_key = BillingPeriodKey(self.clock().strftime("%Y-%m"))
-        await recorder.pin_run_pricing(
-            str(run_id),
-            (
-                CostProviderOperation(
-                    provider_name=self.provider_name,
-                    model=result.model,
-                    operation=self.provider_operation,
-                ),
-            ),
-            billing_period_key,
-        )
-        await recorder.record_provider_call(
-            provider_call_record(
-                ProviderCallRecordRequest(
-                    run_id=run_id,
-                    provider_name=self.provider_name,
-                    provider_operation=self.provider_operation,
-                    billing_period_key=billing_period_key,
-                    result=result,
-                    recorded_at=self.clock(),
-                )
-            )
-        )
-        await recorder.finalize_run(str(run_id), "draft")
-
-    async def _record_failure(self, run_id: uuid.UUID, failure: Failure) -> None:
-        """Record a terminal failed run state."""
-        async with self.uow_factory() as uow:
-            try:
-                await self._append_failure_events(uow, run_id, failure)
-                await uow.generation_runs.update_run_status(
-                    run_id,
-                    update=GenerationRunStatusUpdate(
-                        status=GenerationRunStatus.FAILED,
-                        current_node="failed",
-                        ended_at=self.clock(),
-                        error_message=failure.message,
-                        error_category=failure.category,
-                    ),
-                )
-                await uow.commit()
-            except RunAlreadyTerminal, RunNotFound:
-                await uow.rollback()
-                return
-        self._record_terminal_metric(GenerationRunStatus.FAILED, failure.category)
-        self.metrics.increment_counter(
-            _METRIC_DRAFT_ERRORS,
-            labels={"error_category": failure.category},
-        )
-        log_error(
-            logger,
-            "generation_run_launcher.failed run_id=%s category=%s",
-            run_id,
-            failure.category,
-        )
-
-    async def _append_failure_events(
-        self,
-        uow: CanonicalUnitOfWork,
-        run_id: uuid.UUID,
-        failure: Failure,
-    ) -> None:
-        """Append failure-related events before terminal status mutation."""
-        if failure.should_emit_invalid_tei:
-            await uow.generation_runs.append_event(
-                run_id,
-                kind="tei.invalid",
-                payload={"error_category": failure.category},
-                occurred_at=self.clock(),
-            )
-        await uow.generation_runs.append_event(
-            run_id,
-            kind="run.failed",
-            payload={
-                "error_message": failure.message,
-                "error_category": failure.category,
-            },
-            occurred_at=self.clock(),
-        )
-
-    def _record_terminal_metric(
+    def record_terminal_metric(
         self,
         status: GenerationRunStatus,
         error_category: str,

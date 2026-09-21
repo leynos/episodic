@@ -100,57 +100,65 @@ async def _with_latest_revisions[EntityT: _VersionedEntity](
     return [(entity, revisions.get(entity.id, 0)) for entity in entities]
 
 
-async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 dependency-injected collaborators keep this explicit
+@dc.dataclass(frozen=True, slots=True)
+class _VersionedEntityUpdate[EntityT: _VersionedEntity, HistoryT]:
+    """Dependencies and data for one optimistic-lock update."""
+
+    entity_id: uuid.UUID
+    expected_revision: int
+    entity_label: str
+    entity_repo: _EntityRepository[EntityT]
+    history_repo: _HistoryRepository[HistoryT]
+    fetch_latest: cabc.Callable[[uuid.UUID], cabc.Awaitable[_RevisionedEntry | None]]
+    history_entry_class: type[HistoryT]
+    entity_id_field: str
+    update_fields: cabc.Callable[[EntityT, dt.datetime], EntityT]
+    create_snapshot: cabc.Callable[[EntityT], JsonMapping]
+    audit: AuditMetadata
+
+
+async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](
     uow: CanonicalUnitOfWork,
-    *,
-    entity_id: uuid.UUID,
-    expected_revision: int,
-    entity_label: str,
-    entity_repo: _EntityRepository[EntityT],
-    history_repo: _HistoryRepository[HistoryT],
-    fetch_latest: cabc.Callable[[uuid.UUID], cabc.Awaitable[_RevisionedEntry | None]],
-    history_entry_class: type[HistoryT],
-    entity_id_field: str,
-    update_fields: cabc.Callable[[EntityT, dt.datetime], EntityT],
-    create_snapshot: cabc.Callable[[EntityT], JsonMapping],
-    audit: AuditMetadata,
+    update: _VersionedEntityUpdate[EntityT, HistoryT],
 ) -> tuple[EntityT, int]:
     """Update a versioned entity using optimistic locking."""
     try:
-        history_entry_fields = {field.name for field in dc.fields(history_entry_class)}
+        history_entry_fields = {
+            field.name for field in dc.fields(update.history_entry_class)
+        }
     except TypeError as exc:  # pragma: no cover - defensive guard
         msg = "history_entry_class must be a dataclass type."
         raise TypeError(msg) from exc
-    if entity_id_field not in history_entry_fields:
+    if update.entity_id_field not in history_entry_fields:
         msg = (
-            f"History entry type {history_entry_class.__name__} does not define "
-            f"required field {entity_id_field!r}."
+            f"History entry type {update.history_entry_class.__name__} does not define "
+            f"required field {update.entity_id_field!r}."
         )
         raise ValueError(msg)
 
-    entity = await entity_repo.get(entity_id)
+    entity = await update.entity_repo.get(update.entity_id)
     if entity is None:
-        msg = f"{entity_label} {entity_id} not found."
-        raise EntityNotFoundError(msg, entity_id=str(entity_id))
+        msg = f"{update.entity_label} {update.entity_id} not found."
+        raise EntityNotFoundError(msg, entity_id=str(update.entity_id))
 
-    latest_revision = await _get_latest_revision(fetch_latest, entity_id)
+    latest_revision = await _get_latest_revision(update.fetch_latest, update.entity_id)
     _check_revision_conflict(
-        expected_revision=expected_revision,
+        expected_revision=update.expected_revision,
         latest_revision=latest_revision,
-        entity_label=entity_label,
+        entity_label=update.entity_label,
     )
 
     now = dt.datetime.now(dt.UTC)
-    updated_entity = update_fields(entity, now)
+    updated_entity = update.update_fields(entity, now)
     next_revision = latest_revision + 1
-    history_entry = history_entry_class(
+    history_entry = update.history_entry_class(
         id=uuid.uuid4(),
         revision=next_revision,
-        actor=audit.actor,
-        note=audit.note,
-        snapshot=create_snapshot(updated_entity),
+        actor=update.audit.actor,
+        note=update.audit.note,
+        snapshot=update.create_snapshot(updated_entity),
         created_at=now,
-        **{entity_id_field: updated_entity.id},
+        **{update.entity_id_field: updated_entity.id},
     )
     # The storage adapter translates revision-uniqueness violations into
     # `RevisionConflictError`, so this domain helper does not need to inspect
@@ -161,8 +169,8 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
     # update without its matching history revision. Other failures propagate
     # unchanged.
     try:
-        await entity_repo.update(updated_entity)
-        await history_repo.add(history_entry)
+        await update.entity_repo.update(updated_entity)
+        await update.history_repo.add(history_entry)
         await uow.commit()
     except RevisionConflictError:
         await uow.rollback()

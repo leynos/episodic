@@ -127,7 +127,7 @@ def _build_assistant_content_literal() -> str:
 
 def _write_provider_config(provider_dir: Path) -> None:
     """Write the chapter-marker provider configuration to Vidai Mock."""
-    provider_file = provider_dir / "chapter_markers.yaml"
+    provider_file = provider_dir / "openai.yaml"
     provider_file.write_text(
         "\n".join((
             'name: "chapter_markers"',
@@ -243,6 +243,7 @@ def _start_vidaimock_process(
                 str(port),
                 "--config-dir",
                 str(config_dir),
+                "--isolated",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -383,7 +384,6 @@ def assert_chapter_markers_enrich_tei_idempotently(
     """Verify generated chapters produce one repeatable TEI chapter block."""
     result = chapter_markers_context.result
     assert result is not None, "Expected generated chapter markers."
-
     enriched_once = enrich_tei_with_chapter_markers(
         chapter_markers_context.script_tei_xml,
         result,
