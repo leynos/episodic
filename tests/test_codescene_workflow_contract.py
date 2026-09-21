@@ -29,6 +29,8 @@ ACTION_REVISIONS = (
     REPOSITORY_ROOT / "tests" / "support" / "approved_action_revisions.json"
 )
 TRACKED_ACTIONS = frozenset({GENERATE_COVERAGE_ACTION, UPLOAD_CODESCENE_ACTION})
+PULL_REQUEST_TRIGGERS = frozenset({"pull_request", "pull_request_target"})
+CODESCENE_ACCESS_ENV = "CS_ACCESS_TOKEN"
 EXPECTED_UPLOAD_INPUTS = {
     "format": "cobertura",
     "mode": "upload",
@@ -56,6 +58,32 @@ def _workflow_paths() -> tuple[pl.Path, ...]:
             *WORKFLOWS_DIRECTORY.glob("*.yaml"),
         ))
     )
+
+
+def _workflow_triggers(path: pl.Path) -> frozenset[str]:
+    """Return one workflow's event names.
+
+    PyYAML resolves an unquoted ``on:`` key to the boolean ``True``, so a
+    reader that consults only the string key sees no events at all and lets
+    every trigger-scoped contract pass over an empty set. Both keys are read.
+
+    Returns
+    -------
+    frozenset[str]
+        Every event name the workflow declares, from either spelling of the
+        trigger key.
+    """
+    workflow = _load_workflow(path)
+    events: set[str] = set()
+    for key in ("on", True):
+        if key not in workflow:
+            continue
+        value = workflow[key]
+        if isinstance(value, dict | list):
+            events.update(str(event) for event in value)
+        else:
+            events.add(str(value))
+    return frozenset(events)
 
 
 def _workflow_jobs(path: pl.Path) -> dict[typ.Any, typ.Any]:
@@ -314,3 +342,36 @@ def test_retired_pins_do_not_reappear_in_workflows() -> None:
         text = workflow_path.read_text(encoding="utf-8")
         for pin in retired:
             assert pin not in text, f"{workflow_path} references retired pin {pin}"
+
+
+def test_the_publisher_serves_no_pull_request() -> None:
+    """The uploading workflow answers default-branch events only.
+
+    A workflow that both publishes and serves pull requests would be required
+    to upload and forbidden from uploading at once.
+    """
+    triggers = _workflow_triggers(COVERAGE_MAIN_WORKFLOW)
+    assert triggers == frozenset({"push", "workflow_dispatch"}), (
+        "the publisher must answer only a main push or a dispatch, got "
+        f"{sorted(triggers)}"
+    )
+
+
+def test_pull_request_workflows_never_receive_the_codescene_token() -> None:
+    """No workflow reachable from a fork's head may hold the CodeScene token."""
+    pull_request_workflows = [
+        path
+        for path in _workflow_paths()
+        if _workflow_triggers(path) & PULL_REQUEST_TRIGGERS
+    ]
+    assert CI_WORKFLOW in pull_request_workflows, (
+        "the pull-request lane must be enumerated, or this contract asserts nothing"
+    )
+    contacts = {path for path, _, _ in _codescene_contacts()}
+    for path in pull_request_workflows:
+        assert path not in contacts, (
+            f"{path} serves pull requests and contacts CodeScene"
+        )
+        assert CODESCENE_ACCESS_ENV not in path.read_text(encoding="utf-8"), (
+            f"{path} serves pull requests and must not reference {CODESCENE_ACCESS_ENV}"
+        )

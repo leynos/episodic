@@ -61,6 +61,20 @@ No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
 caller-supplied digest would add another value that can become stale.
 
+### Keep the publisher off the pull-request path
+
+`coverage-main.yml` answers a push to `main` and a manual dispatch, and nothing
+else. A workflow that both uploads and serves pull requests would be required
+to publish and forbidden from publishing at the same time, so the contract
+asserts that workflow's exact trigger set rather than only the upload step's
+guard. It also asserts that no workflow reachable from a pull request mentions
+`CS_ACCESS_TOKEN`, because a fork's head runs in that lane.
+
+When adding a clause that reads a workflow's triggers, read the key under both
+its quoted spelling and the boolean `True` that PyYAML produces for an unquoted
+`on:`. Every workflow here uses the unquoted form, so a reader that consults
+only the string key sees no events and passes over an empty set.
+
 ### Maintain composite action pins
 
 An immutable full SHA prevents a tag from moving, but does not freeze the
