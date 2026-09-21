@@ -24,7 +24,7 @@ from urllib.parse import urlparse
 
 from celery import Celery
 
-from episodic.logging import get_logger
+from episodic.logging import get_logger, log_exception, log_info
 
 from .tasks import SCAFFOLD_TASK_WORKLOADS, WorkerDependencies, register_scaffold_tasks
 from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology, WorkloadClass
@@ -294,13 +294,8 @@ def _build_task_routes(
     if task_workloads is None:
         task_workloads = SCAFFOLD_TASK_WORKLOADS
 
-    def _log_info(message: str, *args: object) -> None:
-        try:
-            logger.info(message, *args)
-        except TypeError:
-            logger.info(message % args)
-
-    _log_info(
+    log_info(
+        logger,
         "Building Celery worker task routes for %s tasks.",
         len(task_workloads),
     )
@@ -308,25 +303,16 @@ def _build_task_routes(
         task_routes = topology.task_routes(task_workloads)
     except (TypeError, ValueError) as exc:
         validation_error = str(exc)
-        log_exception = logger.exception
-        try:
-            log_exception(
-                (
-                    "Celery worker task route validation failed for "
-                    "tasks=%r, workloads=%r: %s"
-                ),
-                tuple(task_workloads),
-                tuple(task_workloads.values()),
-                validation_error,
-            )
-        except TypeError:
-            log_exception(
-                "Celery worker task route validation failed for tasks="
-                f"{tuple(task_workloads)!r}, workloads="
-                f"{tuple(task_workloads.values())!r}: {validation_error}",
-            )
+        log_exception(
+            logger,
+            "Celery worker task route validation failed for tasks=%r, workloads=%r: %s",
+            tuple(task_workloads),
+            tuple(task_workloads.values()),
+            validation_error,
+        )
         raise
-    _log_info(
+    log_info(
+        logger,
         "Built Celery worker task routes for %s tasks.",
         len(task_routes),
     )

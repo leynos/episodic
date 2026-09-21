@@ -7,7 +7,7 @@ import typing as typ
 
 import falcon
 
-from episodic.logging import LogLevel, get_logger, log_warning
+from episodic.logging import get_logger, log_debug, log_warning
 
 logger = get_logger(__name__)
 
@@ -173,7 +173,10 @@ def _log_authorization_denial(
     context: AuthorizationContext,
 ) -> None:
     """Log non-permit decisions without recording credential material."""
-    logger.log(
-        LogLevel.DEBUG,
-        (f"Authorization denied with {decision} for {context.method} {context.path}."),
+    log_debug(
+        logger,
+        "Authorization denied with %s for %s %s.",
+        decision,
+        context.method,
+        context.path,
     )

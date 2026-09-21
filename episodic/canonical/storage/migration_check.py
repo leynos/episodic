@@ -24,7 +24,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
-from episodic.logging import get_logger
+from episodic.logging import get_logger, log_error, log_exception, log_info
 
 if typ.TYPE_CHECKING:
     import sqlalchemy as sa
@@ -75,7 +75,9 @@ async def check_migrations_cli() -> int:
         detected, 2 on infrastructure errors.
     """
     if importlib.util.find_spec("py_pglite") is None:
-        _logger.error("py-pglite is not installed; cannot run migration drift check.")
+        log_error(
+            _logger, "py-pglite is not installed; cannot run migration drift check."
+        )
         return 2
 
     import tempfile
@@ -95,24 +97,24 @@ async def check_migrations_cli() -> int:
                 dsn = config.get_connection_string()
                 engine = create_async_engine(dsn, pool_pre_ping=True)
                 try:
-                    _logger.info("Applying migrations to ephemeral database.")
+                    log_info(_logger, "Applying migrations to ephemeral database.")
                     await apply_migrations(engine)
 
-                    _logger.info("Checking for schema drift.")
+                    log_info(_logger, "Checking for schema drift.")
                     diffs = await detect_schema_drift(engine)
                 finally:
                     await engine.dispose()
     except _INFRASTRUCTURE_ERRORS:
-        _logger.exception("Infrastructure error.")
+        log_exception(_logger, "Infrastructure error.")
         return 2
 
     if diffs:
-        _logger.error(f"Schema drift detected ({len(diffs)} difference(s)):")
+        log_error(_logger, "Schema drift detected (%s difference(s)):", len(diffs))
         for diff in diffs:
-            _logger.error(f"  {diff}")
+            log_error(_logger, "  %s", diff)
         return 1
 
-    _logger.info("No schema drift detected.")
+    log_info(_logger, "No schema drift detected.")
     return 0
 
 

@@ -3,11 +3,13 @@
 import concurrent.futures as cf
 import contextlib
 import dataclasses as dc
+import json
 import typing as typ
 
 import pytest
 
 import episodic.concurrent_interpreters as ci
+from episodic.logging import LoggerHandle, LogLevel
 from tests.conftest import square_executor_value as _square
 
 if typ.TYPE_CHECKING:
@@ -87,6 +89,19 @@ class _FakeLogger:
         del kwargs
         self.messages.append(message)
 
+    def log(
+        self,
+        level: int | LogLevel,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record a fallback logger call."""
+        del level, exc_info, stack_info
+        self.messages.append(message)
+
 
 @pytest.mark.asyncio
 async def test_interpreter_executor_records_lifecycle_observability(
@@ -101,7 +116,7 @@ async def test_interpreter_executor_records_lifecycle_observability(
         "_create_interpreter_pool_executor",
         lambda max_workers: cf.ThreadPoolExecutor(max_workers=max_workers),
     )
-    monkeypatch.setattr(ci, "_log", logger)
+    monkeypatch.setattr(ci, "_log", LoggerHandle(logger))
     executor = ci.InterpreterPoolCpuTaskExecutor(
         max_workers=1,
         metrics=metrics,
@@ -131,12 +146,10 @@ async def test_interpreter_executor_records_lifecycle_observability(
         pytest.approx(25.0),
         {"outcome": "success"},
     ) in metrics.observations, "shutdown latency metric must record 25 ms"
-    assert "Created interpreter-pool executor" in logger.messages, (
-        "creation log must identify the interpreter-pool executor"
-    )
-    assert "Shut down interpreter-pool executor" in logger.messages, (
-        "shutdown log must identify the interpreter-pool executor"
-    )
+    assert {json.loads(message)["event"] for message in logger.messages} >= {
+        "interpreter_pool_executor_created",
+        "interpreter_pool_executor_shutdown",
+    }, "creation log must identify the interpreter-pool executor"
 
 
 def test_builder_records_executor_selection_metrics(

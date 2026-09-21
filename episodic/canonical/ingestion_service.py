@@ -21,7 +21,7 @@ import dataclasses as dc
 import typing as typ
 
 from episodic.asyncio_tasks import TaskMetadata, create_task
-from episodic.logging import get_logger
+from episodic.logging import get_logger, log_info
 
 from .domain import IngestionRequest
 from .services import ingest_sources
@@ -185,10 +185,14 @@ def _log_multi_source_outcome(
     episode: CanonicalEpisode,
 ) -> None:
     """Log the completed multi-source ingestion outcome."""
-    logger.info(
-        f"Multi-source ingestion complete: {len(source_inputs)} sources, "
-        f"{len(outcome.preferred_sources)} preferred, "
-        f"{len(outcome.rejected_sources)} rejected. Episode {episode.id}."
+    log_info(
+        logger,
+        "Multi-source ingestion complete: %s sources, %s preferred, %s rejected. "
+        "Episode %s.",
+        len(source_inputs),
+        len(outcome.preferred_sources),
+        len(outcome.rejected_sources),
+        episode.id,
     )
 
 
