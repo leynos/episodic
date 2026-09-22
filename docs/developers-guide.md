@@ -61,22 +61,32 @@ No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
 caller-supplied digest would add another value that can become stale.
 
-### Deferred: production-only coverage scope
+### Production-only coverage scope
 
-The Slipcover invocation this workflow replaced passed
-`--source episodic,alembic`, so the published percentage measured application
-and migration code alone. The shared action's pinned revision offers no
-equivalent input, and an undeclared input is ignored with a warning rather than
-rejected, so the scope cannot be restored by passing one. The measured
-percentage therefore now includes test code, and the ratchet floor starts from
-that wider figure.
+Both `Generate coverage` steps pass `python-source: episodic,alembic`, which
+the shared action forwards to Slipcover as a single `--source` argument. That
+restores the scope the Slipcover command these workflows replaced had, so the
+published percentage measures application and migration code rather than test
+implementation detail.
 
-Restore the scope by passing `python-source: episodic,alembic` to both
-`Generate coverage` steps once leynos/shared-actions#502 has merged and the pin
-here has moved to a revision on that repository's `main` which declares the
-input. Move both workflows together, because the contract requires one shared
-revision, and expect the first ratcheting run after the move to read a baseline
-measured on the wider scope.
+Keep the two workflows on the same value. The contract asserts both, because a
+pull request ratcheting against a baseline the default branch measured over a
+different set of files compares two numbers that do not mean the same thing.
+
+The scope changes which files the report contains, in both directions. Measured
+against this repository at `bb40bc85` with the action's own runner:
+
+| Scope               | Files in report | Line coverage |
+| ------------------- | --------------- | ------------- |
+| Slipcover discovery | 473             | 89.64%        |
+| `episodic,alembic`  | 211             | 90.85%        |
+
+The unscoped run measures 258 test files, 5 scripts and 3 benchmarks alongside
+the code under test. The scoped run drops those and gains four `episodic`
+modules that no test imports, which discovery never saw and which the scope
+counts as the noughts they are. The first ratcheting run after a scope change
+therefore reads a baseline measured over a different file set; expect one run
+of noise before the floor is meaningful again.
 
 ### Keep the publisher off the pull-request path
 

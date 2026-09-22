@@ -4,11 +4,10 @@ Pull requests execute arbitrary head-repository code. They enforce coverage
 with the shared generator's local ratchet and never contact CodeScene; only a
 default-branch push may upload the measured report.
 
-The adoption is partial. The replaced Slipcover command scoped coverage to
-``episodic,alembic``; the pinned generator revision declares no equivalent
-input, so no clause here asserts a source scope. Add one alongside a
-``python-source`` input once leynos/shared-actions#502 has merged and the pin
-has moved to a revision that declares it.
+Coverage is scoped to the application and migration packages, as the Slipcover
+command this workflow replaced was. The scope is asserted rather than left to
+the generator's discovery, because an unscoped run measures the test suite
+alongside the code it exercises and omits a production module no test imports.
 """
 
 import json
@@ -42,7 +41,7 @@ GENERATE_COVERAGE_ACTION = "leynos/shared-actions/.github/actions/generate-cover
 UPLOAD_CODESCENE_ACTION = (
     "leynos/shared-actions/.github/actions/upload-codescene-coverage"
 )
-APPROVED_REVISION = "a5765019912a8ab6882b12db049c7cde635f3a85"
+APPROVED_REVISION = "dbe2e22ceaf498d85512679ccded38be9dbe7777"
 ON_MAIN = "github.ref == 'refs/heads/main'"
 UPLOAD_GUARD = f"{ON_MAIN} && env.CS_ACCESS_TOKEN != ''"
 MAIN_PUSH_TRIGGER = {"branches": ["main"]}
@@ -53,6 +52,7 @@ TRACKED_ACTIONS = frozenset({GENERATE_COVERAGE_ACTION, UPLOAD_CODESCENE_ACTION})
 PULL_REQUEST_TRIGGERS = frozenset({"pull_request", "pull_request_target"})
 CODESCENE_ACCESS_ENV = "CS_ACCESS_TOKEN"
 CODESCENE_HOST = "codescene.io"
+PRODUCTION_SOURCE_SCOPE = "episodic,alembic"
 EXPECTED_UPLOAD_INPUTS = {
     "format": "cobertura",
     "mode": "upload",
@@ -148,6 +148,9 @@ def test_pull_requests_enforce_coverage_with_the_local_ratchet() -> None:
         assert inputs["with-ratchet"] == "true", "coverage ratchet must be enabled"
         assert not inputs["pytest-workers"], (
             "coverage must preserve serial pytest execution"
+        )
+        assert inputs["python-source"] == PRODUCTION_SOURCE_SCOPE, (
+            "coverage must measure the application and migration packages only"
         )
 
     main_inputs = mapping(main_coverage["with"], subject="main coverage inputs")
