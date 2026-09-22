@@ -28,6 +28,7 @@ from tests.test_codescene_workflow_contract_support import (
     workflow_steps,
     workflow_triggers,
     workflow_uses,
+    workflows_reachable_from,
 )
 
 if typ.TYPE_CHECKING:
@@ -288,11 +289,10 @@ def test_the_publisher_serves_no_pull_request() -> None:
 
 def test_pull_request_workflows_never_receive_the_codescene_token() -> None:
     """No workflow reachable from a fork's head may hold the CodeScene token."""
-    pull_request_workflows = [
-        path
-        for path in workflow_paths()
-        if workflow_triggers(path) & PULL_REQUEST_TRIGGERS
-    ]
+    # The closure, not the trigger list: a workflow declaring only
+    # `workflow_call` still runs on a pull request when a pull-request
+    # workflow calls it, and `secrets: inherit` hands it the token.
+    pull_request_workflows = sorted(workflows_reachable_from(PULL_REQUEST_TRIGGERS))
     assert CI_WORKFLOW in pull_request_workflows, (
         "the pull-request lane must be enumerated, or this contract asserts nothing"
     )

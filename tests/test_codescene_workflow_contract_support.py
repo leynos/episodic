@@ -234,3 +234,63 @@ def workflow_uses() -> list[tuple[str, str]]:
         text = path.read_text(encoding="utf-8")
         references.extend(re.findall(r"uses:\s*(\S+?)@(\S+)", text))
     return references
+
+
+def local_workflow_calls(path: pl.Path) -> frozenset[pl.Path]:
+    """Return the same-repository reusable workflows one workflow calls.
+
+    GitHub accepts two spellings for a local reusable workflow,
+    ``./.github/workflows/x.yml`` and ``$/.github/workflows/x.yml``. A reader
+    that knows only the first silently drops callers written the other way.
+
+    Parameters
+    ----------
+    path : pl.Path
+        Workflow document to read.
+
+    Returns
+    -------
+    frozenset[pl.Path]
+        Existing workflow documents this one calls, resolved to paths.
+    """
+    called: set[pl.Path] = set()
+    for job in workflow_jobs(path).values():
+        if not isinstance(job, dict):
+            continue
+        reference = typ.cast("Workflow", job).get("uses")
+        if not isinstance(reference, str):
+            continue
+        for prefix in ("./", "$/"):
+            if reference.startswith(prefix):
+                candidate = REPOSITORY_ROOT / reference.removeprefix(prefix)
+                if candidate.is_file():
+                    called.add(candidate)
+    return frozenset(called)
+
+
+def workflows_reachable_from(events: frozenset[str]) -> frozenset[pl.Path]:
+    """Return every workflow one of the given events can reach.
+
+    A workflow that declares only ``workflow_call`` still runs on a pull
+    request when a pull-request workflow calls it, and it receives inherited
+    secrets, so a contract that enumerates triggers alone cannot see it.
+
+    Parameters
+    ----------
+    events : frozenset[str]
+        Trigger names that start the traversal.
+
+    Returns
+    -------
+    frozenset[pl.Path]
+        The entry workflows and everything they call, transitively.
+    """
+    pending = [path for path in workflow_paths() if workflow_triggers(path) & events]
+    reached: set[pl.Path] = set()
+    while pending:
+        current = pending.pop()
+        if current in reached:
+            continue
+        reached.add(current)
+        pending.extend(local_workflow_calls(current) - reached)
+    return frozenset(reached)

@@ -128,6 +128,14 @@ its quoted spelling and the boolean `True` that PyYAML produces for an unquoted
 `on:`. Every workflow here uses the unquoted form, so a reader that consults
 only the string key sees no events and passes over an empty set.
 
+The pull-request lane is a closure, not a trigger list. A workflow that
+declares only `workflow_call` still runs on a pull request when a pull-request
+workflow calls it, and `secrets: inherit` hands it the token, so enumerating
+triggers alone cannot see it. The contract therefore follows same-repository
+reusable-workflow calls transitively, reading both spellings GitHub accepts,
+`./.github/workflows/x.yml` and `$/.github/workflows/x.yml`. A reader that
+knows only the first drops callers written the other way.
+
 ### Maintain composite action pins
 
 An immutable full SHA prevents a tag from moving, but does not freeze the
