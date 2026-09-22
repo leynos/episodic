@@ -21,6 +21,9 @@ WORKFLOWS_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
 type Mapping = dict[object, object]
 type Workflow = Mapping
 type Step = Mapping
+# Where a same-repository reusable workflow lives. GitHub does not look in its
+# subdirectories.
+LOCAL_WORKFLOW_DIRECTORY = pl.PurePosixPath(".github/workflows")
 
 
 def mapping(value: object, *, subject: str) -> Workflow:
@@ -236,12 +239,48 @@ def workflow_uses() -> list[tuple[str, str]]:
     return references
 
 
+def local_workflow(reference: object) -> pl.Path | None:
+    """Return the workflow a same-repository `uses:` reference names, or None.
+
+    The reference is matched by shape rather than by a list of spellings: less
+    a leading ``./``, it must name a file directly under ``.github/workflows/``.
+    A spelling nobody enumerated is then not mistaken for a call to another
+    repository. A local call naming a workflow this checkout does not hold
+    fails, because the closure cannot vouch for what it never read.
+
+    Parameters
+    ----------
+    reference : object
+        A job's ``uses:`` value.
+
+    Returns
+    -------
+    pl.Path | None
+        The called workflow's path, or None when the reference is not a local
+        workflow call.
+
+    Examples
+    --------
+    >>> local_workflow("./.github/workflows/ci.yml").name
+    'ci.yml'
+    >>> local_workflow("leynos/episodic/.github/workflows/ci.yml@main") is None
+    True
+    """
+    if not isinstance(reference, str):
+        return None
+    relative = pl.PurePosixPath(reference.removeprefix("./"))
+    if relative.parent != LOCAL_WORKFLOW_DIRECTORY:
+        return None
+    candidate = REPOSITORY_ROOT / relative
+    assert candidate.is_file(), f"{reference} names a workflow that does not exist"
+    return candidate
+
+
 def local_workflow_calls(path: pl.Path) -> frozenset[pl.Path]:
     """Return the same-repository reusable workflows one workflow calls.
 
-    GitHub accepts two spellings for a local reusable workflow,
-    ``./.github/workflows/x.yml`` and ``$/.github/workflows/x.yml``. A reader
-    that knows only the first silently drops callers written the other way.
+    A call is local when :func:`local_workflow` reads it so; a call to another
+    repository is not followed, because its content is not in this tree.
 
     Parameters
     ----------
@@ -251,21 +290,14 @@ def local_workflow_calls(path: pl.Path) -> frozenset[pl.Path]:
     Returns
     -------
     frozenset[pl.Path]
-        Existing workflow documents this one calls, resolved to paths.
+        Workflow documents this one calls, resolved to paths.
     """
-    called: set[pl.Path] = set()
-    for job in workflow_jobs(path).values():
-        if not isinstance(job, dict):
-            continue
-        reference = typ.cast("Workflow", job).get("uses")
-        if not isinstance(reference, str):
-            continue
-        for prefix in ("./", "$/"):
-            if reference.startswith(prefix):
-                candidate = REPOSITORY_ROOT / reference.removeprefix(prefix)
-                if candidate.is_file():
-                    called.add(candidate)
-    return frozenset(called)
+    return frozenset(
+        resolved
+        for job in workflow_jobs(path).values()
+        if isinstance(job, dict)
+        and (resolved := local_workflow(typ.cast("Workflow", job).get("uses")))
+    )
 
 
 def workflows_reachable_from(events: frozenset[str]) -> frozenset[pl.Path]:

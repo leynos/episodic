@@ -13,6 +13,8 @@ alongside the code it exercises and omits a production module no test imports.
 import json
 import typing as typ
 
+import pytest
+
 from tests.test_codescene_workflow_contract_support import (
     REPOSITORY_ROOT,
     WORKFLOWS_DIRECTORY,
@@ -20,6 +22,7 @@ from tests.test_codescene_workflow_contract_support import (
     Step,
     all_workflow_steps,
     load_workflow,
+    local_workflow,
     mapping,
     named_step,
     trigger_config,
@@ -313,3 +316,34 @@ def test_pull_request_workflows_never_receive_the_codescene_token() -> None:
         assert CODESCENE_HOST not in text.casefold(), (
             f"{path} serves pull requests and must not reference {CODESCENE_HOST}"
         )
+
+
+@pytest.mark.parametrize(
+    ("reference", "expected"),
+    [
+        ("./.github/workflows/ci.yml", "ci.yml"),
+        (".github/workflows/ci.yml", "ci.yml"),
+        ("./.github/workflows/nested/ci.yml", None),
+        ("./.github/actions/setup", None),
+        ("leynos/episodic/.github/workflows/ci.yml@main", None),
+        ("./.github/workflows/", None),
+    ],
+)
+def test_a_local_workflow_call_is_read_by_shape(
+    reference: str, expected: str | None
+) -> None:
+    """Follow a call exactly when it names a file under the workflow directory.
+
+    A reader that listed spellings would miss the bare `.github/` form, and one
+    that accepted any path would follow a subdirectory GitHub never reads.
+    """
+    resolved = local_workflow(reference)
+    assert (resolved.name if resolved else None) == expected, (
+        f"{reference!r} must read as {expected!r}, got {resolved!r}"
+    )
+
+
+def test_a_local_call_to_a_missing_workflow_fails() -> None:
+    """Refuse to drop a local call the closure cannot read out of the lane."""
+    with pytest.raises(AssertionError, match="does not exist"):
+        local_workflow("./.github/workflows/missing.yml")
