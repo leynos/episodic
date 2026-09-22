@@ -81,6 +81,8 @@ against this repository at `bb40bc85` with the action's own runner:
 | Slipcover discovery | 473             | 89.64%        |
 | `episodic,alembic`  | 211             | 90.85%        |
 
+_Table 1: Coverage report scope comparison._
+
 The unscoped run measures 258 test files, 5 scripts and 3 benchmarks alongside
 the code under test. The scoped run drops those and gains four `episodic`
 modules that no test imports, which discovery never saw and which the scope
@@ -272,7 +274,7 @@ the test fails until a human edits the pinned constant to match. That defeats
 the purpose of automated dependency updates and turns a routine bump into a
 manual chore.
 
-Contract tests may still verify the *shape* of a reusable-workflow caller. They
+Contract tests may still verify the _shape_ of a reusable-workflow caller. They
 must not verify the specific SHA value.
 
 - Do assert the workflow references the correct reusable workflow path.
@@ -1080,7 +1082,7 @@ The following error codes are reserved for the source-intake implementation:
 | `ingestion_job_not_found`  | 404         | Referenced ingestion job does not exist.                      |
 | `series_profile_not_found` | 404         | Referenced series profile does not exist.                     |
 
-*Table 4: Reserved source-intake API error codes.*
+_Table 4: Reserved source-intake API error codes._
 
 Source-intake observability follows
 [ADR 015](adr/adr-015-upload-and-idempotency-ports.md). Implement the metrics
