@@ -90,6 +90,27 @@ counts as the noughts they are. The first ratcheting run after a scope change
 therefore reads a baseline measured over a different file set; expect one run
 of noise before the floor is meaningful again.
 
+### The coverage environment is not a document tree
+
+`make markdownlint` globs `**/*.md` across the working tree, so anything a
+build step writes into the workspace becomes a document it lints. The shared
+coverage action builds its environment as `.venv-coverage` beside `.venv`,
+which puts several hundred third-party README and licence files inside that
+glob. `.markdownlint-cli2.jsonc` therefore ignores `**/.venv-coverage/**`
+alongside `**/.venv/**`.
+
+Continuous integration lints Markdown before it runs coverage, so only a local
+run after coverage ever saw those files. That ordering is a coincidence of the
+job's step order, not a guarantee, which is why the exclusion is asserted by
+[`tests/test_markdownlint_config_contract.py`](../tests/test_markdownlint_config_contract.py)
+rather than left as a configuration line. The contract evaluates the
+configured globs against representative paths, so rewording a glob without
+changing its meaning is allowed and deleting it is not, and it asserts that
+this repository's own documents are still linted, so widening the list to `**`
+fails too.
+
+Add an entry here whenever a build step writes into the workspace.
+
 ### Keep the publisher off the pull-request path
 
 `coverage-main.yml` answers a push to `main` and a manual dispatch, and nothing

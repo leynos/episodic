@@ -14,8 +14,13 @@ import pathlib as pl
 import re
 import typing as typ
 
+import pytest
+
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 MARKDOWNLINT_CONFIG = REPOSITORY_ROOT / ".markdownlint-cli2.jsonc"
+# A JSON object's keys are strings; its values are arbitrary JSON, so they
+# are `object` and every consumer narrows before use.
+type Configuration = dict[str, object]
 # One alternation, so a string literal is consumed before a "//" inside it
 # can be mistaken for a comment. Both JSONC comment forms are covered, even
 # though this file uses only the line form today.
@@ -40,12 +45,14 @@ def _strip_jsonc_comments(text: str) -> str:
     )
 
 
-def _configuration() -> dict[str, typ.Any]:
+def _configuration() -> Configuration:
     """Return the parsed Markdown lint configuration."""
     raw = MARKDOWNLINT_CONFIG.read_text(encoding="utf-8")
     parsed = json.loads(_strip_jsonc_comments(raw))
     assert isinstance(parsed, dict), "the Markdown lint configuration must be a mapping"
-    return parsed
+    # `dict` is invariant, so the narrowed value is not the alias; the
+    # assertion above is the check this cast stands on.
+    return typ.cast("Configuration", parsed)
 
 
 def _ignores() -> tuple[str, ...]:
@@ -66,25 +73,25 @@ def test_markdownlint_configuration_parses() -> None:
     assert _ignores(), "the configuration must declare at least one ignore"
 
 
-def test_the_coverage_environment_is_excluded() -> None:
+@pytest.mark.parametrize("candidate", COVERAGE_ENVIRONMENT_DOCUMENTS)
+def test_the_coverage_environment_is_excluded(candidate: str) -> None:
     """A coverage run must not turn third-party documents into lint findings."""
-    for candidate in COVERAGE_ENVIRONMENT_DOCUMENTS:
-        assert _is_ignored(candidate), (
-            f"{candidate} is inside the shared coverage action's environment "
-            "and must be excluded from the Markdown lint"
-        )
+    assert _is_ignored(candidate), (
+        f"{candidate} is inside the shared coverage action's environment "
+        "and must be excluded from the Markdown lint"
+    )
 
 
-def test_repository_documents_are_not_excluded() -> None:
+@pytest.mark.parametrize("candidate", REPOSITORY_DOCUMENTS)
+def test_repository_documents_are_not_excluded(candidate: str) -> None:
     """The exclusions must stay narrow enough to still lint this repository.
 
     Without this, an ignore list of `**` would satisfy the clause above while
     disabling the gate entirely.
     """
-    for candidate in REPOSITORY_DOCUMENTS:
-        assert (REPOSITORY_ROOT / candidate).is_file(), (
-            f"{candidate} must exist for this contract to discriminate"
-        )
-        assert not _is_ignored(candidate), (
-            f"{candidate} is a repository document and must still be linted"
-        )
+    assert (REPOSITORY_ROOT / candidate).is_file(), (
+        f"{candidate} must exist for this contract to discriminate"
+    )
+    assert not _is_ignored(candidate), (
+        f"{candidate} is a repository document and must still be linted"
+    )
