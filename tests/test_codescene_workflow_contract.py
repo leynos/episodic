@@ -15,6 +15,7 @@ import typing as typ
 
 import pytest
 
+from tests import test_codescene_workflow_contract_support as support
 from tests.test_codescene_workflow_contract_support import (
     REPOSITORY_ROOT,
     WORKFLOWS_DIRECTORY,
@@ -347,3 +348,30 @@ def test_a_local_call_to_a_missing_workflow_fails() -> None:
     """Refuse to drop a local call the closure cannot read out of the lane."""
     with pytest.raises(AssertionError, match="does not exist"):
         local_workflow("./.github/workflows/missing.yml")
+
+
+def test_the_lane_follows_calls_transitively(
+    tmp_path: pl.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reach a `workflow_call` workflow through a called one, and nothing else.
+
+    No workflow here calls another today, so the repository's own files cannot
+    show the traversal working; a tree of three workflows can. The uncalled
+    reusable workflow stays out, so a complying repository is not failed.
+    """
+    directory = tmp_path / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    call = "jobs:\n  call:\n    uses: ./.github/workflows/{}\n    secrets: inherit\n"
+    (directory / "ci.yml").write_text("on: pull_request\n" + call.format("middle.yml"))
+    (directory / "middle.yml").write_text(
+        "on: workflow_call\n" + call.format("probe.yml")
+    )
+    for name in ("probe.yml", "uncalled.yml"):
+        (directory / name).write_text("on: workflow_call\njobs: {}\n")
+    monkeypatch.setattr(support, "REPOSITORY_ROOT", tmp_path)
+    monkeypatch.setattr(support, "WORKFLOWS_DIRECTORY", directory)
+
+    reached = {path.name for path in workflows_reachable_from(PULL_REQUEST_TRIGGERS)}
+    assert reached == {"ci.yml", "middle.yml", "probe.yml"}, (
+        f"the lane must be the transitive closure of calls, got {sorted(reached)}"
+    )
