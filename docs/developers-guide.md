@@ -61,22 +61,55 @@ No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
 caller-supplied digest would add another value that can become stale.
 
-### Deferred: production-only coverage scope
+### Production-only coverage scope
 
-The Slipcover invocation this workflow replaced passed
-`--source episodic,alembic`, so the published percentage measured application
-and migration code alone. The shared action's pinned revision offers no
-equivalent input, and an undeclared input is ignored with a warning rather than
-rejected, so the scope cannot be restored by passing one. The measured
-percentage therefore now includes test code, and the ratchet floor starts from
-that wider figure.
+Both `Generate coverage` steps pass `python-source: episodic,alembic`, which
+the shared action forwards to Slipcover as a single `--source` argument. That
+restores the scope the Slipcover command these workflows replaced had, so the
+published percentage measures application and migration code rather than test
+implementation detail.
 
-Restore the scope by passing `python-source: episodic,alembic` to both
-`Generate coverage` steps once leynos/shared-actions#502 has merged and the pin
-here has moved to a revision on that repository's `main` which declares the
-input. Move both workflows together, because the contract requires one shared
-revision, and expect the first ratcheting run after the move to read a baseline
-measured on the wider scope.
+Keep the two workflows on the same value. The contract asserts both, because a
+pull request ratcheting against a baseline the default branch measured over a
+different set of files compares two numbers that do not mean the same thing.
+
+The scope changes which files the report contains, in both directions. Measured
+against this repository at `bb40bc85` with the action's own runner:
+
+| Scope               | Files in report | Line coverage |
+| ------------------- | --------------- | ------------- |
+| Slipcover discovery | 473             | 89.64%        |
+| `episodic,alembic`  | 211             | 90.85%        |
+
+_Table 1: Coverage report scope comparison._
+
+The unscoped run measures 258 test files, 5 scripts and 3 benchmarks alongside
+the code under test. The scoped run drops those and gains four `episodic`
+modules that no test imports, which discovery never saw and which the scope
+counts as the noughts they are. The first ratcheting run after a scope change
+therefore reads a baseline measured over a different file set; expect one run
+of noise before the floor is meaningful again.
+
+### The coverage environment is not a document tree
+
+`make markdownlint` globs `**/*.md` across the working tree, so anything a
+build step writes into the workspace becomes a document it lints. The shared
+coverage action builds its environment as `.venv-coverage` beside `.venv`,
+which puts several hundred third-party README and licence files inside that
+glob. `.markdownlint-cli2.jsonc` therefore ignores `**/.venv-coverage/**`
+alongside `**/.venv/**`.
+
+Continuous integration lints Markdown before it runs coverage, so only a local
+run after coverage ever saw those files. That ordering is a coincidence of the
+job's step order, not a guarantee, which is why the exclusion is asserted by
+[`tests/test_markdownlint_config_contract.py`](../tests/test_markdownlint_config_contract.py)
+rather than left as a configuration line. The contract evaluates the
+configured globs against representative paths, so rewording a glob without
+changing its meaning is allowed and deleting it is not, and it asserts that
+this repository's own documents are still linted, so widening the list to `**`
+fails too.
+
+Add an entry here whenever a build step writes into the workspace.
 
 ### Keep the publisher off the pull-request path
 
@@ -94,6 +127,20 @@ When adding a clause that reads a workflow's triggers, read the key under both
 its quoted spelling and the boolean `True` that PyYAML produces for an unquoted
 `on:`. Every workflow here uses the unquoted form, so a reader that consults
 only the string key sees no events and passes over an empty set.
+
+The pull-request lane is a closure, not a trigger list. A workflow that
+declares only `workflow_call` still runs on a pull request when a pull-request
+workflow calls it, and `secrets: inherit` hands it the token, so enumerating
+triggers alone cannot see it. The contract therefore follows same-repository
+reusable-workflow calls transitively. A call is local when its reference, less
+one of the two same-repository prefixes GitHub documents, names a file directly
+under `.github/workflows/`. The prefixes are `./`, which is workspace-relative,
+and `$/`, the self-repository form GitHub.com recommends. A local call naming a
+missing workflow fails the contract instead of dropping out of the lane.
+`tests/workflow_call_graph.py` owns the pure halves, the reference shape and
+the closure over a call graph, and a property test holds that closure to an
+independent fixed-point reference. The support module only reads the repository
+into that graph, and names the file when a workflow cannot be read.
 
 ### Maintain composite action pins
 
@@ -262,7 +309,7 @@ the test fails until a human edits the pinned constant to match. That defeats
 the purpose of automated dependency updates and turns a routine bump into a
 manual chore.
 
-Contract tests may still verify the *shape* of a reusable-workflow caller. They
+Contract tests may still verify the _shape_ of a reusable-workflow caller. They
 must not verify the specific SHA value.
 
 - Do assert the workflow references the correct reusable workflow path.
@@ -1070,7 +1117,7 @@ The following error codes are reserved for the source-intake implementation:
 | `ingestion_job_not_found`  | 404         | Referenced ingestion job does not exist.                      |
 | `series_profile_not_found` | 404         | Referenced series profile does not exist.                     |
 
-*Table 4: Reserved source-intake API error codes.*
+_Table 4: Reserved source-intake API error codes._
 
 Source-intake observability follows
 [ADR 015](adr/adr-015-upload-and-idempotency-ports.md). Implement the metrics

@@ -15,6 +15,11 @@
     // action must not read their reflogs as documents.
     ".git/**",
     "**/.venv/**",
+    // The shared coverage action builds its own environment beside .venv in
+    // the workspace, so a local `make markdownlint` after a coverage run
+    // would otherwise lint third-party licence files. CI is ordered so the
+    // Markdown lint precedes coverage, which is why this went unnoticed.
+    "**/.venv-coverage/**",
     ".node_modules/**",
     "**/node_modules/**",
     "**/target/**",

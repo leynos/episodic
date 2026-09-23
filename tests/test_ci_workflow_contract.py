@@ -9,7 +9,7 @@ WORKFLOW_PATHS = (
     REPOSITORY_ROOT / ".github" / "workflows" / "coverage-main.yml",
 )
 GENERATE_COVERAGE_ACTION = "leynos/shared-actions/.github/actions/generate-coverage"
-GENERATE_COVERAGE_REVISION = "a5765019912a8ab6882b12db049c7cde635f3a85"
+GENERATE_COVERAGE_REVISION = "dbe2e22ceaf498d85512679ccded38be9dbe7777"
 
 
 def test_coverage_workflows_pin_the_same_generator_revision() -> None:
