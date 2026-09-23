@@ -137,6 +137,10 @@ one of the two same-repository prefixes GitHub documents, names a file directly
 under `.github/workflows/`. The prefixes are `./`, which is workspace-relative,
 and `$/`, the self-repository form GitHub.com recommends. A local call naming a
 missing workflow fails the contract instead of dropping out of the lane.
+`tests/workflow_call_graph.py` owns the pure halves, the reference shape and
+the closure over a call graph, and a property test holds that closure to an
+independent fixed-point reference. The support module only reads the repository
+into that graph, and names the file when a workflow cannot be read.
 
 ### Maintain composite action pins
 

@@ -13,9 +13,6 @@ alongside the code it exercises and omits a production module no test imports.
 import json
 import typing as typ
 
-import pytest
-
-from tests import test_codescene_workflow_contract_support as support
 from tests.test_codescene_workflow_contract_support import (
     REPOSITORY_ROOT,
     WORKFLOWS_DIRECTORY,
@@ -23,7 +20,6 @@ from tests.test_codescene_workflow_contract_support import (
     Step,
     all_workflow_steps,
     load_workflow,
-    local_workflow,
     mapping,
     named_step,
     trigger_config,
@@ -317,64 +313,3 @@ def test_pull_request_workflows_never_receive_the_codescene_token() -> None:
         assert CODESCENE_HOST not in text.casefold(), (
             f"{path} serves pull requests and must not reference {CODESCENE_HOST}"
         )
-
-
-@pytest.mark.parametrize(
-    ("reference", "expected"),
-    [
-        ("./.github/workflows/ci.yml", "ci.yml"),
-        (".github/workflows/ci.yml", "ci.yml"),
-        ("$/.github/workflows/ci.yml", "ci.yml"),
-        ("$/.github/workflows/nested/ci.yml", None),
-        ("./.github/workflows/nested/ci.yml", None),
-        ("./.github/actions/setup", None),
-        ("leynos/episodic/.github/workflows/ci.yml@main", None),
-        ("./.github/workflows/", None),
-    ],
-)
-def test_a_local_workflow_call_is_read_by_shape(
-    reference: str, expected: str | None
-) -> None:
-    """Follow a call exactly when it names a file under the workflow directory.
-
-    Both documented same-repository prefixes, `./` and `$/`, are followed; a
-    reader knowing only one drops callers written the other way. One that
-    accepted any path would follow a subdirectory GitHub never reads.
-    """
-    resolved = local_workflow(reference)
-    assert (resolved.name if resolved else None) == expected, (
-        f"{reference!r} must read as {expected!r}, got {resolved!r}"
-    )
-
-
-def test_a_local_call_to_a_missing_workflow_fails() -> None:
-    """Refuse to drop a local call the closure cannot read out of the lane."""
-    with pytest.raises(AssertionError, match="does not exist"):
-        local_workflow("./.github/workflows/missing.yml")
-
-
-def test_the_lane_follows_calls_transitively(
-    tmp_path: pl.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Reach a `workflow_call` workflow through a called one, and nothing else.
-
-    No workflow here calls another today, so the repository's own files cannot
-    show the traversal working; a tree of three workflows can. The uncalled
-    reusable workflow stays out, so a complying repository is not failed.
-    """
-    directory = tmp_path / ".github" / "workflows"
-    directory.mkdir(parents=True)
-    call = "jobs:\n  call:\n    uses: ./.github/workflows/{}\n    secrets: inherit\n"
-    (directory / "ci.yml").write_text("on: pull_request\n" + call.format("middle.yml"))
-    (directory / "middle.yml").write_text(
-        "on: workflow_call\n" + call.format("probe.yml")
-    )
-    for name in ("probe.yml", "uncalled.yml"):
-        (directory / name).write_text("on: workflow_call\njobs: {}\n")
-    monkeypatch.setattr(support, "REPOSITORY_ROOT", tmp_path)
-    monkeypatch.setattr(support, "WORKFLOWS_DIRECTORY", directory)
-
-    reached = {path.name for path in workflows_reachable_from(PULL_REQUEST_TRIGGERS)}
-    assert reached == {"ci.yml", "middle.yml", "probe.yml"}, (
-        f"the lane must be the transitive closure of calls, got {sorted(reached)}"
-    )

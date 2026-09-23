@@ -45,10 +45,30 @@ def _strip_jsonc_comments(text: str) -> str:
     )
 
 
+class ConfigurationReadError(OSError):
+    """Raised when the Markdown lint configuration cannot be read or parsed."""
+
+
 def _configuration() -> Configuration:
-    """Return the parsed Markdown lint configuration."""
-    raw = MARKDOWNLINT_CONFIG.read_text(encoding="utf-8")
-    parsed = json.loads(_strip_jsonc_comments(raw))
+    """Return the parsed Markdown lint configuration.
+
+    Returns
+    -------
+    Configuration
+        The parsed configuration mapping.
+
+    Raises
+    ------
+    ConfigurationReadError
+        If the file cannot be read, or is not JSON once its comments are
+        stripped, naming the file rather than failing several frames away.
+    """
+    try:
+        raw = MARKDOWNLINT_CONFIG.read_text(encoding="utf-8")
+        parsed = json.loads(_strip_jsonc_comments(raw))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        message = f"{MARKDOWNLINT_CONFIG} could not be read: {error}"
+        raise ConfigurationReadError(message) from error
     assert isinstance(parsed, dict), "the Markdown lint configuration must be a mapping"
     # `dict` is invariant, so the narrowed value is not the alias; the
     # assertion above is the check this cast stands on.

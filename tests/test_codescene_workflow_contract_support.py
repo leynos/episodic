@@ -12,6 +12,8 @@ import typing as typ
 
 import yaml
 
+from tests.workflow_call_graph import local_workflow_name, reachable
+
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 WORKFLOWS_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
 
@@ -21,13 +23,6 @@ WORKFLOWS_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
 type Mapping = dict[object, object]
 type Workflow = Mapping
 type Step = Mapping
-# Where a same-repository reusable workflow lives. GitHub does not look in its
-# subdirectories.
-LOCAL_WORKFLOW_DIRECTORY = pl.PurePosixPath(".github/workflows")
-# The two prefixes GitHub documents for a same-repository call: the
-# workspace-relative `./` and the self-repository `$/`, which GitHub.com
-# recommends and which resolves to the running commit without a checkout.
-SELF_REPOSITORY_PREFIXES = ("./", "$/")
 
 
 def mapping(value: object, *, subject: str) -> Workflow:
@@ -51,6 +46,14 @@ def mapping(value: object, *, subject: str) -> Workflow:
     return typ.cast("Workflow", value)
 
 
+class WorkflowReadError(OSError):
+    """Raised when a workflow file cannot be read or parsed, naming the file.
+
+    A contract several frames away would otherwise fail with an opaque decoding
+    or YAML error naming no workflow.
+    """
+
+
 def load_workflow(path: pl.Path) -> Workflow:
     """Parse one workflow using PyYAML's GitHub-compatible key handling.
 
@@ -63,8 +66,18 @@ def load_workflow(path: pl.Path) -> Workflow:
     -------
     Workflow
         The parsed document.
+
+    Raises
+    ------
+    WorkflowReadError
+        If the file cannot be read, does not decode, or is not YAML.
     """
-    return mapping(yaml.safe_load(path.read_text(encoding="utf-8")), subject=str(path))
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
+        message = f"{path} could not be read as a workflow: {error}"
+        raise WorkflowReadError(message) from error
+    return mapping(document, subject=str(path))
 
 
 def workflow_paths() -> tuple[pl.Path, ...]:
@@ -243,62 +256,12 @@ def workflow_uses() -> list[tuple[str, str]]:
     return references
 
 
-def _without_self_repository_prefix(reference: str) -> str:
-    """Return a `uses:` reference less one leading same-repository prefix."""
-    return next(
-        (
-            reference.removeprefix(prefix)
-            for prefix in SELF_REPOSITORY_PREFIXES
-            if reference.startswith(prefix)
-        ),
-        reference,
-    )
+def local_workflow_calls(path: pl.Path) -> frozenset[str]:
+    """Return the file names of the same-repository workflows one workflow calls.
 
-
-def local_workflow(reference: object) -> pl.Path | None:
-    """Return the workflow a same-repository `uses:` reference names, or None.
-
-    The reference is matched by shape: less a leading ``./`` or ``$/``, the
-    two same-repository prefixes GitHub documents, it must name a file
-    directly under ``.github/workflows/``. A local call naming a workflow this
-    checkout does not hold fails, because the closure cannot vouch for what it
-    never read.
-
-    Parameters
-    ----------
-    reference : object
-        A job's ``uses:`` value.
-
-    Returns
-    -------
-    pl.Path | None
-        The called workflow's path, or None when the reference is not a local
-        workflow call.
-
-    Examples
-    --------
-    >>> local_workflow("./.github/workflows/ci.yml").name
-    'ci.yml'
-    >>> local_workflow("$/.github/workflows/ci.yml").name
-    'ci.yml'
-    >>> local_workflow("leynos/episodic/.github/workflows/ci.yml@main") is None
-    True
-    """
-    if not isinstance(reference, str):
-        return None
-    relative = pl.PurePosixPath(_without_self_repository_prefix(reference))
-    if relative.parent != LOCAL_WORKFLOW_DIRECTORY:
-        return None
-    candidate = REPOSITORY_ROOT / relative
-    assert candidate.is_file(), f"{reference} names a workflow that does not exist"
-    return candidate
-
-
-def local_workflow_calls(path: pl.Path) -> frozenset[pl.Path]:
-    """Return the same-repository reusable workflows one workflow calls.
-
-    A call is local when :func:`local_workflow` reads it so; a call to another
-    repository is not followed, because its content is not in this tree.
+    A call is local when :func:`workflow_call_graph.local_workflow_name` reads
+    it so; a call to another repository is not followed, because its content
+    is not in this tree.
 
     Parameters
     ----------
@@ -307,15 +270,15 @@ def local_workflow_calls(path: pl.Path) -> frozenset[pl.Path]:
 
     Returns
     -------
-    frozenset[pl.Path]
-        Workflow documents this one calls, resolved to paths.
+    frozenset[str]
+        Called workflow file names, whether or not such a file exists.
     """
-    return frozenset(
-        resolved
+    names = (
+        local_workflow_name(typ.cast("Workflow", job).get("uses"))
         for job in workflow_jobs(path).values()
         if isinstance(job, dict)
-        and (resolved := local_workflow(typ.cast("Workflow", job).get("uses")))
     )
+    return frozenset(name for name in names if name is not None)
 
 
 def workflows_reachable_from(events: frozenset[str]) -> frozenset[pl.Path]:
@@ -323,7 +286,9 @@ def workflows_reachable_from(events: frozenset[str]) -> frozenset[pl.Path]:
 
     A workflow that declares only ``workflow_call`` still runs on a pull
     request when a pull-request workflow calls it, and it receives inherited
-    secrets, so a contract that enumerates triggers alone cannot see it.
+    secrets, so a contract that enumerates triggers alone cannot see it. This
+    reads the repository into a call graph; :func:`workflow_call_graph.reachable`
+    closes it.
 
     Parameters
     ----------
@@ -333,14 +298,12 @@ def workflows_reachable_from(events: frozenset[str]) -> frozenset[pl.Path]:
     Returns
     -------
     frozenset[pl.Path]
-        The entry workflows and everything they call, transitively.
+        The entry workflows and everything they call, transitively. A local
+        call to a workflow the repository does not hold propagates
+        ``UnresolvedWorkflowCallError``; an unreadable workflow propagates
+        :class:`WorkflowReadError`.
     """
-    pending = [path for path in workflow_paths() if workflow_triggers(path) & events]
-    reached: set[pl.Path] = set()
-    while pending:
-        current = pending.pop()
-        if current in reached:
-            continue
-        reached.add(current)
-        pending.extend(local_workflow_calls(current) - reached)
-    return frozenset(reached)
+    paths = workflow_paths()
+    calls = {path.name: local_workflow_calls(path) for path in paths}
+    entries = [path.name for path in paths if workflow_triggers(path) & events]
+    return frozenset(WORKFLOWS_DIRECTORY / name for name in reachable(calls, entries))
