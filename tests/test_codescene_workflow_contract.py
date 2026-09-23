@@ -44,7 +44,7 @@ UPLOAD_CODESCENE_ACTION = (
 )
 APPROVED_REVISION = "dbe2e22ceaf498d85512679ccded38be9dbe7777"
 ON_MAIN = "github.ref == 'refs/heads/main'"
-UPLOAD_GUARD = f"{ON_MAIN} && env.CS_ACCESS_TOKEN != ''"
+UPLOAD_GUARD = f"steps.codescene_token.outputs.available == 'true' && {ON_MAIN}"
 MAIN_PUSH_TRIGGER = {"branches": ["main"]}
 ACTION_REVISIONS = (
     REPOSITORY_ROOT / "tests" / "support" / "approved_action_revisions.json"
@@ -58,7 +58,7 @@ EXPECTED_UPLOAD_INPUTS = {
     "format": "cobertura",
     "mode": "upload",
     "path": "coverage.xml",
-    "access-token": "${{ env.CS_ACCESS_TOKEN }}",
+    "access-token": "${{ secrets.CS_ACCESS_TOKEN }}",
 }
 
 
@@ -106,9 +106,10 @@ def test_codescene_is_contacted_only_from_a_default_branch_push() -> None:
     assert upload["if"] == UPLOAD_GUARD, (
         "upload must be guarded by the default branch and a token"
     )
-    assert mapping(upload["env"], subject="CodeScene upload environment") == {
-        "CS_ACCESS_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"
-    }, "upload must expose only the repository secret as its step environment"
+    assert "env" not in upload, (
+        "the upload must declare no env: the token passes as an input, because "
+        "a composite action's nested steps inherit the calling step's env"
+    )
 
 
 def test_default_branch_upload_uses_the_measured_cobertura_report() -> None:

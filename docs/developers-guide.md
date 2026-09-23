@@ -52,10 +52,37 @@ been measured, and is the only CodeScene consumer.
 
 The ratchet baseline is stored in the GitHub Actions cache. Its default
 publication mode saves on a push to `main`; this repository also permits a
-manual dispatch on `main` after an automerge that does not emit a push event.
+manual dispatch on `main`, because a merge made by the Dependabot automerge
+workflow's token fires no push event (see
+[shared-actions issue 518](https://github.com/leynos/shared-actions/issues/518)).
 That job uses `publish-baseline: 'always'` and is restricted to `main`, so a
 feature branch cannot advance the baseline. The first ratcheting run has no
 floor until a default-branch run saves one.
+
+Publishers queue on the concurrency group `coverage-main-${{ github.ref }}`,
+with `cancel-in-progress: false`: two runs writing the baseline at once would
+be a lost update, and cancelling one would abandon its write half done. A group
+holds one pending run, and a newer run replaces it, so a dispatch that arrives
+while a push waits replaces that push. Because this job saves the baseline on a
+dispatch too, and a dispatch on `main` runs at `main`'s head, the replacing run
+publishes the newer commit, and the baseline does not fall behind. In a
+repository whose baseline saves only on a push, the same replacement leaves the
+baseline one commit behind until the next push. This reasoning covers triggered
+runs, a push or a dispatch. A manual "Re-run jobs" on an older `main` run is an
+operator action rather than a trigger: it keeps that run's commit, so it
+republishes that commit's coverage and baseline until the next push supersedes
+them.
+
+The token never enters an `env` on the publisher job. The upload is a composite
+action, and a composite action's nested steps inherit the calling step's
+environment, so a token there reached every one of them. A
+`Check CodeScene token availability` step publishes only
+`available=${{ secrets.CS_ACCESS_TOKEN != '' }}`, the upload's condition reads
+that output, and the upload takes
+`access-token: ${{ secrets.CS_ACCESS_TOKEN }}` directly.
+`tests/test_codescene_publisher_token.py` holds the shape, including the
+positive half: the token is named exactly in the check's command and the
+upload's input, so deleting it cannot pass for keeping it out of an `env`.
 
 No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
