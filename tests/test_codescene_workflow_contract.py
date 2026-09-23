@@ -324,6 +324,8 @@ def test_pull_request_workflows_never_receive_the_codescene_token() -> None:
     [
         ("./.github/workflows/ci.yml", "ci.yml"),
         (".github/workflows/ci.yml", "ci.yml"),
+        ("$/.github/workflows/ci.yml", "ci.yml"),
+        ("$/.github/workflows/nested/ci.yml", None),
         ("./.github/workflows/nested/ci.yml", None),
         ("./.github/actions/setup", None),
         ("leynos/episodic/.github/workflows/ci.yml@main", None),
@@ -335,8 +337,9 @@ def test_a_local_workflow_call_is_read_by_shape(
 ) -> None:
     """Follow a call exactly when it names a file under the workflow directory.
 
-    A reader that listed spellings would miss the bare `.github/` form, and one
-    that accepted any path would follow a subdirectory GitHub never reads.
+    Both documented same-repository prefixes, `./` and `$/`, are followed; a
+    reader knowing only one drops callers written the other way. One that
+    accepted any path would follow a subdirectory GitHub never reads.
     """
     resolved = local_workflow(reference)
     assert (resolved.name if resolved else None) == expected, (

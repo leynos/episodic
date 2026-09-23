@@ -133,10 +133,10 @@ declares only `workflow_call` still runs on a pull request when a pull-request
 workflow calls it, and `secrets: inherit` hands it the token, so enumerating
 triggers alone cannot see it. The contract therefore follows same-repository
 reusable-workflow calls transitively. A call is local when its reference, less
-a leading `./`, names a file directly under `.github/workflows/`; the shape is
-matched rather than a list of spellings, so a spelling nobody listed is not
-read as a call to another repository, and a local call naming a missing
-workflow fails the contract instead of dropping out of the lane.
+one of the two same-repository prefixes GitHub documents, names a file directly
+under `.github/workflows/`. The prefixes are `./`, which is workspace-relative,
+and `$/`, the self-repository form GitHub.com recommends. A local call naming a
+missing workflow fails the contract instead of dropping out of the lane.
 
 ### Maintain composite action pins
 

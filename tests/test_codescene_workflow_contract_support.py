@@ -24,6 +24,10 @@ type Step = Mapping
 # Where a same-repository reusable workflow lives. GitHub does not look in its
 # subdirectories.
 LOCAL_WORKFLOW_DIRECTORY = pl.PurePosixPath(".github/workflows")
+# The two prefixes GitHub documents for a same-repository call: the
+# workspace-relative `./` and the self-repository `$/`, which GitHub.com
+# recommends and which resolves to the running commit without a checkout.
+SELF_REPOSITORY_PREFIXES = ("./", "$/")
 
 
 def mapping(value: object, *, subject: str) -> Workflow:
@@ -239,14 +243,26 @@ def workflow_uses() -> list[tuple[str, str]]:
     return references
 
 
+def _without_self_repository_prefix(reference: str) -> str:
+    """Return a `uses:` reference less one leading same-repository prefix."""
+    return next(
+        (
+            reference.removeprefix(prefix)
+            for prefix in SELF_REPOSITORY_PREFIXES
+            if reference.startswith(prefix)
+        ),
+        reference,
+    )
+
+
 def local_workflow(reference: object) -> pl.Path | None:
     """Return the workflow a same-repository `uses:` reference names, or None.
 
-    The reference is matched by shape rather than by a list of spellings: less
-    a leading ``./``, it must name a file directly under ``.github/workflows/``.
-    A spelling nobody enumerated is then not mistaken for a call to another
-    repository. A local call naming a workflow this checkout does not hold
-    fails, because the closure cannot vouch for what it never read.
+    The reference is matched by shape: less a leading ``./`` or ``$/``, the
+    two same-repository prefixes GitHub documents, it must name a file
+    directly under ``.github/workflows/``. A local call naming a workflow this
+    checkout does not hold fails, because the closure cannot vouch for what it
+    never read.
 
     Parameters
     ----------
@@ -263,12 +279,14 @@ def local_workflow(reference: object) -> pl.Path | None:
     --------
     >>> local_workflow("./.github/workflows/ci.yml").name
     'ci.yml'
+    >>> local_workflow("$/.github/workflows/ci.yml").name
+    'ci.yml'
     >>> local_workflow("leynos/episodic/.github/workflows/ci.yml@main") is None
     True
     """
     if not isinstance(reference, str):
         return None
-    relative = pl.PurePosixPath(reference.removeprefix("./"))
+    relative = pl.PurePosixPath(_without_self_repository_prefix(reference))
     if relative.parent != LOCAL_WORKFLOW_DIRECTORY:
         return None
     candidate = REPOSITORY_ROOT / relative
