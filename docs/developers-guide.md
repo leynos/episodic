@@ -88,6 +88,12 @@ that output, and the upload takes
 `tests/test_codescene_publisher_token.py` holds the shape, including the
 positive half: the token is named exactly in the check's command and the
 upload's input, so deleting it cannot pass for keeping it out of an `env`.
+`tests/test_codescene_publisher_scenarios.py` runs the decision rather than
+reading it. It executes the check step's own script, with its secret expression
+rendered as GitHub renders it, then evaluates the job's and the upload's `if:`
+conditions for each token, event and ref. The upload happens exactly when the
+token exists and the run is on `main`, and an absent token skips it rather than
+failing.
 
 No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
