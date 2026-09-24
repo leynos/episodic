@@ -18,6 +18,8 @@ import re
 import subprocess  # noqa: S404  # Runs a fixed pytest collection command.
 import sys
 
+import pytest
+
 from tests.test_codescene_workflow_contract_support import (
     REPOSITORY_ROOT,
     WORKFLOWS_DIRECTORY,
@@ -33,7 +35,8 @@ COVERAGE_MAIN_WORKFLOW = WORKFLOWS_DIRECTORY / "coverage-main.yml"
 COVERAGE_MAIN_JOB = "coverage-upload"
 GENERATE_COVERAGE_ACTION = "leynos/shared-actions/.github/actions/generate-coverage@"
 #: A command that runs the suite, or part of it, outside the coverage action.
-PLAIN_SUITE = re.compile(r"\bpytest\b|\bmake\s+(\S+=\S+\s+)*test(?![-\w])")
+#: Variable assignments and options may precede the target (`make -j2 test`).
+PLAIN_SUITE = re.compile(r"\bpytest\b|\bmake\s+((?:\S+=\S+|-\S+)\s+)*test(?![-\w])")
 #: The publisher inputs that leave pytest's collection untouched. Anything else
 #: could narrow the suite this contract relies on, so it must be read first.
 COLLECTION_NEUTRAL_INPUTS = frozenset({
@@ -68,6 +71,23 @@ def test_ci_runs_no_plain_suite() -> None:
     assert not plain, f"ci.yml runs the suite outside coverage in {plain!r}"
 
 
+@pytest.mark.parametrize(
+    ("command", "runs_suite"),
+    [
+        ("make test", True),
+        ("make -j2 test", True),
+        ("make PYTEST_XDIST_WORKERS=4 test", True),
+        ("make -k PYTEST_XDIST_WORKERS=4 test", True),
+        ("uv run pytest -v", True),
+        ("make test-workflow-contracts", False),
+        ("make typecheck", False),
+    ],
+)
+def test_the_plain_suite_pattern(command: str, *, runs_suite: bool) -> None:
+    """Recognize every spelling of a plain suite run, and nothing longer."""
+    assert bool(PLAIN_SUITE.search(command)) is runs_suite, command
+
+
 def test_the_publisher_runs_the_whole_suite_on_every_push_to_main() -> None:
     """Require an unguarded, uncut coverage run on every push to main."""
     push = trigger_config(COVERAGE_MAIN_WORKFLOW, "push")
@@ -96,9 +116,10 @@ def test_the_publisher_runs_the_whole_suite_on_every_push_to_main() -> None:
 def test_a_default_collection_selects_the_crosshair_proof() -> None:
     """Require the CrossHair proof in the suite the coverage lanes run.
 
-    Collection goes through pytest with the repository's own configuration,
-    so a marker deselection in `addopts` or a collection hook drops the node
-    here exactly as it would in the coverage run.
+    Collection goes through pytest with the repository's own configuration
+    and no path argument, as the coverage run's does, so a `testpaths`
+    narrowing, a marker deselection in `addopts` or a collection hook drops
+    the node here exactly as it would there.
     """
     completed = subprocess.run(  # noqa: S603 - fixed argv, shell=False, no user input.
         [
@@ -109,7 +130,6 @@ def test_a_default_collection_selects_the_crosshair_proof() -> None:
             "-q",
             "-p",
             "no:cacheprovider",
-            "tests/test_chrono_contracts.py",
         ],
         cwd=REPOSITORY_ROOT,
         check=False,
