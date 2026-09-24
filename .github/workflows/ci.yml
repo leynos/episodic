@@ -103,10 +103,12 @@ jobs:
             exit 1
           fi
 
-      # Default-branch coverage and its upload are handled by coverage-main.yml.
-      - name: Run tests
-        if: github.event_name != 'pull_request'
-        run: make test
+      # This job runs the suite only as the pull-request coverage step below.
+      # On a push to main, coverage-main.yml runs the same suite under coverage
+      # and uploads it, so a plain `make test` here would run every test twice
+      # on the same commit. The CrossHair PEP 316 proof is a test in that suite
+      # (tests/test_chrono_contracts.py), so both lanes run it. Held by
+      # tests/test_suite_runs_once_contract.py.
 
       # Pull requests enforce production coverage locally against the latest
       # default-branch cache baseline. They do not contact CodeScene.
