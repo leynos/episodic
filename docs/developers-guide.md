@@ -142,6 +142,26 @@ the closure over a call graph, and a property test holds that closure to an
 independent fixed-point reference. The support module only reads the repository
 into that graph, and names the file when a workflow cannot be read.
 
+### Run the suite once per event
+
+Each event runs the test suite once, and that run is the coverage run. A pull
+request runs it in `ci.yml`'s coverage step; a push to `main` runs it in
+`coverage-main.yml`. `ci.yml` has no plain `make test` or `pytest` step,
+because on a push it would run every test a second time on the same commit. The
+CrossHair PEP 316 proof that `make test` runs through its `crosshair`
+prerequisite is also a test in the suite
+(`tests/test_chrono_contracts.py::TestChronoContracts::test_chrono_crosshair_contracts_pass`),
+so both coverage lanes run it.
+
+[`tests/test_suite_runs_once_contract.py`](../tests/test_suite_runs_once_contract.py)
+holds the three facts the arrangement stands on. `ci.yml` runs no plain suite.
+The publisher runs the whole suite, unguarded, on every push to `main`, with no
+input that could narrow what pytest collects. A default collection, read
+through pytest with this repository's own configuration, still selects the
+CrossHair test. A new coverage input must be added to the contract's
+collection-neutral set deliberately, after checking that it does not narrow the
+suite.
+
 ### Maintain composite action pins
 
 An immutable full SHA prevents a tag from moving, but does not freeze the
