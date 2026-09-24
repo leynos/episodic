@@ -73,9 +73,14 @@ operator action rather than a trigger: it keeps that run's commit, so it
 republishes that commit's coverage and baseline until the next push supersedes
 them.
 
-The token never enters an `env` on the publisher job. The upload is a composite
-action, and a composite action's nested steps inherit the calling step's
-environment, so a token there reached every one of them. A
+No `env` that the publisher workflow declares holds the token, whether at
+workflow, job or step level. The upload is a composite action, and a composite
+action's nested steps inherit the calling step's environment, so a token there
+reached every one of them. The token still enters one environment: the pinned
+action binds `CS_ACCESS_TOKEN` from its `access-token` input in the `env` of
+its own upload step (and of its gate-check step, which `mode: upload` skips),
+where `cs-coverage` reads it. That step is inside the action's boundary and
+sees the token alone; the action's other nested steps do not. A
 `Check CodeScene token availability` step publishes only
 `available=${{ secrets.CS_ACCESS_TOKEN != '' }}`, the upload's condition reads
 that output, and the upload takes

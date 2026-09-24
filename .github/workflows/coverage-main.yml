@@ -81,11 +81,11 @@ jobs:
           pytest-workers: ''
 
       - name: Check CodeScene token availability
-        # Publishes whether the token exists, and nothing else. The token
-        # stays out of every `env` on this job: the upload is a composite
+        # Publishes whether the token exists, and nothing else. No `env` this
+        # workflow declares holds the token: the upload is a composite
         # action, and a composite action's nested steps inherit the calling
         # step's environment, so a token placed there reaches every one of
-        # them.
+        # them. The action binds it only in its own upload step's `env`.
         id: codescene_token
         run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
 
