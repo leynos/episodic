@@ -6,7 +6,7 @@ import re
 import uuid
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
@@ -141,39 +141,33 @@ def test_every_terminal_status_accepts_a_cleared_lifecycle(
 @settings(max_examples=25)
 @given(
     status=st.sampled_from(TERMINAL_STATUSES),
-    active_node=st.text(min_size=1),
+    current_node=st.one_of(st.none(), st.text(min_size=1)),
+    ended_at=st.one_of(st.none(), st.just(NOW)),
 )
-def test_every_terminal_status_rejects_an_active_node(
+def test_every_terminal_status_rejects_an_invalid_lifecycle(
     status: GenerationRunStatus,
-    active_node: str,
+    current_node: str | None,
+    ended_at: dt.datetime | None,
 ) -> None:
-    """A terminal run may not retain an active node, whatever the label."""
-    with pytest.raises(
-        ValueError,
-        match="terminal generation runs must not have a current node",
-    ):
+    """A terminal run must clear its node and carry an end time.
+
+    Sampling both fields crosses the whole invalid space rather than one
+    axis at a time, so the two-invalid case is covered as well. The node
+    fault is reported in preference to the end-time fault, matching the
+    order the validator checks them in.
+    """
+    assume(current_node is not None or ended_at is None)
+    expected = (
+        "terminal generation runs must not have a current node"
+        if current_node is not None
+        else "terminal generation runs must have an end time"
+    )
+    with pytest.raises(ValueError, match=expected):
         dc.replace(
             _pending_run(),
             status=status,
-            current_node=active_node,
-            ended_at=NOW,
-        )
-
-
-@settings(max_examples=25)
-@given(status=st.sampled_from(TERMINAL_STATUSES))
-def test_every_terminal_status_requires_an_end_time(
-    status: GenerationRunStatus,
-) -> None:
-    """A terminal run always carries the end time that closed it."""
-    with pytest.raises(
-        ValueError, match="terminal generation runs must have an end time"
-    ):
-        dc.replace(
-            _pending_run(),
-            status=status,
-            current_node=None,
-            ended_at=None,
+            current_node=current_node,
+            ended_at=ended_at,
         )
 
 

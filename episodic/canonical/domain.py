@@ -123,6 +123,34 @@ class CheckpointStatus(enum.StrEnum):
         return self is not CheckpointStatus.CREATED
 
 
+def _require_lifecycle_field_types(
+    *,
+    current_node: object,
+    ended_at: object,
+) -> None:
+    """Reject a mistyped lifecycle field before any value check runs.
+
+    The parameters are deliberately the unnarrowed types: this function's
+    whole job is to establish those types at runtime. It is separate from
+    :func:`_validate_terminal_run_lifecycle` so the ordering rule -- a
+    mistyped field reports its type and never the lifecycle rule, even on a
+    terminal run -- is expressed by the call order rather than by reading
+    down a single function.
+
+    Raises
+    ------
+    TypeError
+        If ``current_node`` is neither ``None`` nor a string, or ``ended_at``
+        is neither ``None`` nor a :class:`datetime.datetime`.
+    """
+    if current_node is not None and not isinstance(current_node, str):
+        msg = "current_node must be a string."
+        raise TypeError(msg)
+    if ended_at is not None and not isinstance(ended_at, dt.datetime):
+        msg = "ended_at must be a datetime."
+        raise TypeError(msg)
+
+
 def _validate_terminal_run_lifecycle(
     *,
     status: GenerationRunStatus,
@@ -130,12 +158,7 @@ def _validate_terminal_run_lifecycle(
     ended_at: dt.datetime | None,
 ) -> None:
     """Validate lifecycle fields required by terminal generation runs."""
-    if current_node is not None and not isinstance(current_node, str):
-        msg = "current_node must be a string."
-        raise TypeError(msg)
-    if ended_at is not None and not isinstance(ended_at, dt.datetime):
-        msg = "ended_at must be a datetime."
-        raise TypeError(msg)
+    _require_lifecycle_field_types(current_node=current_node, ended_at=ended_at)
     if not status.is_terminal():
         return
     if current_node is not None:
