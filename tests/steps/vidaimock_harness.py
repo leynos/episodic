@@ -311,8 +311,16 @@ def start_vidaimock(launch: VidaiMockLaunch) -> VidaiMockServer:
         # A fresh file per attempt keeps one attempt's diagnostics from
         # bleeding into the next.
         stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - closed by terminate_process_gracefully.
+        try:
+            process = _start_once(launch, port, stderr_file)
+        except BaseException:
+            # `Popen` can fail before any child exists, for example when the
+            # binary is not executable. No child will close the capture, so it
+            # is closed here rather than leaked with its handle open.
+            _close_stderr(stderr_file)
+            raise
         server = VidaiMockServer(
-            process=_start_once(launch, port, stderr_file),
+            process=process,
             host=launch.host,
             port=port,
             label=launch.label,
