@@ -154,32 +154,66 @@ class TestBuildCommand:
     """Translation of gate settings into a nose query command."""
 
     def test_pins_every_configured_setting(self) -> None:
-        """Roots, surface, ranking bound, channels, and size are all passed."""
-        command = detector.build_command(
-            "nose",
-            dc.replace(stub_settings(), roots=("episodic", "openai_test_types.py")),
+        """The whole argument vector is pinned, in order, from the settings."""
+        settings = dc.replace(
+            stub_settings(),
+            roots=("episodic", "openai_test_types.py"),
+            mode="semantic",
+            min_size=40,
+            surface="all",
+            top=30,
+            exclude=("**/generated/**", "**/_vendor/**"),
         )
-        assert command[:6] == [
+
+        command = detector.build_command("nose", settings)
+
+        assert command == [
             "nose",
             "query",
             "--root",
             "episodic",
             "--root",
             "openai_test_types.py",
-        ], "Every configured root must be passed with --root."
-        assert "all" in command, "The widened surface must pass the `all` term."
-        assert "top=30" in command, "The ranking bound must be passed as a term."
-        assert command[-2:] == ["--format", "json"], "The gate must parse JSON."
+            "all",
+            "top=30",
+            "--mode",
+            "semantic",
+            "--min-size",
+            "40",
+            "--exclude",
+            "**/generated/**",
+            "--exclude",
+            "**/_vendor/**",
+            "--format",
+            "json",
+        ], "Every configured setting must reach nose, in the documented order."
 
     def test_default_surface_omits_the_all_term(self) -> None:
         """The default surface leaves nose on its ranked dashboard."""
-        command = detector.build_command(
-            "nose", dc.replace(stub_settings(), surface="default", top=None)
+        settings = dc.replace(
+            stub_settings(),
+            roots=("episodic",),
+            mode="syntax",
+            min_size=24,
+            surface="default",
+            top=None,
+            exclude=(),
         )
-        assert "all" not in command, "The default surface must not widen the view."
-        assert not any(item.startswith("top=") for item in command), (
-            "An unset ranking bound must not be passed."
-        )
+
+        command = detector.build_command("nose", settings)
+
+        assert command == [
+            "nose",
+            "query",
+            "--root",
+            "episodic",
+            "--mode",
+            "syntax",
+            "--min-size",
+            "24",
+            "--format",
+            "json",
+        ], "The default surface must not widen the view or pass a ranking bound."
 
 
 class TestRunDetector:
@@ -194,65 +228,118 @@ class TestRunDetector:
             "Findings must report both spans."
         )
 
-    def test_orders_by_descending_value_then_location(self) -> None:
-        """Findings sort by value, then by their location labels."""
-        report = {
-            "families": [
-                {
-                    "witness": "copy-paste",
-                    "value": 5.0,
-                    "locations": [
-                        {"file": "episodic/z.py", "start": 1, "end": 2, "name": None},
-                        {"file": "episodic/y.py", "start": 1, "end": 2, "name": None},
-                    ],
-                },
-                {
-                    "witness": "exact",
-                    "value": 9.0,
-                    "locations": [
-                        {"file": "episodic/a.py", "start": 1, "end": 2, "name": "run"},
-                        {"file": "episodic/b.py", "start": 1, "end": 2, "name": "run"},
-                    ],
-                },
-            ]
-        }
-        findings = detector.normalize_findings(report)
-        assert [finding.value for finding in findings] == [9.0, 5.0], (
+    @pytest.mark.parametrize(
+        ("families", "expected_values", "expected_labels"),
+        [
+            pytest.param(
+                [
+                    {
+                        "witness": "copy-paste",
+                        "value": 5.0,
+                        "locations": [
+                            {
+                                "file": "episodic/z.py",
+                                "start": 1,
+                                "end": 2,
+                                "name": None,
+                            },
+                            {
+                                "file": "episodic/y.py",
+                                "start": 1,
+                                "end": 2,
+                                "name": None,
+                            },
+                        ],
+                    },
+                    {
+                        "witness": "exact",
+                        "value": 9.0,
+                        "locations": [
+                            {
+                                "file": "episodic/a.py",
+                                "start": 1,
+                                "end": 2,
+                                "name": "run",
+                            },
+                            {
+                                "file": "episodic/b.py",
+                                "start": 1,
+                                "end": 2,
+                                "name": "run",
+                            },
+                        ],
+                    },
+                ],
+                [9.0, 5.0],
+                [
+                    "episodic/a.py:1-2 run ~ episodic/b.py:1-2 run",
+                    "episodic/z.py:1-2 ~ episodic/y.py:1-2",
+                ],
+                id="descending-value",
+            ),
+            pytest.param(
+                [
+                    {
+                        "witness": "copy-paste",
+                        "value": 5.0,
+                        "locations": [
+                            {
+                                "file": "episodic/z.py",
+                                "start": 1,
+                                "end": 2,
+                                "name": None,
+                            },
+                            {
+                                "file": "episodic/y.py",
+                                "start": 1,
+                                "end": 2,
+                                "name": None,
+                            },
+                        ],
+                    },
+                    {
+                        "witness": "copy-paste",
+                        "value": 5.0,
+                        "locations": [
+                            {
+                                "file": "episodic/b.py",
+                                "start": 1,
+                                "end": 2,
+                                "name": None,
+                            },
+                            {
+                                "file": "episodic/a.py",
+                                "start": 1,
+                                "end": 2,
+                                "name": None,
+                            },
+                        ],
+                    },
+                ],
+                [5.0, 5.0],
+                [
+                    "episodic/b.py:1-2 ~ episodic/a.py:1-2",
+                    "episodic/z.py:1-2 ~ episodic/y.py:1-2",
+                ],
+                id="location-label-tie-break",
+            ),
+        ],
+    )
+    def test_orders_findings(
+        self,
+        families: list[dict[str, object]],
+        expected_values: list[float],
+        expected_labels: list[str],
+    ) -> None:
+        """Findings sort by descending value, then by normalized location label."""
+        findings = detector.normalize_findings({"families": families})
+
+        assert [finding.value for finding in findings] == expected_values, (
             "Higher-value families must sort first."
         )
-        assert findings[0].label == ("episodic/a.py:1-2 run ~ episodic/b.py:1-2 run"), (
-            "Named locations must carry their unit name into the report."
+        assert [finding.label for finding in findings] == expected_labels, (
+            "Equal values must order by normalized location label."
         )
-
-    def test_orders_equal_values_by_location_label(self) -> None:
-        """Equal-value families sort lexicographically by their location labels."""
-        report = {
-            "families": [
-                {
-                    "witness": "copy-paste",
-                    "value": 5.0,
-                    "locations": [
-                        {"file": "episodic/z.py", "start": 1, "end": 2, "name": None},
-                        {"file": "episodic/y.py", "start": 1, "end": 2, "name": None},
-                    ],
-                },
-                {
-                    "witness": "copy-paste",
-                    "value": 5.0,
-                    "locations": [
-                        {"file": "episodic/b.py", "start": 1, "end": 2, "name": None},
-                        {"file": "episodic/a.py", "start": 1, "end": 2, "name": None},
-                    ],
-                },
-            ]
-        }
-
-        findings = detector.normalize_findings(report)
-
-        assert [finding.label for finding in findings] == [
-            "episodic/b.py:1-2 ~ episodic/a.py:1-2",
-            "episodic/z.py:1-2 ~ episodic/y.py:1-2",
-        ], "Equal values must order by normalized location label."
 
     @pytest.mark.parametrize(
         ("value", "expected"),
@@ -378,5 +465,41 @@ class TestRunDetector:
 
         with pytest.raises(
             detector.GateExecutionError, match="timed out after 120 seconds"
+        ):
+            detector._run_command(("nose", "query"))
+
+    def test_run_command_reports_a_non_zero_exit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A detector that fails carries its status and diagnostic out."""
+
+        def failing(
+            *_args: object, **_kwargs: object
+        ) -> detector.subprocess.CompletedProcess[str]:
+            return detector.subprocess.CompletedProcess(
+                args=["nose", "query"], returncode=2, stdout="", stderr="bad query\n"
+            )
+
+        monkeypatch.setattr(detector.subprocess, "run", failing)
+
+        with pytest.raises(
+            detector.GateExecutionError,
+            match=r"nose exited with status 2: bad query",
+        ):
+            detector._run_command(("nose", "query"))
+
+    def test_run_command_reports_an_execution_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unrunnable detector points at the install remediation."""
+
+        def unrunnable(*_args: object, **_kwargs: object) -> typ.NoReturn:
+            raise OSError(13, "Permission denied")
+
+        monkeypatch.setattr(detector.subprocess, "run", unrunnable)
+
+        with pytest.raises(
+            detector.GateExecutionError,
+            match=r"cannot run nose: .*Permission denied.*make install-nose",
         ):
             detector._run_command(("nose", "query"))

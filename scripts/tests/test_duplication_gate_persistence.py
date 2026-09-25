@@ -5,6 +5,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+import tomlkit.exceptions
 from duplication_gate_test_support import (
     allowlist,
     copied_gate_workspace,
@@ -103,6 +104,27 @@ class TestAppendAllowEntry:
         assert data["project"]["name"] == "x", (
             "Appending must preserve existing TOML content."
         )
+
+    def test_unparseable_document_raises_a_configuration_error(
+        self, tmp_path: Path
+    ) -> None:
+        """An unparseable manifest is a configuration error, not a traceback."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("this is not = = valid toml\n", encoding="utf-8")
+
+        with pytest.raises(allowlist.GateConfigError) as raised:
+            allowlist.append_allow_entry(
+                pyproject,
+                keys=("episodic/a.py",),
+                reason="unit reason",
+            )
+
+        assert isinstance(raised.value.__cause__, tomlkit.exceptions.ParseError), (
+            "The parse failure must be preserved as the cause."
+        )
+        assert pyproject.read_text(encoding="utf-8") == (
+            "this is not = = valid toml\n"
+        ), "A rejected document must be left untouched."
 
     def test_atomic_write_preserves_mode_and_original_on_failure(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

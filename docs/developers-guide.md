@@ -445,19 +445,21 @@ upstream titles, fixtures, stems or exclusions in `typos.local.toml`.
 
 ### Atomic writes
 
+`make spelling` runs the external `typos-config-builder` gate, so no
+repository script writes a spelling cache.
+
 `scripts/atomic_write.py` provides `atomic_write` for replacing generated
 files through a temporary sibling and `Path.replace`. It is a neutral
-persistence helper, imported by the spelling rollout, the duplication
-allowlist writer, and the cache module that re-exports it for callers that
-already reach it there.
+persistence helper that belongs to neither caller's domain; today its live
+consumer is the duplication allowlist writer in
+`scripts/duplication_allowlist.py`.
 
 Its `AtomicWriteOptions` value object controls the policy: the defaults create
 missing parent directories, do not preserve an existing destination mode, and
-do not call `fsync`. The spelling rollout uses those defaults. The duplication
-allowlist writer disables parent creation, preserves the destination mode, and
-syncs temporary file contents before replacement and parent-directory metadata
-after replacement because it updates the existing repository `pyproject.toml`
-under its own lock.
+do not call `fsync`. The duplication allowlist writer instead disables parent
+creation, preserves the destination mode, and syncs temporary file contents
+before replacement and parent-directory metadata after replacement, because it
+updates the existing repository `pyproject.toml` under its own lock.
 
 Keep upstream API spellings in fenced code where practical. The gate ignores
 fenced code blocks but still checks inline code spans, so an identifier that
@@ -961,12 +963,14 @@ Key expectations:
   - `pglite_session` yields a ready-to-use `AsyncSession`.
 - Because `migrated_engine` drops and recreates the `public` schema before
   applying migrations, each database-backed test gets an isolated schema while
-  the expensive py-pglite Node process is shared for the pytest session.
+  the session-scoped `pglite_sqlalchemy_manager` process is shared for the
+  pytest session.
 - A session-scoped `pglite_node_environment` fixture owns the py-pglite work
-  root. The helper installs py-pglite's Node dependencies once for the session
-  and retries startup up to three times with a fresh run directory before
-  failing, because the external Node process can occasionally time out during
-  startup on shared hosts.
+  root, and a session-scoped `pglite_node_modules` fixture primes py-pglite's
+  Node dependencies once for the session. The session manager retries startup
+  up to three times with a fresh run directory before failing, because the
+  external Node process can occasionally time out during startup on shared
+  hosts.
 - Most database-backed tests should use `session_factory` or `pglite_session`.
   Use `pglite_engine` only for lower-level engine assertions, and use
   `pglite_sqlalchemy_manager` only when a test genuinely needs direct manager

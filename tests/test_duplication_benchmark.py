@@ -300,10 +300,10 @@ class TestScoreFindings:
         assert scores[Lane.SEMANTIC_CLONE].true_positives == 1, "label lane credited"
         assert scores[Lane.SYNTACTIC_CLONE].true_positives == 0, "finding lane not"
 
-    def test_rejects_duplicate_expectation_identifiers(self) -> None:
-        """Ambiguous labels are configuration errors."""
-        with pytest.raises(ValueError, match="duplicate expectation"):
-            score_findings(
+    @pytest.mark.parametrize(
+        "expectations",
+        [
+            pytest.param(
                 [
                     _expectation("same"),
                     _expectation(
@@ -311,13 +311,9 @@ class TestScoreFindings:
                         members=(_fragment("c.py", 1, 5), _fragment("d.py", 1, 5)),
                     ),
                 ],
-                [],
-            )
-
-    def test_rejects_duplicate_expectation_pairs(self) -> None:
-        """Two labels naming the same unordered pair are rejected."""
-        with pytest.raises(ValueError, match="duplicate expectation"):
-            score_findings(
+                id="duplicate-identifier",
+            ),
+            pytest.param(
                 [
                     _expectation("one"),
                     _expectation(
@@ -325,5 +321,13 @@ class TestScoreFindings:
                         members=(_fragment("b.py", 1, 20), _fragment("a.py", 1, 20)),
                     ),
                 ],
-                [],
-            )
+                id="duplicate-unordered-pair",
+            ),
+        ],
+    )
+    def test_rejects_duplicate_expectations(
+        self, expectations: list[Expectation]
+    ) -> None:
+        """Ambiguous labels or repeated unordered pairs are configuration errors."""
+        with pytest.raises(ValueError, match="duplicate expectation"):
+            score_findings(expectations, [])

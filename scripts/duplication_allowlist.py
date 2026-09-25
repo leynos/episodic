@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
 import tomlkit
+import tomlkit.exceptions
 import tomlkit.items
 from atomic_write import AtomicWriteOptions, atomic_write
 from nose_schema import Finding, GateConfigError, Location
@@ -238,10 +239,23 @@ def append_allow_entry(
         One location key for a unit entry, or several for a members entry.
     reason : str
         Reviewable justification recorded with the entry.
+
+    Raises
+    ------
+    GateConfigError
+        If ``pyproject_path`` is unreadable or is not valid TOML.
     """
     target = tuple(keys)
     with _locked_file(pyproject_path):
-        document = tomlkit.parse(pyproject_path.read_text(encoding="utf-8"))
+        try:
+            document = tomlkit.parse(pyproject_path.read_text(encoding="utf-8"))
+        except tomlkit.exceptions.ParseError as error:
+            # tomlkit raises a ValueError subclass, which the gate's own
+            # vocabulary does not catch, so an unparseable manifest would
+            # otherwise escape as a traceback rather than a reported
+            # configuration error.
+            msg = f"cannot parse {pyproject_path}: {error}"
+            raise GateConfigError(msg) from error
         tool = document.setdefault("tool", tomlkit.table(is_super_table=True))
         gate = tool.setdefault("duplication_gate", tomlkit.table())
         entries = gate.setdefault("allow", tomlkit.aot())

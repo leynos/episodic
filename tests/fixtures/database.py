@@ -3,7 +3,12 @@
 import asyncio
 import contextlib
 import os
+import pathlib
+import shutil
+import subprocess  # noqa: S404 - py-pglite shell-out shape is mirrored for retry handling.
+import tempfile
 import typing as typ
+import uuid
 
 import pytest
 import pytest_asyncio
@@ -47,6 +52,88 @@ def pglite_node_environment(
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
 
     return tmp_path_factory.mktemp("pglite-node-env")
+
+
+# py-pglite runs `npm install` in every work directory it is handed, and it
+# gives that subprocess a fixed 60-second timeout which it does not catch, so
+# one slow registry response surfaces as `subprocess.TimeoutExpired` out of
+# `PGliteManager.start()`. A per-test work directory pays that cost, and that
+# risk, once per test. Priming the modules once per session and pointing each
+# per-test directory at the result reduces it to a single attempt.
+PGLITE_START_ATTEMPTS = 3
+
+
+def _prepare_pglite_work_dir(source: Path, destination: Path) -> Path:
+    """Return ``destination`` ready to run, reusing already-installed modules.
+
+    py-pglite skips its own install when the work directory already holds
+    ``node_modules``, so linking the session's copy in keeps each work
+    directory isolated while making the network call unnecessary. Only the
+    module tree is shared: py-pglite regenerates ``package.json`` and
+    ``pglite_manager.js`` for the destination, and the generated script has
+    the destination's own socket path baked into it.
+
+    Parameters
+    ----------
+    source : pathlib.Path
+        Session directory whose ``node_modules`` was installed once.
+    destination : pathlib.Path
+        Per-test directory py-pglite will run the server from.
+
+    Returns
+    -------
+    pathlib.Path
+        ``destination``, with the shared module tree linked in.
+    """
+    destination.mkdir(parents=True, exist_ok=True)
+    node_modules = destination / "node_modules"
+    if not node_modules.exists():
+        node_modules.symlink_to(source / "node_modules", target_is_directory=True)
+    return destination
+
+
+@pytest.fixture(scope="session")
+def pglite_node_modules(pglite_node_environment: Path) -> Path:
+    """Prime py-pglite's Node dependencies once for the whole session.
+
+    The fixture starts one throwaway py-pglite server, which is what makes
+    py-pglite stage its own ``package.json`` and install the modules into the
+    session directory. A failed attempt clears any partial ``node_modules``
+    first, so py-pglite retries the install rather than treating a truncated
+    tree as usable.
+
+    Returns
+    -------
+    pathlib.Path
+        Session directory holding a populated ``node_modules``.
+
+    Raises
+    ------
+    RuntimeError
+        If py-pglite is unavailable or the server never starts.
+    """
+    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
+        msg = "py-pglite is not available for runtime test fixtures."
+        raise RuntimeError(msg)
+
+    seed_dir = pglite_node_environment / "npm-seed"
+    last_error: Exception | None = None
+    for attempt in range(1, PGLITE_START_ATTEMPTS + 1):
+        if attempt > 1:
+            shutil.rmtree(seed_dir / "node_modules", ignore_errors=True)
+        config = PGliteConfig(work_dir=seed_dir, timeout=90)
+        manager = PGliteManager(config)
+        try:
+            manager.start()
+        except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+            last_error = exc
+            manager.stop()
+            continue
+        manager.stop()
+        return seed_dir
+
+    msg = f"py-pglite dependency install failed after {PGLITE_START_ATTEMPTS} attempts"
+    raise RuntimeError(msg) from last_error
 
 
 def _should_use_pglite() -> bool:
@@ -208,20 +295,32 @@ async def migrated_engine(
     yield pglite_engine
 
 
-@pytest_asyncio.fixture
-async def migrated_database_url(tmp_path: Path) -> cabc.AsyncIterator[str]:
-    """Yield a migrated ephemeral database URL for runtime process tests."""
-    if not _should_use_pglite():
-        pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
+async def _start_migrated_pglite(
+    work_dir: Path,
+    socket_dir: Path,
+) -> tuple[PGliteManager, str]:
+    """Start one migrated py-pglite server and return it with its URL.
 
-    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
-        msg = "py-pglite is not available for runtime test fixtures."
-        raise RuntimeError(msg)
+    Parameters
+    ----------
+    work_dir : pathlib.Path
+        Directory py-pglite runs the server from, holding the shared
+        ``node_modules`` link.
+    socket_dir : pathlib.Path
+        Directory for this server's Unix socket.
 
+    Returns
+    -------
+    tuple[PGliteManager, str]
+        The running manager and a migrated SQLAlchemy connection URL.
+    """
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    work_dir = tmp_path / "runtime-pglite"
-    config = PGliteConfig(work_dir=work_dir)
+    config = PGliteConfig(
+        work_dir=work_dir,
+        socket_path=str(socket_dir / ".s.PGSQL.5432"),
+        timeout=90,
+    )
     manager = PGliteManager(config)
     manager.start()
     try:
@@ -232,10 +331,85 @@ async def migrated_database_url(tmp_path: Path) -> cabc.AsyncIterator[str]:
             await apply_migrations(engine)
         finally:
             await engine.dispose()
+    except BaseException:
+        manager.stop()
+        raise
+    return manager, database_url
+
+
+@pytest_asyncio.fixture
+async def migrated_database_url(
+    tmp_path: Path,
+    pglite_node_modules: Path,
+) -> cabc.AsyncIterator[str]:
+    """Yield a migrated ephemeral database URL for runtime process tests.
+
+    The server is started with retries because py-pglite's own startup is
+    timing-sensitive, but the retry loop finishes before the value is
+    yielded: an exception raised by the test body must reach pytest rather
+    than be mistaken for a failed attempt.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Per-test directory holding this server's work directory.
+    pglite_node_modules : pathlib.Path
+        Session directory whose modules are linked into the work directory.
+
+    Yields
+    ------
+    str
+        SQLAlchemy URL for a migrated database, served for one test.
+
+    Raises
+    ------
+    RuntimeError
+        If py-pglite is unavailable, or the server never serves a migrated
+        database within ``PGLITE_START_ATTEMPTS`` attempts.
+    """
+    if not _should_use_pglite():
+        pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
+
+    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
+        msg = "py-pglite is not available for runtime test fixtures."
+        raise RuntimeError(msg)
+
+    work_dir = _prepare_pglite_work_dir(
+        pglite_node_modules, tmp_path / "runtime-pglite"
+    )
+    # A socket path unique to this work directory keeps concurrently running
+    # py-pglite servers from colliding, and is why the module tree is shared
+    # as a link rather than the directory itself. `mkdtemp` already creates
+    # the directory owner-only, matching py-pglite's own socket directory.
+    socket_dir = pathlib.Path(
+        tempfile.mkdtemp(prefix=f"py-pglite-{uuid.uuid4().hex[:8]}-")
+    )
+
+    last_error: Exception | None = None
+    manager: PGliteManager | None = None
+    database_url = ""
+    for _attempt in range(1, PGLITE_START_ATTEMPTS + 1):
+        try:
+            manager, database_url = await _start_migrated_pglite(work_dir, socket_dir)
+        except (RuntimeError, OSError, sa_exc.OperationalError) as exc:
+            last_error = exc
+            continue
+        break
+
+    if manager is None:
+        shutil.rmtree(socket_dir, ignore_errors=True)
+        msg = (
+            "py-pglite failed to serve a migrated database after "
+            f"{PGLITE_START_ATTEMPTS} attempts"
+        )
+        raise RuntimeError(msg) from last_error
+
+    try:
         yield database_url
     finally:
         if manager.is_running():
             manager.stop()
+        shutil.rmtree(socket_dir, ignore_errors=True)
 
 
 @pytest_asyncio.fixture
