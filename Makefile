@@ -25,7 +25,12 @@ PYTEST_XDIST_ARGS := -n $(PYTEST_XDIST_WORKERS)
 endif
 LOCAL_K8S_ENGINE ?= docker
 LOCAL_K8S_PROVIDER ?= k3d
-PYLINT_PYTHON ?= pypy
+# Pin the PyPy minor version. A bare `pypy` alias resolves to whichever
+# interpreter uv has installed most recently, and astroid's inference follows
+# the interpreter, so the same tree can score 10.00/10 on one PyPy release and
+# fail on the next. Pinning keeps the gate reproducible; override on the command
+# line to check a different interpreter deliberately.
+PYLINT_PYTHON ?= pypy-3.11
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
 PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
 PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)

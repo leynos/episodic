@@ -235,8 +235,10 @@ max-positional-arguments = 4
 # Keep this Pylint pass focused on the explicitly selected messages.
 disable = [
     "all",
-    # Managed PyPy is currently 3.11 while the project targets Python 3.14
-    # syntax; keep PyPy-backed Pylint useful on files it can parse.
+    # The PyPy-backed Pylint runs on the interpreter pinned by PYLINT_PYTHON
+    # in the Makefile (pypy-3.11), which cannot parse every Python 3.14
+    # construct this project uses; keep that pass useful on the files it can
+    # parse rather than failing the gate on syntax it was never able to read.
     "syntax-error",
 ]
 enable = [
