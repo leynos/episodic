@@ -636,7 +636,7 @@ type = "function"
 full_name = [
     "episodic.cost.ports._validate_currency_code",
     "episodic.cost.ports._validate_usage_metrics",
-    "episodic.generation.guest_bios._ensure_non_empty_fields",
+    "episodic.generation.guest_bios_models._ensure_non_empty_fields",
     "episodic.generation.show_notes._ensure_non_empty_fields",
     "episodic.generation.show_notes._ensure_optional_iso8601_duration",
     "episodic.generation.show_notes._normalize_optional_tei_locator",
