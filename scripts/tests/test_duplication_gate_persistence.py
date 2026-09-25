@@ -210,9 +210,7 @@ class TestAppendAllowEntry:
 
         try:
             assert first.wait(timeout=10) == 0, "First writer must exit successfully."
-            assert second.wait(timeout=10) == 0, (
-                "Second writer must exit successfully."
-            )
+            assert second.wait(timeout=10) == 0, "Second writer must exit successfully."
         finally:
             # A timed-out writer blocks on the lock holding its stdout and
             # stderr pipes open. Reap both on the way out so a failure here

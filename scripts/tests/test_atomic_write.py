@@ -11,11 +11,12 @@ import inspect
 import os
 import stat
 import typing as typ
-from pathlib import Path
-
-import pytest
 
 import atomic_write
+import pytest
+
+if typ.TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_creates_parent_directories_by_default(tmp_path: Path) -> None:
