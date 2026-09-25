@@ -91,9 +91,11 @@ def test_generation_run_accepts_a_valid_terminal_run() -> None:
         current_node=None,
         ended_at=NOW,
     )
-    assert run.status is GenerationRunStatus.SUCCEEDED
-    assert run.ended_at == NOW
-    assert run.current_node is None
+    assert run.status is GenerationRunStatus.SUCCEEDED, (
+        "A valid terminal run must keep its terminal status."
+    )
+    assert run.ended_at == NOW, "A valid terminal run must keep its end time."
+    assert run.current_node is None, "A valid terminal run must clear its node."
 
 
 def test_terminal_type_error_outranks_the_node_value_error() -> None:
@@ -131,9 +133,9 @@ def test_every_terminal_status_accepts_a_cleared_lifecycle(
         current_node=None,
         ended_at=NOW,
     )
-    assert run.status is status
-    assert run.current_node is None
-    assert run.ended_at == NOW
+    assert run.status is status, "The terminal status must survive construction."
+    assert run.current_node is None, "The cleared node must stay cleared."
+    assert run.ended_at == NOW, "The supplied end time must be retained."
 
 
 @settings(max_examples=25)
@@ -186,5 +188,7 @@ def test_non_terminal_statuses_keep_their_lifecycle_unchanged(
 ) -> None:
     """A non-terminal run is untouched by the terminal lifecycle rule."""
     run = dc.replace(_pending_run(), status=status, ended_at=ended_at)
-    assert run.status is status
-    assert run.ended_at == ended_at
+    assert run.status is status, "A non-terminal status must be left alone."
+    assert run.ended_at == ended_at, (
+        "The terminal lifecycle rule must not touch a non-terminal run."
+    )
