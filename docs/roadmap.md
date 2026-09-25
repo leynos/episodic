@@ -268,10 +268,14 @@ metering. Completion enables reliable, auditable generation workflows.
   - Aggregate run totals with hierarchical ledger entries.
   - See
     [Cost accounting and budget enforcement](episodic-podcast-generation-system-design.md#cost-accounting-and-budget-enforcement).
-- [ ] 2.4.5. Extend architecture enforcement to orchestration code.
+- [x] 2.4.5. Extend architecture enforcement to orchestration code.
   - Validate LangGraph nodes depend on ports only.
   - Validate Celery tasks depend on ports only.
   - Audit checkpoint payload boundaries.
+  - Added Hecate groups for LangGraph nodes, orchestration task modules, and
+    checkpoint payload DTOs.
+  - Added BDD, snapshot, structural, property, and Vidai Mock-backed graph
+    coverage for the enforced boundaries.
 
 ### 2.5. Pricing catalogue and budget enforcement
 
