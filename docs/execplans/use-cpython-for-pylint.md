@@ -165,6 +165,46 @@ self-derived. Recorded as a deliberate decision, not an oversight.
   so the harness test now casts it to `cabc.Sequence[str]` behind a documented
   assertion.
 
+## Review round: CI green, then four verified defects fixed
+
+CI is green on `f8e9487` and on the successor `5fbf87b`, with all 23 steps
+executed and none skipped. The headline `Smoke-test vidaimock isolation` step
+ran for the first time and passed on both, so the claim that the isolation
+harness works in CI now rests on real CI evidence rather than on a step that
+was skipped behind an earlier failure.
+
+CodeRabbit returned `CHANGES_REQUESTED` against `b44ebb9` with eleven comments.
+Four findings were reproduced before being fixed, each then verified against
+its own failure mode (`ef122dc`):
+
+- `ReferenceDocument.lock_version` accepted `True`, because
+  `isinstance(..., int)` admits booleans while the shared
+  `require_positive_integer` deliberately excludes them. The module's two
+  optimistic-lock counters disagreed; both now share the helper.
+- `ReferenceDocumentRevision` raised `AttributeError` rather than `TypeError`
+  for a non-string `content_hash`, calling `.strip()` before checking the type.
+  Now routed through `validate_non_empty_text`; a blank string still raises
+  `ValueError`.
+- `validate_llm_config` could mask its documented `ValueError`: a rejected
+  numeric field was logged raw, and the logger's `json.dumps` raised
+  `TypeError` first for a value such as `timeout_seconds=object()`. A new
+  `_json_safe` passes JSON-encodable values through unchanged and falls back to
+  `repr` only for the rest.
+- `start_vidaimock` leaked the standard-error capture when `Popen` raised
+  before a child existed, such as a non-executable binary.
+
+One suggestion was declined: replacing the `isinstance` predicates with `match`
+cases. The cited guidance is about verbose if-elif chains and switch
+statements, not single type predicates, and the repository uses `isinstance` in
+54 files against `match` in 18.
+
+The `_json_safe` fix is worth a note on method. The first attempt wrapped all
+three fields in `repr` unconditionally, which would have silently changed the
+logged types for ordinary mistyping. The snapshot in
+`tests/__snapshots__/test_llm_openai_adapter_config.ambr` pins
+`"max_attempts": 3` and `"timeout_seconds": 30.0` as numbers, so reading the
+existing contract first is what kept the fix from becoming a schema change.
+
 ## Lessons
 
 - Editing a document while a gate is running invalidates that gate for the
