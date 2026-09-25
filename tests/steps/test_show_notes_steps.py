@@ -5,10 +5,6 @@ from __future__ import annotations
 import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json
-import shutil
-import socket
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
-import time
 import typing as typ
 from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
@@ -25,9 +21,14 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
+from tests.steps.vidaimock_harness import (
+    start_vidaimock_process,
+    terminate_process_gracefully,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import subprocess  # noqa: S404 - types the local Vidai Mock test server child.
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
 
@@ -42,6 +43,7 @@ class ShowNotesBDDContext:
     template_structure: dict[str, object] | None = None
     result: ShowNotesResult | None = None
     request_payload: LLMRequest | None = None
+    stderr_file: typ.TextIO | None = None
 
 
 @dc.dataclass(slots=True)
@@ -71,12 +73,7 @@ def show_notes_context() -> cabc.Iterator[ShowNotesBDDContext]:
     ctx = ShowNotesBDDContext()
     yield ctx
     if ctx.process is not None:
-        ctx.process.terminate()
-        try:
-            ctx.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            ctx.process.kill()
-            ctx.process.wait(timeout=5)
+        terminate_process_gracefully(ctx.process, ctx.stderr_file)
 
 
 @scenario(
@@ -86,13 +83,6 @@ def show_notes_context() -> cabc.Iterator[ShowNotesBDDContext]:
 )
 def test_show_notes_behaviour() -> None:
     """Run the show notes behaviour scenario."""
-
-
-def _find_free_port() -> int:
-    """Bind to an ephemeral port and return its number before releasing it."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
 
 
 def _build_assistant_content_literal() -> str:
@@ -163,96 +153,6 @@ def _write_response_template(
     )
 
 
-_VIDAIMOCK_STARTUP_TIMEOUT = 5.0
-_VIDAIMOCK_PROBE_INTERVAL = 0.2
-_VIDAIMOCK_PORT_START_ATTEMPTS = 5
-
-
-def _handle_connect_failure(
-    process: subprocess.Popen[str],
-    deadline: float,
-) -> None:
-    """Raise if the deadline has passed; otherwise sleep before the next probe."""
-    if time.monotonic() < deadline:
-        time.sleep(_VIDAIMOCK_PROBE_INTERVAL)
-        return
-    if process.poll() is None:
-        process.terminate()
-    msg = "Vidai Mock did not become ready within the timeout."
-    raise RuntimeError(msg) from None
-
-
-def _await_port_ready(
-    process: subprocess.Popen[str],
-    host: str,
-    port: int,
-    timeout: float = _VIDAIMOCK_STARTUP_TIMEOUT,
-) -> None:
-    """Poll a TCP port until the server accepts connections or the deadline expires."""
-    deadline = time.monotonic() + timeout
-    while True:
-        if process.poll() is not None:
-            msg = "Vidai Mock failed to start for the show notes behavioural test."
-            raise RuntimeError(msg)
-        try:
-            with socket.create_connection((host, port), timeout=0.5):
-                return
-        except OSError:
-            _handle_connect_failure(process, deadline)
-
-
-def _terminate_process_gracefully(process: subprocess.Popen[str]) -> None:
-    """Terminate *process*, escalating to SIGKILL if it does not exit promptly."""
-    if process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
-
-
-def _start_vidaimock_process(
-    show_notes_context: ShowNotesBDDContext,
-    config_dir: Path,
-) -> None:
-    """Start Vidai Mock, retrying a few ports to reduce bind races."""
-    vidaimock_path = shutil.which("vidaimock")
-    if vidaimock_path is None:
-        pytest.skip("vidaimock executable not found in PATH")
-    last_error: RuntimeError | None = None
-    for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
-        port = _find_free_port()
-        process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
-            [
-                vidaimock_path,
-                "--host",
-                "127.0.0.1",
-                "--port",
-                str(port),
-                "--config-dir",
-                str(config_dir),
-                "--isolated",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        try:
-            _await_port_ready(process, "127.0.0.1", port)
-        except RuntimeError as exc:
-            _terminate_process_gracefully(process)
-            last_error = exc
-            continue
-
-        show_notes_context.base_url = f"http://127.0.0.1:{port}/v1"
-        show_notes_context.process = process
-        return
-
-    msg = "Vidai Mock failed to start for the show notes behavioural test."
-    raise RuntimeError(msg) from last_error
-
-
 @given("a Vidai Mock show-notes server is running")
 def vidaimock_server(
     show_notes_context: ShowNotesBDDContext,
@@ -269,7 +169,11 @@ def vidaimock_server(
     assistant_content_literal = _build_assistant_content_literal()
     _write_response_template(template_dir, assistant_content_literal)
 
-    _start_vidaimock_process(show_notes_context, tmp_path)
+    start_vidaimock_process(
+        show_notes_context,
+        tmp_path,
+        label="the show-notes behavioural test",
+    )
 
 
 @given("a TEI script body is prepared for show-notes extraction")

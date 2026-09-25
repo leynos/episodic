@@ -5,10 +5,6 @@ from __future__ import annotations
 import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json
-import shutil
-import socket
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
-import time
 import typing as typ
 from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
@@ -26,9 +22,14 @@ from episodic.qa.pedante import (
     PedanteEvaluatorConfig,
     PedanteSourcePacket,
 )
+from tests.steps.vidaimock_harness import (
+    start_vidaimock_process,
+    terminate_process_gracefully,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import subprocess  # noqa: S404 - types the local Vidai Mock test server child.
 
     from episodic.qa.pedante import PedanteEvaluationResult
 
@@ -42,6 +43,7 @@ class PedanteBDDContext:
     request: PedanteEvaluationRequest | None = None
     result: PedanteEvaluationResult | None = None
     prompt_text: str = ""
+    stderr_file: typ.TextIO | None = None
 
 
 def _run_async_step(
@@ -58,12 +60,7 @@ def pedante_context() -> cabc.Iterator[PedanteBDDContext]:
     ctx = PedanteBDDContext()
     yield ctx
     if ctx.process is not None:
-        ctx.process.terminate()
-        try:
-            ctx.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            ctx.process.kill()
-            ctx.process.wait(timeout=5)
+        terminate_process_gracefully(ctx.process, ctx.stderr_file)
 
 
 @scenario(
@@ -72,13 +69,6 @@ def pedante_context() -> cabc.Iterator[PedanteBDDContext]:
 )
 def test_pedante_behaviour() -> None:
     """Run the Pedante behaviour scenario."""
-
-
-def _find_free_port() -> int:
-    """Bind to an ephemeral port and return its number before releasing it."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
 
 
 def _build_assistant_content_literal() -> str:
@@ -150,77 +140,6 @@ def _write_response_template(
     )
 
 
-_VIDAIMOCK_STARTUP_TIMEOUT = 5.0
-_VIDAIMOCK_PROBE_INTERVAL = 0.2
-
-
-def _handle_connect_failure(
-    process: subprocess.Popen[str],
-    deadline: float,
-) -> None:
-    """Raise if the deadline has passed; otherwise sleep before the next probe."""
-    if time.monotonic() < deadline:
-        time.sleep(_VIDAIMOCK_PROBE_INTERVAL)
-        return
-    if process.poll() is None:
-        process.terminate()
-    msg = "Vidai Mock did not become ready within the timeout."
-    raise RuntimeError(msg) from None
-
-
-def _await_port_ready(
-    process: subprocess.Popen[str],
-    host: str,
-    port: int,
-    timeout: float = _VIDAIMOCK_STARTUP_TIMEOUT,
-) -> None:
-    """Poll a TCP port until the server accepts connections or the deadline expires."""
-    deadline = time.monotonic() + timeout
-    while True:
-        if process.poll() is not None:
-            msg = "Vidai Mock failed to start for the Pedante behavioural test."
-            raise RuntimeError(msg)
-        try:
-            with socket.create_connection((host, port), timeout=0.5):
-                return
-        except OSError:
-            _handle_connect_failure(process, deadline)
-
-
-def _start_vidaimock_process(
-    pedante_context: PedanteBDDContext,
-    config_dir: Path,
-    port: int,
-) -> None:
-    """Start the Vidai Mock server and verify it started successfully."""
-    vidaimock_path = shutil.which("vidaimock")
-    if vidaimock_path is None:
-        msg = "vidaimock executable not found in PATH"
-        raise RuntimeError(msg)
-
-    pedante_context.base_url = f"http://127.0.0.1:{port}/v1"
-    pedante_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
-        [
-            vidaimock_path,
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--config-dir",
-            str(config_dir),
-            "--isolated",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
-
-    _await_port_ready(pedante_context.process, "127.0.0.1", port)
-
-
-# ── BDD step ──
-
-
 @given("a Vidai Mock Pedante server is running")
 def vidaimock_server(
     pedante_context: PedanteBDDContext,
@@ -235,7 +154,11 @@ def vidaimock_server(
     assistant_content_literal = _build_assistant_content_literal()
     _write_provider_config(provider_dir)
     _write_response_template(template_dir, assistant_content_literal)
-    _start_vidaimock_process(pedante_context, tmp_path, port=_find_free_port())
+    start_vidaimock_process(
+        pedante_context,
+        tmp_path,
+        label="the Pedante behavioural test",
+    )
 
 
 @given("a TEI-backed Pedante evaluation request is prepared")

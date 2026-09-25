@@ -8,7 +8,7 @@ and drives `ChapterMarkersGenerator` through pytest-bdd steps.
 The scenario proves the component relationships across the generation service,
 LLM port, OpenAI-compatible adapter, Vidai Mock test server, and TEI enrichment
 helper. The local server is process-scoped to the fixture and cleaned up
-through the same termination helper used when startup retries fail.
+through the shared termination helper.
 """
 
 from __future__ import annotations
@@ -16,10 +16,6 @@ from __future__ import annotations
 import asyncio
 import dataclasses as dc
 import json
-import shutil
-import socket
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
-import time
 import typing as typ
 from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
@@ -37,9 +33,14 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
+from tests.steps.vidaimock_harness import (
+    start_vidaimock_process,
+    terminate_process_gracefully,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import subprocess  # noqa: S404 - types the local Vidai Mock test server child.
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
 
@@ -55,6 +56,7 @@ class ChapterMarkersBDDContext:
     result: ChapterMarkersResult | None = None
     request_payload: LLMRequest | None = None
     enriched_tei_xml: str = ""
+    stderr_file: typ.TextIO | None = None
 
 
 @dc.dataclass(slots=True)
@@ -85,7 +87,7 @@ def chapter_markers_context() -> cabc.Iterator[ChapterMarkersBDDContext]:
     ctx = ChapterMarkersBDDContext()
     yield ctx
     if ctx.process is not None:
-        _terminate_process_gracefully(ctx.process)
+        terminate_process_gracefully(ctx.process, ctx.stderr_file)
 
 
 @scenario(
@@ -95,13 +97,6 @@ def chapter_markers_context() -> cabc.Iterator[ChapterMarkersBDDContext]:
 )
 def test_chapter_markers_behaviour() -> None:
     """Run the chapter-marker behaviour scenario."""
-
-
-def _find_free_port() -> int:
-    """Bind to an ephemeral port and return its number before releasing it."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
 
 
 def _build_assistant_content_literal() -> str:
@@ -174,96 +169,6 @@ def _write_response_template(
     )
 
 
-_VIDAIMOCK_STARTUP_TIMEOUT = 5.0
-_VIDAIMOCK_PROBE_INTERVAL = 0.2
-_VIDAIMOCK_PORT_START_ATTEMPTS = 5
-
-
-def _handle_connect_failure(
-    process: subprocess.Popen[str],
-    deadline: float,
-) -> None:
-    """Raise if the deadline has passed; otherwise sleep before probing again."""
-    if time.monotonic() < deadline:
-        time.sleep(_VIDAIMOCK_PROBE_INTERVAL)
-        return
-    if process.poll() is None:
-        process.terminate()
-    msg = "Vidai Mock did not become ready within the timeout."
-    raise RuntimeError(msg) from None
-
-
-def _await_port_ready(
-    process: subprocess.Popen[str],
-    host: str,
-    port: int,
-    timeout: float = _VIDAIMOCK_STARTUP_TIMEOUT,
-) -> None:
-    """Poll a TCP port until the server accepts connections or times out."""
-    deadline = time.monotonic() + timeout
-    while True:
-        if process.poll() is not None:
-            msg = "Vidai Mock failed to start for the chapter-marker test."
-            raise RuntimeError(msg)
-        try:
-            with socket.create_connection((host, port), timeout=0.5):
-                return
-        except OSError:
-            _handle_connect_failure(process, deadline)
-
-
-def _terminate_process_gracefully(process: subprocess.Popen[str]) -> None:
-    """Terminate *process*, escalating to SIGKILL if it does not exit promptly."""
-    if process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
-
-
-def _start_vidaimock_process(
-    chapter_markers_context: ChapterMarkersBDDContext,
-    config_dir: Path,
-) -> None:
-    """Start Vidai Mock, retrying ports to reduce bind races."""
-    vidaimock_path = shutil.which("vidaimock")
-    if vidaimock_path is None:
-        pytest.skip("vidaimock executable not found in PATH")
-    last_error: RuntimeError | None = None
-    for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
-        port = _find_free_port()
-        process = subprocess.Popen(  # noqa: S603 - fixed trusted local binary.  # pylint: disable=consider-using-with
-            [
-                vidaimock_path,
-                "--host",
-                "127.0.0.1",
-                "--port",
-                str(port),
-                "--config-dir",
-                str(config_dir),
-                "--isolated",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        try:
-            _await_port_ready(process, "127.0.0.1", port)
-        except RuntimeError as exc:
-            _terminate_process_gracefully(process)
-            last_error = exc
-            continue
-
-        chapter_markers_context.base_url = f"http://127.0.0.1:{port}/v1"
-        chapter_markers_context.process = process
-        return
-
-    msg = "Vidai Mock failed to start for the chapter-marker test."
-    raise RuntimeError(msg) from last_error
-
-
 @given("a Vidai Mock chapter-marker server is running")
 def vidaimock_server(
     chapter_markers_context: ChapterMarkersBDDContext,
@@ -277,7 +182,11 @@ def vidaimock_server(
 
     _write_provider_config(provider_dir)
     _write_response_template(template_dir, _build_assistant_content_literal())
-    _start_vidaimock_process(chapter_markers_context, tmp_path)
+    start_vidaimock_process(
+        chapter_markers_context,
+        tmp_path,
+        label="the chapter-marker behavioural test",
+    )
 
 
 @given("a TEI script body is prepared for chapter-marker extraction")

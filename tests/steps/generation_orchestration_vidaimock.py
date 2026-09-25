@@ -1,24 +1,20 @@
-"""Vidai Mock helpers for generation orchestration BDD tests."""
+"""Vidai Mock provider content for the generation orchestration BDD tests.
+
+Process startup, readiness, and cleanup live in `tests.steps.vidaimock_harness`;
+this module owns only the orchestration provider's configuration and response
+template.
+"""
 
 import json
-import os
-import shutil
-import socket
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
-import time
 import typing as typ
-
-import pytest
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
-
-def find_free_port() -> int:
-    """Bind to an ephemeral port and return its number before releasing it."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+__all__ = [
+    "write_provider_config",
+    "write_response_template",
+]
 
 
 def _planner_content_literal() -> str:
@@ -104,79 +100,3 @@ def write_response_template(template_dir: Path) -> None:
         ),
         encoding="utf-8",
     )
-
-
-_VIDAIMOCK_STARTUP_TIMEOUT = 5.0
-_VIDAIMOCK_PROBE_INTERVAL = 0.2
-
-
-def _handle_connect_failure(
-    process: subprocess.Popen[str],
-    deadline: float,
-) -> None:
-    """Raise if the deadline has passed; otherwise sleep before the next probe."""
-    if time.monotonic() < deadline:
-        time.sleep(_VIDAIMOCK_PROBE_INTERVAL)
-        return
-    if process.poll() is None:
-        process.terminate()
-    msg = "Vidai Mock did not become ready within the timeout."
-    raise RuntimeError(msg) from None
-
-
-def _await_port_ready(
-    process: subprocess.Popen[str],
-    host: str,
-    port: int,
-    timeout: float = _VIDAIMOCK_STARTUP_TIMEOUT,
-) -> None:
-    """Poll a TCP port until the server accepts connections or the deadline expires."""
-    deadline = time.monotonic() + timeout
-    while True:
-        if process.poll() is not None:
-            msg = "Vidai Mock failed to start for the orchestration behavioural test."
-            raise RuntimeError(msg)
-        try:
-            with socket.create_connection((host, port), timeout=0.5):
-                return
-        except OSError:
-            _handle_connect_failure(process, deadline)
-
-
-def start_vidaimock_process(
-    orchestration_context: VidaiMockProcessContext,
-    config_dir: Path,
-    port: int,
-) -> None:
-    """Start Vidai Mock or skip/fail according to the current environment."""
-    vidaimock_path = shutil.which("vidaimock")
-    if vidaimock_path is None:
-        if os.getenv("CI"):
-            pytest.fail("vidaimock executable not found in PATH")
-        pytest.skip("vidaimock executable not found in PATH")
-
-    orchestration_context.base_url = f"http://127.0.0.1:{port}/v1"
-    orchestration_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
-        [
-            vidaimock_path,
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--config-dir",
-            str(config_dir),
-            "--isolated",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
-
-    _await_port_ready(orchestration_context.process, "127.0.0.1", port)
-
-
-class VidaiMockProcessContext(typ.Protocol):
-    """Minimal mutable state required by the Vidai Mock process helper."""
-
-    process: subprocess.Popen[str] | None
-    base_url: str

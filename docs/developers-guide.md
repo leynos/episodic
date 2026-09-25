@@ -410,6 +410,74 @@ what makes the dependency change visible alongside the caller change.
 The exception is narrow. It covers those two actions alone. Every other
 reusable-workflow caller follows the pattern-matching rule above.
 
+### The Vidai Mock pin
+
+`ci.yml` and `coverage-main.yml` download a pinned Vidai Mock release, verify
+its SHA-256, and put it on `PATH`. The two pins are kept identical: a release
+that differs between the pull-request lane and the main-branch lane would make
+behavioural results depend on the event that triggered them.
+
+The pinned release must support `--isolated`. The behavioural fixtures pass it
+so the server serves only the provider templates the test wrote, rather than
+the release's embedded catalogue as well; `--isolated` was added in 0.2.8, and
+0.1.3 exits `2` with `unexpected argument '--isolated' found`. When bumping the
+pin, verify the published Linux x64 archive's digest before recording it, and
+confirm the new release accepts `--isolated` (see the smoke test below).
+
+### Behavioural inference harness
+
+`tests/steps/vidaimock_harness.py` owns the Vidai Mock process lifecycle for
+every live-server behavioural suite, so the startup, readiness, and cleanup
+rules are written once rather than copied per module. Provider and template
+content stays with the suite that needs it.
+
+`start_vidaimock` starts one child per attempt on a fresh ephemeral port, passes
+`--config-dir` and `--isolated`, and waits for the port to accept a
+connection. Its failure handling follows how the binary actually fails:
+
+- A child that exits before its port is reachable is reported with its exit
+  code and a bounded capture of its standard error, and is never retried. An
+  unrecognized argument or an unusable configuration fails identically every
+  time, so retrying would only hide the cause behind a readiness timeout.
+- Only a bind failure — the standard error naming an address already in use —
+  is retried, up to `_VIDAIMOCK_PORT_START_ATTEMPTS` fresh ports.
+- A child that stays alive without ever accepting a connection is reported as
+  a readiness timeout, without inventing an exit code for a process that is
+  still running.
+
+Standard error is captured to a temporary file rather than a pipe, so a noisy
+child cannot block on a full pipe buffer and the diagnostics survive the
+child's exit. Only a bounded prefix reaches a failure message.
+
+A missing executable keeps its existing contract: a skip when running locally,
+and a failure under `CI`, because a silently skipped live-server scenario would
+reduce coverage without saying so.
+
+Both the success and the failure path terminate the child through
+`terminate_process_gracefully`, escalating to `SIGKILL` if it does not exit
+promptly, so a failed attempt is reaped rather than leaked.
+
+`tests/steps/test_vidaimock_harness.py` covers the failure paths with a small
+stand-in child program, so the readiness, retry, diagnostic, and
+bounded-capture contracts hold without depending on an installed binary.
+
+### Vidai Mock smoke test
+
+`scripts/check_vidaimock_isolated.py` runs the installed binary against this
+repository's own fixture provider. It asserts that the binary starts with
+`--config-dir` and `--isolated`, that the fixture provider loads, that its
+Jinja template renders into a live `/v1/chat/completions` response, and that
+`/v1/models` lists only the configured provider.
+
+`ci.yml` runs it as a step of its own, before the coverage step. A pin that
+loses `--isolated` therefore fails once, in one place, with the binary's own
+diagnostic, instead of failing every live-server scenario in the coverage run.
+Run it locally with:
+
+```shell
+uv run --group dev python scripts/check_vidaimock_isolated.py
+```
+
 ## Falcon HTTP runtime
 
 The canonical HTTP adapter has two layers:

@@ -2,7 +2,6 @@
 
 import dataclasses as dc
 import json
-import subprocess  # noqa: S404 - terminates a controlled local test process.
 import typing as typ
 
 import httpx
@@ -19,14 +18,15 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMConfig,
 )
 from tests.fixtures.api import build_api_dependencies
-from tests.steps.generation_orchestration_vidaimock import (
-    find_free_port,
+from tests.steps.vidaimock_harness import (
     start_vidaimock_process,
+    terminate_process_gracefully,
 )
 
 if typ.TYPE_CHECKING:
     import asyncio
     import collections.abc as cabc
+    import subprocess  # noqa: S404 - types the controlled local test server child.
     from pathlib import Path
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -62,6 +62,7 @@ class NoQaGenerationSliceContext:
     run_response: httpx.Response | None = None
     events_response: httpx.Response | None = None
     tei_response: httpx.Response | None = None
+    stderr_file: typ.TextIO | None = None
 
     async def request(
         self,
@@ -103,12 +104,7 @@ class NoQaGenerationSliceContext:
             self.runner.run(self.close())
         finally:
             if self.process is not None:
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
-                    self.process.wait(timeout=5)
+                terminate_process_gracefully(self.process, self.stderr_file)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -212,7 +208,11 @@ def configure_vidaimock(context: NoQaGenerationSliceContext, tmp_path: Path) -> 
     template_dir.mkdir(parents=True)
     _write_provider_config(provider_dir)
     _write_response_template(template_dir)
-    start_vidaimock_process(context, tmp_path, port=find_free_port())
+    start_vidaimock_process(
+        context,
+        tmp_path,
+        label="the no-QA generation-slice behavioural test",
+    )
 
     context.llm_client = httpx.AsyncClient()
     context.llm_adapter = OpenAICompatibleLLMAdapter(
