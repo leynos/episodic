@@ -208,8 +208,19 @@ class TestAppendAllowEntry:
             assert first.poll() is None, "First writer must wait for the lock."
             assert second.poll() is None, "Second writer must wait for the lock."
 
-        assert first.wait(timeout=10) == 0, "First writer must exit successfully."
-        assert second.wait(timeout=10) == 0, "Second writer must exit successfully."
+        try:
+            assert first.wait(timeout=10) == 0, "First writer must exit successfully."
+            assert second.wait(timeout=10) == 0, (
+                "Second writer must exit successfully."
+            )
+        finally:
+            # A timed-out writer blocks on the lock holding its stdout and
+            # stderr pipes open. Reap both on the way out so a failure here
+            # cannot leak processes or descriptors into the rest of the run.
+            for writer in (first, second):
+                if writer.poll() is None:
+                    writer.kill()
+                writer.wait(timeout=10)
 
         entries = tomllib.loads(
             (script.parent.parent / "pyproject.toml").read_text(encoding="utf-8")

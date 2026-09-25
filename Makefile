@@ -152,9 +152,10 @@ duplication: install-nose ## Run the blocking code-duplication gate
 
 duplication-test: ## Run the duplication-gate helper tests
 	@$(UV_ENV) NOSE_BIN=$(NOSE_BIN) $(UV) run --no-project \
-		--with pytest==9.0.2 --with cyclopts \
-		--with tomlkit --with 'hypothesis[asyncio]==6.165.6' \
+		--with pytest==9.0.2 --with cyclopts==4.25.2 \
+		--with tomlkit==0.15.1 --with 'hypothesis[asyncio]==6.165.6' \
 		python -m pytest -c /dev/null --rootdir=. -p no:cacheprovider \
+		scripts/tests/test_atomic_write.py \
 		scripts/tests/test_duplication_gate.py \
 		scripts/tests/test_duplication_gate_commands.py \
 		scripts/tests/test_duplication_gate_make.py \

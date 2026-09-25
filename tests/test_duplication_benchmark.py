@@ -104,7 +104,7 @@ class TestParsePyscnPairs:
     def test_null_pair_array_is_empty_report(self, tmp_path: Path) -> None:
         """Null pair arrays parse as empty pyscn reports."""
         payload = {"clone": {"clone_pairs": None}}
-        assert parse_pyscn_pairs(payload, corpus_root=tmp_path) == (), (
+        assert not parse_pyscn_pairs(payload, corpus_root=tmp_path), (
             "null clone_pairs must parse as an empty report"
         )
 

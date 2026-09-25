@@ -1,18 +1,20 @@
 """Replace files atomically through a temporary sibling.
 
-A neutral persistence helper shared by the spelling-cache rollout and the
-duplication allowlist writer. It belongs to neither caller's domain: both need
-the same write-temporary-then-``Path.replace`` sequence with the same knobs,
-so the routine lives on its own rather than in whichever module needed it
-first.
+A neutral persistence helper used by the duplication allowlist writer. It
+belongs to no caller's domain: the write-temporary-then-``Path.replace``
+sequence with its knobs is wanted by other tooling too, so the routine lives
+on its own rather than in whichever module needed it first.
 """
 
-import collections.abc as cabc
 import contextlib
 import dataclasses as dc
 import os
 import pathlib
 import tempfile
+import typing as typ
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -22,6 +24,12 @@ class AtomicWriteOptions:
     create_parents: bool = True
     preserve_mode: bool = False
     sync_file: bool = False
+
+
+# Read as the default for `atomic_write` rather than constructed at each call
+# site, which would evaluate the call in the signature and share one mutable
+# default across every caller.
+_DEFAULT_OPTIONS = AtomicWriteOptions()
 
 
 @contextlib.contextmanager
@@ -49,7 +57,7 @@ def atomic_write(
     path: pathlib.Path,
     content: bytes,
     *,
-    options: AtomicWriteOptions = AtomicWriteOptions(),
+    options: AtomicWriteOptions = _DEFAULT_OPTIONS,
 ) -> None:
     """Atomically replace a path after writing a temporary sibling.
 
