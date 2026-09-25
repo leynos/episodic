@@ -15,6 +15,7 @@ import collections.abc as cabc
 import typing as typ
 import uuid
 from abc import ABC, abstractmethod
+from functools import partial
 
 from episodic.api.handlers import (
     HistoryRequest,
@@ -26,8 +27,10 @@ from episodic.api.handlers import (
 from episodic.api.helpers import parse_pagination, require_payload_dict
 from episodic.api.types import JsonPayload
 from episodic.canonical.profile_templates import (
+    EntityKind,
     UpdateEpisodeTemplateRequest,
     UpdateSeriesProfileRequest,
+    list_history_paged,
 )
 
 if typ.TYPE_CHECKING:
@@ -42,6 +45,29 @@ type UpdateRequestBuilder = cabc.Callable[
     [uuid.UUID, JsonPayload],
     UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,
 ]
+
+
+def history_service_fn(
+    kind: EntityKind,
+) -> cabc.Callable[..., cabc.Awaitable[tuple[list[object], int]]]:
+    """Bind the shared paged history-list service to one entity kind.
+
+    Parameters
+    ----------
+    kind : EntityKind
+        The entity kind whose history the returned service lists.
+
+    Returns
+    -------
+    collections.abc.Callable
+        The history-list service with its ``kind`` argument bound. History
+        resources share this binding so the concrete resource only names its
+        own entity kind rather than repeating the cast and the partial.
+    """
+    return typ.cast(
+        "cabc.Callable[..., cabc.Awaitable[tuple[list[object], int]]]",
+        partial(list_history_paged, kind=kind),
+    )
 
 
 class _ResourceBase(ABC):

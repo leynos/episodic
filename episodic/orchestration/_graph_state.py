@@ -80,3 +80,18 @@ class GenerationGraphState:
     action_results: tuple[dto.ActionExecutionResult, ...] = ()
     orchestration_result: dto.GenerationOrchestrationResult | None = None
     suspended_result: dto.SuspendedWorkflowResult | None = None
+
+
+def _require_request_and_planner(
+    state: GenerationGraphState,
+) -> tuple[dto.GenerationOrchestrationRequest, dto.PlannerResult]:
+    """Return required request and planner state values."""
+    request = state.request
+    if request is None:
+        msg = "missing required state value: request"
+        raise ValueError(msg)
+    planner_result = state.planner_result
+    if planner_result is None:
+        msg = "missing required state value: planner_result"
+        raise ValueError(msg)
+    return request, planner_result

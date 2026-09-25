@@ -20,8 +20,9 @@ responsible for adapting those semantics to their own protocols.
 import collections.abc as cabc
 import dataclasses as dc
 import enum
-import inspect
 import typing as typ
+
+from episodic.canonical.validation import validate_async_callable
 
 type HealthCheckCallback = cabc.Callable[[], cabc.Coroutine[None, None, bool]]
 
@@ -73,21 +74,6 @@ class HealthObserver(typ.Protocol):
         """Return the current health report."""
 
 
-def _validate_async_callable(callback: object, attribute_name: str) -> None:
-    """Require a coroutine function for health checks invoked with ``await``."""
-    if not callable(callback):
-        msg = f"{attribute_name} must be callable."
-        raise TypeError(msg)
-
-    if inspect.iscoroutinefunction(callback) or inspect.iscoroutinefunction(
-        type(callback).__call__
-    ):
-        return
-
-    msg = f"{attribute_name} must be an async callable returning an awaitable."
-    raise TypeError(msg)
-
-
 @dc.dataclass(frozen=True, slots=True)
 class ProbeHealthObserver:
     """Observe health by evaluating named asynchronous checks."""
@@ -111,7 +97,7 @@ class ProbeHealthObserver:
             if not name.strip():
                 msg = "Health check names must be non-empty strings."
                 raise ValueError(msg)
-            _validate_async_callable(callback, f"Health check {name!r}")
+            validate_async_callable(callback, f"Health check {name!r}")
         return cls(_checks=check_tuple)
 
     async def observe(self) -> HealthReport:

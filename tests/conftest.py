@@ -31,6 +31,7 @@ if typ.TYPE_CHECKING:
         IoDiagnosticResult,
     )
 pytest_plugins: list[str] = [
+    "tests.fixtures.pglite_runtime",
     "tests.fixtures.database",
     "tests.fixtures.llm",
     "tests.fixtures.api",

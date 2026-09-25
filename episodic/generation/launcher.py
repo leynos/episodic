@@ -439,7 +439,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             claimed.run.id,
             update=GenerationRunStatusUpdate(
                 status=GenerationRunStatus.SUCCEEDED,
-                current_node="complete",
+                current_node=None,
                 ended_at=self.clock(),
             ),
         )
@@ -491,7 +491,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
                     run_id,
                     update=GenerationRunStatusUpdate(
                         status=GenerationRunStatus.FAILED,
-                        current_node="failed",
+                        current_node=None,
                         ended_at=self.clock(),
                         error_message=failure.message,
                         error_category=failure.category,

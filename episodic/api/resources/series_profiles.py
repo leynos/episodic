@@ -28,6 +28,7 @@ from episodic.api.resources.base import (
     _GetHistoryResourceBase,
     _GetResourceBase,
     _UpdateResourceBase,
+    history_service_fn,
 )
 from episodic.api.serializers import (
     serialize_series_profile,
@@ -35,11 +36,11 @@ from episodic.api.serializers import (
 )
 from episodic.canonical.briefs import build_series_brief
 from episodic.canonical.profile_templates import (
+    EntityKind,
     EntityNotFoundError,
     create_series_profile,
     get_entity_with_revision,
     list_entities_with_revisions_paged,
-    list_history_paged,
     update_series_profile,
 )
 
@@ -224,10 +225,7 @@ class SeriesProfileHistoryResource(_GetHistoryResourceBase[object]):
         cabc.Awaitable[tuple[list[object], int]],
     ]:
         """Return the profile-history list service."""
-        return typ.cast(
-            "cabc.Callable[..., cabc.Awaitable[tuple[list[object], int]]]",
-            partial(list_history_paged, kind="series_profile"),
-        )
+        return history_service_fn(EntityKind.SERIES_PROFILE)
 
     @staticmethod
     @typ.override

@@ -1,6 +1,7 @@
 """Domain models for canonical content storage."""
 
 import dataclasses as dc
+import datetime as dt
 import enum
 import typing as typ
 
@@ -8,7 +9,6 @@ from .generation_quality import QaStatus, QualityMode
 from .generation_run_errors import CheckpointAlreadyTerminal
 
 if typ.TYPE_CHECKING:
-    import datetime as dt
     import uuid
 
 type JsonMapping = dict[str, object]
@@ -123,6 +123,52 @@ class CheckpointStatus(enum.StrEnum):
         return self is not CheckpointStatus.CREATED
 
 
+def _require_lifecycle_field_types(
+    *,
+    current_node: object,
+    ended_at: object,
+) -> None:
+    """Reject a mistyped lifecycle field before any value check runs.
+
+    The parameters are deliberately the unnarrowed types: this function's
+    whole job is to establish those types at runtime. It is separate from
+    :func:`_validate_terminal_run_lifecycle` so the ordering rule -- a
+    mistyped field reports its type and never the lifecycle rule, even on a
+    terminal run -- is expressed by the call order rather than by reading
+    down a single function.
+
+    Raises
+    ------
+    TypeError
+        If ``current_node`` is neither ``None`` nor a string, or ``ended_at``
+        is neither ``None`` nor a :class:`datetime.datetime`.
+    """
+    if current_node is not None and not isinstance(current_node, str):
+        msg = "current_node must be a string."
+        raise TypeError(msg)
+    if ended_at is not None and not isinstance(ended_at, dt.datetime):
+        msg = "ended_at must be a datetime."
+        raise TypeError(msg)
+
+
+def _validate_terminal_run_lifecycle(
+    *,
+    status: GenerationRunStatus,
+    current_node: str | None,
+    ended_at: dt.datetime | None,
+) -> None:
+    """Validate lifecycle fields required by terminal generation runs."""
+    _require_lifecycle_field_types(current_node=current_node, ended_at=ended_at)
+    if not status.is_terminal():
+        return
+    if current_node is not None:
+        msg = "terminal generation runs must not have a current node"
+        raise ValueError(msg)
+    if ended_at is None:
+        msg = "terminal generation runs must have an end time"
+        raise ValueError(msg)
+
+
 class CheckpointAction(enum.StrEnum):
     """Reviewer actions accepted for a generation checkpoint."""
 
@@ -155,6 +201,11 @@ class GenerationRun:
 
     def __post_init__(self) -> None:
         """Validate generation-run invariants."""
+        _validate_terminal_run_lifecycle(
+            status=self.status,
+            current_node=self.current_node,
+            ended_at=self.ended_at,
+        )
         _validate_non_empty_text(self.actor, "actor")
         _validate_optional_text(self.current_node, "current_node")
         _validate_optional_text(self.error_message, "error_message")

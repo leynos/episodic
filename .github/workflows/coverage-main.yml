@@ -49,6 +49,20 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
 
+      # py-pglite runs `npm install` to fetch the PGlite WebAssembly runtime
+      # the SQLAlchemy fixtures drive. py-pglite caps that install at a fixed
+      # 60 seconds and does not catch the resulting timeout, so serving it
+      # from a warm npm cache keeps a slow registry from failing the suite.
+      # The key carries the pinned py-pglite version, so a bump misses the
+      # cache and refetches.
+      - name: Cache npm packages for py-pglite
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-py-pglite-0.5.3
+          restore-keys: |
+            npm-${{ runner.os }}-py-pglite-
+
       - name: Install VidaiMock
         env:
           VIDAIMOCK_VERSION: "0.1.3"

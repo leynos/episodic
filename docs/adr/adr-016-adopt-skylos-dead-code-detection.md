@@ -26,3 +26,11 @@ maintainers must remove when they become stale.
 - Framework callbacks, protocol implementations, and compatibility re-exports
   remain live through precise, reasoned configuration rather than bulk
   baselines or unexplained inline suppressions.
+
+## Addendum: rename the Skylos allowlist argument (2026-09-03)
+
+The `skylos-allow` Make target now accepts `SYMBOL` instead of `NAME`. WSL
+injects the host name into the ambient `NAME` variable, which could otherwise
+silently satisfy the target's required-value check. `SYMBOL` avoids that
+collision while preserving the same named-exception format and reason
+requirement.

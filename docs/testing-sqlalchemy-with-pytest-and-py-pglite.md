@@ -38,14 +38,31 @@ Database-backed tests should build on these fixtures, in this order:
 - `pglite_session` yields an `AsyncSession` created from that migrated engine.
 - `canonical_api_client` builds a Falcon test client whose unit-of-work factory
   uses the shared `session_factory`.
-- `pglite_node_environment` owns the session work root for py-pglite. The
-  fixture installs py-pglite's Node dependencies once for the session and
-  retries startup up to three times with a fresh run directory before failing,
-  which absorbs occasional external Node startup stalls.
+- `pglite_node_environment` owns the session work root for py-pglite.
+- `pglite_node_modules` primes py-pglite's Node dependencies once for the
+  session. It starts one throwaway server in the work root, which is what makes
+  py-pglite stage its own `package.json` and run `npm install`, and it retries
+  up to `PGLITE_START_ATTEMPTS` times, clearing a partial `node_modules`
+  between attempts.
+- `migrated_database_url` yields a migrated database URL for tests that drive
+  the application as a separate process. It starts its own short-lived server
+  per test, because those tests mutate process-global environment, and retries
+  startup up to `PGLITE_START_ATTEMPTS` times before yielding the URL. That
+  server is not shared with the session manager.
+
+The Node module tree installed by `pglite_node_modules` is shared session-wide:
+`migrated_database_url` symlinks it into each per-test work directory instead
+of reinstalling, and only that tree is shared. py-pglite regenerates
+`package.json` and `pglite_manager.js` for each work directory because the
+generated script has that directory's socket path baked into it, and each work
+directory gets its own socket directory so concurrently running servers cannot
+collide. py-pglite runs `npm install` in every work directory it is handed
+under a fixed 60-second timeout it does not catch, so priming the module tree
+once per session limits that install, and its timeout risk, to one attempt.
 
 Because `migrated_engine` drops and recreates the `public` schema before
 applying migrations, each database-backed test gets isolated schema state while
-the expensive py-pglite process is shared for the pytest session.
+the `pglite_sqlalchemy_manager` process is session-scoped for SQLAlchemy tests.
 
 ### Preferred fixture choices
 

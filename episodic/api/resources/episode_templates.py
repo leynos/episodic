@@ -29,16 +29,17 @@ from episodic.api.resources.base import (
     _GetHistoryResourceBase,
     _GetResourceBase,
     _UpdateResourceBase,
+    history_service_fn,
 )
 from episodic.api.serializers import (
     serialize_episode_template,
     serialize_episode_template_history_entry,
 )
 from episodic.canonical.profile_templates import (
+    EntityKind,
     create_episode_template,
     get_entity_with_revision,
     list_entities_with_revisions_paged,
-    list_history_paged,
     update_episode_template,
 )
 
@@ -223,10 +224,7 @@ class EpisodeTemplateHistoryResource(_GetHistoryResourceBase[object]):
         cabc.Awaitable[tuple[list[object], int]],
     ]:
         """Return the template-history list service."""
-        return typ.cast(
-            "cabc.Callable[..., cabc.Awaitable[tuple[list[object], int]]]",
-            partial(list_history_paged, kind="episode_template"),
-        )
+        return history_service_fn(EntityKind.EPISODE_TEMPLATE)
 
     @staticmethod
     @typ.override

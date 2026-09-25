@@ -48,7 +48,10 @@ from episodic.orchestration._checkpoint_resume import (
 from episodic.orchestration._checkpoint_resume import (
     resume_generation_orchestration as resume_generation_orchestration,
 )
-from episodic.orchestration._graph_state import GenerationGraphState
+from episodic.orchestration._graph_state import (
+    GenerationGraphState,
+    _require_request_and_planner,
+)
 from episodic.orchestration._planning_orchestrator import (
     _cost_provider_operations,
     _current_billing_period_key,
@@ -183,13 +186,7 @@ async def _execute_node(
         "generation_graph.execute_node.start",
         correlation_id=correlation_id,
     )
-    if request is None:
-        msg = "missing required state value: request"
-        raise ValueError(msg)
-    planner_result = state.planner_result
-    if planner_result is None:
-        msg = "missing required state value: planner_result"
-        raise ValueError(msg)
+    request, planner_result = _require_request_and_planner(state)
 
     # Keep tool execution ordered so the graph mirrors application-service semantics.
     action_results = [
@@ -221,13 +218,7 @@ def _finish_node(
         "generation_graph.finish_node.start",
         correlation_id=correlation_id,
     )
-    if request is None:
-        msg = "missing required state value: request"
-        raise ValueError(msg)
-    planner_result = state.planner_result
-    if planner_result is None:
-        msg = "missing required state value: planner_result"
-        raise ValueError(msg)
+    _, planner_result = _require_request_and_planner(state)
     try:
         orchestration_result = build_generation_result(
             planner_result,

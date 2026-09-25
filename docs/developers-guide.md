@@ -38,6 +38,17 @@ Accepted design decisions relevant to current implementation work:
 - The build backend is `uv_build` (`>=0.11.32,<0.12.0`), declared in the
   `[build-system]` table of `pyproject.toml`.
 
+The transport-free validators in `episodic.canonical.validation` belong to the
+canonical domain layer. They provide dependency-free, side-effect-free
+argument-shape checks that adapters may call at their boundaries;
+domain-specific validation remains with the domain type it guards. In
+particular, `validate_async_callable(callback, attribute_name)` requires a
+callable whose invocation returns an awaitable and raises `TypeError`
+otherwise. The health port uses it in `ProbeHealthObserver.from_checks`, while
+the API dependency boundary uses it for readiness probes, authorization
+decisions, and shutdown hooks. Keep this module free of adapter imports so the
+dependency direction remains inward.
+
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
@@ -229,8 +240,9 @@ The target runs this repository-wide pipeline, in order:
 3. the focused built-in Pylint 4 rules under managed PyPy;
 4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
    separate future-annotations pass;
-5. `ambrleaks` over Syrupy snapshots under `tests`; and
-6. a blocking Skylos dead-code scan.
+5. `ambrleaks` over Syrupy snapshots under `tests`;
+6. a blocking Skylos dead-code scan; and
+7. a blocking nose code-duplication gate.
 
 The built-in Pylint pass is invoked through `uv tool run --python pypy` with
 the pinned `pylint-pypy-shim` wrapper from
@@ -301,10 +313,12 @@ both commands. Maintainers must update both package pins together and validate
 the complete `make lint` pipeline.
 
 Skylos is separately provisioned by the Makefile at exact release `4.33.2` and
-runs locally with concise, non-interactive output. The lint command disables
-uploads and provenance collection, selects only dead-code analysis, and fails
-when an unexplained finding remains. It does not invoke cloud or Large Language
-Model (LLM) analysis and never modifies source files.
+runs locally with concise, non-interactive output under CPython 3.14. Keep this
+interpreter requirement: Skylos's runtime `ast` parser must understand the
+project's Python 3.14 syntax. The lint command disables uploads and provenance
+collection, selects only dead-code analysis, and fails when an unexplained
+finding remains. It does not invoke cloud or Large Language Model (LLM)
+analysis and never modifies source files.
 
 Treat every new finding as dead code until its runtime caller is verified.
 Remove genuine dead code. For framework callbacks, protocol implementations, or
@@ -326,18 +340,93 @@ rule cannot describe the boundary. Its reason must include who or what calls
 the symbol and how that was verified. Add one with:
 
 ```shell
-make skylos-allow NAME=registered_handler \
+make skylos-allow SYMBOL=registered_handler \
   REASON="Loaded by the plugin registry; verified in the registry contract test"
 ```
 
-The target refuses empty `NAME` and `REASON` values and stores the explanation
-under `[tool.skylos.whitelist.documented]`; it does not create entry-point
-rules. Do not generate baselines, scrape reports into configuration, or add
-bulk unexplained exceptions. Use inline suppression only when neither an
-entry-point rule nor a named exception can describe the boundary, and keep its
-reason beside the suppression. Temporary exceptions must name an owner,
-tracking reference, and expiry condition. Remove exception entries when the
-dynamic boundary disappears.
+The target refuses empty `SYMBOL` and `REASON` values and stores the
+explanation under `[tool.skylos.whitelist.documented]`; it does not create
+entry-point rules. Do not generate baselines, scrape reports into
+configuration, or add bulk unexplained exceptions. Use inline suppression only
+when neither an entry-point rule nor a named exception can describe the
+boundary, and keep its reason beside the suppression. Temporary exceptions must
+name an owner, tracking reference, and expiry condition. Remove exception
+entries when the dynamic boundary disappears.
+
+## Code-duplication gate
+
+`make lint` (and the standalone `make duplication` target) runs
+`scripts/duplication_gate.py check`, which drives the pinned nose detector with
+the `[tool.nose]` settings in `pyproject.toml` and fails while unsuppressed
+duplication families remain. Findings name every member as a
+`path:start-end ~ path:start-end` family, with nose's unit name appended to
+each location it named, followed by the witness kind and refactoring value, so
+a finding can be pasted directly into a refactoring task or coding-agent
+prompt. The tool choice, settings, and exception policy follow ADR-021 and
+[the duplication head-to-head](pychase-pyscn-duplication-head-to-head.md).
+
+Both targets depend on `make install-nose`, which installs the `nose-cli`
+release binary at `NOSE_VERSION` into `.tools/nose` using `cargo-binstall`'s
+git mode against the upstream repository, because the crate is not published on
+crates.io. The target is a no-op once the binary reports the pinned version,
+and CI restores `.tools/nose` from a cache keyed on the runner operating system
+and that version. The gate itself re-verifies `nose --version` against
+`[tool.nose] version` before scanning and refuses to run on a mismatch,
+pointing at `make install-nose`; set `NOSE_BIN` to point the gate at another
+binary. `tests/test_toolchain_contract.py` asserts that the Makefile pin, the
+CI pin, and `[tool.nose] version` agree, and that the install and version-check
+commands actually reference the pin.
+
+`[tool.nose]` pins what is scanned and how: the `episodic` package and
+`openai_test_types.py` as roots, `mode = "syntax,semantic,near"` so a change to
+nose's defaults cannot widen or narrow the gate silently, a floor of 24
+intermediate-language tokens, `surface = "all"` so families nose hides behind
+its dashboard ranking are still adjudicated, and `top = 30` ranked families.
+The semantic channel reports only exact intermediate-language equivalence, so
+the gate blocks on a narrow, witness-backed subset of semantic duplication;
+broader Type-4 duplication remains a review concern.
+
+Treat every new finding as copy-paste until proven otherwise: prefer extracting
+the shared logic over suppressing the report. When the parallel structure is
+intentional — wire-format declarations, Template Method subclasses over a
+shared base, or independently versioned schemas — record a reasoned exception:
+
+```shell
+make duplication-allow FIRST='episodic/api/serializers.py::serialize_series_profile' \
+  SECOND='episodic/api/serializers.py::serialize_episode_template' \
+  REASON="Wire-format serializers are literal response-schema declarations for distinct resources"
+```
+
+Keys name locations, not line spans, because spans churn whenever code above
+them moves. A key is a repository-relative path glob, optionally suffixed
+`::name` to require nose's unit name as well; `::name` keys never match the
+fragment-level findings nose reports without a name, such as shared import
+blocks. An entry silences a family only when _every_ location in that family
+matches one of its keys, so a new copy in an unlisted file still blocks the
+gate. Omit `SECOND` to record a single-key entry, which silences every family
+whose members all sit under that key. `make duplication-allow` accepts one
+`SECOND`; for a family with more members, call
+`scripts/duplication_gate.py allow` directly and repeat `--second`.
+
+The target refuses empty keys or reasons and stores entries under
+`[tool.duplication_gate]`. The gate reports entries that no longer cover any
+finding as stale; remove them in the same change. Declarative module patterns
+(storage record models, record/domain mappers, repository protocols, typed
+request modules) are covered by reasoned path-glob entries in that same table,
+rather than by a separate exclusion list, so they stay reviewable and
+stale-checked.
+
+Allowlist updates take an advisory cross-process lock, so a concurrent writer
+waits until the current update completes. If a writer is cancelled or
+interrupted, closing its lock descriptor releases the lock. Each successful
+update fsyncs a temporary sibling before atomically replacing `pyproject.toml`
+with the destination file's mode preserved. This prevents concurrent allowlist
+updates from overwriting one another.
+
+nose is deterministic: repeated scans of the same tree produce byte-identical
+reports without a hash-seed or interpreter pin, so the gate needs no
+environment of its own beyond the pinned binary. Its helper tests run through
+`make duplication-test`.
 
 ## Spelling policy
 
@@ -353,6 +442,23 @@ the shared dictionary needs no change here. Because the dictionary is live,
 Do not edit generated entries in `typos.toml`; any edits are overwritten on the
 next run. Put only narrow repository-specific proper nouns, identifiers, quoted
 upstream titles, fixtures, stems or exclusions in `typos.local.toml`.
+
+### Atomic writes
+
+`make spelling` runs the external `typos-config-builder` gate, so no repository
+script writes a spelling cache.
+
+`scripts/atomic_write.py` provides `atomic_write` for replacing generated files
+through a temporary sibling and `Path.replace`. It is a neutral persistence
+helper that belongs to neither caller's domain; today its live consumer is the
+duplication allowlist writer in `scripts/duplication_allowlist.py`.
+
+Its `AtomicWriteOptions` value object controls the policy: the defaults create
+missing parent directories, do not preserve an existing destination mode, and
+do not call `fsync`. The duplication allowlist writer instead disables parent
+creation, preserves the destination mode, and syncs temporary file contents
+before replacement and parent-directory metadata after replacement, because it
+updates the existing repository `pyproject.toml` under its own lock.
 
 Keep upstream API spellings in fenced code where practical. The gate ignores
 fenced code blocks but still checks inline code spans, so an identifier that
@@ -856,12 +962,14 @@ Key expectations:
   - `pglite_session` yields a ready-to-use `AsyncSession`.
 - Because `migrated_engine` drops and recreates the `public` schema before
   applying migrations, each database-backed test gets an isolated schema while
-  the expensive py-pglite Node process is shared for the pytest session.
+  the session-scoped `pglite_sqlalchemy_manager` process is shared for the
+  pytest session.
 - A session-scoped `pglite_node_environment` fixture owns the py-pglite work
-  root. The helper installs py-pglite's Node dependencies once for the session
-  and retries startup up to three times with a fresh run directory before
-  failing, because the external Node process can occasionally time out during
-  startup on shared hosts.
+  root, and a session-scoped `pglite_node_modules` fixture primes py-pglite's
+  Node dependencies once for the session. The session manager retries startup
+  up to three times with a fresh run directory before failing, because the
+  external Node process can occasionally time out during startup on shared
+  hosts.
 - Most database-backed tests should use `session_factory` or `pglite_session`.
   Use `pglite_engine` only for lower-level engine assertions, and use
   `pglite_sqlalchemy_manager` only when a test genuinely needs direct manager
@@ -1679,6 +1787,10 @@ The port surface is intentionally split:
 - `GenerationRunRepository` creates, fetches, lists, and updates run state.
 - `GenerationEventLog` appends events and allocates per-run `EventSeq` values
   inside the adapter.
+- `event_page_minimum_sequence` owns the shared cursor, limit, and offset
+  invariant for every `GenerationEventLog` adapter. Keep transport parsing in
+  the inbound adapter and invoke this helper only after values become domain
+  types.
 - `GenerationRunEventStore` composes the run repository and event log for
   durable generation-run storage. `CanonicalUnitOfWork.generation_runs` exposes
   this port; `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunStore` to
@@ -1713,6 +1825,11 @@ documents. It commits that request-scoped unit of work before calling
 `launch(run_id)`. `EpisodeTeiResource` remains the retrieval boundary: it
 serves the persisted episode TEI as JSON by default or raw
 `application/tei+xml` with content negotiation.
+
+`episodic.canonical.episode_factory.build_draft_episode` owns the common
+initial field set for new draft episodes. Ingestion services call it after they
+have chosen the owning profile and parsed the TEI header; do not use it when
+rehydrating persisted episodes or applying lifecycle transitions.
 
 `DraftScriptGenerator` is the generation seam. The launcher projects canonical
 source documents and resolved host or guest reference-document revisions into
@@ -1863,7 +1980,7 @@ SELECT :event_id, :run_id,
 
 UPDATE generation_runs
 SET status = 'failed',
-    current_node = 'failed',
+    current_node = NULL,
     ended_at = CURRENT_TIMESTAMP,
     error_message = 'Generation lease expired; failed manually.',
     error_category = 'launcher.lease_expired',
@@ -1878,6 +1995,17 @@ The resulting semantics are compare-and-act: only the qualifying row is locked,
 and a missing row causes an explicit rollback with no persisted event or status
 change. The `run.failed` event and `failed` terminal update are committed
 atomically after that lock succeeds.
+
+The terminal update must clear `current_node` and set `ended_at`. A run in a
+terminal status (`succeeded`, `failed`, or `cancelled`) records where it
+stopped in its events, not in `current_node`, which names only the node a
+_running_ run currently occupies. The SQL adapter validates both fields before
+flushing and rejects a terminal update that leaves a current node
+(`terminal generation runs must not have a current node`) or omits an end time
+(`terminal generation runs must have an end time`), leaving the persisted run
+unchanged. Manual recovery must use `current_node = NULL` and a non-null
+`ended_at`, as shown above; a terminal update omitting either field is rejected
+before persistence.
 
 Keep `idempotency_principal_id` and `idempotency_key` unchanged. They remain
 attached to the failed generation run so a replay is tied to the existing

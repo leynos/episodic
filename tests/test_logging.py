@@ -93,7 +93,9 @@ class _LogOnlySpyLogger:
 
     def __init__(self) -> None:
         """Initialise an empty call record."""
-        self.calls: list[tuple[int, str, object | None, bool]] = []
+        self.calls: list[
+            tuple[int | episodic_logging.LogLevel, str, object | None, bool]
+        ] = []
 
     # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def log(
@@ -108,6 +110,28 @@ class _LogOnlySpyLogger:
         """Record a call made through the stdlib-style log() entry point."""
         assert isinstance(level, int), "logger level must satisfy the integer contract"
         self.calls.append((level, message, exc_info, stack_info))
+
+
+class _RaisingInfoLogger(_LogOnlySpyLogger):
+    """Record a convenience call before simulating an emission failure."""
+
+    def info(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record one call then raise the original emission failure."""
+        self.calls.append((
+            episodic_logging.LogLevel.INFO,
+            message,
+            exc_info,
+            stack_info,
+        ))
+        msg = "emission failed"
+        raise TypeError(msg)
 
 
 class _CollectorHandler:
@@ -275,6 +299,18 @@ def test_log_wrappers_fall_back_to_logger_log_when_needed(
     )
 
     assert logger.calls == snapshot, "fallback logger calls must match the snapshot"
+
+
+def test_log_wrapper_does_not_retry_a_failed_convenience_emission() -> None:
+    """A convenience-method TypeError propagates without a second log call."""
+    logger = _RaisingInfoLogger()
+
+    with pytest.raises(TypeError, match="emission failed"):
+        episodic_logging.log_info(logger, "Loaded %s documents", 3)
+
+    assert logger.calls == [
+        (episodic_logging.LogLevel.INFO, "Loaded 3 documents", None, False)
+    ], "A failed convenience call must not be retried through log()."
 
 
 def test_femtologging_exposes_stdlib_style_logger_surface() -> None:
