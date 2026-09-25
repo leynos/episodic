@@ -164,7 +164,9 @@ def test_every_terminal_status_requires_an_end_time(
     status: GenerationRunStatus,
 ) -> None:
     """A terminal run always carries the end time that closed it."""
-    with pytest.raises(ValueError, match="terminal generation runs must have an end time"):
+    with pytest.raises(
+        ValueError, match="terminal generation runs must have an end time"
+    ):
         dc.replace(
             _pending_run(),
             status=status,

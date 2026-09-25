@@ -842,10 +842,6 @@ members = ["episodic/canonical/reference_documents/__init__.py", "episodic/canon
 reason = "Service re-export blocks; the package surface and the services facade list the same operations."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/domain.py", "episodic/generation/draft_script.py"]
-reason = "Identical TYPE_CHECKING preamble and JsonMapping alias; sharing it would make the domain module import a generation module."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/cost/__init__.py", "episodic/cost/recorder.py", "episodic/cost/storage/adapters.py"]
 reason = "Cost port import blocks: the package surface, the recorder, and the storage adapter name the same ports."
 
@@ -872,6 +868,10 @@ reason = "Usage normalizers for two independently versioned OpenAI payload schem
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/resources/source_intake.py", "episodic/api/resources/reference_documents.py"]
 reason = "Falcon resource modules import the same request-parsing helpers before their own serializers."
+
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/episode_templates.py", "episodic/api/resources/series_profiles.py"]
+reason = "Falcon resource adapters that import the same base-class mixins and shared request helpers before binding their own serializers; import statements cannot be factored into a shared helper, so each adapter must name its own binding set."
 
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/serializers.py", "episodic/canonical/profile_templates/helpers.py"]
