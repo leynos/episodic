@@ -14,6 +14,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Publishers queue rather than race or cancel. Two runs writing the baseline
+# at once is a lost update, and cancelling one abandons its write half done.
+# A pull-request lane may cancel itself; a trunk publisher may not.
+concurrency:
+  group: coverage-main-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   coverage-upload:
     # `publish-baseline: always` below also supports the manual main dispatch
@@ -73,18 +80,25 @@ jobs:
           publish-baseline: 'always'
           pytest-workers: ''
 
+      - name: Check CodeScene token availability
+        # Publishes whether the token exists, and nothing else. No `env` this
+        # workflow declares holds the token: the upload is a composite
+        # action, and a composite action's nested steps inherit the calling
+        # step's environment, so a token placed there reaches every one of
+        # them. The action binds it only in its own upload step's `env`.
+        id: codescene_token
+        run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
       - name: Upload coverage data to CodeScene
-        env:
-          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         # The job above already restricts this workflow to main, and the
         # workflow answers only a main push or a dispatch. Guarding this
         # step on the push event alone would leave CodeScene with no
         # coverage for an automerge, which is the case the dispatch exists
         # to cover.
-        if: github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != ''
+        if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
         with:
           format: cobertura
           mode: upload
           path: coverage.xml
-          access-token: ${{ env.CS_ACCESS_TOKEN }}
+          access-token: ${{ secrets.CS_ACCESS_TOKEN }}
