@@ -81,7 +81,9 @@ def test_skylos_entrypoint_rules_distinguish_methods_from_functions() -> None:
         == "method"
     ), "Expected the Falcon shutdown hook to be classified as a method."
     assert (
-        entrypoint_types["episodic.canonical.domain.Checkpoint._validate_options"]
+        entrypoint_types[
+            "episodic.canonical.domain_generation.Checkpoint._validate_options"
+        ]
         == "method"
     ), "Expected the checkpoint validator to be classified as a method."
     assert (

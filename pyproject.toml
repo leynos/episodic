@@ -602,19 +602,19 @@ full_name = [
     "episodic.canonical.ingestion_sources._validate_weight",
     "episodic.canonical.uploads._require_non_negative",
     "episodic.canonical.uploads._require_non_negative_if_present",
-    "episodic.canonical.domain._require_positive_integer",
-    "episodic.canonical.domain._validate_draft_without_qa_metadata",
+    "episodic.canonical.domain_validation._require_positive_integer",
+    "episodic.canonical.domain_validation._validate_draft_without_qa_metadata",
 ]
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
 full_name = [
-    "episodic.canonical.domain.Checkpoint._validate_options",
-    "episodic.canonical.domain.Checkpoint._validate_responded_fields",
-    "episodic.canonical.domain.ReferenceBinding._validate_single_target",
-    "episodic.canonical.domain.ReferenceBinding._validate_target_kind_matches",
-    "episodic.canonical.domain.ReferenceBinding._validate_effective_from_constraint",
+    "episodic.canonical.domain_generation.Checkpoint._validate_options",
+    "episodic.canonical.domain_generation.Checkpoint._validate_responded_fields",
+    "episodic.canonical.domain_reference_documents.ReferenceBinding._validate_single_target",
+    "episodic.canonical.domain_reference_documents.ReferenceBinding._validate_target_kind_matches",
+    "episodic.canonical.domain_reference_documents.ReferenceBinding._validate_effective_from_constraint",
 ]
 reason = "Canonical value objects call these validation methods from dataclass post-initialization hooks."
 
@@ -916,6 +916,13 @@ allowed = [
 name = "domain_ports"
 prefixes = [
     "episodic.canonical.domain",
+    "episodic.canonical.domain_enums",
+    "episodic.canonical.domain_episodes",
+    "episodic.canonical.domain_generation",
+    "episodic.canonical.domain_ingestion",
+    "episodic.canonical.domain_reference_documents",
+    "episodic.canonical.domain_templates",
+    "episodic.canonical.domain_validation",
     "episodic.canonical.constraints",
     "episodic.canonical.ingestion",
     "episodic.canonical.ingestion_ports",
