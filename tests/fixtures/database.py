@@ -242,6 +242,51 @@ async def _start_migrated_pglite(
     return manager, database_url
 
 
+async def _start_migrated_pglite_with_retries(
+    work_dir: Path,
+    socket_dir: Path,
+) -> tuple[PGliteManager, str]:
+    """Start a migrated py-pglite server, retrying a timing-sensitive start.
+
+    py-pglite's own startup is timing-sensitive, so a failed attempt is
+    retried. Only the start is retried: once this returns, an exception
+    raised by the test body reaches pytest rather than being mistaken for a
+    failed attempt, which is why the loop lives here rather than around the
+    fixture's ``yield``.
+
+    Parameters
+    ----------
+    work_dir : pathlib.Path
+        Directory py-pglite runs the server from, holding the shared
+        ``node_modules`` link.
+    socket_dir : pathlib.Path
+        Directory for this server's Unix socket.
+
+    Returns
+    -------
+    tuple[PGliteManager, str]
+        The running manager and a migrated SQLAlchemy connection URL.
+
+    Raises
+    ------
+    RuntimeError
+        If the server never serves a migrated database within
+        ``PGLITE_START_ATTEMPTS`` attempts.
+    """
+    last_error: Exception | None = None
+    for _attempt in range(1, PGLITE_START_ATTEMPTS + 1):
+        try:
+            return await _start_migrated_pglite(work_dir, socket_dir)
+        except (RuntimeError, OSError, sa_exc.OperationalError) as exc:
+            last_error = exc
+
+    msg = (
+        "py-pglite failed to serve a migrated database after "
+        f"{PGLITE_START_ATTEMPTS} attempts"
+    )
+    raise RuntimeError(msg) from last_error
+
+
 @pytest_asyncio.fixture
 async def migrated_database_url(
     tmp_path: Path,
@@ -249,10 +294,9 @@ async def migrated_database_url(
 ) -> cabc.AsyncIterator[str]:
     """Yield a migrated ephemeral database URL for runtime process tests.
 
-    The server is started with retries because py-pglite's own startup is
-    timing-sensitive, but the retry loop finishes before the value is
-    yielded: an exception raised by the test body must reach pytest rather
-    than be mistaken for a failed attempt.
+    ``_start_migrated_pglite_with_retries`` settles the timing-sensitive
+    start before the value is yielded, so an exception raised by the test
+    body reaches pytest rather than being mistaken for a failed attempt.
 
     Parameters
     ----------
@@ -288,24 +332,13 @@ async def migrated_database_url(
         tempfile.mkdtemp(prefix=f"py-pglite-{uuid.uuid4().hex[:8]}-")
     )
 
-    last_error: Exception | None = None
-    manager: PGliteManager | None = None
-    database_url = ""
-    for _attempt in range(1, PGLITE_START_ATTEMPTS + 1):
-        try:
-            manager, database_url = await _start_migrated_pglite(work_dir, socket_dir)
-        except (RuntimeError, OSError, sa_exc.OperationalError) as exc:
-            last_error = exc
-            continue
-        break
-
-    if manager is None:
-        shutil.rmtree(socket_dir, ignore_errors=True)
-        msg = (
-            "py-pglite failed to serve a migrated database after "
-            f"{PGLITE_START_ATTEMPTS} attempts"
+    try:
+        manager, database_url = await _start_migrated_pglite_with_retries(
+            work_dir, socket_dir
         )
-        raise RuntimeError(msg) from last_error
+    except BaseException:
+        shutil.rmtree(socket_dir, ignore_errors=True)
+        raise
 
     try:
         yield database_url
