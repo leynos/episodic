@@ -71,6 +71,9 @@ jobs:
             npm-${{ runner.os }}-py-pglite-
 
       - name: Install VidaiMock
+        # Keep this pin identical to ci.yml: both lanes run the same
+        # behavioural fixtures, and the `--isolated` flag they pass needs
+        # 0.2.8 or later.
         env:
           VIDAIMOCK_VERSION: "0.3.1"
           VIDAIMOCK_SHA256: "d228cb27be8835d0e6f538f1cde5c7fcc1675223b7f7c0cb05218df1954d72c5"
