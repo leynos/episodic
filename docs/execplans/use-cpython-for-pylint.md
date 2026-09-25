@@ -56,7 +56,7 @@ directly rather than inferred from the argv.
 
 | Condition             | Exit | stderr                                                                                   |
 | --------------------- | ---- | ---------------------------------------------------------------------------------------- |
-| Unrecognised argument | 2    | `error: unexpected argument '--not-a-flag' found`                                        |
+| Unrecognized argument | 2    | `error: unexpected argument '--not-a-flag' found`                                        |
 | Port already bound    | 1    | `ERROR: Failed to bind to address 127.0.0.1:46002: Address already in use (os error 98)` |
 
 Both exit before serving. The bind failure is the only retryable one.
@@ -112,7 +112,7 @@ self-derived. Recorded as a deliberate decision, not an oversight.
       clean (target-only paths byte-identical, no unexplained deletions, no
       new duplicated blocks).
 - [x] Verified `0.2.11` archive digest, flag support, and provider/template
-      compatibility; characterised failure signatures.
+      compatibility; characterized failure signatures.
 - [x] Harness consolidation: `tests/steps/vidaimock_harness.py` is the single
       owner of startup, readiness, and cleanup; the five step modules and
       `no_qa_generation_slice_support.py` now route through it, each with its
