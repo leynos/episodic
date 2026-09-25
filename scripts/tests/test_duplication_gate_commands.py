@@ -6,7 +6,6 @@ import subprocess  # noqa: S404 - tests exercise copied gate and Make commands.
 import sys
 import textwrap
 import tomllib
-import typing as typ
 from pathlib import Path
 
 import pytest
@@ -62,12 +61,12 @@ class TestGateCommands:
 
     def test_check_reports_stale_entries(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Allow entries covering nothing are reported for removal."""
-        monkeypatch.chdir(typ.cast("Path", tmp_path))
+        monkeypatch.chdir(tmp_path)
         entry = allowlist.AllowEntry(keys=("episodic/gone.py",), reason="resolved")
         monkeypatch.setattr(gate, "load_allowlist", lambda _path: (entry,))
         monkeypatch.setattr(gate, "detect_findings", lambda: [])
@@ -247,12 +246,12 @@ class TestGateCommands:
 
     def test_check_reports_detector_schema_errors(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Malformed detector reports exit cleanly instead of showing a traceback."""
-        monkeypatch.chdir(typ.cast("Path", tmp_path))
+        monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(gate, "load_allowlist", lambda _path: ())
 
         def raise_schema_error() -> list[detector.Finding]:
@@ -273,12 +272,12 @@ class TestGateCommands:
 
     def test_check_reports_a_version_mismatch(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """An unpinned detector fails the gate with a remediation message."""
-        workspace = typ.cast("Path", tmp_path)
+        workspace = tmp_path
         stub = write_stub_nose(workspace, version="nose 0.19.0")
         monkeypatch.setenv("NOSE_BIN", str(stub))
         monkeypatch.chdir(workspace)
@@ -292,12 +291,12 @@ class TestGateCommands:
 
     def test_allow_reports_malformed_existing_entries(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Malformed existing allows exit cleanly instead of showing a traceback."""
-        pyproject = typ.cast("Path", tmp_path) / "pyproject.toml"
+        pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(
             '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py"\n',
             encoding="utf-8",
@@ -336,12 +335,12 @@ class TestGateCommands:
 
     def test_allow_rejects_malformed_keys(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """An absolute key is refused before anything is written."""
-        pyproject = typ.cast("Path", tmp_path) / "pyproject.toml"
+        pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text("[project]\nname = 'x'\n", encoding="utf-8")
         monkeypatch.setattr(gate, "PYPROJECT", pyproject)
 
@@ -369,12 +368,12 @@ class TestGateCommands:
     )
     def test_allow_cli_round_trips_unit_and_members(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         second: list[str] | None,
         expected_keys: tuple[str, ...],
     ) -> None:
         """The real allow CLI records both supported exception forms."""
-        _workspace, script = copied_gate_workspace(typ.cast("Path", tmp_path))
+        _workspace, script = copied_gate_workspace(tmp_path)
         arguments = ["allow", "--first", "episodic/a.py"]
         for key in second or ():
             arguments.extend(("--second", key))
@@ -388,10 +387,10 @@ class TestGateCommands:
             "CLI must retain the supplied reason."
         )
 
-    def test_check_cli_passes_with_a_stub_detector(self, tmp_path: object) -> None:
+    def test_check_cli_passes_with_a_stub_detector(self, tmp_path: Path) -> None:
         """The gate exits zero through its real CLI when every family is allowed."""
-        workspace, script = copied_gate_workspace(typ.cast("Path", tmp_path))
-        stub = write_stub_nose(typ.cast("Path", tmp_path))
+        workspace, script = copied_gate_workspace(tmp_path)
+        stub = write_stub_nose(tmp_path)
         (workspace / "pyproject.toml").write_text(
             textwrap.dedent(
                 """\
@@ -442,7 +441,7 @@ class TestGateCommands:
             "Real check invocation must report its successful gate result."
         )
 
-    def test_reports_a_planted_verbatim_copy(self, tmp_path: object) -> None:
+    def test_reports_a_planted_verbatim_copy(self, tmp_path: Path) -> None:
         """The pinned detector reports a planted copy through normalization."""
         settings = detector.load_settings(REPOSITORY_ROOT / "pyproject.toml")
         try:
@@ -465,7 +464,7 @@ class TestGateCommands:
                 return round(total, 2)
             """
         )
-        workspace = typ.cast("Path", tmp_path)
+        workspace = tmp_path
         (workspace / "mod.py").write_text(
             body.replace("NAME", "first_total")
             + "\n\n"
@@ -516,9 +515,9 @@ class TestEndToEndBlocking:
         """
     )
 
-    def _planted_workspace(self, tmp_path: object, *, allow: str = "") -> Path:
+    def _planted_workspace(self, tmp_path: Path, *, allow: str = "") -> Path:
         """Build a gate workspace whose package holds one verbatim duplicate."""
-        workspace, _script = copied_gate_workspace(typ.cast("Path", tmp_path))
+        workspace, _script = copied_gate_workspace(tmp_path)
         package = workspace / "planted"
         package.mkdir()
         (package / "__init__.py").write_text("", encoding="utf-8")
@@ -562,7 +561,7 @@ class TestEndToEndBlocking:
             environment=gate_environment(NOSE_BIN=binary),
         )
 
-    def test_planted_duplicate_blocks_the_gate(self, tmp_path: object) -> None:
+    def test_planted_duplicate_blocks_the_gate(self, tmp_path: Path) -> None:
         """A genuine duplicate fails `check` and names both copies."""
         result = self._run_check(self._planted_workspace(tmp_path))
 
@@ -577,7 +576,7 @@ class TestEndToEndBlocking:
         )
 
     def test_reasoned_exception_unblocks_the_planted_duplicate(
-        self, tmp_path: object
+        self, tmp_path: Path
     ) -> None:
         """The same duplicate passes once a reasoned allow entry covers it."""
         allow = textwrap.dedent(

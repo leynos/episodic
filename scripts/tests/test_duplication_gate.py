@@ -5,6 +5,8 @@ allowlist, matching, and partitioning logic without invoking it. The
 ``make duplication-test`` target runs them on the repository interpreter.
 """
 
+from __future__ import annotations
+
 import re
 import textwrap
 import typing as typ
@@ -148,13 +150,13 @@ class TestValidateKey:
 class TestLoadAllowlist:
     """Allowlist parsing and validation."""
 
-    def _write(self, tmp_path: object, body: str) -> Path:
+    def _write(self, tmp_path: Path, body: str) -> Path:
         """Write ``body`` to ``pyproject.toml`` under ``tmp_path``."""
-        pyproject = typ.cast("Path", tmp_path) / "pyproject.toml"
+        pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(textwrap.dedent(body), encoding="utf-8")
         return pyproject
 
-    def test_loads_unit_and_members_entries(self, tmp_path: object) -> None:
+    def test_loads_unit_and_members_entries(self, tmp_path: Path) -> None:
         """Unit and members entries load with their reasons."""
         pyproject = self._write(
             tmp_path,
@@ -179,7 +181,7 @@ class TestLoadAllowlist:
             "Allow entry must retain its reason."
         )
 
-    def test_missing_gate_table_yields_empty_allowlist(self, tmp_path: object) -> None:
+    def test_missing_gate_table_yields_empty_allowlist(self, tmp_path: Path) -> None:
         """A pyproject without the gate table produces no entries."""
         pyproject = self._write(tmp_path, "[project]\nname = 'x'\nversion = '0'\n")
         assert allowlist.load_allowlist(pyproject) == (), (
@@ -241,7 +243,7 @@ class TestLoadAllowlist:
     )
     def test_rejects_malformed_entries(
         self,
-        tmp_path: object,
+        tmp_path: Path,
         body: str,
         diagnostic: str,
     ) -> None:

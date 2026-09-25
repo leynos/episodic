@@ -1,6 +1,7 @@
 """Domain models for canonical content storage."""
 
 import dataclasses as dc
+import datetime as dt
 import enum
 import typing as typ
 
@@ -8,7 +9,6 @@ from .generation_quality import QaStatus, QualityMode
 from .generation_run_errors import CheckpointAlreadyTerminal
 
 if typ.TYPE_CHECKING:
-    import datetime as dt
     import uuid
 
 type JsonMapping = dict[str, object]
@@ -130,6 +130,12 @@ def _validate_terminal_run_lifecycle(
     ended_at: dt.datetime | None,
 ) -> None:
     """Validate lifecycle fields required by terminal generation runs."""
+    if current_node is not None and not isinstance(current_node, str):
+        msg = "current_node must be a string."
+        raise TypeError(msg)
+    if ended_at is not None and not isinstance(ended_at, dt.datetime):
+        msg = "ended_at must be a datetime."
+        raise TypeError(msg)
     if not status.is_terminal():
         return
     if current_node is not None:

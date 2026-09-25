@@ -33,6 +33,20 @@ def test_parse_ratio_rejects_non_finite_fractions(ratio: str) -> None:
         parse_ratio(ratio)
 
 
+@pytest.mark.parametrize(
+    "ratio",
+    ["1:inf", "1:-inf", "inf:1", "-inf:1", "inf:inf", "nan:1", "1:nan"],
+)
+def test_parse_ratio_rejects_non_finite_operands(ratio: str) -> None:
+    """A finite quotient must not hide a non-finite operand.
+
+    ``1:inf`` and ``1:-inf`` previously divided to ``0.0`` and ``-0.0``, which
+    slipped past the result-based finiteness and sign checks.
+    """
+    with pytest.raises(ValueError, match="ratio operands must be finite"):
+        parse_ratio(ratio)
+
+
 @pytest.mark.parametrize("limit", [0, -1])
 def test_message_collectors_reject_non_positive_limits(limit: int) -> None:
     """Aligned corpus collectors return no messages for non-positive limits."""

@@ -123,6 +123,9 @@ def test_normalization_orders_values_then_locations(
         ]
     }
     normalized = detector.normalize_findings(report)
+    assert len(normalized) == len(findings), (
+        "Normalization must conserve the finding count."
+    )
     sort_keys = [(-finding.value, finding.label) for finding in normalized]
     assert sort_keys == sorted(sort_keys), (
         "Normalization must sort by descending value then source location."

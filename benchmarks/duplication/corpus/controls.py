@@ -60,7 +60,7 @@ def parse_ratio(text: str) -> float:
     Raises
     ------
     ValueError
-        If the text is empty, negative, or divides by zero.
+        If the text is empty, uses a non-finite operand, or divides by zero.
     """
     cleaned = text.strip()
     if not cleaned:
@@ -70,11 +70,14 @@ def parse_ratio(text: str) -> float:
         fraction = float(cleaned[:-1]) / PERCENT_SCALE
     elif ":" in cleaned:
         left, _, right = cleaned.partition(":")
-        denominator = float(right)
+        numerator, denominator = float(left), float(right)
+        if not math.isfinite(numerator) or not math.isfinite(denominator):
+            msg = "ratio operands must be finite"
+            raise ValueError(msg)
         if not denominator:
             msg = "ratio denominator must not be zero"
             raise ValueError(msg)
-        fraction = float(left) / denominator
+        fraction = numerator / denominator
     else:
         fraction = float(cleaned)
     if not math.isfinite(fraction):
