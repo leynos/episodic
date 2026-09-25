@@ -17,7 +17,10 @@ import uuid
 import pytest
 
 from episodic.canonical.domain import SeriesProfile, SeriesProfileHistoryEntry
-from episodic.canonical.profile_templates.helpers import _update_versioned_entity
+from episodic.canonical.profile_templates.helpers import (
+    _update_versioned_entity,
+    _VersionedEntityUpdate,
+)
 from episodic.canonical.profile_templates.types import (
     AuditMetadata,
     RevisionConflictError,
@@ -121,17 +124,19 @@ async def test_update_versioned_entity_rolls_back_on_translated_conflict() -> No
     with pytest.raises(RevisionConflictError):
         await _update_versioned_entity(
             typ.cast("CanonicalUnitOfWork", uow),
-            entity_id=profile.id,
-            expected_revision=1,
-            entity_label="Series profile",
-            entity_repo=entity_repo,
-            history_repo=history_repo,
-            fetch_latest=fetch_latest,
-            history_entry_class=SeriesProfileHistoryEntry,
-            entity_id_field="series_profile_id",
-            update_fields=update_fields,
-            create_snapshot=create_snapshot,
-            audit=AuditMetadata(actor="editor@example.com", note="Concurrent edit"),
+            _VersionedEntityUpdate(
+                entity_id=profile.id,
+                expected_revision=1,
+                entity_label="Series profile",
+                entity_repo=entity_repo,
+                history_repo=history_repo,
+                fetch_latest=fetch_latest,
+                history_entry_class=SeriesProfileHistoryEntry,
+                entity_id_field="series_profile_id",
+                update_fields=update_fields,
+                create_snapshot=create_snapshot,
+                audit=AuditMetadata(actor="editor@example.com", note="Concurrent edit"),
+            ),
         )
 
     assert entity_repo.updated, "expected the entity update to run before the conflict"

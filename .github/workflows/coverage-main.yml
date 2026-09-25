@@ -50,9 +50,12 @@ jobs:
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
 
       - name: Install VidaiMock
+        # Keep this pin identical to ci.yml: both lanes run the same
+        # behavioural fixtures, and the `--isolated` flag they pass needs
+        # 0.2.8 or later.
         env:
-          VIDAIMOCK_VERSION: "0.1.3"
-          VIDAIMOCK_SHA256: "214032f365b7f6d8e43fc32fbdb73a2f5d1ccec963c20807eb0675260af16665"
+          VIDAIMOCK_VERSION: "0.2.11"
+          VIDAIMOCK_SHA256: "888d40195438491534a7a669776e06977367da62beb57feac8fa1a1f08faa93b"
         run: |
           curl -fsSL -o vidaimock-linux-x64.tar.gz \
             "https://github.com/vidaiUK/VidaiMock/releases/download/v${VIDAIMOCK_VERSION}/vidaimock-linux-x64.tar.gz"

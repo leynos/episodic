@@ -12,6 +12,18 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _PaginatedQuery[RecordT, DomainT]:
+    """SQL query components and pagination bounds for one repository listing."""
+
+    record_type: type[RecordT]
+    where_clause: typ.Any
+    order_by_clause: typ.Any
+    mapper: cabc.Callable[[RecordT], DomainT]
+    limit: int | None = None
+    offset: int = 0
+
+
 @dc.dataclass(slots=True)
 class _RepositoryBase:
     """Shared helpers for SQLAlchemy repositories."""
@@ -70,28 +82,22 @@ class _RepositoryBase:
             mapper,
         )
 
-    async def _list_paginated[RecordT, DomainT](  # noqa: PLR0913  # filters and pagination bounds are independent inputs
+    async def _list_paginated[RecordT, DomainT](
         self,
-        record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        order_by_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        mapper: cabc.Callable[[RecordT], DomainT],
-        *,
-        limit: int | None = None,
-        offset: int = 0,
+        query: _PaginatedQuery[RecordT, DomainT],
     ) -> list[DomainT]:
         """List mapped records with ordering and optional limit/offset paging."""
         statement = (
             sa
-            .select(record_type)
-            .where(where_clause)
-            .order_by(order_by_clause)
-            .offset(offset)
+            .select(query.record_type)
+            .where(query.where_clause)
+            .order_by(query.order_by_clause)
+            .offset(query.offset)
         )
-        if limit is not None:
-            statement = statement.limit(limit)
+        if query.limit is not None:
+            statement = statement.limit(query.limit)
         result = await self._session.execute(statement)
-        return [mapper(row) for row in result.scalars()]
+        return [query.mapper(row) for row in result.scalars()]
 
     async def _get_latest_where[RecordT, DomainT](
         self,

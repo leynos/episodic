@@ -1,5 +1,6 @@
 """Falcon resources for no-QA generation-run creation and polling."""
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -8,8 +9,16 @@ import falcon
 
 from episodic.api.errors import http_error, map_source_intake_error, validation_error
 from episodic.api.helpers import parse_uuid, require_payload_dict
+from episodic.api.resources.generation_run_errors import (
+    generation_input_error as _generation_input_error,
+)
+from episodic.api.resources.generation_run_errors import (
+    generation_overloaded as _generation_overloaded,
+)
+from episodic.api.resources.generation_run_errors import (
+    ingestion_job_not_found as _ingestion_job_not_found,
+)
 from episodic.api.serializers import (
-    serialize_generation_event,
     serialize_generation_run,
 )
 from episodic.api.source_idempotency import (
@@ -28,7 +37,7 @@ from episodic.canonical.generation_persistence import (
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate, event_seq
+from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.source_intake_service import SourceIntakeError
 from episodic.generation.launcher import GenerationRunAdmissionError
 from episodic.observability import NoopTracer
@@ -43,8 +52,6 @@ if typ.TYPE_CHECKING:
 
 _GENERATION_RUN_OPERATION = "generation_run.create"
 _RETRY_AFTER = "1"
-_MAX_EVENT_LIMIT = 100
-_DEFAULT_EVENT_LIMIT = 20
 
 type Clock = cabc.Callable[[], dt.datetime]
 type UuidFactory = cabc.Callable[[], uuid.UUID]
@@ -60,6 +67,31 @@ def _uuid7() -> uuid.UUID:
     return uuid.uuid7()
 
 
+@dc.dataclass(frozen=True, slots=True)
+class GenerationRunsResourceConfig:
+    """Runtime collaborators and limits for generation-run resources.
+
+    Parameters
+    ----------
+    clock : Clock
+        Clock used for durable timestamps.
+    uuid_factory : UuidFactory
+        Factory used for generated identifiers.
+    max_source_count : int | None
+        Optional source-count limit for episode materialisation.
+    tracer : TracerPort | None
+        Optional tracer for command-level observability.
+    """
+
+    clock: Clock = _utc_now
+    uuid_factory: UuidFactory = _uuid7
+    max_source_count: int | None = None
+    tracer: TracerPort | None = None
+
+
+_DEFAULT_GENERATION_RUNS_RESOURCE_CONFIG = GenerationRunsResourceConfig()
+
+
 class GenerationRunsResource:
     """Create no-QA generation runs for authenticated ingestion-job owners.
 
@@ -69,22 +101,19 @@ class GenerationRunsResource:
     cannot select another actor.
     """
 
-    def __init__(  # noqa: PLR0913  # HTTP composition requires independent test seams.
+    def __init__(
         self,
         uow_factory: UowFactory,
         *,
         launcher: GenerationRunLauncher | None,
-        clock: Clock = _utc_now,
-        uuid_factory: UuidFactory = _uuid7,
-        max_source_count: int | None = None,
-        tracer: TracerPort | None = None,
+        config: GenerationRunsResourceConfig = _DEFAULT_GENERATION_RUNS_RESOURCE_CONFIG,
     ) -> None:
         self._uow_factory = uow_factory
         self._launcher = launcher
-        self._clock = clock
-        self._uuid_factory = uuid_factory
-        self._max_source_count = max_source_count
-        self._tracer = NoopTracer() if tracer is None else tracer
+        self._clock = config.clock
+        self._uuid_factory = config.uuid_factory
+        self._max_source_count = config.max_source_count
+        self._tracer = NoopTracer() if config.tracer is None else config.tracer
 
     async def on_post(
         self,
@@ -106,7 +135,7 @@ class GenerationRunsResource:
 
         Raises
         ------
-        _ingestion_job_not_found
+        ingestion_job_not_found
             If the caller has no access to the requested ingestion job.
 
         Notes
@@ -273,143 +302,6 @@ class GenerationRunsResource:
                 await uow.commit()
 
 
-def _generation_overloaded() -> falcon.HTTPServiceUnavailable:
-    """Build the stable response for a rejected in-process launch."""
-    return typ.cast(
-        "falcon.HTTPServiceUnavailable",
-        http_error(
-            falcon.HTTPServiceUnavailable(
-                description="Generation capacity is temporarily exhausted."
-            ),
-            code="generation_overloaded",
-        ),
-    )
-
-
-class GenerationRunResource:
-    """Return one generation-run polling snapshot."""
-
-    def __init__(
-        self, uow_factory: UowFactory, *, tracer: TracerPort | None = None
-    ) -> None:
-        self._uow_factory = uow_factory
-        self._tracer = NoopTracer() if tracer is None else tracer
-
-    async def on_get(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-        run_id: str,
-    ) -> None:
-        """Return the current generation-run state."""
-        with self._tracer.start_span(
-            "generation_run.read",
-            attributes={"operation": "generation_run.read"},
-        ) as span:
-            try:
-                parsed_run_id = parse_uuid(run_id, "run_id")
-            except falcon.HTTPError:
-                span.set_attribute("outcome", "rejected")
-                span.set_attribute("failure_category", "invalid_input")
-                raise
-            actor = principal_id(req)
-            if actor is None:
-                span.set_attribute("outcome", "not_found")
-                span.set_attribute("failure_category", "run.not_found")
-                raise _run_not_found(parsed_run_id)
-            async with self._uow_factory() as uow:
-                run = await uow.generation_runs.get_run(parsed_run_id)
-            if run is None:
-                span.set_attribute("outcome", "not_found")
-                span.set_attribute("failure_category", "run.not_found")
-                raise _run_not_found(parsed_run_id)
-            if run.actor != actor:
-                span.set_attribute("outcome", "not_found")
-                span.set_attribute("failure_category", "run.not_found")
-                raise _run_not_found(parsed_run_id)
-            resp.media = serialize_generation_run(run)
-            resp.status = falcon.HTTP_200
-            if not run.status.is_terminal():
-                resp.set_header("Retry-After", _RETRY_AFTER)
-            span.set_attribute("outcome", "success")
-
-
-class GenerationRunEventsResource:
-    """Return cursor-paginated events for one generation run."""
-
-    def __init__(
-        self, uow_factory: UowFactory, *, tracer: TracerPort | None = None
-    ) -> None:
-        self._uow_factory = uow_factory
-        self._tracer = NoopTracer() if tracer is None else tracer
-
-    async def on_get(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-        run_id: str,
-    ) -> None:
-        """List events after an optional sequence cursor."""
-        with self._tracer.start_span(
-            "generation_run.events.list",
-            attributes={"operation": "generation_run.events.list"},
-        ) as span:
-            try:
-                parsed_run_id = parse_uuid(run_id, "run_id")
-                after_seq = _parse_optional_positive_int(req, "after_seq")
-                limit = _parse_limit(req)
-                offset = _parse_offset(req)
-                if after_seq is not None and offset != 0:
-                    message = "after_seq and offset cannot be combined."
-                    raise validation_error(
-                        message,
-                        field="offset",
-                        constraint="exclusive_with_after_seq",
-                    )
-            except falcon.HTTPError:
-                span.set_attribute("outcome", "rejected")
-                span.set_attribute("failure_category", "invalid_input")
-                raise
-            span.set_attribute(
-                "pagination", "cursor" if after_seq is not None else "offset"
-            )
-            actor = principal_id(req)
-            if actor is None:
-                span.set_attribute("outcome", "not_found")
-                span.set_attribute("failure_category", "run.not_found")
-                raise _run_not_found(parsed_run_id)
-            async with self._uow_factory() as uow:
-                run = await uow.generation_runs.get_run(parsed_run_id)
-                if run is None or run.actor != actor:
-                    span.set_attribute("outcome", "not_found")
-                    span.set_attribute("failure_category", "run.not_found")
-                    raise _run_not_found(parsed_run_id)
-                try:
-                    events = await uow.generation_runs.list_events(
-                        parsed_run_id,
-                        after_seq=None if after_seq is None else event_seq(after_seq),
-                        limit=limit,
-                        offset=offset,
-                    )
-                    total = await uow.generation_runs.count_events(
-                        parsed_run_id,
-                        after_seq=None if after_seq is None else event_seq(after_seq),
-                    )
-                except RunNotFound as exc:
-                    span.set_attribute("outcome", "not_found")
-                    span.set_attribute("failure_category", "run.not_found")
-                    raise _run_not_found(parsed_run_id) from exc
-            resp.media = {
-                "items": [serialize_generation_event(event) for event in events],
-                "after_seq": after_seq,
-                "limit": limit,
-                "offset": offset,
-                "total": total,
-            }
-            resp.status = falcon.HTTP_200
-            span.set_attribute("outcome", "success")
-
-
 class _CreateGenerationRun(typ.NamedTuple):
     skip_qa_rationale: str
     configuration: JsonPayload
@@ -464,95 +356,6 @@ def _optional_mapping(payload: JsonPayload, field_name: str) -> JsonPayload:
     return typ.cast("JsonPayload", value)
 
 
-def _parse_optional_positive_int(req: falcon.Request, name: str) -> int | None:
-    raw = req.get_param(name)
-    if raw is None:
-        return None
-    value = _parse_int(raw, name)
-    if value < 1:
-        message = f"{name} must be a positive integer."
-        raise validation_error(
-            message,
-            field=name,
-            constraint="range",
-        )
-    return value
-
-
-def _parse_limit(req: falcon.Request) -> int:
-    raw = req.get_param("limit")
-    value = _DEFAULT_EVENT_LIMIT if raw is None else _parse_int(raw, "limit")
-    if value < 1 or value > _MAX_EVENT_LIMIT:
-        message = f"limit must be between 1 and {_MAX_EVENT_LIMIT}."
-        raise validation_error(
-            message,
-            field="limit",
-            constraint="range",
-        )
-    return value
-
-
-def _parse_offset(req: falcon.Request) -> int:
-    """Parse the event collection offset."""
-    raw = req.get_param("offset")
-    value = 0 if raw is None else _parse_int(raw, "offset")
-    if value < 0:
-        message = "offset must be a non-negative integer."
-        raise validation_error(
-            message,
-            field="offset",
-            constraint="range",
-        )
-    return value
-
-
-def _parse_int(raw: str, name: str) -> int:
-    try:
-        return int(raw)
-    except ValueError as exc:
-        message = f"{name} must be an integer."
-        raise validation_error(
-            message,
-            field=name,
-            constraint="type",
-        ) from exc
-
-
-def _run_not_found(run_id: uuid.UUID) -> falcon.HTTPNotFound:
-    return typ.cast(
-        "falcon.HTTPNotFound",
-        http_error(
-            falcon.HTTPNotFound(description=f"Generation run not found: {run_id}."),
-            code="generation_run_not_found",
-            details={"run_id": str(run_id)},
-        ),
-    )
-
-
-def _ingestion_job_not_found(ingestion_job_id: uuid.UUID) -> falcon.HTTPNotFound:
-    """Build a non-disclosing response for an inaccessible ingestion job."""
-    return typ.cast(
-        "falcon.HTTPNotFound",
-        http_error(
-            falcon.HTTPNotFound(
-                description=f"Ingestion job not found: {ingestion_job_id}."
-            ),
-            code="ingestion_job_not_found",
-            details={"ingestion_job_id": str(ingestion_job_id)},
-        ),
-    )
-
-
 def _owns_ingestion_job(job: IngestionJob, principal: str | None) -> bool:
     """Return whether the server-derived principal can use an ingestion job."""
     return principal is not None and job.owner_principal_id == principal
-
-
-def _generation_input_error(message: str) -> falcon.HTTPUnprocessableEntity:
-    return typ.cast(
-        "falcon.HTTPUnprocessableEntity",
-        http_error(
-            falcon.HTTPUnprocessableEntity(description=message),
-            code="generation_input_invalid",
-        ),
-    )

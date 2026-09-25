@@ -31,16 +31,29 @@ extend-exclude = [
 locale = "en-gb"
 extend-ignore-re = [
     "(?s)```.*?```",
+    "--[a-zA-Z0-9-]*color[a-zA-Z0-9*-]*",
     "--artifact-server-path\\b",
     "<artifact-name>",
     "Azure\\s+Architecture\\s+Center\\s*\\|\\s*Microsoft\\s+Learn\\b",
     "GitHub\\s+Flavored\\s+Markdown\\b(?:\\s\\(GFM\\))?",
+    "HashiCorp",
+    "How to organise your Rust tests",
+    "\\b(?:background|theme)_color\\b",
+    "\\b(?:carousel|dropdown|footer|indicator|items|navbar|toast)-center\\b",
+    "\\bAppFactory<Ser\\b",
     "\\bact-artifacts\\b",
+    "\\bartifact-(?:name|server-path)\\b",
+    "\\bcolor-(?:mix|contrast)\\b",
+    "\\bflavor = ",
     "\\bmaterialise_episode_from_ingestion\\b",
     "\\brust-analyzer\\b",
     "\\bserialised_outcome\\b",
     "\\bspeech_render_artifacts\\b",
+    "\\bvar\\.iamge_id\\b",
+    "\\{COLOR\\}",
+    "\\{color\\}",
     "`color`",
+    "currentColor",
 ]
 
 [default.extend-words]

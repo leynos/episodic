@@ -4,12 +4,51 @@ import dataclasses as dc
 import enum
 import typing as typ
 
+from .domain_validation import copy_json_mapping
 from .generation_quality import QaStatus, QualityMode
 from .generation_run_errors import CheckpointAlreadyTerminal
 
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
+
+    from .domain_records import (
+        ApprovalEvent,
+        CanonicalEpisode,
+        EpisodeTeiUpdate,
+        EpisodeTemplate,
+        EpisodeTemplateHistoryEntry,
+        IngestionJob,
+        IngestionJobListFilters,
+        IngestionRequest,
+        ReferenceBinding,
+        ReferenceDocument,
+        ReferenceDocumentRevision,
+        SeriesProfile,
+        SeriesProfileHistoryEntry,
+        SourceDocument,
+        SourceDocumentInput,
+        TeiHeader,
+    )
+
+    __all__ = (
+        "ApprovalEvent",
+        "CanonicalEpisode",
+        "EpisodeTeiUpdate",
+        "EpisodeTemplate",
+        "EpisodeTemplateHistoryEntry",
+        "IngestionJob",
+        "IngestionJobListFilters",
+        "IngestionRequest",
+        "ReferenceBinding",
+        "ReferenceDocument",
+        "ReferenceDocumentRevision",
+        "SeriesProfile",
+        "SeriesProfileHistoryEntry",
+        "SourceDocument",
+        "SourceDocumentInput",
+        "TeiHeader",
+    )
 
 type JsonMapping = dict[str, object]
 
@@ -164,8 +203,8 @@ class GenerationRun:
             qa_status=self.qa_status,
             skip_qa_rationale=self.skip_qa_rationale,
         )
-        _copy_json_mapping(self, "budget_snapshot")
-        _copy_json_mapping(self, "configuration")
+        copy_json_mapping(self, "budget_snapshot")
+        copy_json_mapping(self, "configuration")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -186,7 +225,7 @@ class GenerationEvent:
             msg = "seq must be a positive integer."
             raise ValueError(msg)
         _validate_non_empty_text(self.kind, "kind")
-        _copy_json_mapping(self, "payload")
+        copy_json_mapping(self, "payload")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -201,7 +240,7 @@ class CheckpointResponse:
     def __post_init__(self) -> None:
         """Validate response invariants."""
         _validate_non_empty_text(self.responded_by, "responded_by")
-        _copy_json_mapping(self, "payload")
+        copy_json_mapping(self, "payload")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -226,7 +265,7 @@ class Checkpoint:
         _validate_non_empty_text(self.prompt, "prompt")
         self._validate_options()
         _validate_optional_text(self.responded_by, "responded_by")
-        _copy_json_mapping(self, "response_payload")
+        copy_json_mapping(self, "response_payload")
         self._validate_responded_fields()
 
     def _validate_options(self) -> None:
@@ -290,374 +329,9 @@ class Checkpoint:
             raise CheckpointAlreadyTerminal(self.id)
 
 
-@dc.dataclass(frozen=True, slots=True)
-class SeriesProfile:
-    """Series metadata required for canonical ingestion."""
-
-    id: uuid.UUID
-    slug: str
-    title: str
-    description: str | None
-    configuration: JsonMapping
-    guardrails: JsonMapping
-    created_at: dt.datetime
-    updated_at: dt.datetime
-
-
-@dc.dataclass(frozen=True, slots=True)
-class TeiHeader:
-    """Parsed TEI header payload."""
-
-    id: uuid.UUID
-    title: str
-    payload: JsonMapping
-    raw_xml: str
-    created_at: dt.datetime
-    updated_at: dt.datetime
-
-
-def _require_positive_integer(value: object, field_name: str) -> None:
-    """Require an exact positive integer, excluding boolean values."""
-    if type(value) is not int or value < 1:
-        msg = f"{field_name} must be a positive integer."
-        raise ValueError(msg)
-
-
-def _require_value(value: object, field_name: str) -> None:
-    """Require a non-null provenance value."""
-    if value is None:
-        msg = f"{field_name} must be set."
-        raise ValueError(msg)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class CanonicalEpisode:
-    """Canonical episode representation."""
-
-    id: uuid.UUID
-    series_profile_id: uuid.UUID
-    tei_header_id: uuid.UUID
-    title: str
-    tei_xml: str
-    status: EpisodeStatus
-    approval_state: ApprovalState
-    created_at: dt.datetime
-    updated_at: dt.datetime
-    tei_revision: int = 1
-    tei_content_hash: str | None = None
-    qa_status: QaStatus | None = None
-    last_generation_run_id: uuid.UUID | None = None
-
-    def __post_init__(self) -> None:
-        """Validate TEI revision metadata."""
-        _validate_non_empty_text(self.tei_xml, "tei_xml")
-        _require_positive_integer(self.tei_revision, "tei_revision")
-        _validate_optional_text(
-            self.tei_content_hash,
-            "tei_content_hash",
-        )
-
-
-@dc.dataclass(frozen=True, slots=True)
-class EpisodeTeiUpdate:
-    """Optimistic TEI update request for a canonical episode."""
-
-    tei_xml: str
-    qa_status: QaStatus
-    last_generation_run_id: uuid.UUID
-    expected_revision: int
-    updated_at: dt.datetime
-
-    def __post_init__(self) -> None:
-        """Validate optimistic TEI update invariants."""
-        _validate_non_empty_text(self.tei_xml, "tei_xml")
-        _require_value(self.qa_status, "qa_status")
-        _require_value(self.last_generation_run_id, "last_generation_run_id")
-        _require_positive_integer(self.expected_revision, "expected_revision")
-
-
-@dc.dataclass(frozen=True, slots=True)
-class IngestionJob:
-    """Ingestion job state for source document runs."""
-
-    id: uuid.UUID
-    series_profile_id: uuid.UUID
-    target_episode_id: uuid.UUID | None
-    status: IngestionStatus
-    requested_at: dt.datetime
-    started_at: dt.datetime | None
-    completed_at: dt.datetime | None
-    error_message: str | None
-    created_at: dt.datetime
-    updated_at: dt.datetime
-    intake_state: IntakeState = IntakeState.AWAITING_SOURCES
-    owner_principal_id: str | None = None
-
-
-@dc.dataclass(frozen=True, slots=True)
-class IngestionJobListFilters:
-    """Filters for listing source-intake ingestion jobs."""
-
-    series_profile_id: uuid.UUID | None
-    intake_state: IntakeState | None
-    owner_principal_id: str | None = None
-
-
-@dc.dataclass(frozen=True, slots=True)
-class SourceDocument:
-    """Source document metadata for ingestion jobs."""
-
-    id: uuid.UUID
-    ingestion_job_id: uuid.UUID
-    canonical_episode_id: uuid.UUID | None
-    reference_document_revision_id: uuid.UUID | None
-    source_type: str
-    source_uri: str
-    weight: float
-    content_hash: str
-    metadata: JsonMapping
-    created_at: dt.datetime
-
-
-@dc.dataclass(frozen=True, slots=True)
-class ReferenceDocument:
-    """Reusable reference document metadata independent of ingestion jobs."""
-
-    id: uuid.UUID
-    owner_series_profile_id: uuid.UUID
-    kind: ReferenceDocumentKind
-    lifecycle_state: ReferenceDocumentLifecycleState
-    metadata: JsonMapping
-    created_at: dt.datetime
-    updated_at: dt.datetime
-    lock_version: int = 1
-
-    def __post_init__(self) -> None:
-        """Validate optimistic-lock invariants."""
-        if not isinstance(self.lock_version, int) or self.lock_version < 1:
-            msg = "lock_version must be a positive integer."
-            raise ValueError(msg)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class ReferenceDocumentRevision:
-    """Immutable content revision for a reusable reference document."""
-
-    id: uuid.UUID
-    reference_document_id: uuid.UUID
-    content: JsonMapping
-    content_hash: str
-    author: str | None
-    change_note: str | None
-    created_at: dt.datetime
-
-    def __post_init__(self) -> None:
-        """Validate content-hash invariants."""
-        if self.content_hash.strip() == "":
-            msg = "content_hash must be a non-empty string."
-            raise ValueError(msg)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class ReferenceBinding:
-    """Pinned reusable reference revision linked to one target context."""
-
-    id: uuid.UUID
-    reference_document_revision_id: uuid.UUID
-    target_kind: ReferenceBindingTargetKind
-    series_profile_id: uuid.UUID | None
-    episode_template_id: uuid.UUID | None
-    ingestion_job_id: uuid.UUID | None
-    effective_from_episode_id: uuid.UUID | None
-    created_at: dt.datetime
-
-    def __post_init__(self) -> None:
-        """Validate target and applicability invariants."""
-        self._validate_single_target()
-        self._validate_target_kind_matches()
-        self._validate_effective_from_constraint()
-
-    def _validate_single_target(self) -> None:
-        """Validate that exactly one target identifier is populated."""
-        target_pairs = (
-            (ReferenceBindingTargetKind.SERIES_PROFILE, self.series_profile_id),
-            (
-                ReferenceBindingTargetKind.EPISODE_TEMPLATE,
-                self.episode_template_id,
-            ),
-            (ReferenceBindingTargetKind.INGESTION_JOB, self.ingestion_job_id),
-        )
-        populated_targets = [kind for kind, value in target_pairs if value is not None]
-        if len(populated_targets) != 1:
-            msg = "ReferenceBinding must set exactly one target identifier."
-            raise ValueError(msg)
-
-    def _validate_target_kind_matches(self) -> None:
-        """Validate target_kind matches the populated target identifier."""
-        target_mapping = {
-            ReferenceBindingTargetKind.SERIES_PROFILE: self.series_profile_id,
-            ReferenceBindingTargetKind.EPISODE_TEMPLATE: self.episode_template_id,
-            ReferenceBindingTargetKind.INGESTION_JOB: self.ingestion_job_id,
-        }
-        populated_targets = [
-            kind for kind, value in target_mapping.items() if value is not None
-        ]
-        populated_target = populated_targets[0]
-        if populated_target is not self.target_kind:
-            msg = "ReferenceBinding target_kind does not match populated target."
-            raise ValueError(msg)
-
-    def _validate_effective_from_constraint(self) -> None:
-        """Validate effective_from applicability constraint."""
-        if (
-            self.effective_from_episode_id is not None
-            and self.target_kind is not ReferenceBindingTargetKind.SERIES_PROFILE
-        ):
-            msg = (
-                "ReferenceBinding effective_from_episode_id is only valid for "
-                "series_profile targets."
-            )
-            raise ValueError(msg)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class ApprovalEvent:
-    """Approval state transitions for canonical episodes."""
-
-    id: uuid.UUID
-    episode_id: uuid.UUID
-    actor: str | None
-    from_state: ApprovalState | None
-    to_state: ApprovalState
-    note: str | None
-    payload: JsonMapping
-    created_at: dt.datetime
-
-
-@dc.dataclass(frozen=True, slots=True)
-class SourceDocumentInput:
-    """Input payload for new source documents."""
-
-    source_type: str
-    source_uri: str
-    weight: float
-    content_hash: str
-    metadata: JsonMapping
-    reference_document_revision_id: uuid.UUID | None = None
-
-
-@dc.dataclass(frozen=True, slots=True)
-class IngestionRequest:
-    """Input payload for canonical ingestion."""
-
-    tei_xml: str
-    sources: list[SourceDocumentInput]
-    requested_by: str | None
-    episode_template_id: uuid.UUID | None = None
-
-
-@dc.dataclass(frozen=True, slots=True)
-class EpisodeTemplate:
-    """Episode template metadata for structured brief generation.
-
-    Attributes
-    ----------
-    id : uuid.UUID
-        Primary key for the episode template.
-    series_profile_id : uuid.UUID
-        Foreign key to the owning series profile.
-    slug : str
-        Stable slug identifier unique within a profile.
-    title : str
-        Human-readable template title.
-    description : str | None
-        Optional longer template description.
-    structure : JsonMapping
-        JSON structure describing template sections.
-    guardrails : JsonMapping
-        Persisted LLM guardrail configuration for this template.
-    created_at : dt.datetime
-        Timestamp when the template was created.
-    updated_at : dt.datetime
-        Timestamp when the template was last updated.
-    """
-
-    id: uuid.UUID
-    series_profile_id: uuid.UUID
-    slug: str
-    title: str
-    description: str | None
-    structure: JsonMapping
-    guardrails: JsonMapping
-    created_at: dt.datetime
-    updated_at: dt.datetime
-
-
-@dc.dataclass(frozen=True, slots=True)
-class SeriesProfileHistoryEntry:
-    """Immutable change-history entry for a series profile.
-
-    Attributes
-    ----------
-    id : uuid.UUID
-        Primary key for the history entry.
-    series_profile_id : uuid.UUID
-        Foreign key to the series profile.
-    revision : int
-        Monotonically increasing revision number.
-    actor : str | None
-        Optional identifier for the actor who made the change.
-    note : str | None
-        Optional free-form note describing the change.
-    snapshot : JsonMapping
-        Snapshot payload of the profile state at this revision.
-    created_at : dt.datetime
-        Timestamp when the history entry was created.
-    """
-
-    id: uuid.UUID
-    series_profile_id: uuid.UUID
-    revision: int
-    actor: str | None
-    note: str | None
-    snapshot: JsonMapping
-    created_at: dt.datetime
-
-
-@dc.dataclass(frozen=True, slots=True)
-class EpisodeTemplateHistoryEntry:
-    """Immutable change-history entry for an episode template.
-
-    Attributes
-    ----------
-    id : uuid.UUID
-        Primary key for the history entry.
-    episode_template_id : uuid.UUID
-        Foreign key to the episode template.
-    revision : int
-        Monotonically increasing revision number.
-    actor : str | None
-        Optional identifier for the actor who made the change.
-    note : str | None
-        Optional free-form note describing the change.
-    snapshot : JsonMapping
-        Snapshot payload of the template state at this revision.
-    created_at : dt.datetime
-        Timestamp when the history entry was created.
-    """
-
-    id: uuid.UUID
-    episode_template_id: uuid.UUID
-    revision: int
-    actor: str | None
-    note: str | None
-    snapshot: JsonMapping
-    created_at: dt.datetime
-
-
 def _is_blank(value: str) -> bool:
     """Return whether a string is empty after whitespace trimming."""
-    return value.strip() == ""
+    return not value.strip()
 
 
 def _validate_non_empty_text(value: str, field_name: str) -> None:
@@ -695,10 +369,30 @@ def _validate_draft_without_qa_metadata(
     _validate_non_empty_text(skip_qa_rationale, "skip_qa_rationale")
 
 
-def _copy_json_mapping(owner: object, field_name: str) -> None:
-    """Validate and defensively copy a JSON mapping field."""
-    value = getattr(owner, field_name)
-    if not isinstance(value, dict):
-        msg = f"{field_name} must be a JSON mapping."
-        raise TypeError(msg)
-    object.__setattr__(owner, field_name, dict(value))
+_RECORD_NAMES = frozenset({
+    "ApprovalEvent",
+    "CanonicalEpisode",
+    "EpisodeTeiUpdate",
+    "EpisodeTemplate",
+    "EpisodeTemplateHistoryEntry",
+    "IngestionJob",
+    "IngestionJobListFilters",
+    "IngestionRequest",
+    "ReferenceBinding",
+    "ReferenceDocument",
+    "ReferenceDocumentRevision",
+    "SeriesProfile",
+    "SeriesProfileHistoryEntry",
+    "SourceDocument",
+    "SourceDocumentInput",
+    "TeiHeader",
+})
+
+
+def __getattr__(name: str) -> object:
+    """Lazily resolve record types to keep domain model boundaries acyclic."""
+    if name not in _RECORD_NAMES:
+        raise AttributeError(name)
+    from episodic.canonical import domain_records
+
+    return getattr(domain_records, name)

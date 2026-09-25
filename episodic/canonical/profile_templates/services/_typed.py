@@ -26,6 +26,7 @@ from episodic.canonical.profile_templates.helpers import (
     _profile_snapshot,
     _template_snapshot,
     _update_versioned_entity,
+    _VersionedEntityUpdate,
 )
 from episodic.canonical.profile_templates.types import (
     AuditMetadata,
@@ -125,27 +126,29 @@ async def update_series_profile(
     """
     return await _update_versioned_entity(
         uow,
-        entity_id=request.profile_id,
-        expected_revision=request.expected_revision,
-        entity_label="Series profile",
-        entity_repo=uow.series_profiles,
-        history_repo=uow.series_profile_history,
-        fetch_latest=uow.series_profile_history.get_latest_for_profile,
-        history_entry_class=SeriesProfileHistoryEntry,
-        entity_id_field="series_profile_id",
-        update_fields=lambda entity, now: dc.replace(
-            entity,
-            title=request.data.title,
-            description=request.data.description,
-            configuration=request.data.configuration,
-            guardrails={
-                **entity.guardrails,
-                **request.data.guardrails,
-            },
-            updated_at=now,
+        _VersionedEntityUpdate(
+            entity_id=request.profile_id,
+            expected_revision=request.expected_revision,
+            entity_label="Series profile",
+            entity_repo=uow.series_profiles,
+            history_repo=uow.series_profile_history,
+            fetch_latest=uow.series_profile_history.get_latest_for_profile,
+            history_entry_class=SeriesProfileHistoryEntry,
+            entity_id_field="series_profile_id",
+            update_fields=lambda entity, now: dc.replace(
+                entity,
+                title=request.data.title,
+                description=request.data.description,
+                configuration=request.data.configuration,
+                guardrails={
+                    **entity.guardrails,
+                    **request.data.guardrails,
+                },
+                updated_at=now,
+            ),
+            create_snapshot=_profile_snapshot,
+            audit=request.audit,
         ),
-        create_snapshot=_profile_snapshot,
-        audit=request.audit,
     )
 
 
@@ -235,25 +238,27 @@ async def update_episode_template(
     """
     return await _update_versioned_entity(
         uow,
-        entity_id=request.template_id,
-        expected_revision=request.expected_revision,
-        entity_label="Episode template",
-        entity_repo=uow.episode_templates,
-        history_repo=uow.episode_template_history,
-        fetch_latest=uow.episode_template_history.get_latest_for_template,
-        history_entry_class=EpisodeTemplateHistoryEntry,
-        entity_id_field="episode_template_id",
-        update_fields=lambda entity, now: dc.replace(
-            entity,
-            title=request.data.title,
-            description=request.data.description,
-            structure=request.data.structure,
-            guardrails={
-                **entity.guardrails,
-                **request.data.guardrails,
-            },
-            updated_at=now,
+        _VersionedEntityUpdate(
+            entity_id=request.template_id,
+            expected_revision=request.expected_revision,
+            entity_label="Episode template",
+            entity_repo=uow.episode_templates,
+            history_repo=uow.episode_template_history,
+            fetch_latest=uow.episode_template_history.get_latest_for_template,
+            history_entry_class=EpisodeTemplateHistoryEntry,
+            entity_id_field="episode_template_id",
+            update_fields=lambda entity, now: dc.replace(
+                entity,
+                title=request.data.title,
+                description=request.data.description,
+                structure=request.data.structure,
+                guardrails={
+                    **entity.guardrails,
+                    **request.data.guardrails,
+                },
+                updated_at=now,
+            ),
+            create_snapshot=_template_snapshot,
+            audit=request.audit,
         ),
-        create_snapshot=_template_snapshot,
-        audit=request.audit,
     )

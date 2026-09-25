@@ -226,17 +226,16 @@ The target runs this repository-wide pipeline, in order:
 
 1. Hecate architecture import-boundary checks;
 2. Ruff formatting-independent lint checks;
-3. the focused built-in Pylint 4 rules under managed PyPy;
+3. the focused built-in Pylint 4 rules under CPython 3.14;
 4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
    separate future-annotations pass;
 5. `ambrleaks` over Syrupy snapshots under `tests`; and
 6. a blocking Skylos dead-code scan.
 
-The built-in Pylint pass is invoked through `uv tool run --python pypy` with
-the pinned `pylint-pypy-shim` wrapper from
-[github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
-That wrapper installs the PyPy-specific Astroid compatibility patch before
-delegating to Pylint.
+Both Pylint passes are invoked through `uv run --python 3.14`, using the
+project environment's CPython interpreter. `PYLINT_JOBS` spends a tenth of the
+available cores on Pylint, with a minimum of two workers; maintainers can
+override the variable for constrained environments.
 
 Pylint's message selection is allow-listed in `pyproject.toml` with
 `disable = ["all"]` and explicit `enable` entries for the logging, match,
@@ -244,37 +243,34 @@ refactoring, standard-library, and modified-iteration checks this repository
 cares about. Keep rule rationale comments beside those entries, so future lint
 changes explain why a rule is enabled, instead of only recording its name.
 
-The wrapper disables Pylint's `syntax-error` message for this pass because the
-managed PyPy runtime currently parses Python 3.11 syntax while the project
-targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
-the wrapper and skipped, which keeps parse incompatibilities visible without
-hiding other diagnostics from files that PyPy can analyse.
-
-The lint target therefore runs the `df12-python-lints` Pylint plug-in
-separately under CPython 3.14. This pass uses the project's actual syntax and
-Astroid runtime, while the PyPy pass retains its compatibility shim for the
-built-in Pylint checks. The project environment hard-pins the plug-in version in
-`pyproject.toml`. The equivalent df12 command is:
+The lint target runs the `df12-python-lints` Pylint plug-in separately under
+the same CPython 3.14 interpreter. The project environment hard-pins the
+plug-in version in `pyproject.toml`. The equivalent df12 command is:
 
 ```shell
-uv run --python 3.14 pylint --disable=all \
+uv run --python 3.14 pylint -j 2 --disable=all \
   --load-plugins=df12_python_lints \
   --enable=R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111 \
   alembic episodic openai_test_types.py tests
 ```
 
-The df12 pass covers the same `PYLINT_TARGETS` scope as the PyPy pass:
-application and migration code, the OpenAI test types, and the complete test
-suite. Keep new df12 checks in the `DF12_PYLINT_MESSAGES` allow-list so their
-adoption remains explicit. The C9112 future-annotations check runs separately
-over the same scope:
+The examples use the two-worker minimum. `make lint` calculates the worker
+count from the available cores. The df12 pass covers the same `PYLINT_TARGETS`
+scope as the built-in pass: application and migration code, the OpenAI test
+types, and the complete test suite. Keep new df12 checks in the
+`DF12_PYLINT_MESSAGES` allow-list so their adoption remains explicit. The C9112
+future-annotations check runs separately over the same scope:
 
 ```shell
-uv run --python 3.14 pylint --disable=all \
+uv run --python 3.14 pylint -j 2 --disable=all \
   --load-plugins=df12_python_lints --enable=C9112 \
   --ignore-paths='^tests/steps/test_.*_steps[.]py$' \
   alembic episodic openai_test_types.py tests
 ```
+
+Until the upstream `df12-python-lints` issue is resolved, this pass prints each
+finding twice. Treat duplicate lines as one diagnostic when investigating its
+output.
 
 Existing pytest-bdd step modules under `tests/steps/` match `test_*_steps.py`
 and retain postponed annotations because pytest-bdd evaluates step annotations
@@ -296,9 +292,9 @@ uv tool run --python 3.14 \
 The two commands intentionally provision the package differently:
 `pyproject.toml` pins `df12-python-lints` at `v0.2.0` for the
 project-environment Pylint pass, while `DF12_PYTHON_LINTS_REF` controls the
-separately provisioned `ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for
-both commands. Maintainers must update both package pins together and validate
-the complete `make lint` pipeline.
+separately provisioned `ambrleaks` tool. `PYLINT_PYTHON` selects CPython 3.14
+for both Pylint passes and `ambrleaks`. Maintainers must update both package
+pins together and validate the complete `make lint` pipeline.
 
 Skylos is separately provisioned by the Makefile at exact release `4.33.2` and
 runs locally with concise, non-interactive output. The lint command disables
@@ -413,6 +409,74 @@ what makes the dependency change visible alongside the caller change.
 
 The exception is narrow. It covers those two actions alone. Every other
 reusable-workflow caller follows the pattern-matching rule above.
+
+### The Vidai Mock pin
+
+`ci.yml` and `coverage-main.yml` download a pinned Vidai Mock release, verify
+its SHA-256, and put it on `PATH`. The two pins are kept identical: a release
+that differs between the pull-request lane and the main-branch lane would make
+behavioural results depend on the event that triggered them.
+
+The pinned release must support `--isolated`. The behavioural fixtures pass it
+so the server serves only the provider templates the test wrote, rather than
+the release's embedded catalogue as well; `--isolated` was added in 0.2.8, and
+0.1.3 exits `2` with `unexpected argument '--isolated' found`. When bumping the
+pin, verify the published Linux x64 archive's digest before recording it, and
+confirm the new release accepts `--isolated` (see the smoke test below).
+
+### Behavioural inference harness
+
+`tests/steps/vidaimock_harness.py` owns the Vidai Mock process lifecycle for
+every live-server behavioural suite, so the startup, readiness, and cleanup
+rules are written once rather than copied per module. Provider and template
+content stays with the suite that needs it.
+
+`start_vidaimock` starts one child per attempt on a fresh ephemeral port, passes
+`--config-dir` and `--isolated`, and waits for the port to accept a
+connection. Its failure handling follows how the binary actually fails:
+
+- A child that exits before its port is reachable is reported with its exit
+  code and a bounded capture of its standard error, and is never retried. An
+  unrecognized argument or an unusable configuration fails identically every
+  time, so retrying would only hide the cause behind a readiness timeout.
+- Only a bind failure — the standard error naming an address already in use —
+  is retried, up to `_VIDAIMOCK_PORT_START_ATTEMPTS` fresh ports.
+- A child that stays alive without ever accepting a connection is reported as
+  a readiness timeout, without inventing an exit code for a process that is
+  still running.
+
+Standard error is captured to a temporary file rather than a pipe, so a noisy
+child cannot block on a full pipe buffer and the diagnostics survive the
+child's exit. Only a bounded prefix reaches a failure message.
+
+A missing executable keeps its existing contract: a skip when running locally,
+and a failure under `CI`, because a silently skipped live-server scenario would
+reduce coverage without saying so.
+
+Both the success and the failure path terminate the child through
+`terminate_process_gracefully`, escalating to `SIGKILL` if it does not exit
+promptly, so a failed attempt is reaped rather than leaked.
+
+`tests/steps/test_vidaimock_harness.py` covers the failure paths with a small
+stand-in child program, so the readiness, retry, diagnostic, and
+bounded-capture contracts hold without depending on an installed binary.
+
+### Vidai Mock smoke test
+
+`scripts/check_vidaimock_isolated.py` runs the installed binary against this
+repository's own fixture provider. It asserts that the binary starts with
+`--config-dir` and `--isolated`, that the fixture provider loads, that its
+Jinja template renders into a live `/v1/chat/completions` response, and that
+`/v1/models` lists only the configured provider.
+
+`ci.yml` runs it as a step of its own, before the coverage step. A pin that
+loses `--isolated` therefore fails once, in one place, with the binary's own
+diagnostic, instead of failing every live-server scenario in the coverage run.
+Run it locally with:
+
+```shell
+uv run --group dev python scripts/check_vidaimock_isolated.py
+```
 
 ## Falcon HTTP runtime
 

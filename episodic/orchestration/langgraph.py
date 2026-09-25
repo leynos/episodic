@@ -48,13 +48,10 @@ from episodic.orchestration._checkpoint_resume import (
 from episodic.orchestration._checkpoint_resume import (
     resume_generation_orchestration as resume_generation_orchestration,
 )
-from episodic.orchestration._graph_state import GenerationGraphState
-from episodic.orchestration._planning_orchestrator import (
-    _cost_provider_operations,
-    _current_billing_period_key,
-    _provider_call_record,
-    _ProviderCallContext,
+from episodic.orchestration._graph_costs import (
+    _record_costs_from_finished_state,
 )
+from episodic.orchestration._graph_state import GenerationGraphState
 from episodic.orchestration._types import _log_event
 from episodic.orchestration._usage import build_generation_result
 
@@ -63,7 +60,7 @@ if typ.TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
-    from episodic.cost import BillingPeriodKey, CostRecorderPort
+    from episodic.cost import CostRecorderPort
     from episodic.orchestration import _dto as dto
     from episodic.orchestration import _protocols as protocols
 else:
@@ -84,7 +81,7 @@ class ExecuteNodeFn(typ.Protocol):
         self, state: GenerationGraphState
     ) -> cabc.Awaitable[ExecuteNodeResult]:
         """Return the async execute-node update for *state*."""
-        ...
+        pass
 
 
 @dc.dataclass(slots=True)
@@ -277,90 +274,6 @@ def _invoke_finish_callback(
             correlation_id=correlation_id,
             error=str(exc),
         )
-
-
-async def _record_planner_cost_if_available(
-    cost_recorder: CostRecorderPort,
-    *,
-    workflow_run_id: str,
-    planner_result: dto.PlannerResult,
-    billing_period_key: BillingPeriodKey,
-) -> None:
-    """Record a planner provider-call cost entry when usage is available."""
-    if planner_result.provider_call_usage is None:
-        return
-    await cost_recorder.record_provider_call(
-        _provider_call_record(
-            context=_ProviderCallContext(
-                workflow_run_id=workflow_run_id,
-                workflow_node="planner",
-                logical_call_id=planner_result.provider_response_id,
-                model=planner_result.model,
-                operation=str(planner_result.provider_operation),
-            ),
-            provider_call_usage=planner_result.provider_call_usage,
-            billing_period_key=billing_period_key,
-        )
-    )
-
-
-async def _record_action_costs_from_results(
-    cost_recorder: CostRecorderPort,
-    *,
-    workflow_run_id: str,
-    action_results: tuple[dto.ActionExecutionResult, ...],
-    billing_period_key: BillingPeriodKey,
-) -> None:
-    """Record a provider-call cost entry for each action result that carries usage."""
-    for action_result in action_results:
-        if action_result.provider_call_usage is None:
-            continue
-        await cost_recorder.record_provider_call(
-            _provider_call_record(
-                context=_ProviderCallContext(
-                    workflow_run_id=workflow_run_id,
-                    workflow_node=action_result.action_kind.value,
-                    logical_call_id=action_result.action_id,
-                    model=action_result.model,
-                    operation=str(action_result.provider_operation),
-                ),
-                provider_call_usage=action_result.provider_call_usage,
-                billing_period_key=billing_period_key,
-            )
-        )
-
-
-async def _record_costs_from_finished_state(
-    state: GenerationGraphState,
-    *,
-    cost_recorder: CostRecorderPort | None,
-) -> None:
-    """Record graph provider-call costs from the finished direct path."""
-    if cost_recorder is None:
-        return
-    if state.request is None or state.planner_result is None:
-        return
-    billing_period_key = _current_billing_period_key()
-    planner_result = state.planner_result
-    workflow_run_id = state.request.correlation_id
-    providers = _cost_provider_operations(planner_result)
-    if providers:
-        await cost_recorder.pin_run_pricing(
-            workflow_run_id, providers, billing_period_key
-        )
-    await _record_planner_cost_if_available(
-        cost_recorder,
-        workflow_run_id=workflow_run_id,
-        planner_result=planner_result,
-        billing_period_key=billing_period_key,
-    )
-    await _record_action_costs_from_results(
-        cost_recorder,
-        workflow_run_id=workflow_run_id,
-        action_results=state.action_results,
-        billing_period_key=billing_period_key,
-    )
-    await cost_recorder.finalize_run(workflow_run_id, None)
 
 
 def _build_execute_node(

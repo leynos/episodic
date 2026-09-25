@@ -17,12 +17,10 @@ from __future__ import annotations
 import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
 import json
-import shutil
-import socket
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
-import time
 import typing as typ
-from pathlib import Path  # noqa: TC003 - pytest-bdd inspects step annotations.
+from pathlib import (
+    Path,  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
+)
 
 import pytest
 import yaml
@@ -40,9 +38,14 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
+from tests.steps.vidaimock_harness import (
+    start_vidaimock_process,
+    terminate_process_gracefully,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import subprocess  # noqa: S404 - types the local Vidai Mock test server child.
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
 
@@ -58,6 +61,7 @@ class GuestBiosBDDContext:
     result: GuestBiosResult | None = None
     enriched_tei_xml: str = ""
     request_payload: LLMRequest | None = None
+    stderr_file: typ.TextIO | None = None
 
 
 @dc.dataclass(slots=True)
@@ -87,7 +91,7 @@ def guest_bios_context() -> cabc.Iterator[GuestBiosBDDContext]:
     ctx = GuestBiosBDDContext()
     yield ctx
     if ctx.process is not None:
-        _terminate_process_gracefully(ctx.process)
+        terminate_process_gracefully(ctx.process, ctx.stderr_file)
 
 
 @scenario(
@@ -97,13 +101,6 @@ def guest_bios_context() -> cabc.Iterator[GuestBiosBDDContext]:
 )
 def test_guest_bios_behaviour() -> None:
     """Run the guest-bios behaviour scenario."""
-
-
-def _find_free_port() -> int:
-    """Bind to an ephemeral port and return its number before releasing it."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
 
 
 def _build_assistant_content_literal() -> str:
@@ -123,7 +120,7 @@ def _build_assistant_content_literal() -> str:
 
 def _write_provider_config(provider_dir: Path) -> None:
     """Write the guest-bios provider configuration to Vidai Mock."""
-    provider_file = provider_dir / "guest_bios.yaml"
+    provider_file = provider_dir / "openai.yaml"
     provider_config = {
         "name": "guest_bios",
         "matcher": "/v1/chat/completions",
@@ -176,95 +173,6 @@ def _write_response_template(
     )
 
 
-_VIDAIMOCK_STARTUP_TIMEOUT = 5.0
-_VIDAIMOCK_PROBE_INTERVAL = 0.2
-_VIDAIMOCK_PORT_START_ATTEMPTS = 5
-
-
-def _handle_connection_timeout(
-    process: subprocess.Popen[str],
-    deadline: float,
-) -> None:
-    """Terminate the process after the polling deadline and raise RuntimeError."""
-    if time.monotonic() < deadline:
-        return
-    if process.poll() is None:
-        process.terminate()
-    msg = "Vidai Mock did not become ready within the timeout."
-    raise RuntimeError(msg)
-
-
-def _await_port_ready(
-    process: subprocess.Popen[str],
-    host: str,
-    port: int,
-    timeout: float = _VIDAIMOCK_STARTUP_TIMEOUT,
-) -> None:
-    """Poll a TCP port until the server accepts connections or the deadline expires."""
-    deadline = time.monotonic() + timeout
-    while True:
-        if process.poll() is not None:
-            msg = "Vidai Mock failed to start for the guest-bios behavioural test."
-            raise RuntimeError(msg)
-        try:
-            with socket.create_connection((host, port), timeout=0.5):
-                return
-        except OSError:
-            _handle_connection_timeout(process, deadline)
-            time.sleep(_VIDAIMOCK_PROBE_INTERVAL)
-
-
-def _terminate_process_gracefully(process: subprocess.Popen[str]) -> None:
-    """Terminate *process*, escalating to SIGKILL if it does not exit promptly."""
-    if process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
-
-
-def _start_vidaimock_process(
-    guest_bios_context: GuestBiosBDDContext,
-    config_dir: Path,
-) -> None:
-    """Start Vidai Mock, retrying a few ports to reduce bind races."""
-    vidaimock_path = shutil.which("vidaimock")
-    if vidaimock_path is None:
-        pytest.skip("vidaimock executable not found in PATH")
-    last_error: RuntimeError | None = None
-    for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
-        port = _find_free_port()
-        process = subprocess.Popen(  # pylint: disable=consider-using-with  # noqa: S603 - vidaimock_path comes from shutil.which and subprocess.Popen receives only controlled test arguments.
-            [
-                vidaimock_path,
-                "--host",
-                "127.0.0.1",
-                "--port",
-                str(port),
-                "--config-dir",
-                str(config_dir),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        try:
-            _await_port_ready(process, "127.0.0.1", port)
-        except RuntimeError as exc:
-            _terminate_process_gracefully(process)
-            last_error = exc
-            continue
-
-        guest_bios_context.base_url = f"http://127.0.0.1:{port}/v1"
-        guest_bios_context.process = process
-        return
-
-    msg = "Vidai Mock failed to start for the guest-bios behavioural test."
-    raise RuntimeError(msg) from last_error
-
-
 @given("a Vidai Mock guest-bios server is running")
 def vidaimock_server(
     guest_bios_context: GuestBiosBDDContext,
@@ -278,7 +186,11 @@ def vidaimock_server(
 
     _write_provider_config(provider_dir)
     _write_response_template(template_dir, _build_assistant_content_literal())
-    _start_vidaimock_process(guest_bios_context, tmp_path)
+    start_vidaimock_process(
+        guest_bios_context,
+        tmp_path,
+        label="the guest-bios behavioural test",
+    )
 
 
 @given("a TEI script body and pinned guest profile are prepared")
@@ -387,14 +299,11 @@ def assert_prompt_contains_guest_profile(
 def assert_enriched_tei_contains_guest_bios(
     guest_bios_context: GuestBiosBDDContext,
 ) -> None:
-    """Verify generated biographies are formatted in the canonical TEI body."""
-    assert 'type="guest-bios"' in guest_bios_context.enriched_tei_xml, (
-        "Expected collection to contain the value"
+    """Verify generated biographies use the canonical guest-bios body block."""
+    xml = guest_bios_context.enriched_tei_xml
+    ada_reference = 'corresp="urn:episodic:reference-document-revision:rev-ada"'
+    assert 'type="guest-bios"' in xml, "Expected a guest-bios body block."
+    assert ada_reference in xml, "Expected Ada's reference document revision."
+    assert "Ada Lovelace wrote about analytical engines." in xml, (
+        "Expected Ada's generated biography."
     )
-    assert (
-        'corresp="urn:episodic:reference-document-revision:rev-ada"'
-        in guest_bios_context.enriched_tei_xml
-    ), "Expected collection to contain the value"
-    assert "Ada Lovelace wrote about analytical engines." in (
-        guest_bios_context.enriched_tei_xml
-    ), "Expected collection to contain the value"

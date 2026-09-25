@@ -10,6 +10,7 @@ import pytest
 from episodic.api import create_app
 from episodic.api.resources.generation_runs import (
     GenerationRunsResource,
+    GenerationRunsResourceConfig,
     _CreateGenerationRun,
 )
 from tests.fixtures.api import build_api_dependencies
@@ -50,8 +51,10 @@ async def test_generation_run_resource_uses_injected_factories(
     resource = GenerationRunsResource(
         dependencies.uow_factory,
         launcher=RecordingLauncher(),
-        clock=lambda: now,
-        uuid_factory=iter(ids).__next__,
+        config=GenerationRunsResourceConfig(
+            clock=lambda: now,
+            uuid_factory=iter(ids).__next__,
+        ),
     )
     run = await resource._create_run(
         ingestion_job_id,

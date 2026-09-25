@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio  # noqa: TC003  # pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
 import typing as typ
 from pathlib import (
     Path,  # noqa: TC003  # pytest-bdd inspects step annotations at runtime.
@@ -33,14 +32,17 @@ from episodic.orchestration import (
     resume_generation_orchestration,
 )
 from tests.steps.generation_orchestration_vidaimock import (
-    find_free_port,
-    start_vidaimock_process,
     write_provider_config,
     write_response_template,
+)
+from tests.steps.vidaimock_harness import (
+    start_vidaimock_process,
+    terminate_process_gracefully,
 )
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import subprocess  # noqa: S404 - types the local Vidai Mock test server child.
 
     from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
@@ -63,6 +65,7 @@ class OrchestrationBDDContext:
     suspended_result: SuspendedWorkflowResult | None = None
     repeated_suspended_result: SuspendedWorkflowResult | None = None
     cost_recorder: _RecordingCostRecorder | None = None
+    stderr_file: typ.TextIO | None = None
 
 
 @dc.dataclass(slots=True)
@@ -148,12 +151,7 @@ def orchestration_context() -> cabc.Iterator[OrchestrationBDDContext]:
     ctx = OrchestrationBDDContext()
     yield ctx
     if ctx.process is not None:
-        ctx.process.terminate()
-        try:
-            ctx.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            ctx.process.kill()
-            ctx.process.wait(timeout=5)
+        terminate_process_gracefully(ctx.process, ctx.stderr_file)
 
 
 @scenario(
@@ -185,7 +183,11 @@ def vidaimock_server(
 
     write_provider_config(provider_dir)
     write_response_template(template_dir)
-    start_vidaimock_process(orchestration_context, tmp_path, port=find_free_port())
+    start_vidaimock_process(
+        orchestration_context,
+        tmp_path,
+        label="the orchestration behavioural test",
+    )
 
 
 @given("a generation orchestration request is prepared")

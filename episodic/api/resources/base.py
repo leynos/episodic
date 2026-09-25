@@ -17,7 +17,10 @@ import uuid
 from abc import ABC, abstractmethod
 
 from episodic.api.handlers import (
+    CreateEntityRequest,
+    GetEntityRequest,
     HistoryRequest,
+    UpdateEntityRequest,
     handle_create_entity,
     handle_get_entity,
     handle_get_history,
@@ -94,11 +97,13 @@ class _GetResourceBase[EntityT: object](_ResourceBase, ABC):
         """Fetch one entity by identifier."""
         del req
         resp.media, resp.status = await handle_get_entity(
-            uow_factory=self._uow_factory,
-            entity_id=self._get_entity_id_from_path(**kwargs),
-            id_field_name=self._get_id_field_name(),
-            service_fn=self._get_service_fn(),
-            serializer_fn=self._get_serializer_fn(),
+            self._uow_factory,
+            GetEntityRequest(
+                entity_id=self._get_entity_id_from_path(**kwargs),
+                id_field_name=self._get_id_field_name(),
+                service_fn=self._get_service_fn(),
+                serializer_fn=self._get_serializer_fn(),
+            ),
         )
 
 
@@ -196,12 +201,14 @@ class _CreateResourceBase[EntityT: object](_ResourceBase, ABC):
         del kwargs
         payload = require_payload_dict(await req.get_media())
         resp.media, resp.status = await handle_create_entity(
-            uow_factory=self._uow_factory,
-            payload=payload,
-            required_fields=self._get_required_fields(),
-            kwargs_builder=self._get_kwargs_builder(),
-            service_fn=self._get_service_fn(),
-            serializer_fn=self._get_serializer_fn(),
+            self._uow_factory,
+            CreateEntityRequest(
+                payload=payload,
+                required_fields=self._get_required_fields(),
+                kwargs_builder=self._get_kwargs_builder(),
+                service_fn=self._get_service_fn(),
+                serializer_fn=self._get_serializer_fn(),
+            ),
         )
 
 
@@ -255,12 +262,14 @@ class _UpdateResourceBase[EntityT: object](_ResourceBase, ABC):
         """Update one entity by identifier."""
         payload = require_payload_dict(await req.get_media())
         resp.media, resp.status = await handle_update_entity(
-            uow_factory=self._uow_factory,
-            entity_id=self._get_entity_id_from_path(**kwargs),
-            id_field_name=self._get_id_field_name(),
-            payload=payload,
-            required_fields=self._get_required_fields(),
-            request_builder=self._get_request_builder(),
-            service_fn=self._get_update_service_fn(),
-            serializer_fn=self._get_update_serializer_fn(),
+            self._uow_factory,
+            UpdateEntityRequest(
+                entity_id=self._get_entity_id_from_path(**kwargs),
+                id_field_name=self._get_id_field_name(),
+                payload=payload,
+                required_fields=self._get_required_fields(),
+                request_builder=self._get_request_builder(),
+                service_fn=self._get_update_service_fn(),
+                serializer_fn=self._get_update_serializer_fn(),
+            ),
         )

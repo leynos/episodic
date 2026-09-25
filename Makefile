@@ -25,22 +25,23 @@ PYTEST_XDIST_ARGS := -n $(PYTEST_XDIST_WORKERS)
 endif
 LOCAL_K8S_ENGINE ?= docker
 LOCAL_K8S_PROVIDER ?= k3d
-PYLINT_PYTHON ?= pypy
+# Run both Pylint passes on CPython 3.14 so they parse the project's syntax.
+PYLINT_PYTHON ?= 3.14
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
-PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
-PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
+# Spend a tenth of the available cores on Pylint, leaving room for the other
+# agents and builds sharing this machine. The floor of two keeps the pass
+# parallel on small CI runners, whose core count never reaches the tenth.
+PYLINT_JOBS ?= $(shell n=$$(nproc 2>/dev/null || echo 2); \
+		echo $$(( n / 10 > 2 ? n / 10 : 2 )))
 DF12_PYTHON_LINTS_REF ?= v0.2.0
 DF12_PYTHON_LINTS = git+https://github.com/leynos/df12-python-lints.git@$(DF12_PYTHON_LINTS_REF)
-DF12_PYTHON ?= 3.14
-PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) \
-	--from '$(PYLINT_PYPY_SHIM)' pylint-pypy --load-plugins=
+PYLINT = $(UV_ENV) $(UV) run --python $(PYLINT_PYTHON) pylint -j $(PYLINT_JOBS)
 DF12_PYLINT_MESSAGES = R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111
-DF12_PYLINT_BASE = $(UV_ENV) $(UV) run --python $(DF12_PYTHON) pylint \
-	--disable=all --load-plugins=df12_python_lints
+DF12_PYLINT_BASE = $(PYLINT) --disable=all --load-plugins=df12_python_lints
 DF12_PYLINT = $(DF12_PYLINT_BASE) --enable=$(DF12_PYLINT_MESSAGES)
 DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
 	--ignore-paths='^tests/steps/test_.*_steps[.]py$$'
-AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
+AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
 SKYLOS_VERSION = 4.33.2
 SKYLOS = $(UV_ENV) $(UV) tool run --from 'skylos==$(SKYLOS_VERSION)' skylos \

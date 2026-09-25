@@ -11,23 +11,13 @@ persistence stores the result on the canonical episode.
 
 import collections.abc as cabc
 import dataclasses as dc
-import json
 import typing as typ
 
-import tei_rapporteur as tei
-
-from episodic.canonical.hashing import sha256_text
-from episodic.generation.tei_payload import (
-    require_mapping,
-    require_non_empty_str_value,
-    require_sequence,
-)
 from episodic.llm import (
     LLMPort,
     LLMProviderOperation,
     LLMProviderResponseError,
     LLMRequest,
-    LLMResponse,
     LLMTokenBudget,
     LLMTokenBudgetExceededError,
     LLMTransientProviderError,
@@ -38,6 +28,10 @@ from episodic.llm import (
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
+
+    from episodic.llm import LLMResponse
+else:
+    LLMResponse = object
 
 type JsonMapping = dict[str, object]
 type DraftClock = cabc.Callable[[], dt.datetime]
@@ -297,18 +291,34 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
         except LLMTransientProviderError as exc:
             raise DraftScriptTransientProviderError(str(exc)) from exc
 
-        _require_response_size(response.text, self.config.max_response_bytes)
-        parsed = _parse_response(response)
-        tei_xml = _emit_tei(parsed, request.id_factory)
-        return DraftScriptResult(
-            tei_xml=tei_xml,
-            content_hash=sha256_text(tei_xml),
-            usage=response.usage,
-            model=response.model,
-            provider_response_id=response.provider_response_id,
-            finish_reason=response.finish_reason,
-            provider_call_usage=response.provider_call_usage,
+        return _result_from_response(
+            response,
+            maximum_response_bytes=self.config.max_response_bytes,
+            id_factory=request.id_factory,
         )
+
+
+def _build_prompt(request: DraftScriptRequest) -> str:
+    """Build a deterministic JSON prompt payload for draft generation."""
+    from episodic.generation.draft_script_codec import build_prompt
+
+    return build_prompt(request)
+
+
+def _result_from_response(
+    response: LLMResponse,
+    *,
+    maximum_response_bytes: int,
+    id_factory: DraftIdFactory,
+) -> DraftScriptResult:
+    """Validate a provider response and emit its canonical draft result."""
+    from episodic.generation.draft_script_codec import result_from_response
+
+    return result_from_response(
+        response,
+        maximum_response_bytes=maximum_response_bytes,
+        id_factory=id_factory,
+    )
 
 
 def _require_non_empty_text(value: str, field_name: str) -> None:
@@ -316,120 +326,6 @@ def _require_non_empty_text(value: str, field_name: str) -> None:
     if not isinstance(value, str):
         msg = f"{field_name} must be a string."
         raise TypeError(msg)
-    if value.strip() == "":
+    if not value.strip():
         msg = f"{field_name} must be a non-empty string."
         raise ValueError(msg)
-
-
-def _build_prompt(request: DraftScriptRequest) -> str:
-    """Build a deterministic JSON prompt payload."""
-    payload: JsonMapping = {
-        "episode_id": str(request.episode_id),
-        "series_profile_id": str(request.series_profile_id),
-        "title": request.title,
-        "requested_at": request.clock().isoformat(),
-        "sources": [dc.asdict(source) for source in request.sources],
-        "presenter_profiles": [
-            dc.asdict(profile) for profile in request.presenter_profiles
-        ],
-    }
-    return json.dumps(payload, indent=2, sort_keys=True)
-
-
-def _require_response_size(response_text: str, maximum_bytes: int) -> None:
-    """Reject provider responses that exceed the configured byte limit."""
-    if len(response_text.encode("utf-8")) > maximum_bytes:
-        msg = "LLM response exceeds the configured maximum size."
-        raise DraftScriptResponseFormatError(msg)
-
-
-def _parse_response(response: LLMResponse) -> _ParsedDraft:
-    """Parse and validate the LLM response JSON."""
-    try:
-        payload = json.loads(response.text)
-    except json.JSONDecodeError as exc:
-        msg = "LLM response is not valid JSON."
-        raise DraftScriptResponseFormatError(msg) from exc
-
-    payload_dict = require_mapping(
-        payload,
-        "response",
-        error_cls=DraftScriptResponseFormatError,
-    )
-    title = require_non_empty_str_value(
-        payload_dict.get("title"),
-        "title",
-        error_cls=DraftScriptResponseFormatError,
-    ).strip()
-    raw_turns = require_sequence(
-        payload_dict.get("turns"),
-        "turns",
-        error_cls=DraftScriptResponseFormatError,
-    )
-    turns = tuple(_parse_turn(raw_turn) for raw_turn in raw_turns)
-    if len(turns) == 0:
-        msg = "turns must contain at least one turn."
-        raise DraftScriptResponseFormatError(msg)
-    return _ParsedDraft(title=title, turns=turns)
-
-
-def _parse_turn(raw_turn: object) -> DraftTurn:
-    """Parse one generated turn."""
-    turn = require_mapping(
-        raw_turn,
-        "turn",
-        error_cls=DraftScriptResponseFormatError,
-    )
-    text = require_non_empty_str_value(
-        turn.get("text"),
-        "text",
-        error_cls=DraftScriptResponseFormatError,
-    ).strip()
-    speaker = _optional_non_empty_string(turn.get("speaker"), "speaker")
-    return DraftTurn(text=text, speaker=speaker)
-
-
-def _optional_non_empty_string(value: object, field_name: str) -> str | None:
-    """Return an optional stripped string or raise a format error."""
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        msg = f"{field_name} must be a string or null."
-        raise DraftScriptResponseFormatError(msg)
-    stripped = value.strip()
-    return stripped or None
-
-
-def _emit_tei(parsed: _ParsedDraft, id_factory: DraftIdFactory) -> str:
-    """Emit validated TEI XML from a parsed draft."""
-    payload: JsonMapping = {
-        "header": {"file_desc": {"title": parsed.title}},
-        "text": {
-            "body": {
-                "blocks": [_turn_to_block(turn, id_factory) for turn in parsed.turns]
-            }
-        },
-    }
-    try:
-        document = tei.from_dict(payload)
-        document.validate()
-        return tei.emit_xml(document)
-    except (TypeError, ValueError) as exc:
-        raise DraftScriptTeiError(str(exc)) from exc
-
-
-def _turn_to_block(turn: DraftTurn, id_factory: DraftIdFactory) -> JsonMapping:
-    """Convert one generated turn to a `tei_rapporteur` body block."""
-    content = [{"type": "text", "value": turn.text}]
-    if turn.speaker is None:
-        return {
-            "type": "paragraph",
-            "xml_id": id_factory("p"),
-            "content": content,
-        }
-    return {
-        "type": "utterance",
-        "speaker": turn.speaker,
-        "xml_id": id_factory("u"),
-        "content": content,
-    }

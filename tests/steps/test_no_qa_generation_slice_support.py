@@ -18,9 +18,17 @@ class _FailingLauncher:
 
 
 class _Process:
-    """Record process cleanup calls."""
+    """Stand in for the running Vidai Mock child and record cleanup calls.
+
+    The shared harness checks `poll` before terminating so that an already
+    exited child is not waited on twice, so this models a live process.
+    """
 
     terminated = False
+
+    def poll(self) -> int | None:
+        """Report the child as still running."""
+        return None
 
     def terminate(self) -> None:
         """Record graceful termination."""
