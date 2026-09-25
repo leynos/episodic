@@ -158,14 +158,6 @@ jobs:
       - name: Check spelling
         run: make spelling
 
-      - name: Check CPython syntax with Pylint
-        run: |
-          uv tool run --python 3.14 --from 'pylint==4.*' pylint \
-            --disable=all \
-            --enable=syntax-error \
-            --recursive=y \
-            alembic episodic openai_test_types.py tests
-
       - name: Run typechecker
         run: make typecheck
 

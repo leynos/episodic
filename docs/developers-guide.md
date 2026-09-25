@@ -237,18 +237,18 @@ The target runs this repository-wide pipeline, in order:
 
 1. Hecate architecture import-boundary checks;
 2. Ruff formatting-independent lint checks;
-3. the focused built-in Pylint 4 rules under managed PyPy;
+3. the focused built-in Pylint 4 rules under CPython 3.14;
 4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
    separate future-annotations pass;
 5. `ambrleaks` over Syrupy snapshots under `tests`;
 6. a blocking Skylos dead-code scan; and
 7. a blocking nose code-duplication gate.
 
-The built-in Pylint pass is invoked through `uv tool run --python pypy` with
-the pinned `pylint-pypy-shim` wrapper from
-[github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
-That wrapper installs the PyPy-specific Astroid compatibility patch before
-delegating to Pylint.
+The built-in Pylint pass runs the pinned `pylint==$(PYLINT_VERSION)` through
+`uv tool run --managed-python --python 3.14`, isolated from the project
+environment. It runs on CPython rather than PyPy because the source uses Python
+3.14 syntax, PEP 758 unparenthesised `except` lists, that no managed PyPy
+parses.
 
 Pylint's message selection is allow-listed in `pyproject.toml` with
 `disable = ["all"]` and explicit `enable` entries for the logging, match,
@@ -256,17 +256,14 @@ refactoring, standard-library, and modified-iteration checks this repository
 cares about. Keep rule rationale comments beside those entries, so future lint
 changes explain why a rule is enabled, instead of only recording its name.
 
-The wrapper disables Pylint's `syntax-error` message for this pass because the
-managed PyPy runtime currently parses Python 3.11 syntax while the project
-targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
-the wrapper and skipped, which keeps parse incompatibilities visible without
-hiding other diagnostics from files that PyPy can analyse.
+`syntax-error` stays enabled, so a module Pylint cannot parse fails the lint.
+The pass previously ran on PyPy with `syntax-error` disabled, and every module
+PyPy could not parse was skipped without a message, so it was never linted.
 
-The lint target therefore runs the `df12-python-lints` Pylint plug-in
-separately under CPython 3.14. This pass uses the project's actual syntax and
-Astroid runtime, while the PyPy pass retains its compatibility shim for the
-built-in Pylint checks. The project environment hard-pins the plug-in version in
-`pyproject.toml`. The equivalent df12 command is:
+The lint target runs the `df12-python-lints` Pylint plug-in as a separate pass
+under CPython 3.14, loading the plug-in into the project environment. The
+project environment hard-pins the plug-in version in `pyproject.toml`. The
+equivalent df12 command is:
 
 ```shell
 uv run --python 3.14 pylint --disable=all \
@@ -275,7 +272,7 @@ uv run --python 3.14 pylint --disable=all \
   alembic episodic openai_test_types.py tests
 ```
 
-The df12 pass covers the same `PYLINT_TARGETS` scope as the PyPy pass:
+The df12 pass covers the same `PYLINT_TARGETS` scope as the built-in pass:
 application and migration code, the OpenAI test types, and the complete test
 suite. Keep new df12 checks in the `DF12_PYLINT_MESSAGES` allow-list so their
 adoption remains explicit. The C9112 future-annotations check runs separately

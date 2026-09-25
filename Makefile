@@ -25,20 +25,16 @@ PYTEST_XDIST_ARGS := -n $(PYTEST_XDIST_WORKERS)
 endif
 LOCAL_K8S_ENGINE ?= docker
 LOCAL_K8S_PROVIDER ?= k3d
-# Pin the PyPy minor version. A bare `pypy` alias resolves to whichever
-# interpreter uv has installed most recently, and astroid's inference follows
-# the interpreter, so the same tree can score 10.00/10 on one PyPy release and
-# fail on the next. Pinning keeps the gate reproducible; override on the command
-# line to check a different interpreter deliberately.
-PYLINT_PYTHON ?= pypy-3.11
+# Pylint runs on CPython at the project's 3.14 baseline: the source uses 3.14
+# syntax (PEP 758 unparenthesised `except` lists) that no managed PyPy parses.
+PYLINT_PYTHON ?= 3.14
+PYLINT_VERSION ?= 4.0.9
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
-PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
-PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
 DF12_PYTHON_LINTS_REF ?= v0.2.0
 DF12_PYTHON_LINTS = git+https://github.com/leynos/df12-python-lints.git@$(DF12_PYTHON_LINTS_REF)
 DF12_PYTHON ?= 3.14
-PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) \
-	--from '$(PYLINT_PYPY_SHIM)' pylint-pypy --load-plugins=
+PYLINT = $(UV_ENV) $(UV) tool run --managed-python --python $(PYLINT_PYTHON) \
+	--from 'pylint==$(PYLINT_VERSION)' pylint --load-plugins=
 DF12_PYLINT_MESSAGES = R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111
 DF12_PYLINT_BASE = $(UV_ENV) $(UV) run --python $(DF12_PYTHON) pylint \
 	--disable=all --load-plugins=df12_python_lints

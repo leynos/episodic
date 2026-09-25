@@ -231,11 +231,6 @@ max-positional-arguments = 4
 # Keep this Pylint pass focused on the explicitly selected messages.
 disable = [
     "all",
-    # The PyPy-backed Pylint runs on the interpreter pinned by PYLINT_PYTHON
-    # in the Makefile (pypy-3.11), which cannot parse every Python 3.14
-    # construct this project uses; keep that pass useful on the files it can
-    # parse rather than failing the gate on syntax it was never able to read.
-    "syntax-error",
 ]
 enable = [
     # Catch invalid %-style specifiers before log calls reach production.
