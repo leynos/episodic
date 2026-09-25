@@ -621,6 +621,13 @@ reason = "Canonical value objects call these validation methods from dataclass p
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
 full_name = [
+    "episodic.generation.launcher.InProcessGenerationRunLauncher._load_sources",
+]
+reason = "The claim mixin in launcher_claim calls self._load_sources; it stays on the launcher so tests can patch source_from_document in this module."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
     "episodic.concurrent_interpreters._PerfCounterCpuTaskExecutorClock.monotonic_seconds",
     "episodic.observability.NoopMetrics.increment_counter",
     "episodic.observability.NoopMetrics.observe_latency_ms",
