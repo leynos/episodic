@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 import sqlalchemy as sa
 
-from tests.fixtures import database
+from tests.fixtures import database, pglite_runtime
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -26,7 +26,7 @@ class TestPreparePgliteWorkDir:
         source = tmp_path / "npm-seed"
         (source / "node_modules" / "@electric-sql" / "pglite").mkdir(parents=True)
 
-        work_dir = database._prepare_pglite_work_dir(source, tmp_path / "runtime")
+        work_dir = pglite_runtime.prepare_pglite_work_dir(source, tmp_path / "runtime")
 
         linked = work_dir / "node_modules"
         assert linked.is_symlink(), "the module tree must be linked, not copied"
@@ -46,7 +46,7 @@ class TestPreparePgliteWorkDir:
         (source / "pglite_manager.js").write_text("seed socket\n", encoding="utf-8")
         (source / "package.json").write_text("{}\n", encoding="utf-8")
 
-        work_dir = database._prepare_pglite_work_dir(source, tmp_path / "runtime")
+        work_dir = pglite_runtime.prepare_pglite_work_dir(source, tmp_path / "runtime")
 
         assert not (work_dir / "pglite_manager.js").exists(), (
             "the generated script must be written per work directory"
@@ -61,8 +61,8 @@ class TestPreparePgliteWorkDir:
         (source / "node_modules").mkdir(parents=True)
         work_dir = tmp_path / "runtime"
 
-        first = database._prepare_pglite_work_dir(source, work_dir)
-        second = database._prepare_pglite_work_dir(source, work_dir)
+        first = pglite_runtime.prepare_pglite_work_dir(source, work_dir)
+        second = pglite_runtime.prepare_pglite_work_dir(source, work_dir)
 
         assert first == second, "the same directory must be returned"
         assert (second / "node_modules").is_symlink(), "the link must survive reuse"

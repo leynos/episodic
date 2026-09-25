@@ -1,11 +1,14 @@
-"""Database infrastructure fixtures (py-pglite, SQLAlchemy)."""
+"""Database infrastructure fixtures (py-pglite, SQLAlchemy).
+
+The py-pglite Node runtime plumbing these fixtures build on lives in
+:mod:`tests.fixtures.pglite_runtime`, which owns the session Node directory,
+the shared module tree, and the availability probe.
+"""
 
 import asyncio
 import contextlib
-import os
 import pathlib
 import shutil
-import subprocess  # noqa: S404 - py-pglite shell-out shape is mirrored for retry handling.
 import tempfile
 import typing as typ
 import uuid
@@ -17,6 +20,23 @@ import sqlalchemy.exc as sa_exc
 
 from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
+from tests.fixtures.pglite_runtime import (
+    PGLITE_AVAILABLE,
+    PGLITE_START_ATTEMPTS,
+    pglite_node_environment,
+    pglite_node_modules,
+    prepare_pglite_work_dir,
+    should_use_pglite,
+)
+
+# This module is loaded as a pytest plugin unconditionally, so it has to import
+# when the optional py-pglite dependency is absent. Every fixture below that
+# reaches for these names checks `PGLITE_AVAILABLE` first.
+with contextlib.suppress(ModuleNotFoundError):  # pragma: no cover - optional dependency
+    from py_pglite import (  # type: ignore[import-untyped]  # py-pglite does not publish type information for this optional test dependency.
+        PGliteConfig,
+        PGliteManager,
+    )
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -27,136 +47,21 @@ if typ.TYPE_CHECKING:
     )
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-try:
-    from py_pglite import (  # type: ignore[import-untyped]  # py-pglite does not publish type information for this optional test dependency.
-        PGliteConfig,
-        PGliteManager,
-    )
-
-    _PGLITE_AVAILABLE = True
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
-    _PGLITE_AVAILABLE = False
+# Re-exported so the py-pglite fixtures stay importable from this module, which
+# is the pytest plugin registered by the root conftest.
+__all__ = [
+    "PGLITE_AVAILABLE",
+    "PGLITE_START_ATTEMPTS",
+    "pglite_node_environment",
+    "pglite_node_modules",
+    "prepare_pglite_work_dir",
+    "should_use_pglite",
+]
 
 
 # Serialise concurrent schema resets under pytest-xdist. Workers sharing one
 # py-pglite process must go through this lock before dropping `public`.
 _schema_reset_lock = asyncio.Lock()
-
-
-@pytest.fixture(scope="session")
-def pglite_node_environment(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> Path:
-    """Return the session work root for py-pglite test processes."""
-    if not _should_use_pglite():
-        pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
-
-    return tmp_path_factory.mktemp("pglite-node-env")
-
-
-# py-pglite runs `npm install` in every work directory it is handed, and it
-# gives that subprocess a fixed 60-second timeout which it does not catch, so
-# one slow registry response surfaces as `subprocess.TimeoutExpired` out of
-# `PGliteManager.start()`. A per-test work directory pays that cost, and that
-# risk, once per test. Priming the modules once per session and pointing each
-# per-test directory at the result reduces it to a single attempt.
-PGLITE_START_ATTEMPTS = 3
-
-
-def _prepare_pglite_work_dir(source: Path, destination: Path) -> Path:
-    """Return ``destination`` ready to run, reusing already-installed modules.
-
-    py-pglite skips its own install when the work directory already holds
-    ``node_modules``, so linking the session's copy in keeps each work
-    directory isolated while making the network call unnecessary. Only the
-    module tree is shared: py-pglite regenerates ``package.json`` and
-    ``pglite_manager.js`` for the destination, and the generated script has
-    the destination's own socket path baked into it.
-
-    Parameters
-    ----------
-    source : pathlib.Path
-        Session directory whose ``node_modules`` was installed once.
-    destination : pathlib.Path
-        Per-test directory py-pglite will run the server from.
-
-    Returns
-    -------
-    pathlib.Path
-        ``destination``, with the shared module tree linked in.
-    """
-    destination.mkdir(parents=True, exist_ok=True)
-    node_modules = destination / "node_modules"
-    if not node_modules.exists():
-        node_modules.symlink_to(source / "node_modules", target_is_directory=True)
-    return destination
-
-
-@pytest.fixture(scope="session")
-def pglite_node_modules(pglite_node_environment: Path) -> Path:
-    """Prime py-pglite's Node dependencies once for the whole session.
-
-    The fixture starts one throwaway py-pglite server, which is what makes
-    py-pglite stage its own ``package.json`` and install the modules into the
-    session directory. A failed attempt clears any partial ``node_modules``
-    first, so py-pglite retries the install rather than treating a truncated
-    tree as usable.
-
-    Returns
-    -------
-    pathlib.Path
-        Session directory holding a populated ``node_modules``.
-
-    Raises
-    ------
-    RuntimeError
-        If py-pglite is unavailable or the server never starts.
-    """
-    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
-        msg = "py-pglite is not available for runtime test fixtures."
-        raise RuntimeError(msg)
-
-    seed_dir = pglite_node_environment / "npm-seed"
-    last_error: Exception | None = None
-    for attempt in range(1, PGLITE_START_ATTEMPTS + 1):
-        if attempt > 1:
-            shutil.rmtree(seed_dir / "node_modules", ignore_errors=True)
-        config = PGliteConfig(work_dir=seed_dir, timeout=90)
-        manager = PGliteManager(config)
-        try:
-            manager.start()
-        except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
-            last_error = exc
-            manager.stop()
-            continue
-        manager.stop()
-        return seed_dir
-
-    msg = f"py-pglite dependency install failed after {PGLITE_START_ATTEMPTS} attempts"
-    raise RuntimeError(msg) from last_error
-
-
-def _should_use_pglite() -> bool:
-    """Return whether tests should use py-pglite, failing on invalid setup."""
-    allowed_values = {"sqlite", "pglite"}
-    target = os.getenv("EPISODIC_TEST_DB", "pglite").lower()
-    if target not in allowed_values:
-        msg = (
-            f"Unsupported EPISODIC_TEST_DB value: {target!r}. "
-            f"Allowed values are: {', '.join(sorted(allowed_values))}."
-        )
-        raise RuntimeError(msg)
-    if target == "sqlite":
-        return False
-    if target == "pglite" and not _PGLITE_AVAILABLE:
-        msg = (
-            "Database-backed tests requested via EPISODIC_TEST_DB="
-            f"{target!r}, but py-pglite is not installed or unavailable. "
-            "Install py-pglite (see docs/testing-sqlalchemy-with-pytest-and-"
-            "py-pglite.md) or set EPISODIC_TEST_DB=sqlite."
-        )
-        raise RuntimeError(msg)
-    return True
 
 
 async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
@@ -191,7 +96,7 @@ async def _pglite_sqlalchemy_manager(
     work_dir: Path,
 ) -> cabc.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
     """Start a helper-backed py-pglite manager for SQLAlchemy tests."""
-    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
+    if not PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
         msg = "py-pglite is not available for test fixtures."
         raise RuntimeError(msg)
 
@@ -263,7 +168,7 @@ async def pglite_sqlalchemy_manager(
     SQLAlchemyAsyncPGliteManager
         Running manager shared by the SQLAlchemy-backed test session.
     """
-    if not _should_use_pglite():
+    if not should_use_pglite():
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
 
     work_dir = pglite_node_environment / "server"
@@ -367,16 +272,14 @@ async def migrated_database_url(
         If py-pglite is unavailable, or the server never serves a migrated
         database within ``PGLITE_START_ATTEMPTS`` attempts.
     """
-    if not _should_use_pglite():
+    if not should_use_pglite():
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
 
-    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
+    if not PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
         msg = "py-pglite is not available for runtime test fixtures."
         raise RuntimeError(msg)
 
-    work_dir = _prepare_pglite_work_dir(
-        pglite_node_modules, tmp_path / "runtime-pglite"
-    )
+    work_dir = prepare_pglite_work_dir(pglite_node_modules, tmp_path / "runtime-pglite")
     # A socket path unique to this work directory keeps concurrently running
     # py-pglite servers from colliding, and is why the module tree is shared
     # as a link rather than the directory itself. `mkdtemp` already creates
