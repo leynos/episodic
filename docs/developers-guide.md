@@ -401,7 +401,7 @@ Keys name locations, not line spans, because spans churn whenever code above
 them moves. A key is a repository-relative path glob, optionally suffixed
 `::name` to require nose's unit name as well; `::name` keys never match the
 fragment-level findings nose reports without a name, such as shared import
-blocks. An entry silences a family only when *every* location in that family
+blocks. An entry silences a family only when _every_ location in that family
 matches one of its keys, so a new copy in an unlisted file still blocks the
 gate. Omit `SECOND` to record a single-key entry, which silences every family
 whose members all sit under that key. `make duplication-allow` accepts one
@@ -445,14 +445,13 @@ upstream titles, fixtures, stems or exclusions in `typos.local.toml`.
 
 ### Atomic writes
 
-`make spelling` runs the external `typos-config-builder` gate, so no
-repository script writes a spelling cache.
+`make spelling` runs the external `typos-config-builder` gate, so no repository
+script writes a spelling cache.
 
-`scripts/atomic_write.py` provides `atomic_write` for replacing generated
-files through a temporary sibling and `Path.replace`. It is a neutral
-persistence helper that belongs to neither caller's domain; today its live
-consumer is the duplication allowlist writer in
-`scripts/duplication_allowlist.py`.
+`scripts/atomic_write.py` provides `atomic_write` for replacing generated files
+through a temporary sibling and `Path.replace`. It is a neutral persistence
+helper that belongs to neither caller's domain; today its live consumer is the
+duplication allowlist writer in `scripts/duplication_allowlist.py`.
 
 Its `AtomicWriteOptions` value object controls the policy: the defaults create
 missing parent directories, do not preserve an existing destination mode, and
@@ -2000,7 +1999,7 @@ atomically after that lock succeeds.
 The terminal update must clear `current_node` and set `ended_at`. A run in a
 terminal status (`succeeded`, `failed`, or `cancelled`) records where it
 stopped in its events, not in `current_node`, which names only the node a
-*running* run currently occupies. The SQL adapter validates both fields before
+_running_ run currently occupies. The SQL adapter validates both fields before
 flushing and rejects a terminal update that leaves a current node
 (`terminal generation runs must not have a current node`) or omits an end time
 (`terminal generation runs must have an end time`), leaving the persisted run
