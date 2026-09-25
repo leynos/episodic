@@ -129,10 +129,9 @@ class _SchedulingMixin(_MixinBase):
                 await asyncio.shield(self._record_cancellation(run_id))
                 self._cancelled_run_ids.add(run_id)
                 raise
-            else:
-                span.set_attribute("outcome", outcome.outcome)
-                if outcome.failure_category is not None:
-                    span.set_attribute("failure_category", outcome.failure_category)
+            span.set_attribute("outcome", outcome.outcome)
+            if outcome.failure_category is not None:
+                span.set_attribute("failure_category", outcome.failure_category)
 
     async def _execute_run(self, run_id: uuid.UUID) -> _ExecutionOutcome:
         """Execute one generation run while its concurrency permit is held."""

@@ -25,7 +25,7 @@ def _require_value(value: object, field_name: str) -> None:
 
 def _is_blank(value: str) -> bool:
     """Return whether a string is empty after whitespace trimming."""
-    return value.strip() == ""
+    return not value.strip()
 
 
 def _validate_non_empty_text(value: str, field_name: str) -> None:

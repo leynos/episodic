@@ -49,7 +49,7 @@ def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
     """Reject blank or whitespace-only string fields on a dataclass instance."""
     for field_name in field_names:
         value = getattr(instance, field_name)
-        if not isinstance(value, str) or value.strip() == "":
+        if not isinstance(value, str) or not value.strip():
             msg = f"{field_name} must be non-empty."
             raise ValueError(msg)
 
@@ -68,7 +68,7 @@ def _normalize_optional_tei_locator(tei_locator: str | None) -> str | None:
     if tei_locator is None:
         return None
     normalized = tei_locator.strip()
-    if normalized == "":
+    if not normalized:
         return None
     return normalized
 

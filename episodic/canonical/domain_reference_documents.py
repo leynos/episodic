@@ -50,7 +50,7 @@ class ReferenceDocumentRevision:
 
     def __post_init__(self) -> None:
         """Validate content-hash invariants."""
-        if self.content_hash.strip() == "":
+        if not self.content_hash.strip():
             msg = "content_hash must be a non-empty string."
             raise ValueError(msg)
 

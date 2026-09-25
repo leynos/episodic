@@ -38,7 +38,7 @@ def _require_non_empty_text(value: str, field_name: str) -> None:
     if not isinstance(value, str):
         msg = f"{field_name} must be a string."
         raise TypeError(msg)
-    if value.strip() == "":
+    if not value.strip():
         msg = f"{field_name} must be a non-empty string."
         raise ValueError(msg)
 

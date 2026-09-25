@@ -27,7 +27,7 @@ def _decode_object(value: object, field_name: str) -> dict[str, object]:
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
     """Require a non-empty string from an LLM payload."""
-    if not isinstance(value, str) or value.strip() == "":
+    if not isinstance(value, str) or not value.strip():
         msg = f"{field_name} must be a non-empty string."
         raise GuestBiosResponseFormatError(msg)
     return value
