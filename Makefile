@@ -26,7 +26,7 @@ endif
 LOCAL_K8S_ENGINE ?= docker
 LOCAL_K8S_PROVIDER ?= k3d
 # Pylint runs on CPython at the project's 3.14 baseline: the source uses 3.14
-# syntax (PEP 758 unparenthesised `except` lists) that no managed PyPy parses.
+# syntax (PEP 758 unparenthesized `except` lists) that no managed PyPy parses.
 PYLINT_PYTHON ?= 3.14
 PYLINT_VERSION ?= 4.0.9
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
