@@ -103,6 +103,14 @@ jobs:
         id: codescene_token
         run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
 
+      - name: Report a skipped CodeScene upload
+        # Without this the upload step is merely skipped, which reads as
+        # success. The job only runs on main, so a missing token is the one
+        # reason the upload skips. The notice names no secret and reads only
+        # the check's boolean output.
+        if: steps.codescene_token.outputs.available != 'true'
+        run: echo "::notice title=CodeScene upload skipped::The CodeScene access token is not available to this run, so coverage was not uploaded."
+
       - name: Upload coverage data to CodeScene
         # The job above already restricts this workflow to main, and the
         # workflow answers only a main push or a dispatch. Guarding this

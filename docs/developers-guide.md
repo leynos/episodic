@@ -104,7 +104,12 @@ reading it. It executes the check step's own script, with its secret expression
 rendered as GitHub renders it, then evaluates the job's and the upload's `if:`
 conditions for each token, event and ref. The upload happens exactly when the
 token exists and the run is on `main`, and an absent token skips it rather than
-failing.
+failing. A skipped step reads as success, so a
+`Report a skipped CodeScene upload` step then writes a `::notice` annotation
+saying coverage was not uploaded. It reads only the check's boolean output and
+names no secret. The same module asserts that the notice runs exactly when the
+job runs and the upload does not, and that its command reads no `secrets.`
+value.
 
 No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
