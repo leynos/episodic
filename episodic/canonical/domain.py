@@ -51,6 +51,8 @@ from .domain_templates import (
     SeriesProfileHistoryEntry,
     TeiHeader,
 )
+from .generation_quality import QaStatus, QualityMode
+from .generation_run_errors import CheckpointAlreadyTerminal
 
 __all__ = [
     "ApprovalEvent",
@@ -58,6 +60,7 @@ __all__ = [
     "CanonicalEpisode",
     "Checkpoint",
     "CheckpointAction",
+    "CheckpointAlreadyTerminal",
     "CheckpointResponse",
     "CheckpointStatus",
     "EpisodeStatus",
@@ -73,6 +76,8 @@ __all__ = [
     "IngestionStatus",
     "IntakeState",
     "JsonMapping",
+    "QaStatus",
+    "QualityMode",
     "ReferenceBinding",
     "ReferenceBindingTargetKind",
     "ReferenceDocument",

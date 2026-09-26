@@ -40,7 +40,7 @@ class GenerationSourceLimits:
     max_aggregate_source_bytes : int
         Maximum bytes retained across all source documents.
     max_normalized_source_bytes : int
-        Maximum UTF-8 bytes after source-text normalisation.
+        Maximum UTF-8 bytes after source-text normalization.
 
     Raises
     ------
