@@ -5,11 +5,9 @@ Mock-backed `LLMPort` flow. Each scenario starts a local Vidai Mock process
 from a temporary provider/template directory, waits for the TCP port to become
 ready, and tears the process down through the `guest_bios_context` fixture.
 
-The `_RecordingLLMPort` wrapper records every `LLMRequest` before forwarding it
-to the OpenAI-compatible adapter. Step assertions use that captured request to
-prove `GuestBiosGenerator.generate` sent pinned guest profile content, while
-also recording generated `GuestBiosResult` and enriched TEI artefacts for the
-Then steps.
+The `_RecordingLLMPort` records each request before forwarding it to the
+OpenAI-compatible adapter. Assertions verify pinned guest profiles and record
+the `GuestBiosResult` and enriched TEI artefacts.
 """
 
 from __future__ import annotations
@@ -245,6 +243,7 @@ def _start_vidaimock_process(
                 str(port),
                 "--config-dir",
                 str(config_dir),
+                "--isolated",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

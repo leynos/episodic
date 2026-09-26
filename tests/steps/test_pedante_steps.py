@@ -208,6 +208,7 @@ def _start_vidaimock_process(
             str(port),
             "--config-dir",
             str(config_dir),
+            "--isolated",
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
