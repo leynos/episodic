@@ -1853,7 +1853,9 @@ costs and terminal status. The mixins read the launcher's fields through
 at runtime their base is `object`, and the launcher's MRO and slots are
 unchanged. Construct the launcher, never a mixin on its own. `_load_sources`
 stays on the launcher because tests patch `source_from_document` in
-`launcher.py`.
+`launcher.py`. Replacing the mixins with injected scheduling, claim and
+persistence components is tracked in
+[#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they
