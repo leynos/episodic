@@ -17,7 +17,6 @@ import enum
 import json
 import logging
 import typing as typ
-import uuid
 import warnings
 
 from femtologging import basicConfig, get_logger, getLogger
@@ -249,8 +248,6 @@ def _serialize_log_field(value: object) -> object:
             return value.value
         case dt.date() | dt.time():
             return value.isoformat()
-        case uuid.UUID() | BaseException():
-            return str(value)
         case _:
             return str(value)
 

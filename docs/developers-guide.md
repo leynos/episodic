@@ -1093,13 +1093,19 @@ The enforced groups are:
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
   OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
   `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
-- `orchestration_nodes`: LangGraph node functions under
-  `episodic.orchestration._graph_nodes`. This group may depend on the
-  `orchestration_checkpoint` DTO group and `domain_ports`, and must be ordered
-  before the broader `orchestration` group.
-- `orchestration_checkpoint`: provider-neutral checkpoint payload DTO and
-  serialization modules.
-- `orchestration`: LangGraph builders, graph state, planning orchestration, and
+- `orchestration_nodes`: `episodic.orchestration._graph_nodes`,
+  `episodic.orchestration._graph_protocols`,
+  `episodic.orchestration._graph_state`, and `episodic.orchestration._usage`.
+  This group may depend on the `orchestration_checkpoint` DTO group and
+  `domain_ports`, and must be ordered before the broader `orchestration` group.
+- `orchestration_checkpoint`: `episodic.orchestration._dto`,
+  `episodic.orchestration._action_result_dto`,
+  `episodic.orchestration._result_dto`,
+  `episodic.orchestration._checkpoint_payload`,
+  `episodic.orchestration._checkpoint_dto`, and
+  `episodic.orchestration._payload_dto`, the provider-neutral checkpoint
+  payload DTO and serialization modules.
+- `orchestration`: LangGraph builders, planning orchestration, and
   tool execution policy, excluding the dedicated node group. This group may
   depend on `orchestration_nodes` because graph builders and the public facade
   assemble and expose those nodes.

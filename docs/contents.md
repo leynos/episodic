@@ -103,8 +103,6 @@ or delivery planning.
   - source-intake upload storage and idempotency port decisions.
 - [ADR 016: Adopt Skylos dead-code detection](adr/adr-016-adopt-skylos-dead-code-detection.md)
   - blocking static dead-code detection and exception policy.
-- [ADR 016: Orchestration architecture enforcement](adr/adr-016-orchestration-architecture-enforcement.md)
-  - LangGraph node, Celery task, and checkpoint payload enforcement decisions.
 - [ADR 017: No-QA generation execution and TEI persistence][adr-017]
   - generation launcher, draft persistence, recovery, and TEI retrieval
     decisions.
@@ -119,6 +117,8 @@ or delivery planning.
     ADR-021.
 - [ADR 021: Adopt nose duplication gate](adr/adr-021-adopt-nose-duplication-gate.md)
   - current duplication detector, version pinning, and allowlist key policy.
+- [ADR 022: Orchestration architecture enforcement](adr/adr-022-orchestration-architecture-enforcement.md)
+  - LangGraph node, Celery task, and checkpoint payload enforcement decisions.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 

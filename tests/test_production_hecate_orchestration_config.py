@@ -53,6 +53,17 @@ def test_production_config_classifies_orchestration_in_strict_order() -> None:
         "orchestration_nodes",
     ], "broad orchestration must not permit adapter imports"
 
+    orchestration_tasks_group = group_by_name["orchestration_tasks"]
+    assert (
+        _production_hecate_group_for_module("episodic.worker.tasks", groups)
+        == "orchestration_tasks"
+    ), "worker tasks must use their dedicated group"
+    assert orchestration_tasks_group["allowed"] == [
+        "orchestration_tasks",
+        "application",
+        "domain_ports",
+    ], "worker tasks must not depend on adapters"
+
     module_groups = _production_orchestration_module_groups(groups)
     assert all(group_name is not None for group_name in module_groups.values()), (
         "every orchestration Python module must match a configured group"
@@ -82,11 +93,14 @@ def _production_orchestration_module_groups(
     orchestration_root = (
         Path(__file__).resolve().parents[1] / "episodic" / "orchestration"
     )
-    module_names = (
+    module_names = [
         "episodic.orchestration"
         if module_path.name == "__init__.py"
         else f"episodic.orchestration.{module_path.stem}"
         for module_path in orchestration_root.glob("*.py")
+    ]
+    assert module_names, (
+        f"No Python modules found under orchestration package {orchestration_root}"
     )
     return {
         module_name: _production_hecate_group_for_module(module_name, groups)

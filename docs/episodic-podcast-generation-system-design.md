@@ -21,7 +21,7 @@ Accepted decision records:
 - [ADR 013: Speech synthesis adapters](adr/adr-013-speech-synthesis-adapters.md)
 - [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
 - [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
-- [ADR 016: Orchestration architecture enforcement](adr/adr-016-orchestration-architecture-enforcement.md)
+- [ADR 022: Orchestration architecture enforcement](adr/adr-022-orchestration-architecture-enforcement.md)
 - [ADR 018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md)
 - [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
 
@@ -119,9 +119,11 @@ Boundary rules:
   domain and ports, but never on outbound adapter implementations.
 - **Outbound adapters** (database, object storage, message broker, LLM/TTS
   vendors) depend on the domain and ports, but never on inbound adapters.
-- **Orchestration code** (LangGraph nodes and Celery tasks) depends on domain
-  services, ports, and provider-neutral orchestration DTOs only. Direct adapter
-  access is rejected by orchestration-specific Hecate groups.
+- **Orchestration code**: LangGraph node modules depend outside their own group
+  only on domain ports and provider-neutral checkpoint DTOs. Graph builders and
+  Celery task modules may additionally depend on application services; graph
+  builders also assemble the node and checkpoint groups. Direct adapter access
+  is rejected by orchestration-specific Hecate groups.
 - **Cross-adapter imports** are forbidden; interactions happen through ports or
   well-defined message schemas.
 - **Checkpoint payloads** hold orchestration metadata and JSON-shaped
@@ -216,7 +218,7 @@ Enforcement mechanisms:
 - Contract tests exercise port behaviour against adapter implementations, so
   adapters are verified without coupling to infrastructure in the domain.
 - Roadmap item `2.4.5` delivered LangGraph-node-specific imports, Celery task
-  policies, and checkpoint payload boundary enforcement. ADR-016 records the
+  policies, and checkpoint payload boundary enforcement. ADR-022 records the
   orchestration-specific decisions.
 - Code review checklists enforce idempotency keys, single-responsibility task
   scope, and checkpoint payload audits for orchestration changes.

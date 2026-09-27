@@ -1,4 +1,4 @@
-# ADR-016: Orchestration architecture enforcement
+# ADR-022: Orchestration architecture enforcement
 
 ## Status
 
@@ -37,24 +37,37 @@ The risk was concentrated in three places:
 
 ## Decision outcome
 
-In the context of structured generation orchestration, facing boundary creep in
-LangGraph nodes, Celery tasks, and durable checkpoint payloads, we decided for
-dedicated Hecate groups plus structural checkpoint payload tests, and against a
-single broad orchestration group or review-only convention, to achieve
-deterministic import-boundary enforcement, accepting a more detailed
-`pyproject.toml` group ordering and additional fixture maintenance.
+For structured generation orchestration, the decision is to use dedicated
+Hecate groups and structural checkpoint payload tests rather than a single
+broad orchestration group or a review-only convention. This provides
+deterministic import-boundary enforcement, with more detailed `pyproject.toml`
+group ordering and additional fixture maintenance as accepted trade-offs.
 
 The accepted groups are:
 
-- `orchestration_nodes` for `episodic.orchestration._graph_nodes`, allowed to
-  depend on the `orchestration_checkpoint` DTO group and domain ports only.
+- `orchestration_nodes` for `episodic.orchestration._graph_nodes`,
+  `episodic.orchestration._graph_protocols`,
+  `episodic.orchestration._graph_state`, and `episodic.orchestration._usage`,
+  allowed to depend on the `orchestration_checkpoint` DTO group and domain
+  ports only.
 - `orchestration` for graph builders, planning orchestration, and tool
   execution policy, allowed to depend on application services, checkpoint DTOs,
   and `orchestration_nodes`, but not adapters.
 - `orchestration_tasks` for `episodic.worker.tasks`, allowed to depend on
   domain services, domain ports, and `episodic.worker.workloads.WorkloadClass`.
-- `orchestration_checkpoint` for checkpoint DTO and payload serialization
-  modules, allowed to depend on itself and domain-port value types only.
+- `orchestration_checkpoint` for `episodic.orchestration._dto`,
+  `episodic.orchestration._action_result_dto`,
+  `episodic.orchestration._result_dto`,
+  `episodic.orchestration._checkpoint_payload`,
+  `episodic.orchestration._checkpoint_dto`, and
+  `episodic.orchestration._payload_dto` checkpoint DTO and payload
+  serialization modules, allowed to depend on itself and domain-port value
+  types only.
+
+`episodic.orchestration._types` is classified as `domain_ports`. This is why
+`orchestration_nodes` and `orchestration_checkpoint` can import its
+compatibility `_log_event` alias and provider-neutral `ActionKind` and
+`ModelTier` under the existing domain-port allowance.
 
 `episodic.worker.workloads.WorkloadClass` is the canonical domain-port-like
 worker contract, so task modules can describe workload routing without

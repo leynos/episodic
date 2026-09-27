@@ -18,7 +18,7 @@ slice (see `docs/episodic-podcast-generation-system-design.md`, the "Hexagonal
 architecture enforcement" section, which states that "direct adapter access is
 reserved for the later orchestration-specific enforcement slice").
 
-Roadmap item 2.4.5 (`docs/roadmap.md`) asks us to:
+Roadmap item 2.4.5 (`docs/roadmap.md`) defines three requirements:
 
 1. Validate LangGraph nodes depend on ports only.
 2. Validate Celery tasks depend on ports only.
@@ -57,8 +57,7 @@ escalation, not a workaround.
   `episodic.worker.__init__` must keep re-exporting every symbol they export
   today (verify with `leta refs <symbol>` before moving a definition).
 - No single code file may exceed 400 lines (AGENTS.md).
-  `episodic/orchestration/ langgraph.py` is already 460 lines; any split must
-  leave each resulting file under 400 lines.
+  The completed orchestration split keeps each module under this limit.
 - Domain purity: orchestration and worker code must not gain imports of
   transport, storage, ORM, or vendor SDK modules. Cross-adapter imports remain
   forbidden.
@@ -190,7 +189,7 @@ LangGraph-node, Celery-task, and checkpoint-payload scenarios; added a
 normalized `hecate check --format json` snapshot covering representative
 orchestration violations; and added a direct Vidai Mock-backed LangGraph
 `plan -> execute -> finish` behavioural test. Focused validation passed with
-`33 passed` before documentation updates. Documentation now records ADR-016,
+`33 passed` before documentation updates. Documentation now records ADR-022,
 the node/builder split, the `orchestration_nodes`, `orchestration_tasks`, and
 `orchestration_checkpoint` groups, the checkpoint payload audit, and roadmap
 item `2.4.5` as complete. The full milestone gates passed: `make check-fmt`,
@@ -311,7 +310,7 @@ findings.
   modules (`_graph_builder`, `_graph_nodes`, and the compatibility `langgraph`
   barrel) rather than the whole `episodic.orchestration` package. Rationale: M1
   proves the node/builder split and prevents graph modules from importing
-  adapters without prematurely grouping checkpoint DTOs. A package- wide prefix
+  adapters without prematurely grouping checkpoint DTOs. A package-wide prefix
   would force the M3 checkpoint DTO decision into M1 and would make the durable
   checkpoint adapter fail before its port DTO boundary has been audited.
   Date/Author: 2026-06-26, implementation agent.
@@ -320,7 +319,7 @@ findings.
   `episodic.orchestration._types._log_event` to `episodic.logging.log_event`,
   while keeping `_types._log_event` as a compatibility alias. Rationale:
   canonical adapters were using the helper for generic structured logging.
-  Keeping that helper in orchestration created an adapter-to- orchestration
+  Keeping that helper in orchestration created an adapter-to-orchestration
   dependency unrelated to graph policy; the logging module is the existing
   neutral home for logging helpers. Date/Author: 2026-06-26, implementation
   agent.
@@ -439,13 +438,13 @@ LangGraph is a library for building stateful graphs of "nodes" (functions that
 take a state and return a state update). The orchestration package builds one
 such graph for generation:
 
-- `episodic/orchestration/langgraph.py` (460 lines) defines the node functions
-  `_plan_node`, `_execute_node`, `_finish_node`, cost-recording helpers, and
-  the graph builder `build_generation_orchestration_graph`. It imports the
-  LangGraph library plus sibling orchestration modules. The node functions
-  receive their collaborators (`PlannerPort`, `ToolExecutorPort`) by injection;
-  the builder is the module's only consumer of `_planning_orchestrator`
-  (`StructuredPlanningOrchestrator`, application tier).
+- Before the M1 split, `episodic/orchestration/langgraph.py` defined the node
+  functions `_plan_node`, `_execute_node`, `_finish_node`, cost-recording
+  helpers, and the graph builder `build_generation_orchestration_graph`. It
+  imported the LangGraph library plus sibling orchestration modules. The node
+  functions received their collaborators (`PlannerPort`, `ToolExecutorPort`) by
+  injection; the builder was the module's only consumer of
+  `_planning_orchestrator` (`StructuredPlanningOrchestrator`, application tier).
 - `episodic/orchestration/_protocols.py` defines the port protocols
   (`PlannerPort`, `ToolExecutorPort`, `CostRecorderPort`, and similar).
 - `episodic/orchestration/_graph_state.py`, `_types.py`, `_usage.py`,
@@ -681,7 +680,7 @@ passes.
 ### M4 Behavioural tests, snapshots, documentation, and roadmap update (completed)
 
 M4 delivered the behavioural scenarios, the normalized Hecate snapshot, the
-Vidai Mock-backed graph test, the architecture documentation and ADR-016, and
+Vidai Mock-backed graph test, the architecture documentation and ADR-022, and
 the roadmap update. The dated entry above records the focused and final gate
 results, including `make check-fmt`, `make typecheck`, `make lint`, `make test`,
 `make markdownlint`, and `make nixie`.
@@ -752,10 +751,8 @@ Feature: Architecture enforcement
 
 ## Concrete steps
 
-Run all commands from the repository root
-(`/home/leynos/.lody/repos/github---leynos---episodic/worktrees/...` in this
-worktree). Capture long output with `tee` to a temporary log for review, per
-project convention.
+Run all commands from the repository root. Capture long output with `tee` to a
+temporary log for review, per project convention.
 
 1. Build and baseline:
 
@@ -837,9 +834,9 @@ Quality criteria (what "done" means):
   fixture; no rule relies on an ungrouped module to pass.
 - Review: CodeRabbit concerns cleared at each milestone.
 
-Quality method (how we check): the `Makefile` gate suite run sequentially after
-each milestone, plus the fixture-harness positive and negative cases, plus
-CodeRabbit.
+Quality method (how it is checked): the `Makefile` gate suite runs sequentially
+after each milestone, alongside the fixture-harness positive and negative cases
+and CodeRabbit review.
 
 ## Idempotence and recovery
 
@@ -878,8 +875,8 @@ the Decision Log when chosen):
 - Architecture fixtures and tests as listed under "Fixtures to add", a
   structural reflection test, a Hypothesis property test, a `syrupy` snapshot, a
   `pytest-bdd` feature, and a `vidai-mock`-backed behavioural test.
-- `docs/adr/adr-016-*.md` recording the decisions, cross-referenced from
-  ADR-014 and the system design.
+- `docs/adr/adr-022-orchestration-architecture-enforcement.md` recording the
+  decisions, cross-referenced from ADR-014 and the system design.
 
 The orchestration and worker public barrels
 (`episodic/orchestration/__init__.py`, `episodic/worker/__init__.py`) must

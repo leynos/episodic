@@ -13,7 +13,7 @@ does not know the repository's dependency graph. A module can therefore import
 in the wrong direction while still satisfying ordinary lint rules.
 
 The immediate need was roadmap item `1.5.4`: enforce the current service
-scaffold boundaries. ADR-016 records the later orchestration-specific checks
+scaffold boundaries. ADR-022 records the later orchestration-specific checks
 for LangGraph nodes, Celery task payloads, and checkpoint state.
 
 ## Decision
@@ -73,7 +73,7 @@ published structural surface.
 - Constraint-name constants used by service-layer conflict handling now live in
   `episodic.canonical.constraints`. SQLAlchemy models import those constants
   rather than owning the only copy.
-- ADR-016 extends this base policy with LangGraph-node-specific policies,
+- ADR-022 extends this base policy with LangGraph-node-specific policies,
   Celery task checks, and checkpoint payload audits.
 - Hecate replaces the former repo-local `episodic.architecture` checker. New
   architecture groups are added in `pyproject.toml`; generic checker semantics
@@ -88,7 +88,7 @@ configuration: `[tool.hecate]` in `pyproject.toml`.[^4] Tests:
 `tests/test_architecture_enforcement.py`, `tests/test_port_contracts.py`,
 `tests/features/architecture_enforcement.feature`, and
 `tests/steps/test_architecture_enforcement_steps.py`.[^5] Orchestration
-enforcement extension: ADR-016.[^6]
+enforcement extension: ADR-022.[^6]
 
 [^1]: Roadmap items `1.5.4` and `2.4.5` in `docs/roadmap.md`
 [^2]: ExecPlan:
@@ -100,4 +100,4 @@ enforcement extension: ADR-016.[^6]
   `tests/features/architecture_enforcement.feature`, and
   `tests/steps/test_architecture_enforcement_steps.py`
 [^6]: Orchestration architecture enforcement:
-  `docs/adr/adr-016-orchestration-architecture-enforcement.md`
+  `docs/adr/adr-022-orchestration-architecture-enforcement.md`

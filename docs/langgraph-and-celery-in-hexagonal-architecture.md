@@ -43,10 +43,11 @@ The production configuration gives LangGraph nodes a dedicated group before the
 broad `orchestration` group and broader adapter prefixes, so the first matching
 group is the strictest useful boundary.
 
-- `orchestration_nodes` covers `episodic.orchestration._graph_nodes`. Node
-  functions may import the `orchestration_checkpoint` DTO group and
-  `domain_ports`, but not Falcon, Celery, SQLAlchemy, OpenAI adapters, or other
-  concrete infrastructure.
+- `orchestration_nodes` covers all production-classified modules:
+  `episodic.orchestration._graph_nodes`, `_graph_protocols`, `_graph_state`, and
+  `_usage`. Node functions may import the `orchestration_checkpoint` DTO group
+  and `domain_ports`, but not Falcon, Celery, SQLAlchemy, OpenAI adapters, or
+  other concrete infrastructure.
 - `orchestration` covers graph builders, planning orchestration, and tool
   execution policy. This layer may depend on application services, domain
   ports, and `orchestration_nodes`, but still cannot import inbound or outbound
