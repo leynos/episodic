@@ -2,7 +2,7 @@
 
 Branch: `use-cpython-for-pylint` PR:
 <https://github.com/leynos/episodic/pull/339> Baseline commit before this work:
-`e7e1f04` (post-rebase head)
+`e7e1f04` (post-rebase head); rebased onto `main` at `f1bdaca`, head `1a97009`
 
 ## Goal
 
@@ -204,6 +204,56 @@ logged types for ordinary mistyping. The snapshot in
 `tests/__snapshots__/test_llm_openai_adapter_config.ambr` pins
 `"max_attempts": 3` and `"timeout_seconds": 30.0` as numbers, so reading the
 existing contract first is what kept the fix from becoming a schema change.
+
+## Second rebase: onto main at `f1bdaca`, dropping the superseded Pylint commit
+
+`main` advanced three commits, one of which — `ced3f90`, "Run Pylint on CPython
+3.14 and lint every module (#346)" — is a **successor landing of this branch's
+first commit**. It carries the same purpose (Pylint on CPython 3.14, with the
+module splits that purpose forced) decomposed into 55 files at a finer
+granularity, and its `Makefile` already sets `PYLINT_PYTHON ?= 3.14` with a
+*more* precise pin (`pylint==4.0.9`, `--managed-python`) and no PyPy shim.
+
+Replaying `e7e1f04` would therefore have reinstated an older decomposition
+beside the newer one. It was excluded from the replay: `--onto f1bdaca e7e1f04`
+replays only the five later commits. The instruction to "keep only the elements
+of this PR that improve upon what is now present on main" is what this serves.
+
+Three further reconciliation decisions:
+
+- `5fbf87b` (the `typos.toml` regeneration) became empty: its output is
+  byte-identical to `main`'s `typos.toml`, verified before skipping rather than
+  assumed. Main absorbed the same 13 generated lines independently.
+- `e7e1f04` also renamed each scenario's provider fixture to `openai.yaml`.
+  That rename is **not load-bearing**: `scripts/check_vidaimock_isolated.py`'s
+  own docstring records that a provider's `name` field, not its filename, is
+  what `/v1/models` advertises, and a direct probe confirmed it — two fixtures
+  differing only in filename both reported the declared `draft` provider. Each
+  scenario also gets its own `--config-dir`, so no two providers share a
+  directory and no collision was possible. Git's auto-merge kept main's
+  descriptive names, and those were retained.
+- `ef122dc`'s four fixes were retargeted rather than dropped. Main has no
+  `domain_records.py` or `config_validation.py`, but it has the *defects* in its
+  differently-named equivalents: `isinstance(self.lock_version, int)` still
+  admits `True` in `domain_reference_documents.py`, `self.content_hash.strip()`
+  still raises `AttributeError` before the type check, and `utils_config.py`
+  still logs the three numeric fields raw. All three fixes were re-applied to
+  main's files against main's own underscore-prefixed helper names, and each was
+  verified against its exact failure mode. Main's `_json_safe` call site is
+  sound because main's snapshot pins the same numeric log types
+  (`"max_attempts": 3`, `"timeout_seconds": 30.0`) that pass-through preserves.
+
+The four conflicts were all one shape: main retains the duplicated per-module
+startup helpers, and the branch deletes them in favour of the shared harness.
+Resolution took the branch side. This is provable rather than a judgement call:
+`git diff OLD_BASE origin/main` is **empty** for all five files, so the target
+side carried no change of its own and nothing main-side could be lost.
+
+Audited afterwards: `range-diff` clean, `TARGET` an ancestor with no merges in
+range, `git diff --check` clean, all 124 target-only paths byte-identical, and
+the one deletion (`test_generation_orchestration_vidaimock.py`) is a file main
+never touched whose two contracts are re-covered by the new harness's nine
+tests. The 13 `e7e1f04`-only modules stay absent.
 
 ## Lessons
 
