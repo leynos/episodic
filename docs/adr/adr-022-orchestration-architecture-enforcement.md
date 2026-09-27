@@ -50,11 +50,14 @@ The accepted groups are:
   `episodic.orchestration._graph_state`, and `episodic.orchestration._usage`,
   allowed to depend on the `orchestration_checkpoint` DTO group and domain
   ports only.
-- `orchestration` for graph builders, planning orchestration, and tool
-  execution policy, allowed to depend on application services, checkpoint DTOs,
-  and `orchestration_nodes`, but not adapters.
+- `orchestration` for graph builders, planning orchestration, tool execution
+  policy, and `episodic.orchestration.langgraph_costs`, which records provider
+  costs for the direct generation path. It may depend on application services,
+  checkpoint DTOs, and `orchestration_nodes`, but not inbound or outbound
+  adapters.
 - `orchestration_tasks` for `episodic.worker.tasks`, allowed to depend on
-  domain services, domain ports, and `episodic.worker.workloads.WorkloadClass`.
+  `application` and `domain_ports`; `episodic.worker.workloads.WorkloadClass`
+  belongs to `domain_ports`.
 - `orchestration_checkpoint` for `episodic.orchestration._dto`,
   `episodic.orchestration._action_result_dto`,
   `episodic.orchestration._result_dto`,

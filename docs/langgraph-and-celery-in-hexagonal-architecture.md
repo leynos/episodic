@@ -48,10 +48,11 @@ group is the strictest useful boundary.
   `_usage`. Node functions may import the `orchestration_checkpoint` DTO group
   and `domain_ports`, but not Falcon, Celery, SQLAlchemy, OpenAI adapters, or
   other concrete infrastructure.
-- `orchestration` covers graph builders, planning orchestration, and tool
-  execution policy. This layer may depend on application services, domain
-  ports, and `orchestration_nodes`, but still cannot import inbound or outbound
-  adapters.
+- `orchestration` covers graph builders, planning orchestration, tool execution
+  policy, and `episodic.orchestration.langgraph_costs`, which records provider
+  costs for the direct generation path. This layer may depend on application
+  services, domain ports, and `orchestration_nodes`, but still cannot import
+  inbound or outbound adapters.
 - `orchestration_tasks` covers `episodic.worker.tasks`. Tasks may import
   `episodic.worker.workloads.WorkloadClass`, domain services, and ports; the
   worker runtime remains the composition root that wires Celery.
@@ -61,11 +62,13 @@ group is the strictest useful boundary.
   construction time.
 
 The node/builder split keeps framework mechanics out of node functions without
-making LangGraph itself a domain dependency. `_graph_nodes.py` holds the
-side-effect-free node bodies that receive injected planner, executor,
-checkpoint, resume, and cost collaborators. `_graph_builder.py` owns LangGraph
-assembly, callback wrapping, and cost-recording edges. The public
-`langgraph.py` module stays as the stable facade.
+making LangGraph itself a domain dependency. `_graph_nodes.py` is the strict,
+ports-and-DTO-only node implementation: its side-effect-free node bodies
+receive planner and tool-executor ports only. `_checkpoint_resume.py` owns
+checkpoint suspension and resume; `_graph_builder.py` assembles those functions
+with the nodes, callbacks, and direct-path cost recording through
+`langgraph_costs.py`. The public `langgraph.py` module remains the
+compatibility facade.
 
 Checkpoint payload auditing is both static and runtime checked. Hecate prevents
 payload modules from importing storage or application services. A structural

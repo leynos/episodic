@@ -1089,7 +1089,8 @@ The enforced groups are:
   canonical constraint names, and LLM ports.
 - `application`: canonical services, profile/template workflows,
   reference-document workflows, and generation services.
-- `inbound_adapter`: Falcon API modules and worker task/topology seams.
+- `inbound_adapter`: Falcon API modules (`episodic.api`) and the worker
+  topology seam (`episodic.worker.topology`).
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
   OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
   `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
@@ -1105,10 +1106,11 @@ The enforced groups are:
   `episodic.orchestration._checkpoint_dto`, and
   `episodic.orchestration._payload_dto`, the provider-neutral checkpoint
   payload DTO and serialization modules.
-- `orchestration`: LangGraph builders, planning orchestration, and
-  tool execution policy, excluding the dedicated node group. This group may
-  depend on `orchestration_nodes` because graph builders and the public facade
-  assemble and expose those nodes.
+- `orchestration`: LangGraph builders, planning orchestration, tool execution
+  policy, and `episodic.orchestration.langgraph_costs`, which records provider
+  costs for the direct generation path. This broad group excludes the dedicated
+  node group and may depend on `orchestration_nodes` because graph builders and
+  the public facade assemble and expose those nodes.
 - `orchestration_tasks`: Celery task entrypoints.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.

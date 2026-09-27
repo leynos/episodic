@@ -197,6 +197,17 @@ item `2.4.5` as complete. The full milestone gates passed: `make check-fmt`,
 `make markdownlint`, and `make nixie`. CodeRabbit review completed with 0
 findings.
 
+2026-09-27: Replayed the 27-commit series from the PR's recorded base `d9e5ac0`
+onto `origin/main` at `f1bdaca`. Resolved the graph split by retaining the
+branch's ports-only `_graph_nodes.py` and reusing main's `langgraph_costs` from
+`_graph_builder.py`, avoiding duplicate cost logic; removed the duplicate node
+implementation. The developers-guide conflict preserved main's CPython and
+module-size guidance while documenting the integrated layout. Post-rebase
+validation passed: focused production Hecate regression (1 passed),
+`make check-fmt`, `make test` (1,536 passed, 1 skipped), `make typecheck`,
+`make lint` (including Hecate and duplicate detection), `make markdownlint`, and
+`make nixie`.
+
 ## Surprises & discoveries
 
 - Observation: Hecate counts imports inside `if TYPE_CHECKING:` blocks and

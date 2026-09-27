@@ -14,10 +14,10 @@ from episodic.orchestration._graph_nodes import (
     _plan_node,
 )
 from episodic.orchestration._graph_state import GenerationGraphState
+from episodic.orchestration._types import _log_event
 from episodic.orchestration.langgraph_costs import (
     _record_costs_from_finished_state,
 )
-from episodic.orchestration._types import _log_event
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc

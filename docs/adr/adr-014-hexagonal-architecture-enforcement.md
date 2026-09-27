@@ -35,7 +35,9 @@ The first enforced groups are:
   canonical constraint names, and LLM ports.
 - `application`: canonical application services, profile/template services,
   reference-document services, and generation services.
-- `inbound_adapter`: Falcon API modules and worker task/topology seams.
+- The initial `inbound_adapter` classification covered Falcon API modules and
+  worker task/topology seams. Celery task entrypoints are now classified as
+  `orchestration_tasks`, as described in ADR-022.
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
   OpenAI-compatible LLM adapters.
 - `composition_root`: runtime modules whose job is to wire concrete adapters,

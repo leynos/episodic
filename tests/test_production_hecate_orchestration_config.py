@@ -5,18 +5,29 @@ import typing as typ
 from pathlib import Path
 
 EXPECTED_PRODUCTION_ORCHESTRATION_GROUPS = {
-    "episodic.orchestration._graph_nodes": "orchestration_nodes",
-    "episodic.orchestration._graph_protocols": "orchestration_nodes",
-    "episodic.orchestration._graph_state": "orchestration_nodes",
-    "episodic.orchestration._usage": "orchestration_nodes",
+    "episodic.orchestration": "orchestration",
     "episodic.orchestration._action_result_dto": "orchestration_checkpoint",
     "episodic.orchestration._checkpoint_dto": "orchestration_checkpoint",
     "episodic.orchestration._checkpoint_payload": "orchestration_checkpoint",
+    "episodic.orchestration._checkpoint_resume": "orchestration",
     "episodic.orchestration._dto": "orchestration_checkpoint",
+    "episodic.orchestration._graph_builder": "orchestration",
+    "episodic.orchestration._graph_nodes": "orchestration_nodes",
+    "episodic.orchestration._graph_protocols": "orchestration_nodes",
+    "episodic.orchestration._graph_state": "orchestration_nodes",
+    "episodic.orchestration._guest_bios_executor": "orchestration",
     "episodic.orchestration._payload_dto": "orchestration_checkpoint",
-    "episodic.orchestration._result_dto": "orchestration_checkpoint",
-    "episodic.orchestration._types": "domain_ports",
     "episodic.orchestration._planning_orchestrator": "orchestration",
+    "episodic.orchestration._protocols": "orchestration",
+    "episodic.orchestration._result_dto": "orchestration_checkpoint",
+    "episodic.orchestration._routing_executor": "orchestration",
+    "episodic.orchestration._show_notes_executor": "orchestration",
+    "episodic.orchestration._types": "domain_ports",
+    "episodic.orchestration._usage": "orchestration_nodes",
+    "episodic.orchestration.checkpoints": "orchestration",
+    "episodic.orchestration.generation": "orchestration",
+    "episodic.orchestration.langgraph": "orchestration",
+    "episodic.orchestration.langgraph_costs": "orchestration",
 }
 
 
@@ -65,15 +76,8 @@ def test_production_config_classifies_orchestration_in_strict_order() -> None:
     ], "worker tasks must not depend on adapters"
 
     module_groups = _production_orchestration_module_groups(groups)
-    assert all(group_name is not None for group_name in module_groups.values()), (
-        "every orchestration Python module must match a configured group"
-    )
-    classified_expected_modules = {
-        module_name: module_groups[module_name]
-        for module_name in EXPECTED_PRODUCTION_ORCHESTRATION_GROUPS
-    }
-    assert classified_expected_modules == EXPECTED_PRODUCTION_ORCHESTRATION_GROUPS, (
-        "strict and broad prefixes must classify their intended modules"
+    assert module_groups == EXPECTED_PRODUCTION_ORCHESTRATION_GROUPS, (
+        "every orchestration Python module must match its intended production group"
     )
 
 
