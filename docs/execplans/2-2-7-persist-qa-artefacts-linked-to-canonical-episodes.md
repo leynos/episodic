@@ -40,9 +40,9 @@ These are hard invariants. Violating one requires escalation, not a workaround.
   outcomes is roadmap item `4.4.1` and is explicitly out of scope here.
 - Do not add members to `QualityMode` or `QaStatus` in
   `episodic/canonical/generation_quality.py`. `QaStatus` currently has exactly
-  one member, `SKIPPED`, and `episodic/canonical/domain.py` contains
-  `_validate_draft_without_qa_metadata` (around line 681) which *requires*
-  `qa_status is QaStatus.SKIPPED` whenever
+  one member, `SKIPPED`, and `episodic/canonical/domain_validation.py` contains
+  `_validate_draft_without_qa_metadata` (called from `domain_generation.py`),
+  which *requires* `qa_status is QaStatus.SKIPPED` whenever
   `quality_mode is QualityMode.DRAFT_WITHOUT_QA`. Widening either enum would
   change generation semantics that Architecture Decision Record (ADR) 017 fixed
   for the no-QA slice. QA compliance is modelled by a *new, separate* enum on
@@ -65,13 +65,14 @@ These are hard invariants. Violating one requires escalation, not a workaround.
   application-side, `postgresql.UUID(as_uuid=True)` columns,
   `sa.DateTime(timezone=True)` timestamps, `postgresql.JSONB` for structured
   payloads, module-level `sa.Enum(..., values_callable=...)` constants in
-  `episodic/canonical/storage/models_base.py`, and hand-written Alembic
+  `episodic/canonical/storage/models_base.py`, and handwritten Alembic
   migrations.
-- Keep every **new** source file at or under 400 lines (`AGENTS.md`). Ten
-  existing modules already exceed it, topped by `episodic/canonical/domain.py`
-  at 704 lines, so do not read the limit as a description of the current tree.
-  Plan the splits listed under *Module budget* before writing, not after the
-  port contract tests are in place.
+- Keep every source file at or under 400 lines (`AGENTS.md`). Since the
+  rebase onto `f1bdaca`, no module under `episodic/` exceeds the limit — `main`
+  split the former offenders, including `episodic/canonical/domain.py`, into
+  focused sibling modules — so a new breach would be the only one. Plan the
+  splits listed under *Module budget* before writing, not after the port
+  contract tests are in place.
 - All prose is en-GB-oxendict; Markdown prose wraps at 80 columns, code blocks
   at 120.
 
@@ -333,8 +334,8 @@ Stop and escalate when any of these is reached.
   usage and priced entries per provider call, keyed by `workflow_run_id` and an
   idempotency key built as
   `run:{run_id}:node:{node}:call:{provider_response_id}:attempt:{n}`
-  (`episodic/generation/launcher_support.py`). A second copy would drift.
-  Date/Author: 2026-08-23, planning agent.
+  (`episodic/generation/launcher_support_events.py`). A second copy would
+  drift. Date/Author: 2026-08-23, planning agent.
 - Decision: artefacts are immutable once recorded, with exactly one exception —
   an artefact whose `compliance_status` is `errored` is provisional and is
   superseded in place by a later successful recording under the same
@@ -460,7 +461,12 @@ Evaluator contracts live in `episodic/qa/`:
 
 Canonical persistence lives in `episodic/canonical/`:
 
-- Domain entities are frozen dataclasses in `episodic/canonical/domain.py`.
+- Domain entities are frozen dataclasses in focused
+  `episodic/canonical/domain_*.py` modules (`domain_enums.py`,
+  `domain_episodes.py`, `domain_generation.py`, and so on);
+  `episodic/canonical/domain.py` re-exports them so existing imports resolve.
+  Each `domain_*` module is listed individually in Hecate's `domain_ports`
+  group.
 - Ports are `Protocol` classes, for example
   `episodic/canonical/generation_run_ports.py`.
 - SQLAlchemy models live in `episodic/canonical/storage/`, with the declarative
@@ -476,7 +482,7 @@ Canonical persistence lives in `episodic/canonical/`:
   `SqlAlchemyUnitOfWork.__aenter__`; the matching attribute list is declared on
   the `CanonicalUnitOfWork` `Protocol` in
   `episodic/canonical/unit_of_work_protocols.py`.
-- Alembic migrations are hand-written under `alembic/versions/`, named
+- Alembic migrations are handwritten under `alembic/versions/`, named
   `YYYYMMDD_NNNNNN_<slug>.py` with `revision` equal to the filename prefix. The
   current head is `20260624_000012` (`add_ingestion_job_owner.py`). Order is
   defined by `down_revision`, not by the date in the filename — two existing
@@ -522,8 +528,9 @@ Three facts about the gates are easy to discover the hard way:
   (`SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py`) with
   `[tool.skylos.gate] strict = true`. A symbol called only from `tests/` counts
   as dead.
-- `make typecheck` runs `ty` 0.0.32 only. `pyright` is an unused development
-  dependency, so do not rely on `pyright`-specific behaviour.
+- `make typecheck` runs the pinned `ty` (0.0.78 at the last rebase) only.
+  `pyright` is an unused development dependency, so do not rely on
+  `pyright`-specific behaviour.
 
 ### Skills and documents to load before starting
 
@@ -1198,7 +1205,7 @@ fenced blocks.
     `__aenter__` and document it in the class docstring's `Attributes`.
   - `episodic/canonical/unit_of_work_protocols.py` — declare
     `qa_artefacts: QaArtefactRepository`.
-  - `alembic/versions/20260823_000013_add_qa_artefact_tables.py` — hand-written
+  - `alembic/versions/20260823_000013_add_qa_artefact_tables.py` — handwritten
     migration with `down_revision = "20260624_000012"`.
 - Acceptance evidence: `uv run pytest tests/canonical_storage -q` passes and
   `make check-migrations` exits 0. `EV-M2-storage`.
@@ -1814,7 +1821,7 @@ Mapping rules, pinned by `INV-MAPPING-FIDELITY`:
 Do not store `LLMUsage` on the artefact. Correlation to the cost ledger is
 `generation_run_id` plus `evaluator_metadata["provider_response_id"]`, which
 together reconstruct the ledger idempotency key format used in
-`episodic/generation/launcher_support.py`.
+`episodic/generation/launcher_support_events.py`.
 
 ### HTTP contract (EP-M4)
 
@@ -1929,8 +1936,8 @@ a string so `syrupy` can snapshot them without a process boundary; only
 ## Module budget
 
 Plan the splits before writing. Estimates are calibrated against the modules
-each one mirrors: `episodic/canonical/storage/generation_runs.py` is 367 lines,
-`generation_run_models.py` 155, `generation_persistence.py` 371,
+each one mirrors: `episodic/canonical/storage/generation_runs.py` is 358 lines,
+`generation_run_models.py` 155, `generation_persistence.py` 349,
 `alembic/versions/20260624_000010_add_generation_run_tables.py` 194.
 
 | Module                                                       | Estimate      | Split if it grows                                                                                                            |
@@ -2287,3 +2294,18 @@ budget-triggered escalation remains available and needs no further approval.
 Neither decision is an open proposal any more, so implementation is not blocked
 on them. The plan's Status stays `DRAFT` because the plan as a whole has not
 yet been approved for implementation — only these two decisions have.
+
+Revision 4, 2026-09-27. No design change. Rebased onto `main` at `f1bdaca` and
+refreshed the facts that `main` had moved underneath the plan: the cost
+ledger's idempotency key is now built in
+`episodic/generation/launcher_support_events.py`; the domain entities and
+`_validate_draft_without_qa_metadata` now live in focused
+`episodic/canonical/domain_*.py` modules behind a re-exporting `domain.py`; no
+module under `episodic/` exceeds 400 lines any more, so the file-size
+constraint now applies to the whole tree rather than only to new files; `ty` is
+pinned at 0.0.78; and two calibration line counts in *Module budget* changed.
+`main`'s Hecate edits list the new `domain_*` modules as leaf prefixes, which
+is consistent with `EP-M0`'s first-matching-group guard, so `EP-M0` needs no
+change. Note too that `main` now runs a `nose` code-duplication gate and the
+`typos-config-builder` spelling gate inside `make lint` and
+`make markdownlint`; both apply to the files this plan creates.
