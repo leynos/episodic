@@ -2,7 +2,7 @@
 
 Branch: `use-cpython-for-pylint` PR:
 <https://github.com/leynos/episodic/pull/339> Baseline commit before this work:
-`e7e1f04` (post-rebase head); rebased onto `main` at `f1bdaca`, head `1a97009`
+`e7e1f04` (post-rebase head); rebased onto `main` at `f1bdaca`, head `bf2acc8`
 
 ## Goal
 
@@ -270,6 +270,27 @@ file. Dropping `ef122dc` would have quietly reverted three real fixes, because
 "the file is gone" and "the defect is gone" are different claims — and the
 second can only be established by reading main's replacement.
 
+### Publication
+
+The rebased series is `9f51222`, `bf5e1be`, `4c3b54b`, `1a97009`, `5fee061`,
+`bf2acc8`.
+
+All six gates are green on `bf2acc8`: `check-fmt` (exit 0, 122 Markdown files
+unchanged), `lint` (exit 0, 67s, Pylint 10.00/10 on all three invocations),
+`typecheck` (exit 0, `ty 0.0.32`), `test` (exit 0, 174s, 1507 passed, 1
+skipped), `markdownlint` (exit 0, 7s, 123 files, 0 errors), and `nixie` (exit
+0). `typos.toml` converged and was not rewritten.
+
+The force-push was bound with `--force-with-lease` to the previously recorded
+remote head `fdf4f31`, re-read by `git ls-remote` immediately beforehand rather
+than refreshed blindly. The remote branch moved `fdf4f31` → `bf2acc8`, and the
+pull request updated in place:
+
+<https://github.com/leynos/episodic/pull/339>
+
+Recovery refs for `OLD_HEAD`, `OLD_BASE`, and `TARGET` are retained, so the
+pre-rebase history stays recoverable independently of the remote.
+
 ## Lessons
 
 - Editing a document while a gate is running invalidates that gate for the
@@ -317,3 +338,11 @@ second can only be established by reading main's replacement.
   command passed 1273/1273 once load fell to ~5. A timeout that changes shape
   between runs and vanishes in isolation is contention, not a regression — but
   it must be shown, not assumed.
+- The `typos.toml` regeneration is a *latent* state, not a permanent property of
+  the `spelling` gate. It rewrites the tracked file only while the committed
+  bytes differ from the generated ones; once they agree the gate reproduces
+  them and the tree converges clean. Gate runs after the rebase left
+  `git status --porcelain` entirely empty. This is also why a
+  `typos.toml`-regeneration commit can rebase to empty — `main` had absorbed
+  the same generated lines — which is worth confirming by hash before skipping
+  it as redundant.
