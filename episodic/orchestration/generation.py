@@ -3,7 +3,7 @@
 import dataclasses as dc
 import json
 
-from episodic.llm import (
+from episodic.llm.ports import (
     LLMError,
     LLMPort,
     LLMRequest,

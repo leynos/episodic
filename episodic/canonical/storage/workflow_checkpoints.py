@@ -14,14 +14,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import WorkflowCheckpointStatus
+from episodic.logging import log_event as _log_event
 from episodic.observability import (
     MetricsPort,
     MonotonicClockPort,
     NoopMetrics,
     PerfCounterClock,
 )
-from episodic.orchestration import WorkflowCheckpoint
-from episodic.orchestration._types import _log_event
+from episodic.orchestration._checkpoint_dto import WorkflowCheckpoint
 
 from .models import WorkflowCheckpointRecord
 

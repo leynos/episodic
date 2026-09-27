@@ -4,7 +4,7 @@ import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
-from episodic.llm import (
+from episodic.llm.ports import (
     LLMProviderOperation,
     LLMUsage,
     ProviderCallUsage,

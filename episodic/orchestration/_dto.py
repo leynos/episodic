@@ -3,7 +3,7 @@
 import dataclasses as dc
 import uuid  # ruff: ignore[typing-only-standard-library-import] - runtime annotation inspection needs this name.
 
-from episodic.llm import (
+from episodic.llm.ports import (
     LLMProviderOperation,
     LLMTokenBudget,
 )

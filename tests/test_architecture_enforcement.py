@@ -9,7 +9,6 @@ coverage lives in `tests/test_architecture_hecate_config.py`.
 """
 
 import json
-import tomllib
 import typing as typ
 from pathlib import Path
 
@@ -102,6 +101,31 @@ def _fixture_module(package_name: str, module_name: str) -> str:
                     "orchestration_node_imports_outbound_adapter",
                     "storage",
                 ),
+            ),
+        ),
+        (
+            "orchestration_node_imports_application_service",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "orchestration_node_imports_application_service",
+                    "orchestration._graph_nodes",
+                ),
+                _fixture_module(
+                    "orchestration_node_imports_application_service",
+                    "service",
+                ),
+            ),
+        ),
+        (
+            "orchestration_planning_imports_adapter",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "orchestration_planning_imports_adapter",
+                    "orchestration._planning_orchestrator",
+                ),
+                _fixture_module("orchestration_planning_imports_adapter", "adapter"),
             ),
         ),
         (
@@ -271,22 +295,6 @@ def test_checker_accepts_orchestration_fixture_graphs(
 
     rendered = f"{completed_process.stdout}\n{completed_process.stderr}"
     assert completed_process.returncode == 0, rendered
-
-
-def test_production_config_declares_orchestration_groups() -> None:
-    """Production Hecate config names the orchestration enforcement groups."""
-    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
-    config = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-    tool_config = typ.cast("dict[str, object]", config["tool"])
-    hecate_config = typ.cast("dict[str, object]", tool_config["hecate"])
-    groups = typ.cast("list[dict[str, object]]", hecate_config["groups"])
-    group_names = {typ.cast("str", group["name"]) for group in groups}
-
-    assert {
-        "orchestration",
-        "orchestration_tasks",
-        "orchestration_checkpoint",
-    } <= group_names, "production Hecate config must declare orchestration groups"
 
 
 def test_production_checker_accepts_scoped_packages() -> None:

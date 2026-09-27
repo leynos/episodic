@@ -6,7 +6,7 @@ import typing as typ
 from ._payload_dto import ActionExecutionResult, ExecutionPlan
 
 if typ.TYPE_CHECKING:
-    from episodic.llm import LLMUsage
+    from episodic.llm.ports import LLMUsage
 
 
 @dc.dataclass(frozen=True, slots=True)

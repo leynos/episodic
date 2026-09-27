@@ -11,7 +11,7 @@ from episodic.generation import (
     generate_guest_bios_from_reference_bindings,
 )
 from episodic.generation.guest_bios import GuestBiosResponseFormatError
-from episodic.llm import (
+from episodic.llm.ports import (
     LLMError,
     LLMPort,
     LLMProviderResponseError,

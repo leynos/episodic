@@ -5,7 +5,7 @@ import importlib
 import typing as typ
 
 if typ.TYPE_CHECKING:
-    from episodic.orchestration import _dto as dto
+    import episodic.orchestration._dto as dto
 else:
     dto = importlib.import_module("episodic.orchestration._dto")
 

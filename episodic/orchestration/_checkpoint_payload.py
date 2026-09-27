@@ -16,7 +16,7 @@ coverage for that persisted contract.
 import enum
 import typing as typ
 
-from episodic.llm import LLMUsage
+from episodic.llm.ports import LLMUsage
 from episodic.orchestration._payload_dto import (
     ActionExecutionResult,
     ExecutionPlan,

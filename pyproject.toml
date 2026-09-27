@@ -955,6 +955,7 @@ prefixes = [
     "episodic.cost.engine",
     "episodic.llm.ports",
     "episodic.metrics_ports",
+    "episodic.orchestration._types",
     "episodic.worker.workloads",
 ]
 allowed = ["domain_ports"]
@@ -962,6 +963,9 @@ allowed = ["domain_ports"]
 [[tool.hecate.groups]]
 name = "orchestration_checkpoint"
 prefixes = [
+    "episodic.orchestration._dto",
+    "episodic.orchestration._action_result_dto",
+    "episodic.orchestration._result_dto",
     "episodic.orchestration._checkpoint_payload",
     "episodic.orchestration._checkpoint_dto",
     "episodic.orchestration._payload_dto",
@@ -970,15 +974,17 @@ allowed = ["orchestration_checkpoint", "domain_ports"]
 
 [[tool.hecate.groups]]
 name = "orchestration_nodes"
-prefixes = ["episodic.orchestration._graph_nodes"]
+prefixes = [
+    "episodic.orchestration._graph_nodes",
+    "episodic.orchestration._graph_protocols",
+    "episodic.orchestration._graph_state",
+    "episodic.orchestration._usage",
+]
 allowed = ["orchestration_nodes", "domain_ports", "orchestration_checkpoint"]
 
 [[tool.hecate.groups]]
 name = "orchestration"
-prefixes = [
-    "episodic.orchestration._graph_builder",
-    "episodic.orchestration.langgraph",
-]
+prefixes = ["episodic.orchestration"]
 allowed = [
     "orchestration",
     "application",

@@ -49,6 +49,7 @@ ORCHESTRATION_GROUPS: tuple[str, ...] = (
     "application",
     "domain",
     "orchestration_checkpoint",
+    "orchestration_nodes",
 )
 ORCHESTRATION_TASK_GROUPS: tuple[str, ...] = (
     "orchestration_tasks",

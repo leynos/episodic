@@ -11,12 +11,12 @@ from episodic.orchestration._usage import build_generation_result
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from episodic.orchestration import _dto as dto
-    from episodic.orchestration import _protocols as protocols
+    import episodic.orchestration._dto as dto
+    import episodic.orchestration._graph_protocols as protocols
     from episodic.orchestration._graph_state import GenerationGraphState
 else:
     dto = importlib.import_module("episodic.orchestration._dto")
-    protocols = importlib.import_module("episodic.orchestration._protocols")
+    protocols = importlib.import_module("episodic.orchestration._graph_protocols")
 
 
 type ExecuteNodeResult = (

@@ -174,6 +174,7 @@ def _assert_expected_orchestration_groups(
         "application",
         "domain",
         "orchestration_checkpoint",
+        "orchestration_nodes",
     ], "orchestration must allow its declared internal dependencies"
 
 

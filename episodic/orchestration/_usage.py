@@ -1,6 +1,6 @@
 """Usage aggregation helpers for generation orchestration."""
 
-from episodic.llm import LLMUsage
+from episodic.llm.ports import LLMUsage
 from episodic.orchestration._dto import (
     ActionExecutionResult,
     GenerationOrchestrationResult,

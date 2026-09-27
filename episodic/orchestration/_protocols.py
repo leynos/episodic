@@ -11,37 +11,16 @@ without knowing which queue, worker, or user interface produced them.
 
 import typing as typ
 
+from ._graph_protocols import PlannerPort as PlannerPort
+from ._graph_protocols import ToolExecutorPort as ToolExecutorPort
+
 if typ.TYPE_CHECKING:
     from episodic.generation import GuestBioSource, GuestBiosResult, ShowNotesResult
     from episodic.orchestration._dto import (
         ActionExecutionResult,
-        GenerationOrchestrationRequest,
-        PlannedAction,
-        PlannerResult,
         ResumeWorkflowCommand,
         WorkflowCheckpoint,
     )
-
-
-class ToolExecutorPort(typ.Protocol):
-    """Application-level port for executing planned enrichment actions."""
-
-    async def execute(
-        self,
-        action: PlannedAction,
-        context: GenerationOrchestrationRequest,
-    ) -> ActionExecutionResult:
-        """Execute one planned action against the available generation context."""
-
-
-class PlannerPort(typ.Protocol):
-    """Application-level port for structured orchestration planning."""
-
-    async def plan(
-        self,
-        request: GenerationOrchestrationRequest,
-    ) -> PlannerResult:
-        """Return a typed execution plan for the supplied generation request."""
 
 
 class CheckpointPort(typ.Protocol):

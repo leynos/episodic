@@ -9,7 +9,7 @@ from episodic.generation import (
     ShowNotesResult,
 )
 from episodic.generation.show_notes import ShowNotesResponseFormatError
-from episodic.llm import (
+from episodic.llm.ports import (
     LLMError,
     LLMPort,
     LLMProviderResponseError,

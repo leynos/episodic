@@ -14,7 +14,7 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import event_page_minimum_sequence
-from episodic.orchestration._types import _log_event
+from episodic.logging import log_event as _log_event
 
 from .generation_run_mappers import (
     event_from_record,
