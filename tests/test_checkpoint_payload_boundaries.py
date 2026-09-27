@@ -87,37 +87,32 @@ def test_checkpoint_payload_dtos_use_provider_neutral_field_types() -> None:
     assert not rejected_fields, f"provider-specific DTO fields found: {rejected_fields}"
 
 
-def test_workflow_checkpoint_rejects_non_json_payload_values() -> None:
-    """WorkflowCheckpoint rejects payload values that cannot be serialised."""
-    with pytest.raises(
-        TypeError,
-        match="payload must be JSON-serializable",
-    ):
-        WorkflowCheckpoint(
-            checkpoint_id="checkpoint-1",
-            workflow_id="workflow-1",
-            workflow_type="generation_orchestration",
-            step_name="execute",
-            idempotency_key="workflow-1:generation_orchestration:execute:action-1:0",
-            payload={"bad": object()},
-        )
-
-
 @pytest.mark.parametrize(
-    "payload",
+    ("payload", "expected_message"),
     [
-        pytest.param({"value": (1, 2)}, id="tuple-value"),
-        pytest.param({1: "one"}, id="non-string-key"),
+        pytest.param(
+            {"bad": object()},
+            "payload must be JSON-serializable.",
+            id="non-json-value",
+        ),
+        pytest.param(
+            {"value": (1, 2)},
+            "payload must be JSON-serializable without data loss.",
+            id="tuple-value-data-loss",
+        ),
+        pytest.param(
+            {1: "one"},
+            "payload must be JSON-serializable without data loss.",
+            id="non-string-key-data-loss",
+        ),
     ],
 )
-def test_workflow_checkpoint_rejects_lossy_json_payloads(
+def test_workflow_checkpoint_rejects_invalid_json_payloads(
     payload: dict[object, object],
+    expected_message: str,
 ) -> None:
-    """WorkflowCheckpoint rejects payloads changed by a JSON round trip."""
-    with pytest.raises(
-        TypeError,
-        match="payload must be JSON-serializable without data loss",
-    ):
+    """WorkflowCheckpoint rejects unserializable or lossy payloads."""
+    with pytest.raises(TypeError) as exc:
         WorkflowCheckpoint(
             checkpoint_id="checkpoint-1",
             workflow_id="workflow-1",
@@ -126,6 +121,9 @@ def test_workflow_checkpoint_rejects_lossy_json_payloads(
             idempotency_key="workflow-1:generation_orchestration:execute:action-1:0",
             payload=typ.cast("dict[str, object]", payload),
         )
+    assert str(exc.value) == expected_message, (
+        f"unexpected payload validation message: {exc.value!r}"
+    )
 
 
 @given(payload=_JSON_VALUE_STRATEGY)
