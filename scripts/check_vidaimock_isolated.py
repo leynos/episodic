@@ -171,9 +171,9 @@ def _configured_provider_names(config_dir: Path) -> list[str]:
     """Return the provider names the fixture wrote into *config_dir*.
 
     A provider's `name` field, not its filename, is what the server advertises
-    on `/v1/models`; the fixture writes `openai.yaml` declaring `orchestration`.
-    Reading the declared name keeps this comparison honest as the fixture
-    changes.
+    on `/v1/models`; the fixture writes `orchestration.yaml` declaring
+    `orchestration`. Reading the declared name keeps this comparison honest as
+    the fixture changes.
 
     Returns
     -------

@@ -233,13 +233,13 @@ Three further reconciliation decisions:
   directory and no collision was possible. Git's auto-merge kept main's
   descriptive names, and those were retained.
 - `ef122dc`'s four fixes were retargeted rather than dropped. Main has no
-  `domain_records.py` or `config_validation.py`, but it has the *defects* in its
-  differently-named equivalents: `isinstance(self.lock_version, int)` still
+  `domain_records.py` or `config_validation.py`, but it has the *defects* in
+  its differently-named equivalents: `isinstance(self.lock_version, int)` still
   admits `True` in `domain_reference_documents.py`, `self.content_hash.strip()`
   still raises `AttributeError` before the type check, and `utils_config.py`
   still logs the three numeric fields raw. All three fixes were re-applied to
-  main's files against main's own underscore-prefixed helper names, and each was
-  verified against its exact failure mode. Main's `_json_safe` call site is
+  main's files against main's own underscore-prefixed helper names, and each
+  was verified against its exact failure mode. Main's `_json_safe` call site is
   sound because main's snapshot pins the same numeric log types
   (`"max_attempts": 3`, `"timeout_seconds": 30.0`) that pass-through preserves.
 
@@ -254,6 +254,21 @@ range, `git diff --check` clean, all 124 target-only paths byte-identical, and
 the one deletion (`test_generation_orchestration_vidaimock.py`) is a file main
 never touched whose two contracts are re-covered by the new harness's nine
 tests. The 13 `e7e1f04`-only modules stay absent.
+
+One element of `e7e1f04` was deliberately **not** carried forward. It derived a
+Pylint worker count from `nproc` (`PYLINT_JOBS`, a tenth of the cores with a
+floor of two) and ran the pass with `-j`. Main runs Pylint single-threaded
+against a pinned `pylint==4.0.9`, and the worker heuristic is a statement about
+this machine's topology rather than about the VidaiMock defect this branch
+exists to fix. Reinstating it would widen the change beyond its purpose, so it
+is recorded here as a decision rather than left as an unexplained omission.
+
+The two special-case reconciliations are worth naming as a pattern. Where main
+has already landed a *renamed* equivalent of a file this branch modified, the
+right move is not to skip the commit but to retarget its change onto main's
+file. Dropping `ef122dc` would have quietly reverted three real fixes, because
+"the file is gone" and "the defect is gone" are different claims — and the
+second can only be established by reading main's replacement.
 
 ## Lessons
 
