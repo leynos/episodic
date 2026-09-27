@@ -87,7 +87,7 @@
 - **For Python files:**
   - **Testing:** Passes all relevant unit and behavioural tests (`make test`).
   - **Linting:** Passes the complete `make lint` pipeline: Hecate, Ruff, the
-    built-in Pylint rules under managed PyPy, `df12-python-lints` under CPython
+    built-in Pylint rules under CPython 3.14, `df12-python-lints` under CPython
     3.14, `ambrleaks` snapshot scanning, and the blocking Skylos dead-code
     scan. Investigate every finding and remove genuine dead code. After
     verifying a false positive, prefer a precise, typed entry-point rule in

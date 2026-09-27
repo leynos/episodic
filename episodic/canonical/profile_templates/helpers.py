@@ -100,7 +100,27 @@ async def _with_latest_revisions[EntityT: _VersionedEntity](
     return [(entity, revisions.get(entity.id, 0)) for entity in entities]
 
 
-async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 dependency-injected collaborators keep this explicit
+def _require_history_entity_field(
+    history_entry_class: type[object], entity_id_field: str
+) -> None:
+    """Require the history entry dataclass to declare the entity id field."""
+    try:
+        history_entry_fields = {field.name for field in dc.fields(history_entry_class)}
+    except TypeError as exc:  # pragma: no cover - defensive guard
+        msg = "history_entry_class must be a dataclass type."
+        raise TypeError(msg) from exc
+    if entity_id_field not in history_entry_fields:
+        msg = (
+            f"History entry type {history_entry_class.__name__} does not define "
+            f"required field {entity_id_field!r}."
+        )
+        raise ValueError(msg)
+
+
+# Pylint reports the finding the Ruff noqa below already accepts; the
+# refactor to parameter objects is tracked in leynos/episodic#345.
+# pylint: disable-next=too-many-arguments
+async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 dependency-injected collaborators keep this explicit
     uow: CanonicalUnitOfWork,
     *,
     entity_id: uuid.UUID,
@@ -116,17 +136,7 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
     audit: AuditMetadata,
 ) -> tuple[EntityT, int]:
     """Update a versioned entity using optimistic locking."""
-    try:
-        history_entry_fields = {field.name for field in dc.fields(history_entry_class)}
-    except TypeError as exc:  # pragma: no cover - defensive guard
-        msg = "history_entry_class must be a dataclass type."
-        raise TypeError(msg) from exc
-    if entity_id_field not in history_entry_fields:
-        msg = (
-            f"History entry type {history_entry_class.__name__} does not define "
-            f"required field {entity_id_field!r}."
-        )
-        raise ValueError(msg)
+    _require_history_entity_field(history_entry_class, entity_id_field)
 
     entity = await entity_repo.get(entity_id)
     if entity is None:

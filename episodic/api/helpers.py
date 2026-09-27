@@ -1,9 +1,12 @@
 """Request parsing and payload builders for Falcon resource adapters.
 
 This module centralizes common API-layer transformations used by resource
-classes and shared handlers. It provides utilities for UUID parsing, payload
-shape validation, optimistic-lock field parsing, and construction of typed
-service request objects for profile/template create and update operations.
+classes and shared handlers. It provides audit metadata extraction,
+optimistic-lock field parsing, and construction of typed service request
+objects for profile/template create and update operations. Query-parameter
+and payload-shape parsing utilities (UUID parsing, pagination, and generic
+query-parameter helpers) live in :mod:`episodic.api.helpers_query`, which
+this module re-exports so existing import paths keep working.
 
 Examples
 --------
@@ -18,12 +21,9 @@ Build a typed update request from JSON payload:
 
 import copy
 import dataclasses as dc
-import enum
 import re
 import typing as typ
-import uuid
 
-from episodic.canonical.pagination import Pagination
 from episodic.canonical.profile_templates import (
     AuditMetadata,
     EpisodeTemplateData,
@@ -35,144 +35,37 @@ from episodic.canonical.profile_templates import (
 )
 
 from .errors import validation_error
+from .helpers_query import (
+    parse_enum_param,
+    parse_optional_uuid_param,
+    parse_pagination,
+    parse_uuid,
+    require_payload_dict,
+    require_query_params,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-    import falcon
+    import uuid
 
     from .types import JsonPayload
 
+__all__ = [
+    "build_audit_metadata",
+    "build_profile_create_kwargs",
+    "build_profile_update_request",
+    "build_template_create_kwargs",
+    "build_template_update_request",
+    "parse_enum_param",
+    "parse_expected_revision",
+    "parse_optional_uuid_param",
+    "parse_pagination",
+    "parse_uuid",
+    "require_payload_dict",
+    "require_query_params",
+]
+
 _INT_RE = re.compile(r"[+-]?\d+")
-_DEFAULT_PAGE_LIMIT = 20
-_MAX_PAGE_LIMIT = 100
-
-
-def parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
-    """Parse a UUID string for a named request field.
-
-    Parameters
-    ----------
-    raw_value : str
-        Raw string value to parse.
-    field_name : str
-        Request field name used in validation error messages.
-
-    Returns
-    -------
-    uuid.UUID
-        Parsed UUID value.
-
-    Raises
-    ------
-    falcon.HTTPBadRequest
-        If ``raw_value`` cannot be parsed as a UUID; the exception carries the
-        validation error envelope for ``field_name``.
-    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
-    try:
-        return uuid.UUID(raw_value)
-    except (TypeError, ValueError, AttributeError) as exc:
-        msg = f"Invalid UUID for {field_name}: {raw_value!r}."
-        raise validation_error(msg, field=field_name, constraint="uuid") from exc
-
-
-def require_payload_dict(payload: object) -> JsonPayload:
-    """Validate that request media is a JSON object mapping.
-
-    Parameters
-    ----------
-    payload : object
-        Parsed Falcon request media.
-
-    Returns
-    -------
-    JsonPayload
-        Validated JSON object payload.
-
-    Raises
-    ------
-    falcon.HTTPBadRequest
-        If request media is not a JSON object; the exception carries the
-        validation error envelope.
-    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
-    if not isinstance(payload, dict):
-        msg = "JSON object payload is required."
-        raise validation_error(msg, constraint="object")
-    return typ.cast("JsonPayload", payload)
-
-
-def require_query_params(req: falcon.Request, *names: str) -> dict[str, str]:
-    """Return required query parameters or raise HTTP 400."""
-    values: dict[str, str] = {}
-    for name in names:
-        value = req.get_param(name)
-        if value is None:
-            msg = f"Missing required query parameter: {name}"
-            raise validation_error(msg, field=name, constraint="required")
-        values[name] = value
-    return values
-
-
-def parse_pagination(req: falcon.Request) -> Pagination:
-    """Parse and validate common `limit`/`offset` query parameters."""
-    limit = _parse_int_query_param(
-        req.get_param("limit"),
-        name="limit",
-        default=_DEFAULT_PAGE_LIMIT,
-    )
-    offset = _parse_int_query_param(
-        req.get_param("offset"),
-        name="offset",
-        default=0,
-    )
-
-    if limit < 1 or limit > _MAX_PAGE_LIMIT:
-        msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
-        raise validation_error(msg, field="limit", constraint="range")
-    if offset < 0:
-        msg = "offset must be a non-negative integer."
-        raise validation_error(msg, field="offset", constraint="range")
-    return Pagination(limit=limit, offset=offset)
-
-
-def parse_optional_uuid_param(req: falcon.Request, name: str) -> uuid.UUID | None:
-    """Parse an optional UUID query parameter by name."""
-    raw_value = req.get_param(name)
-    if raw_value is None:
-        return None
-    return parse_uuid(raw_value, name)
-
-
-def parse_enum_param[EnumT: enum.Enum](
-    req: falcon.Request,
-    name: str,
-    enum_type: type[EnumT],
-) -> EnumT | None:
-    """Parse an optional enum query parameter by name."""
-    raw_value = req.get_param(name)
-    if raw_value is None:
-        return None
-    try:
-        return enum_type(raw_value)
-    except ValueError as exc:
-        msg = f"Invalid enum value for {name}: {raw_value!r}."
-        raise validation_error(msg, field=name, constraint="enum") from exc
-
-
-def _parse_int_query_param(
-    raw_value: str | None,
-    *,
-    name: str,
-    default: int,
-) -> int:
-    """Parse an optional integer query parameter or raise a validation error."""
-    if raw_value is None:
-        return default
-    try:
-        return int(raw_value)
-    except ValueError as exc:
-        msg = f"{name} must be an integer."
-        raise validation_error(msg, field=name, constraint="type") from exc
 
 
 def build_audit_metadata(payload: JsonPayload) -> AuditMetadata:

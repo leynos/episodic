@@ -45,239 +45,40 @@ Constraints:
   ``PT5M30S`` for five minutes and thirty seconds).
 - LLM responses must conform to the expected JSON schema or
   ``ShowNotesResponseFormatError`` is raised.
+
+The data contracts, JSON-response parsing helpers, and TEI enrichment helper
+live in sibling modules (``show_notes_models``, ``show_notes_parsing``, and
+``show_notes_enrichment`` respectively) to keep this module under the
+project's line-count limit; they are re-exported here so callers keep
+importing from this module.
 """
 
 import dataclasses as dc
 import json
-import re
-import typing as typ
 
-import tei_rapporteur as tei
-
-from episodic.generation.tei_payload import (
-    body_blocks_payload,
-    build_text_inline,
-    is_div_payload,
-    require_mapping,
-    require_non_empty_str_value,
-    require_sequence,
+from episodic.generation.show_notes_enrichment import enrich_tei_with_show_notes
+from episodic.generation.show_notes_models import (
+    JsonMapping,
+    ShowNotesEntry,
+    ShowNotesGeneratorConfig,
+    ShowNotesResult,
 )
-from episodic.llm import (
-    LLMPort,
-    LLMProviderOperation,
-    LLMRequest,
-    LLMResponse,
-    LLMTokenBudget,
-    LLMUsage,
-    ProviderCallUsage,
+from episodic.generation.show_notes_parsing import (
+    ShowNotesResponseFormatError,
+    _decode_object,
+    _parse_entry,
+    _require_list,
 )
+from episodic.llm import LLMPort, LLMRequest, LLMResponse
 
-type JsonMapping = dict[str, object]
-
-_DEFAULT_SYSTEM_PROMPT = (
-    "The assistant acts as a podcast show-notes generator. Given a TEI P5 "
-    "podcast script, "
-    "extract the key topics discussed in the episode. For each topic, provide "
-    "a short heading and a one-to-three sentence summary. If the script contains "
-    "timing cues or segment markers, include an approximate timestamp as an ISO 8601 "
-    'duration (e.g. PT5M30S). Return JSON only with key "entries". Each entry must '
-    'include "topic" and "summary". Optional fields: "timestamp" and "tei_locator".'
-)
-
-_ISO_8601_DURATION_PATTERN = re.compile(
-    r"^P(?=.*\d(?:\.\d+)?[YMWDHS])"
-    r"(?:\d+(?:\.\d+)?W|"
-    r"(?:\d+(?:\.\d+)?Y)?"
-    r"(?:\d+(?:\.\d+)?M)?"
-    r"(?:\d+(?:\.\d+)?D)?"
-    r"(?:T"
-    r"(?:\d+(?:\.\d+)?H)?"
-    r"(?:\d+(?:\.\d+)?M)?"
-    r"(?:\d+(?:\.\d+)?S)?"
-    r")?"
-    r")$"
-)
-
-
-def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
-    """Reject blank or whitespace-only string fields on a dataclass instance."""
-    for field_name in field_names:
-        value = getattr(instance, field_name)
-        if not isinstance(value, str) or value.strip() == "":
-            msg = f"{field_name} must be non-empty."
-            raise ValueError(msg)
-
-
-def _ensure_optional_iso8601_duration(timestamp: str | None) -> None:
-    """Reject timestamp strings that are not ISO 8601 durations."""
-    if timestamp is None:
-        return
-    if _ISO_8601_DURATION_PATTERN.fullmatch(timestamp) is None:
-        msg = "timestamp must be an ISO 8601 duration."
-        raise ValueError(msg)
-
-
-def _normalize_optional_tei_locator(tei_locator: str | None) -> str | None:
-    """Normalize blank TEI locators to None and strip surrounding whitespace."""
-    if tei_locator is None:
-        return None
-    normalized = tei_locator.strip()
-    if normalized == "":
-        return None
-    return normalized
-
-
-@dc.dataclass(frozen=True, slots=True)
-class ShowNotesEntry:
-    """A single show-note item extracted from a podcast script.
-
-    Attributes
-    ----------
-    topic : str
-        Short heading for the show-note item (non-empty).
-    summary : str
-        One-to-three sentence description (non-empty).
-    timestamp : str | None
-        Optional ISO 8601 duration string (e.g., ``PT5M30S`` for five minutes
-        and thirty seconds).
-    tei_locator : str | None
-        Optional XPath or element identifier pointing into the source script
-        TEI body.
-    """
-
-    topic: str
-    summary: str
-    timestamp: str | None = None
-    tei_locator: str | None = None
-
-    def __post_init__(self) -> None:
-        """Reject blank topic and summary fields."""
-        _ensure_non_empty_fields(self, "topic", "summary")
-        _ensure_optional_iso8601_duration(self.timestamp)
-        object.__setattr__(
-            self,
-            "tei_locator",
-            _normalize_optional_tei_locator(self.tei_locator),
-        )
-
-
-@dc.dataclass(frozen=True, slots=True)
-class ShowNotesResult:
-    """Show-notes generation result with structured entries and metadata.
-
-    Attributes
-    ----------
-    entries : tuple[ShowNotesEntry, ...]
-        Structured show-notes entries extracted from the script.
-    usage : LLMUsage
-        Normalized token usage metadata for accounting.
-    model : str
-        Provider model identifier used for generation.
-    provider_response_id : str
-        Provider-native response identifier.
-    finish_reason : str | None
-        Completion stop reason when provided by the vendor.
-    provider_call_usage : ProviderCallUsage | None
-        Provider-specific usage metrics for cost accounting.
-    """
-
-    entries: tuple[ShowNotesEntry, ...]
-    usage: LLMUsage
-    model: str = ""
-    provider_response_id: str = ""
-    finish_reason: str | None = None
-    provider_call_usage: ProviderCallUsage | None = None
-
-
-@dc.dataclass(frozen=True, slots=True)
-class ShowNotesGeneratorConfig:
-    """Configuration for the show-notes generator service.
-
-    Attributes
-    ----------
-    model : str
-        Provider model identifier (e.g., ``gpt-4o-mini``).
-    provider_operation : LLMProviderOperation | str
-        Provider operation shape (default: ``CHAT_COMPLETIONS``).
-    token_budget : LLMTokenBudget | None
-        Token budget constraints, or ``None`` for no limit.
-    system_prompt : str
-        System prompt instructing the LLM on show-notes extraction.
-    """
-
-    model: str
-    provider_operation: LLMProviderOperation | str = (
-        LLMProviderOperation.CHAT_COMPLETIONS
-    )
-    token_budget: LLMTokenBudget | None = None
-    system_prompt: str = _DEFAULT_SYSTEM_PROMPT
-
-
-class ShowNotesResponseFormatError(ValueError):
-    """Raised when the LLM response cannot be parsed into ShowNotesResult."""
-
-
-def _decode_object(value: object, field_name: str) -> dict[str, object]:
-    """Decode a JSON value as a dictionary or raise a format error."""
-    return require_mapping(
-        value,
-        field_name,
-        error_cls=ShowNotesResponseFormatError,
-    )
-
-
-def _require_non_empty_string(value: object, field_name: str) -> str:
-    """Require a non-empty string value or raise a format error."""
-    return require_non_empty_str_value(
-        value,
-        field_name,
-        error_cls=ShowNotesResponseFormatError,
-    )
-
-
-def _require_optional_string(value: object, field_name: str) -> str | None:
-    """Return an input string unchanged or ``None``.
-
-    Returns
-    -------
-    str | None
-        The input string unchanged, or ``None`` when the input is ``None``.
-
-    Raises
-    ------
-    ShowNotesResponseFormatError
-        If *value* is neither a string nor ``None``.
-    """
-    if value is not None and not isinstance(value, str):
-        msg = f"{field_name} must be a string or null."
-        raise ShowNotesResponseFormatError(msg)
-    return value if isinstance(value, str) else None
-
-
-def _require_list(value: object, field_name: str) -> list[object]:
-    """Require a list value or raise a format error."""
-    return require_sequence(
-        value,
-        field_name,
-        error_cls=ShowNotesResponseFormatError,
-    )
-
-
-def _parse_entry(raw: dict[str, object]) -> ShowNotesEntry:
-    """Parse a single show-notes entry from a JSON payload."""
-    topic = _require_non_empty_string(raw.get("topic"), "topic")
-    summary = _require_non_empty_string(raw.get("summary"), "summary")
-    timestamp = _require_optional_string(raw.get("timestamp"), "timestamp")
-    tei_locator = _require_optional_string(raw.get("tei_locator"), "tei_locator")
-    try:
-        return ShowNotesEntry(
-            topic=topic,
-            summary=summary,
-            timestamp=timestamp,
-            tei_locator=tei_locator,
-        )
-    except ValueError as exc:
-        raise ShowNotesResponseFormatError(str(exc)) from exc
+__all__ = [
+    "ShowNotesEntry",
+    "ShowNotesGenerator",
+    "ShowNotesGeneratorConfig",
+    "ShowNotesResponseFormatError",
+    "ShowNotesResult",
+    "enrich_tei_with_show_notes",
+]
 
 
 @dc.dataclass(slots=True)
@@ -407,80 +208,3 @@ class ShowNotesGenerator:
 
         response = await self.llm.generate(request)
         return self._result_from_response(response)
-
-
-def _build_item_payload(entry: ShowNotesEntry) -> dict[str, object]:
-    """Build one list-item payload from a `ShowNotesEntry`."""
-    item_payload: dict[str, object] = {
-        "label": {"content": build_text_inline(entry.topic)},
-        "content": build_text_inline(entry.summary),
-    }
-    if entry.timestamp is not None:
-        item_payload["n"] = entry.timestamp
-    if entry.tei_locator is not None:
-        item_payload["corresp"] = [entry.tei_locator]
-    return item_payload
-
-
-def _build_notes_div_payload(entries: tuple[ShowNotesEntry, ...]) -> dict[str, object]:
-    """Build the structured TEI payload for the show-notes div."""
-    return {
-        "type": "div",
-        "div_type": "notes",
-        "content": [
-            {
-                "type": "list",
-                "items": [_build_item_payload(entry) for entry in entries],
-            }
-        ],
-    }
-
-
-def enrich_tei_with_show_notes(
-    tei_xml: str,
-    result: ShowNotesResult,
-) -> str:
-    """Insert show-notes metadata into a TEI document body.
-
-    Parameters
-    ----------
-    tei_xml : str
-        TEI P5 XML document to enrich.
-    result : ShowNotesResult
-        Show-notes entries to insert.
-
-    Returns
-    -------
-    str
-        Enriched TEI XML as a string.
-
-    Notes
-    -----
-    The enrichment creates a ``<div type="notes">`` element containing a
-    ``<list>`` with ``<item>`` entries. Each item includes:
-
-    - ``<label>``: topic text (required)
-    - inline text: summary text (follows the label)
-    - ``@n``: optional timestamp attribute
-    - ``@corresp``: optional TEI locator attribute
-
-    If the result has no entries, the original TEI is returned unchanged.
-
-    This function uses `tei_rapporteur`'s structured document exchange to
-    parse the TEI, append a `div` block to the body payload, then emit the
-    enriched document back to XML. Malformed TEI raises `ValueError`.
-    """
-    if not result.entries:
-        return tei_xml
-
-    document = tei.parse_xml(tei_xml)
-    document_payload = typ.cast("dict[str, object]", tei.to_dict(document))
-    body_blocks = body_blocks_payload(document_payload)
-    body_blocks[:] = [
-        body_block
-        for body_block in body_blocks
-        if not is_div_payload(body_block, "notes")
-    ]
-    body_blocks.append(_build_notes_div_payload(result.entries))
-    enriched_document = tei.from_dict(document_payload)
-    return tei.emit_xml(enriched_document)

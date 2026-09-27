@@ -231,11 +231,6 @@ max-positional-arguments = 4
 # Keep this Pylint pass focused on the explicitly selected messages.
 disable = [
     "all",
-    # The PyPy-backed Pylint runs on the interpreter pinned by PYLINT_PYTHON
-    # in the Makefile (pypy-3.11), which cannot parse every Python 3.14
-    # construct this project uses; keep that pass useful on the files it can
-    # parse rather than failing the gate on syntax it was never able to read.
-    "syntax-error",
 ]
 enable = [
     # Catch invalid %-style specifiers before log calls reach production.
@@ -602,21 +597,28 @@ full_name = [
     "episodic.canonical.ingestion_sources._validate_weight",
     "episodic.canonical.uploads._require_non_negative",
     "episodic.canonical.uploads._require_non_negative_if_present",
-    "episodic.canonical.domain._require_positive_integer",
-    "episodic.canonical.domain._validate_draft_without_qa_metadata",
+    "episodic.canonical.domain_validation._require_positive_integer",
+    "episodic.canonical.domain_validation._validate_draft_without_qa_metadata",
 ]
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
 full_name = [
-    "episodic.canonical.domain.Checkpoint._validate_options",
-    "episodic.canonical.domain.Checkpoint._validate_responded_fields",
-    "episodic.canonical.domain.ReferenceBinding._validate_single_target",
-    "episodic.canonical.domain.ReferenceBinding._validate_target_kind_matches",
-    "episodic.canonical.domain.ReferenceBinding._validate_effective_from_constraint",
+    "episodic.canonical.domain_generation.Checkpoint._validate_options",
+    "episodic.canonical.domain_generation.Checkpoint._validate_responded_fields",
+    "episodic.canonical.domain_reference_documents.ReferenceBinding._validate_single_target",
+    "episodic.canonical.domain_reference_documents.ReferenceBinding._validate_target_kind_matches",
+    "episodic.canonical.domain_reference_documents.ReferenceBinding._validate_effective_from_constraint",
 ]
 reason = "Canonical value objects call these validation methods from dataclass post-initialization hooks."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.generation.launcher.InProcessGenerationRunLauncher._load_sources",
+]
+reason = "The claim mixin in launcher_claim calls self._load_sources; it stays on the launcher so tests can patch source_from_document in this module."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
@@ -636,10 +638,10 @@ type = "function"
 full_name = [
     "episodic.cost.ports._validate_currency_code",
     "episodic.cost.ports._validate_usage_metrics",
-    "episodic.generation.guest_bios._ensure_non_empty_fields",
-    "episodic.generation.show_notes._ensure_non_empty_fields",
-    "episodic.generation.show_notes._ensure_optional_iso8601_duration",
-    "episodic.generation.show_notes._normalize_optional_tei_locator",
+    "episodic.generation.guest_bios_models._ensure_non_empty_fields",
+    "episodic.generation.show_notes_models._ensure_non_empty_fields",
+    "episodic.generation.show_notes_models._ensure_optional_iso8601_duration",
+    "episodic.generation.show_notes_models._normalize_optional_tei_locator",
     "episodic.orchestration._dto._coerce_single_model_tier",
     "episodic.orchestration._dto._normalize_required_inputs",
 ]
@@ -846,14 +848,6 @@ members = ["episodic/cost/__init__.py", "episodic/cost/recorder.py", "episodic/c
 reason = "Cost port import blocks: the package surface, the recorder, and the storage adapter name the same ports."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/generation/__init__.py", "episodic/generation/launcher_support.py"]
-reason = "Draft-script re-export blocks shared by the package surface and the launcher helper."
-
-[[tool.duplication_gate.allow]]
-members = ["episodic/generation/guest_bios.py", "episodic/generation/show_notes.py"]
-reason = "Accepted debt: the two generation tools share an `episodic.llm` import block and re-implement TEI payload helpers; consolidating onto episodic/generation/tei_payload.py is tracked in PR #276."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/orchestration/_guest_bios_executor.py", "episodic/orchestration/_show_notes_executor.py"]
 reason = "Per-tool executors: an identical import surface and an error-translation dispatcher that each bind their own domain exception pair and tool label at the point of use."
 
@@ -897,6 +891,18 @@ reason = "Level-specific wrappers over _log_at kept explicit so call sites name 
 unit = "episodic/asyncio_tasks.py"
 reason = "Thin public wrappers over one task-creation path differing only in the create_task callable; kept explicit for API ergonomics and typing."
 
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/draft_script_types.py", "episodic/generation/guest_bios_models.py"]
+reason = "Generation-tool model modules import the same episodic.llm budget and usage types; the shared block is the port surface, not logic."
+
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/draft_script_types.py", "episodic/generation/show_notes_models.py"]
+reason = "Generation-tool model modules import the same episodic.llm budget and usage types; the shared block is the port surface, not logic."
+
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/generation_runs.py", "episodic/api/resources/source_intake.py"]
+reason = "Both idempotent API resources import the same source_idempotency helpers; the shared block is an import list, not logic."
+
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"
@@ -916,6 +922,13 @@ allowed = [
 name = "domain_ports"
 prefixes = [
     "episodic.canonical.domain",
+    "episodic.canonical.domain_enums",
+    "episodic.canonical.domain_episodes",
+    "episodic.canonical.domain_generation",
+    "episodic.canonical.domain_ingestion",
+    "episodic.canonical.domain_reference_documents",
+    "episodic.canonical.domain_templates",
+    "episodic.canonical.domain_validation",
     "episodic.canonical.constraints",
     "episodic.canonical.ingestion",
     "episodic.canonical.ingestion_ports",

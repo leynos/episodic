@@ -41,7 +41,10 @@ if typ.TYPE_CHECKING:
     from .types import JsonPayload, UowFactory
 
 
-async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared handler signature for resource adapters
+# Pylint reports the finding the Ruff noqa below already accepts; the
+# refactor to parameter objects is tracked in leynos/episodic#345.
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
+async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared handler signature for resource adapters
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,
@@ -191,7 +194,10 @@ def _raise_mapped_update_error(
     ) from exc
 
 
-async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared handler signature for resource adapters
+# Pylint reports the finding the Ruff noqa below already accepts; the
+# refactor to parameter objects is tracked in leynos/episodic#345.
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
+async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared handler signature for resource adapters
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,
@@ -257,7 +263,10 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 
-async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared creator signature for resource adapters
+# Pylint reports the finding the Ruff noqa below already accepts; the
+# refactor to parameter objects is tracked in leynos/episodic#345.
+# pylint: disable-next=too-many-arguments
+async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared creator signature for resource adapters
     uow_factory: UowFactory,
     payload: JsonPayload,
     *,

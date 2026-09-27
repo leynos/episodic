@@ -92,8 +92,7 @@ def _parse_and_validate_tei(
         if mapped_exc is not exc:
             raise mapped_exc from exc
         raise
-    else:
-        return document
+    return document
 
 
 def _ensure_string_keyed_payload(

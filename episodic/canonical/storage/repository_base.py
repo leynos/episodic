@@ -70,6 +70,9 @@ class _RepositoryBase:
             mapper,
         )
 
+    # Pylint reports the finding the Ruff noqa below already accepts; the
+    # refactor to parameter objects is tracked in leynos/episodic#345.
+    # pylint: disable-next=too-many-arguments
     async def _list_paginated[RecordT, DomainT](  # noqa: PLR0913  # filters and pagination bounds are independent inputs
         self,
         record_type: type[RecordT],

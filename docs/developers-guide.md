@@ -237,18 +237,18 @@ The target runs this repository-wide pipeline, in order:
 
 1. Hecate architecture import-boundary checks;
 2. Ruff formatting-independent lint checks;
-3. the focused built-in Pylint 4 rules under managed PyPy;
+3. the focused built-in Pylint 4 rules under CPython 3.14;
 4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
    separate future-annotations pass;
 5. `ambrleaks` over Syrupy snapshots under `tests`;
 6. a blocking Skylos dead-code scan; and
 7. a blocking nose code-duplication gate.
 
-The built-in Pylint pass is invoked through `uv tool run --python pypy` with
-the pinned `pylint-pypy-shim` wrapper from
-[github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
-That wrapper installs the PyPy-specific Astroid compatibility patch before
-delegating to Pylint.
+The built-in Pylint pass runs the pinned `pylint==$(PYLINT_VERSION)` through
+`uv tool run --managed-python --python 3.14`, isolated from the project
+environment. It runs on CPython rather than PyPy because the source uses Python
+3.14 syntax, PEP 758 unparenthesized `except` lists, that no managed PyPy
+parses.
 
 Pylint's message selection is allow-listed in `pyproject.toml` with
 `disable = ["all"]` and explicit `enable` entries for the logging, match,
@@ -256,17 +256,14 @@ refactoring, standard-library, and modified-iteration checks this repository
 cares about. Keep rule rationale comments beside those entries, so future lint
 changes explain why a rule is enabled, instead of only recording its name.
 
-The wrapper disables Pylint's `syntax-error` message for this pass because the
-managed PyPy runtime currently parses Python 3.11 syntax while the project
-targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
-the wrapper and skipped, which keeps parse incompatibilities visible without
-hiding other diagnostics from files that PyPy can analyse.
+`syntax-error` stays enabled, so a module Pylint cannot parse fails the lint.
+The pass previously ran on PyPy with `syntax-error` disabled, and every module
+PyPy could not parse was skipped without a message, so it was never linted.
 
-The lint target therefore runs the `df12-python-lints` Pylint plug-in
-separately under CPython 3.14. This pass uses the project's actual syntax and
-Astroid runtime, while the PyPy pass retains its compatibility shim for the
-built-in Pylint checks. The project environment hard-pins the plug-in version in
-`pyproject.toml`. The equivalent df12 command is:
+The lint target runs the `df12-python-lints` Pylint plug-in as a separate pass
+under CPython 3.14, loading the plug-in into the project environment. The
+project environment hard-pins the plug-in version in `pyproject.toml`. The
+equivalent df12 command is:
 
 ```shell
 uv run --python 3.14 pylint --disable=all \
@@ -275,7 +272,7 @@ uv run --python 3.14 pylint --disable=all \
   alembic episodic openai_test_types.py tests
 ```
 
-The df12 pass covers the same `PYLINT_TARGETS` scope as the PyPy pass:
+The df12 pass covers the same `PYLINT_TARGETS` scope as the built-in pass:
 application and migration code, the OpenAI test types, and the complete test
 suite. Keep new df12 checks in the `DF12_PYLINT_MESSAGES` allow-list so their
 adoption remains explicit. The C9112 future-annotations check runs separately
@@ -352,6 +349,22 @@ when neither an entry-point rule nor a named exception can describe the
 boundary, and keep its reason beside the suppression. Temporary exceptions must
 name an owner, tracking reference, and expiry condition. Remove exception
 entries when the dynamic boundary disappears.
+
+## Module size and façade modules
+
+AGENTS.md caps a code module at 400 lines, and Pylint enforces it through
+`max-module-lines`. When a module outgrows the cap, split it by responsibility
+into sibling modules named after the original (for example `domain_enums.py`
+beside `domain.py`) and keep the original as the import path: it re-exports
+every name its callers use with `from .sibling import Name`, never by
+assignment. The canonical domain model (`episodic/canonical/domain.py`), the
+API helpers (`episodic/api/helpers.py`), the generation-runs resource, the
+draft-script, guest-bios, show-notes and launcher-support generation modules,
+the OpenAI adapter utilities, the LangGraph graph and the in-process launcher
+all follow this shape. A split module in a Hecate group must name its siblings
+in that group's `prefixes`, because Hecate matches on dotted boundaries, and
+Skylos entry points and duplication-gate exceptions name the module that now
+holds the code.
 
 ## Code-duplication gate
 
@@ -1482,9 +1495,12 @@ critique draft output.
 
 ### Show-notes generation
 
-- `episodic/generation/show_notes.py` defines the `ShowNotesGenerator`,
-  `ShowNotesEntry`, `ShowNotesResult`, `ShowNotesGeneratorConfig`, and
-  `enrich_tei_with_show_notes(...)` helper.
+- `episodic/generation/show_notes.py` defines the `ShowNotesGenerator` and is
+  the import path for `ShowNotesEntry`, `ShowNotesResult`,
+  `ShowNotesGeneratorConfig`, and the `enrich_tei_with_show_notes(...)` helper.
+  The data contracts live in `show_notes_models.py`, response parsing in
+  `show_notes_parsing.py`, and TEI enrichment in `show_notes_enrichment.py`;
+  import them from `show_notes`.
 - `ShowNotesEntry` is an immutable dataclass with constructor-time
   validation:
 
@@ -1703,9 +1719,10 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   `GuestBiosToolExecutor` implementation. It resolves the request's
   `series_profile_id`, optional `episode_id`, and optional `template_id`
   through the configured binding resolver before invoking the generation helper.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
-  used for `plan -> execute -> finish` and the checkpointing path that pauses
-  after planning.
+- `episodic/orchestration/langgraph.py` assembles the in-process LangGraph
+  path used for `plan -> execute -> finish` and the checkpointing path that
+  pauses after planning. The node bodies live in `langgraph_nodes.py` and the
+  direct-path cost recording in `langgraph_costs.py`.
 - `episodic/orchestration/checkpoints.py` contains the in-memory checkpoint
   adapter used by fast tests.
 - `episodic/canonical/storage/workflow_checkpoints.py` contains the SQLAlchemy
@@ -1825,6 +1842,20 @@ documents. It commits that request-scoped unit of work before calling
 `launch(run_id)`. `EpisodeTeiResource` remains the retrieval boundary: it
 serves the persisted episode TEI as JSON by default or raw
 `application/tei+xml` with content negotiation.
+
+`InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is one
+dataclass composed from three mixins: `launcher_scheduling.py` owns bounded
+task admission, draining and cancellation; `launcher_claim.py` claims a run and
+drives draft generation; and `launcher_persistence.py` records events, TEI,
+costs and terminal status. The mixins read the launcher's fields through
+`self`, so `launcher_host.py` declares that shared surface as the
+`LauncherHost` protocol. The mixins inherit from it only while type checking;
+at runtime their base is `object`, and the launcher's MRO and slots are
+unchanged. Construct the launcher, never a mixin on its own. `_load_sources`
+stays on the launcher because tests patch `source_from_document` in
+`launcher.py`. Replacing the mixins with injected scheduling, claim and
+persistence components is tracked in
+[#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they
@@ -2118,9 +2149,11 @@ module remains responsible for HTTP lifecycle and retry orchestration.
   endpoint path and JSON payload.
 - `response.py` classifies HTTP status codes, decodes JSON bodies, and
   normalizes OpenAI-compatible payloads through `openai_client` adapters.
-- `utils.py` validates configuration, estimates preflight token counts,
-  enforces token budgets, checks concrete provider usage, and emits structured
-  diagnostic logs.
+- `utils.py` is a façade over four helper modules and re-exports their
+  functions for existing callers: `utils_config.py` validates configuration,
+  `utils_preflight.py` estimates preflight token counts and enforces the input
+  budget, `utils_usage.py` checks concrete provider usage against the budget,
+  and `utils_logging.py` emits structured diagnostic logs.
 - `__init__.py` is a package namespace for these internal helpers; depend on
   the facade or the `LLMPort` contract rather than importing helper functions
   directly.
