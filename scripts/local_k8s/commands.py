@@ -1,6 +1,7 @@
 """Command construction for the local Kubernetes preview workflow."""
 
 import dataclasses as dc
+import json
 import re
 import subprocess
 import sys
@@ -300,7 +301,7 @@ _DNS1123_LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
 
 def _require_dns1123_label(value: str, field_name: str) -> str:
     """Return a Kubernetes DNS-1123 label or reject the manifest value."""
-    if not _DNS1123_LABEL.match(value):
+    if _DNS1123_LABEL.fullmatch(value) is None:
         msg = (
             f"{field_name} must be a DNS-1123 label "
             f"(lowercase alphanumerics and hyphens); got {value!r}"
@@ -311,15 +312,7 @@ def _require_dns1123_label(value: str, field_name: str) -> str:
 
 def _yaml_string(value: str) -> str:
     """Quote a scalar for the local manifest, escaping control characters."""
-    escaped = (
-        value
-        .replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-        .replace("\t", "\\t")
-    )
-    return '"' + escaped + '"'
+    return json.dumps(value)
 
 
 def local_postgres_manifest(config: PreviewConfig) -> str:

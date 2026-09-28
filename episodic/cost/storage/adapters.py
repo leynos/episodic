@@ -18,6 +18,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
+from episodic import observability
 from episodic.cost._time import parse_instant
 from episodic.cost.ports import (
     CostLedgerEntryId,
@@ -31,20 +32,37 @@ from episodic.cost.ports import (
     TaskRollupLedgerEntry,
     UsageSource,
 )
-from episodic.observability import (
-    MetricsPort,
-    MonotonicClockPort,
-    NoopMetrics,
-    NoopTracer,
-    PerfCounterClock,
-    TracerPort,
-)
 
 from .models import (
     CostLedgerEntryRecord,
     PricingSnapshotRecord,
     RunPricingPinRecord,
 )
+
+_PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT = "uq_pricing_snapshots_content_hash"
+
+
+def _is_pricing_snapshot_hash_collision(exc: IntegrityError) -> bool:
+    """Identify a duplicate pricing snapshot through its named constraint."""
+    # Keep driver inspection local: canonical storage's package initializer
+    # composes this adapter, so importing its helper would create an import cycle.
+    name: str | None = None
+    for candidate in (exc, exc.orig):
+        name = getattr(candidate, "constraint_name", None)
+        if name is None:
+            diagnostic = getattr(candidate, "diag", None)
+            name = getattr(diagnostic, "constraint_name", None)
+        if name is not None:
+            break
+    if name is not None:
+        return name == _PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT
+    # Some DB-API wrappers omit diagnostics; match only PostgreSQL's exact
+    # duplicate-constraint form so unrelated content_hash errors stay visible.
+    return (
+        f'violates unique constraint "{_PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT}"'
+        in str(exc.orig)
+    )
+
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -123,15 +141,33 @@ class SqlAlchemyCostLedgerStore:
         self,
         session: AsyncSession,
         *,
-        metrics: MetricsPort | None = None,
-        tracer: TracerPort | None = None,
-        clock: MonotonicClockPort | None = None,
+        metrics: observability.MetricsPort | None = None,
+        tracer: observability.TracerPort | None = None,
+        clock: observability.MonotonicClockPort | None = None,
     ) -> None:
+        """Create a ledger store bound to one session.
+
+        Parameters
+        ----------
+        session : AsyncSession
+            Session that owns the transaction boundary; the caller commits.
+        metrics : MetricsPort | None, optional
+            Bounded metrics sink. Defaults to ``NoopMetrics``.
+        tracer : TracerPort | None, optional
+            Span sink for storage operations. Defaults to ``NoopTracer``.
+        clock : MonotonicClockPort | None, optional
+            Clock used for latency measurement. Defaults to
+            ``PerfCounterClock``.
+        """
         self._session = session
-        self._metrics: MetricsPort = metrics if metrics is not None else NoopMetrics()
-        self._tracer: TracerPort = tracer if tracer is not None else NoopTracer()
-        self._clock: MonotonicClockPort = (
-            clock if clock is not None else PerfCounterClock()
+        self._metrics: observability.MetricsPort = (
+            metrics if metrics is not None else observability.NoopMetrics()
+        )
+        self._tracer: observability.TracerPort = (
+            tracer if tracer is not None else observability.NoopTracer()
+        )
+        self._clock: observability.MonotonicClockPort = (
+            clock if clock is not None else observability.PerfCounterClock()
         )
 
     def _record_ensure_outcome(
@@ -208,7 +244,7 @@ class SqlAlchemyCostLedgerStore:
                 # The id conflict target does not cover the unique content
                 # hash; a duplicate hash under a different identifier is a
                 # catalogue defect, not a transient storage failure.
-                if "content_hash" in str(exc.orig):
+                if _is_pricing_snapshot_hash_collision(exc):
                     outcome, failure_category = (
                         "collision",
                         "pricing_snapshot.collision",

@@ -2139,13 +2139,12 @@ markdown fences no longer fail the fail-fast JSON parser;
 reasoning effort, and service tier for reasoning models that reject
 `max_tokens`; the provider HTTP timeout is now configurable via
 `OPENAI_TIMEOUT_SECONDS` (the prior hard-coded 30 s timeout under-provisioned
-reasoning-model drafting); `CostLedgerPort.ensure_snapshot` persists a
-resolved pricing snapshot idempotently before it is pinned or referenced, so
-the first run against a fresh database no longer fails a foreign-key check on
+reasoning-model drafting); `CostLedgerPort.ensure_snapshot` persists a resolved
+pricing snapshot idempotently before it is pinned or referenced, so the first
+run against a fresh database no longer fails a foreign-key check on
 `run_pricing_pins`; usage metering omits zero-valued optional token metrics
-instead of reporting spurious cached/audio counters; and the Helm chart
-gained pass-through `volumes`/`volumeMounts` support (with the local
-preview's Secret moved to a stdin-applied manifest) so the
-source-intake object store has a writable mount under the chart's
-`readOnlyRootFilesystem` default. Review hardening for these fixes continues
-on PR #277.
+instead of reporting spurious cached/audio counters; and the Helm chart gained
+pass-through `volumes`/`volumeMounts` support (with the local preview's Secret
+moved to a stdin-applied manifest) so the source-intake object store has a
+writable mount under the chart's `readOnlyRootFilesystem` default. Review
+hardening for these fixes continues on PR #277.

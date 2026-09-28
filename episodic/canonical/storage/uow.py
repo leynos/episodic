@@ -66,10 +66,15 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Factory that produces new async sessions for the unit-of-work scope.
     metrics : MetricsPort | None, optional
         Optional metrics collector used to record UoW counters and timings,
-        forwarded to the workflow checkpoint store.  Defaults to *None*.
+        forwarded to the workflow checkpoint and cost-ledger stores. Defaults
+        to *None*.
     clock : MonotonicClockPort | None, optional
         Optional monotonic clock used to measure elapsed operation time,
-        forwarded to the workflow checkpoint store.  Defaults to *None*.
+        forwarded to the workflow checkpoint and cost-ledger stores. Defaults
+        to *None*.
+    tracer : TracerPort | None, optional
+        Optional tracer forwarded to the cost-ledger store. Defaults to
+        *None*.
 
     Attributes
     ----------

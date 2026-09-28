@@ -9,7 +9,7 @@ import pytest
 from episodic.cost import PricingSnapshotCollisionError, PricingSnapshotId
 from episodic.cost.storage import SqlAlchemyCostLedgerStore
 from episodic.observability import RecordingTracer
-from tests.test_cost_storage_ledger import _pricing_snapshot
+from tests.fixtures.cost import pricing_snapshot
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -82,7 +82,7 @@ async def test_ensure_snapshot_emits_persisted_reused_and_collision(
     """Each ensure outcome emits one bounded counter and one latency metric."""
     tracer = RecordingTracer()
     metrics = _RecordingMetrics()
-    snapshot = _pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f98")
+    snapshot = pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f98")
     colliding = dc.replace(
         snapshot,
         pricing_snapshot_id=PricingSnapshotId("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f99"),

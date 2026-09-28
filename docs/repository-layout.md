@@ -25,6 +25,7 @@ The following tree is an orientation sketch, not a complete file listing.
 │   ├── llm/
 │   ├── orchestration/
 │   ├── qa/
+│   ├── sqlalchemy_base.py
 │   └── worker/
 ├── infra/
 │   ├── clusters/
@@ -79,6 +80,8 @@ The `episodic/` package is grouped by feature and boundary:
   suspend-and-resume support, and executor integration.
 - `episodic/qa/` contains quality-assurance evaluators and related support
   code.
+- `episodic/sqlalchemy_base.py` owns the shared ORM metadata registry used by
+  canonical and cost-accounting storage models.
 - `episodic/worker/` contains Celery worker entrypoints and task wiring.
 
 Domain logic should remain behind ports and adapters rather than reaching

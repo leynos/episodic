@@ -735,9 +735,9 @@ Helm conventions:
   `externalSecret`, ingress, and HTTP probes.
 - `volumes` and `volumeMounts` are pass-through chart values (default `[]`)
   applied verbatim to the pod template and container spec. Use them to make a
-  path writable under the chart's `readOnlyRootFilesystem` default, such as
-  the source-intake object store root; `values.local.yaml` mounts an
-  `emptyDir` at `/tmp` for that purpose.
+  path writable under the chart's `readOnlyRootFilesystem` default, such as the
+  source-intake object store root; `values.local.yaml` mounts an `emptyDir` at
+  `/tmp` for that purpose.
 - Keep the Deployment pod-template `checksum/config` annotation aligned with
   `templates/configmap.yaml` so ConfigMap-backed environment changes roll pods.
 - Validate chart edits with `uv run pytest tests/test_helm_chart_contract.py`.
@@ -755,9 +755,9 @@ Local preview conventions:
 - `local-k8s-up` must apply the local-only Postgres dependency before invoking
   Helm with `--wait`, because `/health/ready` depends on database connectivity.
 - The preview's application Secret is built as a manifest with credentials in
-  `stringData` and applied with `kubectl apply -f -` on stdin, so secret
-  values never appear in command arguments the runner would otherwise print
-  in dry-run mode or echo to stderr on a failed command.
+  `stringData` and applied with `kubectl apply -f -` on stdin, so secret values
+  never appear in command arguments the runner would otherwise print in dry-run
+  mode or echo to stderr on a failed command.
 - Existing clusters must be reused only when the requested ingress port matches
   the k3d load-balancer mapping.
 - Add focused tests in `tests/test_local_k8s_tooling.py` for new command
@@ -917,18 +917,18 @@ must be the default when adding new operational instrumentation:
   operation time. Feature modules (for example `episodic.qa.chrono`) must reuse
   this port rather than declaring parallel hierarchies. The matching default
   adapter `PerfCounterClock` is exported from the same module.
-- `TracerPort` is the canonical tracing interface. `start_span(name,
-  attributes=...)` returns a `SpanHandle`, a context manager that bounds an
-  operation with `set_attribute(name, value)` calls recorded as the span
-  completes.
+- `TracerPort` is the canonical tracing interface.
+  `start_span(name, attributes=…)` returns a `SpanHandle`, a context manager
+  that bounds an operation with `set_attribute(name, value)` calls recorded as
+  the span completes.
 
-`StructuredLogTracer` is the production tracer adapter; it logs the span
-name and completion outcome as structured log lines. It only records
-attributes whose name is in a fixed allow-list (`operation`, `outcome`,
-`failure_category`, `representation`, `pagination`) and silently drops any
-other attribute, so spans cannot leak request payloads, identifiers, or other
-sensitive operation metadata into logs. `NoopTracer` is the default no-op
-adapter used when no tracing backend is wired.
+`StructuredLogTracer` is the production tracer adapter; it logs the span name
+and completion outcome as structured log lines. It only records attributes
+whose name is in a fixed allow-list (`operation`, `outcome`, `failure_category`,
+`representation`, `pagination`) and silently drops any other attribute, so
+spans cannot leak request payloads, identifiers, or other sensitive operation
+metadata into logs. `NoopTracer` is the default no-op adapter used when no
+tracing backend is wired.
 
 `episodic/metrics_ports.py` retains the narrower `BoundedMetricsPort` and
 `BoundedValueMetricsPort` protocols, whose `labels` parameters are typed as
@@ -942,8 +942,8 @@ callers that construct their label dictionaries as concrete `dict` instances.
 Tests should reuse `episodic.observability.NoopMetrics` and `PerfCounterClock`
 (or the feature-specific noops, such as the private `_NoopChronoMetrics`) as
 default test doubles for the boundary. For tracing, tests should reuse
-`episodic.observability.RecordingTracer`, which records each started span as
-a `RecordedSpan` (with its attributes and completion state) for deterministic
+`episodic.observability.RecordingTracer`, which records each started span as a
+`RecordedSpan` (with its attributes and completion state) for deterministic
 assertions.
 
 ## Database migrations
@@ -953,11 +953,17 @@ under `alembic/`, and migration scripts are stored in `alembic/versions/`.
 Schema changes must be expressed as migrations, and tests apply migrations
 before executing database-backed scenarios.
 
+Canonical and cost-accounting ORM models share `episodic.sqlalchemy_base.Base`.
+Keep that module limited to the common SQLAlchemy declarative base so each
+storage feature can import it without loading another feature's package. Domain
+enums and feature-specific model declarations remain with their owning storage
+modules. Alembic and schema tests use the combined `Base.metadata` registry.
+
 ### Creating a new migration
 
-After modifying Object-Relational Mapping (ORM) models in
-`episodic/canonical/storage/models.py`, generate a migration with Alembic's
-autogenerate feature:
+After modifying Object-Relational Mapping (ORM) models in either
+`episodic/canonical/storage/` or `episodic/cost/storage/`, generate a migration
+with Alembic's autogenerate feature:
 
 ```shell
 DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
@@ -1009,7 +1015,7 @@ change local development defaults.
 
 ### Developer workflow
 
-1. Modify ORM models in `episodic/canonical/storage/models.py`.
+1. Modify ORM models in their owning canonical or cost storage module.
 2. Generate a migration: `alembic revision --autogenerate -m "description"`.
 3. Run `make check-migrations` to verify the models and migrations are in sync.
 4. Run `make test` to confirm existing tests still pass.
@@ -2008,19 +2014,19 @@ records, ordered terminal events, and status. A request-scoped unit of work
 must never be captured by a background task.
 
 When configured, `CostRecorder` records the provider call and final run roll-up
-in the persistence unit of work. It first calls `CostLedgerPort.ensure_snapshot`
-to persist the resolved pricing snapshot idempotently, either before pinning
-it to the run or before recording an unpinned provider call; repeated calls
-with the same snapshot identifier reuse the stored row. Pricing snapshots are
-immutable and content-addressed, so a content-hash collision against another
-identifier raises `PricingSnapshotCollisionError` rather than silently
-overwriting the stored snapshot. `ensure_snapshot` carries `effective_from`
-from the resolved catalogue snapshot through to the persisted row (parsed as a
-timezone-aware instant, or left unset when the catalogue entry has none), so
-the stored snapshot preserves the same effective-date precedence the catalogue
-used to resolve it. `CostRecorder` then records usage with a run-scoped
-idempotency key. `PRICING_SNAPSHOT_DIRECTORY` is optional: its
-default is
+in the persistence unit of work. It first calls
+`CostLedgerPort.ensure_snapshot` to persist the resolved pricing snapshot
+idempotently, either before pinning it to the run or before recording an
+unpinned provider call; repeated calls with the same snapshot identifier reuse
+the stored row. Pricing snapshots are immutable and content-addressed, so a
+content-hash collision against another identifier raises
+`PricingSnapshotCollisionError` rather than silently overwriting the stored
+snapshot. `ensure_snapshot` carries `effective_from` from the resolved
+catalogue snapshot through to the persisted row (parsed as a timezone-aware
+instant, or left unset when the catalogue entry has none), so the stored
+snapshot preserves the same effective-date precedence the catalogue used to
+resolve it. `CostRecorder` then records usage with a run-scoped idempotency key.
+`PRICING_SNAPSHOT_DIRECTORY` is optional: its default is
 `config/pricing-snapshots`; a configured relative path is resolved from the
 repository root, and startup rejects a path that is not an existing directory.
 The runtime constructs `FilePricingCatalogue` from the validated directory, so
@@ -2248,8 +2254,8 @@ absent.
 `episodic.llm` now owns a richer outbound contract:
 
 - `LLMRequest` carries the prompt text, optional system prompt, target model,
-  provider operation (`chat_completions` or `responses`), token budget, and
-  the provider-neutral `json_response` flag.
+  provider operation (`chat_completions` or `responses`), token budget, and the
+  provider-neutral `json_response` flag.
 - `OpenAICompatibleLLMAdapter` implements `LLMPort` over explicit
   OpenAI-compatible HTTP calls, so OpenRouter-style chat completions and OpenAI
   Responses stay behind the same port.
@@ -2270,13 +2276,13 @@ absent.
   `response_format={"type": "json_object"}` for chat completions, and
   `text.format={"type": "json_object"}` for the Responses API.
 - `OpenAIPayloadOptions` carries provider-specific request options applied to
-  outbound payloads: `reasoning_effort` (read from
-  `OPENAI_REASONING_EFFORT`), `service_tier` (read from
-  `OPENAI_SERVICE_TIER`), and `token_limit_param` (read from
-  `OPENAI_TOKEN_LIMIT_PARAM`, one of `max_tokens` or
-  `max_completion_tokens`, defaulting to `max_tokens`). `OPENAI_TIMEOUT_SECONDS`
-  sets the adapter's HTTP timeout and defaults to `30.0`. All four are wired
-  from runtime settings in `episodic.api.runtime_config`.
+  outbound payloads: `reasoning_effort` (read from `OPENAI_REASONING_EFFORT`),
+  `service_tier` (read from `OPENAI_SERVICE_TIER`), and `token_limit_param`
+  (read from `OPENAI_TOKEN_LIMIT_PARAM`, one of `max_tokens` or
+  `max_completion_tokens`, defaulting to `max_tokens`).
+  `OPENAI_TIMEOUT_SECONDS` sets the adapter's HTTP timeout and defaults to
+  `30.0`. All four are wired from runtime settings in
+  `episodic.api.runtime_config`.
 
 ### OpenAI-compatible adapter package layout
 
@@ -2305,14 +2311,13 @@ module remains responsible for HTTP lifecycle and retry orchestration.
 
 `episodic.llm.openai_validation` normalizes raw provider usage into the
 canonical `ProviderCallUsage.usage_metrics` used for cost accounting. Cached
-and audio token counts are subsets of the prompt and completion totals, so
-they are made mutually exclusive with the parent metric: subset counts are
-subtracted from `input_tokens`/`output_tokens` and priced under their own
-rates (`cached_input_tokens`, `audio_input_tokens`, `audio_output_tokens`).
-Reasoning tokens remain inside `output_tokens` and are never priced as a
-separate metric. A zero-valued optional metric is omitted entirely, so a
-pricing snapshot never needs a rate for a modality the provider did not
-report.
+and audio token counts are subsets of the prompt and completion totals, so they
+are made mutually exclusive with the parent metric: subset counts are
+subtracted from `input_tokens`/`output_tokens` and priced under their own rates
+(`cached_input_tokens`, `audio_input_tokens`, `audio_output_tokens`). Reasoning
+tokens remain inside `output_tokens` and are never priced as a separate metric.
+A zero-valued optional metric is omitted entirely, so a pricing snapshot never
+needs a rate for a modality the provider did not report.
 
 ## Multi-source ingestion
 

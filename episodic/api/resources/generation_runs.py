@@ -59,9 +59,6 @@ __all__ = [
 ]
 
 _GENERATION_RUN_OPERATION = "generation_run.create"
-_RETRY_AFTER = "1"
-_MAX_EVENT_LIMIT = 100
-_DEFAULT_EVENT_LIMIT = 20
 _DEFAULT_MAX_SOURCE_COUNT = 32
 
 type Clock = cabc.Callable[[], dt.datetime]
