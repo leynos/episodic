@@ -119,11 +119,13 @@ Boundary rules:
   domain and ports, but never on outbound adapter implementations.
 - **Outbound adapters** (database, object storage, message broker, LLM/TTS
   vendors) depend on the domain and ports, but never on inbound adapters.
-- **Orchestration code**: LangGraph node modules depend outside their own group
-  only on domain ports and provider-neutral checkpoint DTOs. Graph builders and
-  Celery task modules may additionally depend on application services; graph
-  builders also assemble the node and checkpoint groups. Direct adapter access
-  is rejected by orchestration-specific Hecate groups.
+- **Orchestration code**: General orchestration modules may depend on domain
+  services and ports, provider-neutral orchestration DTOs, and the specialized
+  node and checkpoint groups. LangGraph node modules have a narrower boundary:
+  they may depend only on ports and provider-neutral checkpoint DTOs outside
+  their own group. Celery task modules may additionally depend on application
+  services. Direct adapter access is rejected by orchestration-specific Hecate
+  groups.
 - **Cross-adapter imports** are forbidden; interactions happen through ports or
   well-defined message schemas.
 - **Checkpoint payloads** hold orchestration metadata and JSON-shaped
@@ -227,15 +229,18 @@ Enforcement mechanisms:
 
 The following rules are normative for LangGraph nodes and Celery tasks:
 
-- Orchestration code depends on domain services and ports only; adapters are
-  accessed exclusively through port interfaces.
+- General orchestration code may depend on application services, domain ports,
+  and provider-neutral orchestration DTOs; adapters are accessed exclusively
+  through port interfaces.
 - LangGraph node modules are classified separately from graph builders. Nodes
-  may depend on orchestration DTOs and ports, whilst builders and application
-  orchestration code may assemble domain services.
-- Celery task modules depend on `WorkloadClass`, domain services, and ports;
-  worker runtime modules remain composition roots for concrete wiring.
-- Checkpoint payload DTO modules are grouped before general orchestration
-  modules so Hecate's first-match ordering keeps them provider-neutral.
+  may depend on their own group, domain ports, and checkpoint DTOs, but not on
+  application services. Other orchestration modules may assemble domain
+  services.
+- Celery task modules depend only on their own group, application services, and
+  domain ports, including `WorkloadClass`; worker runtime modules remain
+  composition roots for concrete wiring.
+- Checkpoint payload DTO modules may depend only on their own group and domain
+  ports. Hecate's first-match ordering keeps them provider-neutral.
 - Celery tasks are single-responsibility and idempotent, with idempotency keys
   persisted per task or workflow step.
 - Checkpoint payloads store orchestration metadata only; canonical domain data

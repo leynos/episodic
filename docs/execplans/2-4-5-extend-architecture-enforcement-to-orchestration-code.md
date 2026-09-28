@@ -389,7 +389,7 @@ round-trip unchanged through JSON serialization.
 
 This section assumes no prior knowledge of the repository.
 
-### Architecture enforcement today
+### Pre-M0 architecture enforcement baseline
 
 The checker is Hecate, invoked by the `check-architecture` target in the
 `Makefile`:
@@ -400,14 +400,14 @@ check-architecture: build ## Check hexagonal architecture import boundaries
 ```
 
 `make lint` runs `check-architecture` first, then Ruff and Pylint. Hecate reads
-`[tool.hecate]` from `pyproject.toml`. The configuration declares one root
-package (`episodic`), a default rule identifier (`ARCH001`), and five ordered
-groups. Each group has a `name`, a list of module `prefixes`, and an `allowed`
-list naming the groups it may import from. Matching is first-match by config
-order, so specific prefixes must precede broader ones. A group must list its
-own name in `allowed` to permit imports between its own modules.
+`[tool.hecate]` from `pyproject.toml`. Before M0, the configuration declared
+one root package (`episodic`), a default rule identifier (`ARCH001`), and five
+ordered groups. Each group has a `name`, a list of module `prefixes`, and an
+`allowed` list naming the groups it may import from. Matching is first-match by
+config order, so specific prefixes must precede broader ones. A group must list
+its own name in `allowed` to permit imports between its own modules.
 
-The current groups (see `pyproject.toml`, the `[tool.hecate]` block) are:
+The pre-M0 groups were:
 
 1. `composition_root` (`episodic.api.runtime`, `episodic.worker.runtime`) may
    import every layer.
@@ -423,6 +423,14 @@ The current groups (see `pyproject.toml`, the `[tool.hecate]` block) are:
 5. `outbound_adapter` (storage, canonical adapters, OpenAI adapters, cost
    storage, pricing catalogue) may import `outbound_adapter`, `application`,
    `domain_ports`.
+
+The completed policy assigns graph nodes, checkpoint payloads, and worker tasks
+to dedicated Hecate groups. Checkpoint payloads may import only their own group
+and `domain_ports`; graph nodes may also import the checkpoint group. General
+orchestration may use `application`, `domain_ports`, and the specialized
+orchestration groups, but not adapters. Worker tasks may use their own group,
+`application`, and `domain_ports`. See the current `[tool.hecate]` block in
+`pyproject.toml` for the ordered prefixes and exact allow-lists.
 
 ### How the architecture tests are wired
 
