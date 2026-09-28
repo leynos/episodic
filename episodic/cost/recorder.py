@@ -209,17 +209,7 @@ class CostRecorder:
     async def _resolve_snapshot_for_record(
         self, record: ProviderCallRecord
     ) -> tuple[PricingSnapshot, bool]:
-        """Resolve the snapshot for a record and whether it was pinned.
-
-        This helper is read-only; the caller owns any persistence the
-        resolution outcome requires.
-
-        Returns
-        -------
-        tuple[PricingSnapshot, bool]
-            The resolved snapshot and whether a run pricing pin selected
-            it.
-        """
+        """Resolve the snapshot and report whether a run pricing pin selected it."""
         key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,
             provider_name=record.provider_name,
@@ -261,8 +251,8 @@ class CostRecorder:
         CostAccountingError
             If pricing or ledger validation fails.
         """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
-        snapshot, pinned = await self._resolve_snapshot_for_record(record)
-        if not pinned:
+        snapshot, is_pinned = await self._resolve_snapshot_for_record(record)
+        if not is_pinned:
             # Unpinned calls must persist the snapshot before the ledger row
             # references it; pinned calls skip this because the pin's foreign
             # key already guarantees the stored row exists.

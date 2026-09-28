@@ -14,10 +14,8 @@ from episodic.cost import (
     IdempotencyKey,
     LedgerScope,
     PricingModel,
-    PricingSnapshot,
     PricingSnapshotCollisionError,
     PricingSnapshotId,
-    PricingSourceKind,
     ProviderCallLedgerEntry,
     RunPricingKey,
     TaskRollupLedgerEntry,
@@ -29,6 +27,7 @@ from episodic.cost.storage import (
     RunPricingPinRecord,
     SqlAlchemyCostLedgerStore,
 )
+from tests.fixtures.cost import pricing_snapshot
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -236,31 +235,13 @@ def test_recorded_at_fixture_is_timezone_aware() -> None:
     assert parsed.tzinfo is not None, "expected parsed datetime to be timezone-aware"
 
 
-def _pricing_snapshot(snapshot_id: str) -> PricingSnapshot:
-    """Build a domain pricing snapshot for persistence tests."""
-    return PricingSnapshot(
-        pricing_snapshot_id=PricingSnapshotId(snapshot_id),
-        provider_name="openai",
-        model="gpt-4o-mini",
-        operation="chat_completions",
-        source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
-        currency=CurrencyCode("USD"),
-        billing_period_key=BillingPeriodKey("2026-06"),
-        rates_minor_per_metric={"input_tokens": 100, "output_tokens": 200},
-        source_metadata={"source_url": "https://example.test/pricing"},
-        content_hash="ensure-hash",
-        retrieved_at="2026-06-04T09:00:00Z",
-        effective_from=dt.datetime(2026, 6, 1, tzinfo=dt.UTC),
-    )
-
-
 @pytest.mark.asyncio
 async def test_ensure_snapshot_persists_once_and_satisfies_pins(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Ensuring a snapshot inserts one row that run pricing pins can reference."""
     snapshot_id = "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f90"
-    snapshot = _pricing_snapshot(snapshot_id)
+    snapshot = pricing_snapshot(snapshot_id)
     conflicting = dc.replace(
         snapshot,
         content_hash="ensure-hash-conflicting",
@@ -325,7 +306,7 @@ async def test_ensure_snapshot_rejects_content_hash_collisions(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A duplicate content hash under a new identifier raises a domain error."""
-    snapshot = _pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f93")
+    snapshot = pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f93")
     colliding = dc.replace(
         snapshot,
         pricing_snapshot_id=PricingSnapshotId("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f94"),

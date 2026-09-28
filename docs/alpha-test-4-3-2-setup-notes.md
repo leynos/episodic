@@ -168,10 +168,10 @@ never an option on this host; the documented rootless-Podman guidance (use
   `/tmp/episodic-object-store` that no longer exist, and a generation run then
   fails with `[Errno 2] No such file or directory`. The database (a StatefulSet
   with a PVC) and the object store (container tmpfs) have different lifetimes;
-  the object store needs a volume with a lifetime matched to the upload
-  rows. This branch adds the `emptyDir` mount (which still dies with the
-  pod) and documents in the users' guide that uploads must be redone after
-  any application pod restart; durable blob storage remains follow-up work.
+  the object store needs a volume with a lifetime matched to the upload rows.
+  This branch adds the `emptyDir` mount (which still dies with the pod) and
+  documents in the users' guide that uploads must be redone after any
+  application pod restart; durable blob storage remains follow-up work.
 - **`make local-k8s-up` refuses to run while its own port-forward is
   alive.** The preview tooling validates that port 8088 is free, so an operator
   following the docs (which say to keep a port-forward running) cannot re-run
@@ -198,60 +198,56 @@ never an option on this host; the documented rootless-Podman guidance (use
   snapshot id) before pinning it or recording a provider call against it.
 - **Fixed `make skylos-allow` and its lint noise.** Two independent
   defects: Skylos parses sources with its own runtime's `ast`, so without
-  `uv tool run --python 3.14` an older default interpreter misreads 3.14
-  syntax and reports phantom dead code (fix cherry-picked from the
+  `uv tool run --python 3.14` an older default interpreter misreads 3.14 syntax
+  and reports phantom dead code (fix cherry-picked from the
   `code-duplication-gate` branch); and the `whitelist` subcommand only
   dispatches when it is Skylos's first argument, so the shared macro's
-  `--config-file` prefix made `--reason` an "unrecognized argument". The
-  target now uses a bare `SKYLOS_CLI` macro for the subcommand and accepts
-  `NAME`/`REASON` only from the make command line, so an ambient `NAME`
-  environment variable can no longer leak into the whitelist (the full
-  test suite had previously written the host's `NAME=ibara` and a
-  shell-injection probe into the real `pyproject.toml`).
+  `--config-file` prefix made `--reason` an "unrecognized argument". The target
+  now uses a bare `SKYLOS_CLI` macro for the subcommand and accepts `NAME`/
+  `REASON` only from the make command line, so an ambient `NAME` environment
+  variable can no longer leak into the whitelist (the full test suite had
+  previously written the host's `NAME=ibara` and a shell-injection probe into
+  the real `pyproject.toml`).
 - **Storage post-mortem after the third crash (whole-PC restart).** The
-  ext4 superblock on the distro disk reports `clean` with no recorded
-  error history, and podman's overlay layer links survived intact this
-  time. The overlay driver configuration itself is sound: native kernel
-  overlayfs (not fuse-overlayfs) on ext4, `d_type` supported. The
-  corruption pattern (EIO on every process spawn, journald files
-  corrupted, overlay link directory destroyed once) with no ext4 error
-  records points at lost writes in the WSL2 VHDX/virtio-blk layer when
-  the VM dies under container-build I/O, not at podman or kind. Worth
-  checking on the Windows side: Event Viewer disk/vhdmp events around the
-  crash times and free space on the drive holding the VHDX. Moving
-  podman's `graphroot` off the distro VHDX onto the separate `/data`
+  ext4 superblock on the distro disk reports `clean` with no recorded error
+  history, and podman's overlay layer links survived intact this time. The
+  overlay driver configuration itself is sound: native kernel overlayfs (not
+  fuse-overlayfs) on ext4, `d_type` supported. The corruption pattern (EIO on
+  every process spawn, journald files corrupted, overlay link directory
+  destroyed once) with no ext4 error records points at lost writes in the WSL2
+  VHDX/virtio-blk layer when the VM dies under container-build I/O, not at
+  podman or kind. Worth checking on the Windows side: Event Viewer disk/vhdmp
+  events around the crash times and free space on the drive holding the VHDX.
+  Moving podman's `graphroot` off the distro VHDX onto the separate `/data`
   disk would also take the build I/O out of the blast radius.
 - **Success.** With all fixes deployed (JSON response mode,
-  `max_completion_tokens`, 600 s timeout, snapshot persistence,
-  zero-metric suppression, and the `emptyDir` mount under a read-only
-  root filesystem), the full workflow completed end to end: series
-  profile → host reference documents and bindings → source document and
-  show specification uploads → ingestion job → source attachment →
-  `draft_without_qa` generation run → `run.succeeded` → TEI P5 download
-  via `Accept: application/tei+xml`. The `gpt-5.6-sol` draft consumed
-  13,803 input and 2,476 output tokens (≈ USD 0.05 at the pinned
-  2026-08 rates) and produced a 10 kB, 39-turn TEI document whose
-  dialogue follows the show specification's host personas and the
-  source document's narrative arc.
+  `max_completion_tokens`, 600 s timeout, snapshot persistence, zero-metric
+  suppression, and the `emptyDir` mount under a read-only root filesystem), the
+  full workflow completed end to end: series profile → host reference documents
+  and bindings → source document and show specification uploads → ingestion job
+  → source attachment → `draft_without_qa` generation run → `run.succeeded` →
+  TEI P5 download via `Accept: application/tei+xml`. The `gpt-5.6-sol` draft
+  consumed 13,803 input and 2,476 output tokens (≈ USD 0.05 at the pinned
+  2026-08 rates) and produced a 10 kB, 39-turn TEI document whose dialogue
+  follows the show specification's host personas and the source document's
+  narrative arc.
 - **Moved rootless podman's `graphroot` off the distro VHDX.** Following
   the storage post-mortem, container storage now lives at
-  `/data/leynos/containers/storage` on the separate xfs disk
-  (`ftype=1`, so overlayfs is supported) instead of
-  `~/.local/share/containers/storage` inside the WSL distro's ext4
-  VHDX. Procedure: stop all containers, `rsync -aHX --numeric-ids` the
-  74 GiB storage tree, point `~/.config/containers/storage.conf` at the
-  new `graphroot`, and verify images and containers are visible. Two
-  traps: the copy must run under `podman unshare` (a plain rsync
-  silently skips every subuid-owned file with permission errors while
-  masking them behind a nonzero exit code), and podman's SQLite state
-  database (`db.sql` at the storage root) records absolute paths, so
-  after the move its `DBConfig` row needs updating
+  `/data/leynos/containers/storage` on the separate xfs disk (`ftype=1`, so
+  overlayfs is supported) instead of `~/.local/share/containers/storage` inside
+  the WSL distro's ext4 VHDX. Procedure: stop all containers,
+  `rsync -aHX --numeric-ids` the 74 GiB storage tree, point
+  `~/.config/containers/storage.conf` at the new `graphroot`, and verify images
+  and containers are visible. Two traps: the copy must run under
+  `podman unshare` (a plain rsync silently skips every subuid-owned file with
+  permission errors while masking them behind a nonzero exit code), and
+  podman's SQLite state database (`db.sql` at the storage root) records
+  absolute paths, so after the move its `DBConfig` row needs updating
   (`StaticDir`/`GraphRoot`/`VolumeDir`) or podman refuses to start with
-  "database configuration mismatch". All containers except `qdrant`
-  (whose data is a bind mount to `/data/qdrant`, outside container
-  storage) were pruned before the move, shrinking the copy from 74 GiB.
-  A smoke `podman run` on the new graphroot succeeded. This takes
-  image-build I/O — the load implicated in all three VM crashes — off
-  the VHDX entirely. The old storage tree is left in place as a
-  fallback until the new location has proven itself; delete
+  "database configuration mismatch". All containers except `qdrant` (whose data
+  is a bind mount to `/data/qdrant`, outside container storage) were pruned
+  before the move, shrinking the copy from 74 GiB. A smoke `podman run` on the
+  new graphroot succeeded. This takes image-build I/O — the load implicated in
+  all three VM crashes — off the VHDX entirely. The old storage tree is left in
+  place as a fallback until the new location has proven itself; delete
   `~/.local/share/containers/storage` to reclaim the space.

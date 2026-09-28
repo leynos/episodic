@@ -17,7 +17,7 @@ from episodic.cost.storage import (
     RunPricingPinRecord,
     SqlAlchemyCostLedgerStore,
 )
-from tests.test_cost_storage_ledger import _pricing_snapshot
+from tests.fixtures.cost import pricing_snapshot
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -59,7 +59,7 @@ async def test_cost_recorder_pins_on_a_fresh_database(
     from episodic.cost.engine import PricingEngine
     from episodic.cost.recorder import CostProviderOperation, CostRecorder
 
-    snapshot = _pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f97")
+    snapshot = pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f97")
     async with session_factory() as session:
         recorder = CostRecorder(
             ledger=SqlAlchemyCostLedgerStore(session),

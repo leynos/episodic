@@ -1,7 +1,6 @@
-"""Shared SQLAlchemy metadata and enum types for canonical storage."""
+"""Canonical SQLAlchemy enum types and shared ORM base import."""
 
 import sqlalchemy as sa
-from sqlalchemy import orm
 
 from episodic.canonical.domain import (
     ApprovalState,
@@ -18,17 +17,7 @@ from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.idempotency import IdempotencyState
 from episodic.canonical.ingestion_sources import AttachmentKind
 from episodic.canonical.uploads import UploadState
-
-
-class Base(orm.DeclarativeBase):
-    """Base class for canonical SQLAlchemy models.
-
-    Notes
-    -----
-    Alembic and test scaffolding rely on ``Base.metadata`` when applying
-    migrations or creating schema definitions.
-    """
-
+from episodic.sqlalchemy_base import Base as Base
 
 EPISODE_STATUS = sa.Enum(
     EpisodeStatus,

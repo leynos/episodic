@@ -449,13 +449,12 @@ authenticate with:
 Authorization: Bearer local-dev-token
 ```
 
-When `OPENAI_API_KEY` is set in the operator's environment,
-`make local-k8s-up` also writes the paired `openai-base-url`/`openai-api-key`
-keys into the same Secret so preview-generated drafts can reach a real
-provider.
+When `OPENAI_API_KEY` is set in the operator's environment, `make local-k8s-up`
+also writes the paired `openai-base-url`/`openai-api-key` keys into the same
+Secret so preview-generated drafts can reach a real provider.
 
-`charts/episodic/values.local.yaml` also pins the effective generation
-settings for the local preview:
+`charts/episodic/values.local.yaml` also pins the effective generation settings
+for the local preview:
 
 - `DRAFT_MODEL: gpt-5.6-sol`
 - `OPENAI_REASONING_EFFORT: low`
