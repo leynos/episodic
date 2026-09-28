@@ -51,17 +51,16 @@ from episodic.llm.ports import (
     LLMResponse,
     LLMTransientProviderError,
 )
-from episodic.observability import (
-    MetricsPort,
-    MonotonicClockPort,
-    NoopMetrics,
-    NoopTracer,
-    PerfCounterClock,
-    TracerPort,
-)
+from episodic.observability_runtime import ObservabilityRuntime
 
 if typ.TYPE_CHECKING:
     from types import TracebackType
+
+    from episodic.observability import (
+        MetricsPort,
+        MonotonicClockPort,
+        TracerPort,
+    )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -128,6 +127,9 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         adapter creates its own client and sets ``_owns_client`` to ``True``.
         When supplied, ``_owns_client`` is ``False`` and caller-owned client
         lifecycle remains outside the adapter.
+    observability
+        Shared metrics, tracing, and monotonic-clock ports. When omitted, the
+        adapter uses the canonical no-op sinks and system clock.
 
     Raises
     ------
@@ -138,20 +140,17 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         Raised when the configured provider operation is unsupported.
     """
 
-    def __init__(  # noqa: PLR0913  # pylint: disable=too-many-arguments  # Observability ports travel together through the runtime seam.
+    def __init__(
         self,
         *,
         config: OpenAICompatibleLLMConfig,
         client: httpx.AsyncClient | None = None,
-        tracer: TracerPort | None = None,
-        metrics: MetricsPort | None = None,
-        clock: MonotonicClockPort | None = None,
+        observability: ObservabilityRuntime | None = None,
     ) -> None:
-        self._tracer: TracerPort = tracer if tracer is not None else NoopTracer()
-        self._metrics: MetricsPort = metrics if metrics is not None else NoopMetrics()
-        self._clock: MonotonicClockPort = (
-            clock if clock is not None else PerfCounterClock()
-        )
+        ports = ObservabilityRuntime() if observability is None else observability
+        self._tracer: TracerPort = ports.tracer
+        self._metrics: MetricsPort = ports.metrics
+        self._clock: MonotonicClockPort = ports.clock
         self._base_url = config.base_url.rstrip("/")
         self._api_key = config.api_key
         self._provider_operation = _coerce_operation(config.provider_operation)
