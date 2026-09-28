@@ -1,3 +1,3 @@
 """Outbound storage fixture."""
 
-VALUE = "storage"
+VALUE: str = "storage"

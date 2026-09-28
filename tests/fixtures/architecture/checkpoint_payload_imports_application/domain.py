@@ -1,3 +1,3 @@
 """Domain fixture for a checkpoint application dependency."""
 
-VALUE = "domain"
+VALUE: str = "domain"

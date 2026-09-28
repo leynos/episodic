@@ -2,6 +2,7 @@
 
 import pytest
 
+from episodic.orchestration import _graph_nodes
 from episodic.orchestration.langgraph import (
     GenerationGraphState,
     _execute_node,
@@ -36,6 +37,7 @@ class TestLangGraphNodeValidation:
             await _execute_node(
                 GenerationGraphState(planner_result=_planner_result()),
                 tool_executor=_FakeToolExecutor(_action_result()),
+                monotonic_clock=lambda: 0.0,
             )
 
     @pytest.mark.asyncio
@@ -47,7 +49,35 @@ class TestLangGraphNodeValidation:
             await _execute_node(
                 GenerationGraphState(request=_request()),
                 tool_executor=_FakeToolExecutor(_action_result()),
+                monotonic_clock=lambda: 0.0,
             )
+
+    @pytest.mark.asyncio
+    async def test_execute_node_uses_injected_monotonic_clock(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Action duration logging uses the supplied clock at the node boundary."""
+        timestamps = iter((10.0, 10.125))
+        logged_events: list[tuple[str, dict[str, object]]] = []
+
+        def record_log_event(_level: str, message: str, **fields: object) -> None:
+            logged_events.append((message, fields))
+
+        monkeypatch.setattr(_graph_nodes, "_log_event", record_log_event)
+        await _execute_node(
+            GenerationGraphState(request=_request(), planner_result=_planner_result()),
+            tool_executor=_FakeToolExecutor(_action_result()),
+            monotonic_clock=lambda: next(timestamps),
+        )
+
+        action_finish = next(
+            fields
+            for message, fields in logged_events
+            if message == "generation_graph.execute_node.action.finish"
+        )
+        assert action_finish["elapsed_ms"] == 125.0, (
+            "elapsed time should be calculated from the injected monotonic clock"
+        )
 
     def test_finish_node_requires_request(self) -> None:
         """Finish node should fail loudly when request state is missing."""

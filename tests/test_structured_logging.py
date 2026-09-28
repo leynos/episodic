@@ -25,10 +25,77 @@ class _EventSpyLogger:
         self.messages.append(message)
 
 
+class _JsonFallbackLogger:
+    """Reject plain messages and record JSON messages accepted on retry."""
+
+    def __init__(self) -> None:
+        """Initialize the logger's attempted and accepted messages."""
+        self.attempted_messages: list[str] = []
+        self.accepted_messages: list[str] = []
+
+    def info(self, message: str, **kwargs: object) -> None:
+        """Accept JSON and reject a plain message with ``TypeError``."""
+        assert not kwargs, "log_event should not add logger kwargs"
+        self.attempted_messages.append(message)
+        if not message.startswith("{"):
+            msg = "plain messages are unsupported"
+            raise TypeError(msg)
+        json.loads(message)
+        self.accepted_messages.append(message)
+
+
 class _EventState(enum.Enum):
     """Representative non-string enum used in structured fields."""
 
     READY = "ready"
+
+
+def test_log_event_emits_plain_message_without_structured_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without structured fields, the original message is logged once."""
+    logger = _EventSpyLogger()
+    monkeypatch.setattr(episodic_logging, "_event_log", logger)
+
+    episodic_logging.log_event("info", "generation.started")
+
+    assert logger.messages == ["generation.started"], (
+        "plain logging should emit the original message exactly once"
+    )
+
+
+def test_log_event_retries_plain_message_as_json_after_type_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retry a logger's rejected plain message as an event JSON object."""
+    logger = _JsonFallbackLogger()
+    monkeypatch.setattr(episodic_logging, "_event_log", logger)
+
+    episodic_logging.log_event("info", "generation.started")
+
+    assert logger.attempted_messages == [
+        "generation.started",
+        '{"event": "generation.started"}',
+    ], "TypeError should trigger one JSON event retry"
+    assert [json.loads(message) for message in logger.accepted_messages] == [
+        {"event": "generation.started"}
+    ], "the logger should accept the JSON event retry"
+
+
+def test_log_event_preserves_message_when_event_field_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The explicit event message wins over a conflicting structured field."""
+    logger = _EventSpyLogger()
+    monkeypatch.setattr(episodic_logging, "_event_log", logger)
+
+    episodic_logging.log_event(
+        "info", "generation.original", event="generation.conflicting"
+    )
+
+    assert json.loads(logger.messages[0])["event"] == "generation.original", (
+        "the message argument must take precedence over a conflicting event field"
+    )
 
 
 def test_log_event_normalizes_non_json_structured_fields(

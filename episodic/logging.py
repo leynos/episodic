@@ -259,6 +259,17 @@ def log_event(level: str, message: str, **fields: object) -> None:
     beside the message. Structured fields are serialized into one JSON message
     when needed.
 
+    Parameters
+    ----------
+    level : str
+        Name of the logger method to call, such as ``"info"`` or ``"error"``.
+    message : str
+        Event message. When fields are encoded as JSON, this is the value of
+        the ``"event"`` key.
+    **fields : object
+        ``exc_info`` and ``stack_info`` are passed through to the logger. Other
+        fields are serialized into the JSON log message.
+
     Examples
     --------
     >>> log_event("info", "generation.started", workflow_id="workflow-42")
@@ -270,7 +281,7 @@ def log_event(level: str, message: str, **fields: object) -> None:
     }
     extra_fields = {k: v for k, v in fields.items() if k not in allowed_kwargs}
     if extra_fields:
-        payload = {"event": message, **extra_fields}
+        payload = {**extra_fields, "event": message}
         log_method(
             json.dumps(payload, default=_serialize_log_field, sort_keys=True),
             **allowed_kwargs,

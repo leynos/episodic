@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import importlib
+import time
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
@@ -85,6 +86,8 @@ def _invoke_finish_callback(
 def _build_execute_node(
     tool_executor: protocols.ToolExecutorPort,
     checkpoint_port: protocols.CheckpointPort | None,
+    *,
+    monotonic_clock: cabc.Callable[[], float],
 ) -> tuple[ExecuteNodeFn, str]:
     """Return *(execute_node_fn, execute_target)* for the graph.
 
@@ -102,7 +105,11 @@ def _build_execute_node(
             state: GenerationGraphState,
         ) -> dict[str, tuple[dto.ActionExecutionResult, ...]]:
             """Async entry point for the execute graph node."""
-            return await _execute_node(state, tool_executor=tool_executor)
+            return await _execute_node(
+                state,
+                tool_executor=tool_executor,
+                monotonic_clock=monotonic_clock,
+            )
 
         return _run_execute_node, "finish"
 
@@ -131,21 +138,29 @@ def build_generation_orchestration_graph(
 ]:
     """Build the in-process generation orchestration graph.
 
-    The returned graph plans a structured generation request, either executes
-    the first planned action directly and aggregates a final
-    `GenerationOrchestrationResult`, or suspends after planning when
-    `checkpoint_port` is provided.
+    The direct path executes every planned action in order before aggregating
+    a final `GenerationOrchestrationResult`. When
+    `extensions.checkpoint_port` is set, execution suspends after planning.
 
-    Args:
-        planner: Port used by the `plan` node to produce an execution plan.
-        tool_executor: Port used by the direct `execute` node to run planned
-            actions.
-        extensions: Optional persistence, callback, and cost-recording
-            collaborators for graph execution.
+    Parameters
+    ----------
+    planner : protocols.PlannerPort
+        Port used by the ``plan`` node to produce an execution plan.
+    tool_executor : protocols.ToolExecutorPort
+        Port used by the direct ``execute`` node to run each planned action.
+    extensions : GenerationGraphExtensions | None
+        Optional persistence, callback, and cost-recording collaborators. Its
+        ``checkpoint_port`` selects suspension after planning.
 
     Returns
     -------
-        The compiled generation orchestration graph.
+    CompiledStateGraph[
+        GenerationGraphState,
+        None,
+        GenerationGraphState,
+        GenerationGraphState,
+    ]
+        Compiled graph for the generation orchestration workflow.
     """
     graph_extensions = extensions or GenerationGraphExtensions()
     graph = StateGraph(GenerationGraphState)
@@ -176,7 +191,9 @@ def build_generation_orchestration_graph(
         return result
 
     execute_node, execute_target = _build_execute_node(
-        tool_executor, graph_extensions.checkpoint_port
+        tool_executor,
+        graph_extensions.checkpoint_port,
+        monotonic_clock=time.monotonic,
     )
 
     graph.add_node("plan", _run_plan_node)

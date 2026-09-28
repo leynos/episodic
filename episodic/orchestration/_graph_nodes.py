@@ -1,7 +1,7 @@
 """Ports-only graph nodes for structured generation orchestration."""
 
+import dataclasses as dc
 import importlib
-import time
 import typing as typ
 
 from episodic.orchestration._graph_state import _require_request_and_planner
@@ -23,6 +23,14 @@ type ExecuteNodeResult = (
     dict[str, tuple[dto.ActionExecutionResult, ...]]
     | dict[str, dto.SuspendedWorkflowResult]
 )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ActionExecutionContext:
+    """Collaborators and model selection shared by one planned execution."""
+
+    tool_executor: protocols.ToolExecutorPort
+    selected_execution_model: str
 
 
 class ExecuteNodeFn(typ.Protocol):
@@ -74,26 +82,26 @@ async def _execute_single_action(
     action: dto.PlannedAction,
     request: dto.GenerationOrchestrationRequest,
     *,
-    tool_executor: protocols.ToolExecutorPort,
-    selected_execution_model: str,
+    execution_context: _ActionExecutionContext,
+    monotonic_clock: cabc.Callable[[], float],
 ) -> dto.ActionExecutionResult:
     """Execute one planned action and emit diagnostic log events."""
-    started_at = time.monotonic()
+    started_at = monotonic_clock()
     action_fields = {
         "correlation_id": request.correlation_id,
         "action_id": action.action_id,
         "action_kind": str(action.action_kind),
         "model_tier": str(action.model_tier),
-        "execution_model": selected_execution_model,
+        "execution_model": execution_context.selected_execution_model,
     }
     try:
-        action_result = await tool_executor.execute(action, request)
+        action_result = await execution_context.tool_executor.execute(action, request)
     except Exception as exc:
         _log_event(
             "error",
             "generation_graph.execute_node.action.error",
             **action_fields,
-            elapsed_ms=round((time.monotonic() - started_at) * 1000, 1),
+            elapsed_ms=round((monotonic_clock() - started_at) * 1000, 1),
             error=str(exc),
         )
         raise
@@ -102,7 +110,7 @@ async def _execute_single_action(
         "debug",
         "generation_graph.execute_node.action.finish",
         **action_fields,
-        elapsed_ms=round((time.monotonic() - started_at) * 1000, 1),
+        elapsed_ms=round((monotonic_clock() - started_at) * 1000, 1),
     )
     return action_result
 
@@ -111,6 +119,7 @@ async def _execute_node(
     state: GenerationGraphState,
     *,
     tool_executor: protocols.ToolExecutorPort,
+    monotonic_clock: cabc.Callable[[], float],
 ) -> dict[str, tuple[dto.ActionExecutionResult, ...]]:
     """Validate state and execute each planned action through the tool executor."""
     request = state.request
@@ -121,14 +130,18 @@ async def _execute_node(
         correlation_id=correlation_id,
     )
     request, planner_result = _require_request_and_planner(state)
+    execution_context = _ActionExecutionContext(
+        tool_executor=tool_executor,
+        selected_execution_model=planner_result.plan.selected_execution_model,
+    )
 
     # Keep tool execution ordered so the graph mirrors application-service semantics.
     action_results = [
         await _execute_single_action(
             action,
             request,
-            tool_executor=tool_executor,
-            selected_execution_model=planner_result.plan.selected_execution_model,
+            execution_context=execution_context,
+            monotonic_clock=monotonic_clock,
         )
         for action in planner_result.plan.steps
     ]
