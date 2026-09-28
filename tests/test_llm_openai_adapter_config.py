@@ -6,11 +6,13 @@ rules stay aligned with the adapter factory used by behavioural LLM tests.
 """
 
 import json
+import math
 import typing as typ
 
 import pytest
 
 from episodic.llm import LLMTokenBudget
+from episodic.llm.openai_api.utils_config import _MIN_CHARS_PER_TOKEN
 
 if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
@@ -21,13 +23,26 @@ if typ.TYPE_CHECKING:
 @pytest.mark.parametrize(
     ("config_kwargs", "match"),
     [
+        # `bool` is an `int` subclass, so every numeric validator needs an
+        # explicit guard to reject it. One case per guarded field.
+        ({"max_attempts": True}, "max_attempts"),
+        ({"retry_delay_seconds": True}, "retry_delay_seconds"),
+        ({"timeout_seconds": True}, "timeout_seconds"),
+        ({"chars_per_token": True}, "chars_per_token"),
         ({"max_attempts": 0}, "max_attempts"),
         ({"max_attempts": "3"}, "max_attempts"),
         ({"retry_delay_seconds": -1}, "retry_delay_seconds"),
         ({"retry_delay_seconds": None}, "retry_delay_seconds"),
+        ({"retry_delay_seconds": float("-inf")}, "retry_delay_seconds"),
         ({"timeout_seconds": 0}, "timeout_seconds"),
         ({"timeout_seconds": "10"}, "timeout_seconds"),
+        ({"timeout_seconds": float("-inf")}, "timeout_seconds"),
         ({"chars_per_token": 0}, "chars_per_token"),
+        # The largest float below the minimum pins the `>=` boundary.
+        (
+            {"chars_per_token": math.nextafter(_MIN_CHARS_PER_TOKEN, 0.0)},
+            "chars_per_token",
+        ),
         ({"chars_per_token": 1e-300}, "chars_per_token"),
         ({"chars_per_token": -1.0}, "chars_per_token"),
         ({"chars_per_token": float("nan")}, "chars_per_token"),
@@ -49,6 +64,36 @@ def test_openai_adapter_config_rejects_invalid_values(
     """Configuration invariants should fail eagerly at construction time."""
     with pytest.raises(ValueError, match=match):
         _ = openai_invalid_config_builder(config_kwargs)
+
+
+@pytest.mark.parametrize(
+    "config_kwargs",
+    [
+        pytest.param({}, id="defaults"),
+        pytest.param({"max_attempts": 1}, id="smallest-positive-int"),
+        pytest.param({"retry_delay_seconds": 0}, id="zero-delay"),
+        pytest.param({"retry_delay_seconds": 0.0}, id="zero-float-delay"),
+        pytest.param({"chars_per_token": 4}, id="int-chars-per-token"),
+        # Exactly the minimum is accepted; the rejection cases above cover the
+        # largest representable float below it.
+        pytest.param(
+            {"chars_per_token": _MIN_CHARS_PER_TOKEN},
+            id="exact-chars-per-token-floor",
+        ),
+    ],
+)
+def test_openai_adapter_config_accepts_boundary_values(
+    config_kwargs: dict[str, object],
+    openai_invalid_config_builder: _OpenAIInvalidConfigBuilder,
+) -> None:
+    """Values on the inclusive boundaries should be accepted, not rejected."""
+    config = openai_invalid_config_builder(config_kwargs)
+
+    for key, expected in config_kwargs.items():
+        assert getattr(config, key) == expected, (
+            f"Expected boundary value {expected!r} to be preserved for {key!r}, "
+            f"got {getattr(config, key)!r}."
+        )
 
 
 def test_openai_adapter_config_rejection_log_snapshot(
