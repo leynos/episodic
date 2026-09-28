@@ -9,10 +9,6 @@ the readiness, retry, and diagnostic contracts are checked without depending on
 Vidai Mock's own argument parsing.
 """
 
-import contextlib
-import dataclasses as dc
-import subprocess  # noqa: S404 - starts a controlled local test child.
-import sys
 import typing as typ
 from pathlib import Path
 
@@ -22,125 +18,54 @@ from tests.steps.vidaimock_harness import (
     VidaiMockLaunch,
     VidaiMockServer,
     VidaiMockStartupError,
-    find_free_port,
+    _launch_server,
     start_vidaimock,
     start_vidaimock_process,
     terminate_process_gracefully,
     wait_for_port,
 )
+from tests.steps.vidaimock_harness_support import (
+    _EXIT_IMMEDIATELY,
+    _NEVER_READY,
+    _argv_value,
+    _child_server_source,
+    _FakeContext,
+    _record_attempts,
+    _stalled_server,
+    _write_child,
+)
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+    import subprocess  # noqa: S404 - types the controlled local test server child.
 
-#: A child that writes a diagnostic and exits non-zero straight away.
-_EXIT_IMMEDIATELY = (
-    "import sys\n"
-    "sys.stderr.write(\"error: unexpected argument '--isolated' found\\n\")\n"
-    "sys.exit(2)\n"
+
+@pytest.mark.parametrize(
+    ("ci", "outcome"),
+    [
+        pytest.param("1", pytest.fail.Exception, id="in-ci-a-missing-binary-fails"),
+        pytest.param(None, pytest.skip.Exception, id="locally-a-missing-binary-skips"),
+    ],
 )
-#: A child that stays alive without ever listening on its port.
-_NEVER_READY = "import time\ntime.sleep(30)\n"
-
-
-def _record_attempts(source: str, attempts: Path) -> str:
-    """Append a marker per run so a test can count how often a child started."""
-    return (
-        "import pathlib, sys\n"
-        f"log = pathlib.Path({str(attempts)!r})\n"
-        "log.write_text((log.read_text() if log.exists() else '') + 'x')\n"
-        f"{source}"
-    )
-
-
-def _write_child(tmp_path: Path, body: str) -> str:
-    """Write an executable stand-in child program and return its path.
-
-    The harness starts the server path directly, so the stand-in needs a
-    shebang naming this interpreter and the execute bit.
-
-    Returns
-    -------
-    str
-        The path of the written, executable stand-in.
-    """
-    child = tmp_path / "child.py"
-    child.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
-    child.chmod(0o755)
-    return str(child)
-
-
-def _argv_value(process: subprocess.Popen[str], option: str) -> str:
-    """Return the value the child was started with for *option*.
-
-    `Popen.args` is typed as a union that also admits `bytes` and `PathLike`,
-    which cannot be indexed or searched. This process is always started from an
-    argument list of `str`, so the assertion is the check the cast stands on.
-
-    Returns
-    -------
-    str
-        The argument following *option* in the child's argument list.
-    """
-    argv = typ.cast("cabc.Sequence[str]", process.args)
-    assert option in argv, f"the child was started without {option}: {argv!r}"
-    return argv[argv.index(option) + 1]
-
-
-@dc.dataclass(slots=True)
-class _FakeContext:
-    """Stand in for a BDD context that records the running server."""
-
-    process: subprocess.Popen[str] | None = None
-    base_url: str = ""
-    stderr_file: typ.TextIO | None = None
-
-
-def _child_server_source() -> str:
-    """Return a child that echoes its argv, binds its port, and serves."""
-    return (
-        "import socket, sys\n"
-        "argv = sys.argv[1:]\n"
-        "sys.stderr.write('argv=' + repr(argv) + '\\n')\n"
-        "sys.stderr.flush()\n"
-        "host = argv[argv.index('--host') + 1]\n"
-        "port = int(argv[argv.index('--port') + 1])\n"
-        "sock = socket.socket()\n"
-        "sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
-        "sock.bind((host, port))\n"
-        "sock.listen(5)\n"
-        "while True:\n"
-        "    connection, _ = sock.accept()\n"
-        "    connection.close()\n"
-    )
-
-
-def test_process_start_fails_in_ci_when_executable_missing(
+def test_a_missing_executable_fails_in_ci_and_skips_locally(
     monkeypatch: pytest.MonkeyPatch,
+    ci: str | None,
+    outcome: type[BaseException],
 ) -> None:
-    """Fail the behavioural story in CI when Vidai Mock is unavailable.
+    """Signal a missing binary as the environment asks, and no other way.
 
-    A skipped live-server scenario in CI reduces coverage without saying so,
-    so a missing binary has to stop the run there.
+    The two outcomes differ deliberately. In CI a skipped live-server scenario
+    reduces coverage without saying so, so a missing binary has to stop the run
+    there; a developer without the binary has chosen not to run the live
+    scenarios, which is not a fault in the code under test. Each case asserts
+    exactly one of the two, so neither can absorb the other's signal.
     """
-    monkeypatch.setenv("CI", "1")
+    if ci is None:
+        monkeypatch.delenv("CI", raising=False)
+    else:
+        monkeypatch.setenv("CI", ci)
     monkeypatch.setattr("shutil.which", lambda _name: None)
 
-    with pytest.raises(pytest.fail.Exception, match="vidaimock executable not found"):
-        start_vidaimock_process(_FakeContext(), config_dir=Path(), port=0)
-
-
-def test_process_start_skips_locally_when_executable_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Keep the local developer skip when Vidai Mock is unavailable.
-
-    A developer without the binary has chosen not to run the live scenarios,
-    which is not a fault in the code under test.
-    """
-    monkeypatch.delenv("CI", raising=False)
-    monkeypatch.setattr("shutil.which", lambda _name: None)
-
-    with pytest.raises(pytest.skip.Exception, match="vidaimock executable not found"):
+    with pytest.raises(outcome, match="vidaimock executable not found"):
         start_vidaimock_process(_FakeContext(), config_dir=Path(), port=0)
 
 
@@ -308,38 +233,6 @@ def test_a_bind_failure_is_retried(tmp_path: Path) -> None:
     )
 
 
-@contextlib.contextmanager
-def _stalled_server(tmp_path: Path) -> cabc.Iterator[VidaiMockServer]:
-    """Yield a server whose child stays alive without ever listening.
-
-    A `with` block cannot own this child: `Popen.__exit__` waits for the
-    process rather than terminating it, which would hang on a child that never
-    exits on its own. The harness's own teardown is used instead, so the
-    reaping contract under test is the one the live scenarios rely on.
-
-    Yields
-    ------
-    VidaiMockServer
-        The running child, on a port nothing is listening on.
-    """
-    child = _write_child(tmp_path, _NEVER_READY)
-    process = subprocess.Popen(  # noqa: S603 - fixed argv, trusted local child.
-        [sys.executable, child],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
-    try:
-        yield VidaiMockServer(
-            process=process,
-            host="127.0.0.1",
-            port=find_free_port(),
-            label="the readiness-timeout regression test",
-        )
-    finally:
-        terminate_process_gracefully(process)
-
-
 def test_a_readiness_timeout_is_reported_as_such(tmp_path: Path) -> None:
     """Report a child that stays alive without listening as a timeout.
 
@@ -395,3 +288,78 @@ def test_a_long_standard_error_capture_is_bounded(tmp_path: Path) -> None:
         "the capture must be bounded before it reaches the message"
     )
     assert len(message) < 8000, f"message length: {len(message)}"
+
+
+def test_a_capture_is_closed_when_no_child_is_created(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Close the stderr capture when child creation fails outright.
+
+    No child exists on this path, so nothing else will ever close the capture,
+    and each retry creates another one. The file is asserted closed rather than
+    merely discarded, because an unclosed handle leaks for the whole run.
+    """
+    created: list[typ.TextIO] = []
+    error = FileNotFoundError("the vidaimock binary could not be started")
+
+    def _fail_to_start(
+        _launch: VidaiMockLaunch,
+        _port: int,
+        stderr_file: typ.TextIO,
+    ) -> subprocess.Popen[str]:
+        created.append(stderr_file)
+        raise error
+
+    monkeypatch.setattr("tests.steps.vidaimock_harness._start_once", _fail_to_start)
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        _launch_server(
+            VidaiMockLaunch(
+                executable="vidaimock-not-installed",
+                config_dir=tmp_path,
+                label="the unclosed-capture regression test",
+            )
+        )
+
+    assert excinfo.value is error, "the start failure must reach the caller unchanged"
+    assert len(created) == 1, "one launch attempt must open one capture"
+    assert created[0].closed is True, "a capture with no child must be closed"
+
+
+def test_an_unexpected_readiness_failure_still_reaps_the_child(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reap the child when readiness fails in a way the startup does not expect.
+
+    Only the startup error is inspected for a bind race. Any other failure out
+    of the readiness wait is unforeseen: it must reach the caller as it is
+    rather than wrapped, and the child must still be stopped, because the
+    caller receives no server to clean up.
+    """
+    child = _write_child(tmp_path, _NEVER_READY)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    started: list[subprocess.Popen[str]] = []
+    error = RuntimeError("the readiness probe itself failed")
+
+    def _fail_readiness(server: VidaiMockServer, **_kwargs: object) -> None:
+        started.append(server.process)
+        raise error
+
+    monkeypatch.setattr("tests.steps.vidaimock_harness.wait_for_port", _fail_readiness)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        start_vidaimock(
+            VidaiMockLaunch(
+                executable=child,
+                config_dir=config_dir,
+                label="the unexpected-readiness regression test",
+            )
+        )
+
+    assert excinfo.value is error, "the original failure must not be wrapped"
+    assert not isinstance(excinfo.value, VidaiMockStartupError), excinfo.value
+    assert len(started) == 1, "one attempt must start one child"
+    assert started[0].poll() is not None, "the child of a failed attempt must be reaped"
