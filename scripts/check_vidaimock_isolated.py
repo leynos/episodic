@@ -106,19 +106,52 @@ def _as_mapping(value: object, description: str) -> dict[str, object]:
     return typ.cast("dict[str, object]", value)
 
 
-def _get_json(url: str, *, timeout: float = 10.0) -> dict[str, object]:
-    """Fetch *url* and decode a JSON object, or fail with the status."""
+def _decode_response(
+    url: str,
+    *,
+    target: str | urllib.request.Request,
+    method: str,
+    timeout: float = 10.0,
+) -> dict[str, object]:
+    """Open *target* and decode its JSON response object.
+
+    Both verbs answer with the same OpenAI-compatible JSON, so the decode and
+    the transport and status translation around it live here once. *target* is
+    whatever `urlopen` should open, which carries anything the verb needs such
+    as a POST body, and *url* is what the diagnostics name. They differ only
+    for a POST, where the request is built around the URL rather than being
+    the URL; `urlopen` accepts either as its first argument. The failure body
+    is quoted bounded by `_BODY_LIMIT`, because an error page is a diagnostic,
+    not a payload.
+
+    Returns
+    -------
+    dict[str, object]
+        The decoded response body.
+
+    Raises
+    ------
+    SmokeTestError
+        If the request failed at the transport level, answered with an HTTP
+        error status, carried a body that is not JSON, or decoded to a value
+        that is not a JSON object.
+    """
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - fixed loopback URL.
+        with urllib.request.urlopen(target, timeout=timeout) as response:  # noqa: S310 - fixed loopback URL.
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:_BODY_LIMIT]
-        msg = f"GET {url} returned HTTP {exc.code}: {body}"
+        msg = f"{method} {url} returned HTTP {exc.code}: {body}"
         raise SmokeTestError(msg) from exc
     except (urllib.error.URLError, OSError, ValueError) as exc:
-        msg = f"GET {url} failed: {exc}"
+        msg = f"{method} {url} failed: {exc}"
         raise SmokeTestError(msg) from exc
-    return _as_mapping(payload, f"GET {url}")
+    return _as_mapping(payload, f"{method} {url}")
+
+
+def _get_json(url: str, *, timeout: float = 10.0) -> dict[str, object]:
+    """Fetch *url* and decode a JSON object, or fail with the status."""
+    return _decode_response(url, target=url, method="GET", timeout=timeout)
 
 
 def _post_completion(
@@ -139,17 +172,7 @@ def _post_completion(
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - fixed loopback URL.
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:_BODY_LIMIT]
-        msg = f"POST {url} returned HTTP {exc.code}: {detail}"
-        raise SmokeTestError(msg) from exc
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        msg = f"POST {url} failed: {exc}"
-        raise SmokeTestError(msg) from exc
-    return _as_mapping(payload, f"POST {url}")
+    return _decode_response(url, target=request, method="POST", timeout=timeout)
 
 
 def _completion_text(payload: dict[str, object]) -> str:
@@ -216,14 +239,21 @@ def _model_ids(base_url: str) -> list[str]:
     )
 
 
-def _verify_startup() -> None:
-    """Report a missing executable as a smoke-test failure, not a traceback.
+def _verify_startup() -> str:
+    """Resolve the executable, reporting a missing one as a smoke-test failure.
 
     `resolve_vidaimock_executable` shares the harness's contract: it fails in CI
     and skips locally. Both arrive as pytest outcome exceptions, which derive
     from `BaseException` rather than `Exception`, so they are caught by name.
     The script itself is a gate, not a collected test, so either outcome is
-    reported as a failure with the reason attached.
+    reported as a failure with the reason attached. The resolved path is
+    handed back because resolving it here already proves it is present: `main`
+    launches the child with this value rather than asking a second time.
+
+    Returns
+    -------
+    str
+        The absolute path of the Vidai Mock binary on `PATH`.
 
     Raises
     ------
@@ -231,7 +261,7 @@ def _verify_startup() -> None:
         If no vidaimock binary is on `PATH`.
     """
     try:
-        resolve_vidaimock_executable()
+        return resolve_vidaimock_executable()
     except (pytest.fail.Exception, pytest.skip.Exception) as exc:
         msg = (
             "the vidaimock executable is not on PATH; CI installs the pinned "
@@ -244,11 +274,21 @@ def _check_isolation(
     base_url: str,
     configured: list[str],
 ) -> None:
-    """Require `/v1/models` to list the configured providers and nothing else."""
+    """Require `/v1/models` to list the configured providers and nothing else.
+
+    Both lists are already sorted by their producers, so comparing them
+    element by element reports a provider that is missing or extra. It also
+    rejects a served model the configuration never declares twice: two copies
+    of one provider would leave a membership test empty on both sides and
+    pass, whereas the pair of lists are not equal.
+
+    Raises
+    ------
+    SmokeTestError
+        If the advertised models are not exactly the configured providers.
+    """
     advertised = _model_ids(base_url)
-    unexpected = [name for name in advertised if name not in configured]
-    missing = [name for name in configured if name not in advertised]
-    if missing or unexpected:
+    if advertised != configured:
         msg = (
             "isolation did not restrict the served providers: "
             f"configured {configured!r}, advertised {advertised!r}. "
@@ -299,9 +339,8 @@ def main() -> int:
     int
         The process exit status: 0 when every step held, 1 otherwise.
     """
-    executable = shutil.which("vidaimock")
-    print(f"vidaimock on PATH: {executable or '(not found)'}")
-    _verify_startup()
+    print(f"vidaimock on PATH: {shutil.which('vidaimock') or '(not found)'}")
+    executable = _verify_startup()
 
     with tempfile.TemporaryDirectory(prefix="vidaimock-smoke-") as scratch:
         config_dir = Path(scratch)
@@ -317,7 +356,7 @@ def main() -> int:
         try:
             server = start_vidaimock(
                 VidaiMockLaunch(
-                    executable=resolve_vidaimock_executable(),
+                    executable=executable,
                     config_dir=config_dir,
                     label=LABEL,
                 )
