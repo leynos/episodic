@@ -10,56 +10,60 @@ from scripts.local_k8s.config import PreviewConfig
 class TestPreviewConfig:
     """Environment loading and representation rules for preview settings."""
 
-    def test_preview_config_reads_openai_key_from_environment(
+    @pytest.mark.parametrize(
+        ("environment_name", "environment_value", "config_attribute"),
+        [
+            ("OPENAI_API_KEY", "sk-env-test", "openai_api_key"),
+            (
+                "OPENAI_BASE_URL",
+                "https://llm.example.test/v1",
+                "openai_base_url",
+            ),
+        ],
+        ids=("api-key", "base-url"),
+    )
+    def test_preview_config_reads_openai_settings_from_environment(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        environment_name: str,
+        environment_value: str,
+        config_attribute: str,
     ) -> None:
-        """A configured OPENAI_API_KEY reaches the preview configuration."""
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-env-test")
+        """Configured provider settings reach the preview configuration."""
+        monkeypatch.setenv(environment_name, environment_value)
 
         config = PreviewConfig()
 
-        assert config.openai_api_key == "sk-env-test", (
-            "the preview config must read the OpenAI key from the environment"
+        assert getattr(config, config_attribute) == environment_value, (
+            f"{environment_name} must populate {config_attribute}"
         )
 
-    def test_preview_config_defaults_to_empty_openai_key(
+    @pytest.mark.parametrize(
+        ("environment_name", "config_attribute", "default_value"),
+        [
+            ("OPENAI_API_KEY", "openai_api_key", ""),
+            (
+                "OPENAI_BASE_URL",
+                "openai_base_url",
+                "https://api.openai.com/v1",
+            ),
+        ],
+        ids=("api-key", "base-url"),
+    )
+    def test_preview_config_defaults_openai_settings(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        environment_name: str,
+        config_attribute: str,
+        default_value: str,
     ) -> None:
-        """An unset OPENAI_API_KEY defaults to an empty string."""
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        """Unset provider settings use their documented defaults."""
+        monkeypatch.delenv(environment_name, raising=False)
 
         config = PreviewConfig()
 
-        assert not config.openai_api_key, (
-            "the preview config must default to no OpenAI key"
-        )
-
-    def test_preview_config_reads_openai_base_url_from_environment(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """A configured OPENAI_BASE_URL overrides the provider default."""
-        monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.test/v1")
-
-        config = PreviewConfig()
-
-        assert config.openai_base_url == "https://llm.example.test/v1", (
-            "the preview config must read the provider base URL from the environment"
-        )
-
-    def test_preview_config_defaults_openai_base_url(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """An unset OPENAI_BASE_URL falls back to the public endpoint."""
-        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-
-        config = PreviewConfig()
-
-        assert config.openai_base_url == "https://api.openai.com/v1", (
-            "the preview config must default to the public OpenAI endpoint"
+        assert getattr(config, config_attribute) == default_value, (
+            f"{environment_name} must default {config_attribute}"
         )
 
     def test_preview_config_repr_hides_the_openai_key(
