@@ -29,15 +29,13 @@ coverage.
 
 import contextlib
 import dataclasses as dc
-import os
-import shutil
 import socket
 import subprocess  # noqa: S404 - starts a fixed local test server binary
 import tempfile
 import time
 import typing as typ
 
-import pytest
+from tests.steps.vidaimock_executable import resolve_vidaimock_executable
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -289,6 +287,42 @@ def _start_once(
     )
 
 
+def _launch_server(launch: VidaiMockLaunch) -> VidaiMockServer:
+    """Start one Vidai Mock child on a fresh port with a fresh capture.
+
+    This is a single attempt: it neither waits for readiness nor decides
+    whether a failure is worth another port. A child that has to be given up
+    on is the caller's to clean up. Whatever the child could not be created
+    with propagates to the caller, with the capture closed first, because no
+    child will ever close it.
+
+    Returns
+    -------
+    VidaiMockServer
+        The started child with the port it was given and the file its standard
+        error is captured in.
+    """
+    port = find_free_port()
+    # A fresh file per attempt keeps one attempt's diagnostics from bleeding
+    # into the next.
+    stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - closed by terminate_process_gracefully.
+    try:
+        process = _start_once(launch, port, stderr_file)
+    except BaseException:
+        # `Popen` can fail before any child exists, for example when the
+        # binary is not executable. No child will close the capture, so it
+        # is closed here rather than leaked with its handle open.
+        _close_stderr(stderr_file)
+        raise
+    return VidaiMockServer(
+        process=process,
+        host=launch.host,
+        port=port,
+        label=launch.label,
+        stderr_file=stderr_file,
+    )
+
+
 def start_vidaimock(launch: VidaiMockLaunch) -> VidaiMockServer:
     """Start Vidai Mock and wait for it to become reachable.
 
@@ -307,29 +341,11 @@ def start_vidaimock(launch: VidaiMockLaunch) -> VidaiMockServer:
     attempts = 0
     last_error: VidaiMockStartupError | None = None
     while attempts < _VIDAIMOCK_PORT_START_ATTEMPTS:
-        port = find_free_port()
-        # A fresh file per attempt keeps one attempt's diagnostics from
-        # bleeding into the next.
-        stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - closed by terminate_process_gracefully.
-        try:
-            process = _start_once(launch, port, stderr_file)
-        except BaseException:
-            # `Popen` can fail before any child exists, for example when the
-            # binary is not executable. No child will close the capture, so it
-            # is closed here rather than leaked with its handle open.
-            _close_stderr(stderr_file)
-            raise
-        server = VidaiMockServer(
-            process=process,
-            host=launch.host,
-            port=port,
-            label=launch.label,
-            stderr_file=stderr_file,
-        )
+        server = _launch_server(launch)
         try:
             wait_for_port(server)
         except VidaiMockStartupError as exc:
-            terminate_process_gracefully(server.process, stderr_file)
+            terminate_process_gracefully(server.process, server.stderr_file)
             if not _is_bind_failure(exc.stderr):
                 # A rejected argument or an unusable configuration is not a
                 # race. Retrying would hide the cause behind a timeout.
@@ -337,40 +353,15 @@ def start_vidaimock(launch: VidaiMockLaunch) -> VidaiMockServer:
             last_error = exc
             attempts += 1
             continue
+        except BaseException:
+            # A readiness failure that is not the startup error is unforeseen,
+            # so it is reported as it is. The child is still stopped here: the
+            # caller receives no server to clean up.
+            terminate_process_gracefully(server.process, server.stderr_file)
+            raise
         return server
 
     raise last_error or VidaiMockStartupError(launch.label, "could not be started")
-
-
-def resolve_vidaimock_executable() -> str:
-    """Return the Vidai Mock executable path, or skip/fail as the environment asks.
-
-    Returns
-    -------
-    str
-        The absolute path of the Vidai Mock binary on `PATH`.
-
-    Raises
-    ------
-    pytest.fail.Exception
-        In CI, where a missing binary must fail the scenario rather than skip
-        it and quietly reduce coverage.
-    pytest.skip.Exception
-        Locally, where a missing binary is a developer's choice, not a fault.
-    AssertionError
-        Never, in practice. Both calls above raise; this keeps every path an
-        explicit return or raise.
-    """  # noqa: DOC502 - Both signals come from pytest.fail/pytest.skip below.
-    path = shutil.which("vidaimock")
-    if path is not None:
-        return path
-    reason = "vidaimock executable not found in PATH"
-    if os.getenv("CI"):
-        pytest.fail(reason)
-    pytest.skip(reason)
-    # Both calls above raise, so this is unreachable; it keeps every path in
-    # this function an explicit return or raise for the reader and the linter.
-    raise AssertionError(reason)  # pragma: no cover
 
 
 def start_vidaimock_process(
