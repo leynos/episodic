@@ -138,6 +138,91 @@ self-derived. Recorded as a deliberate decision, not an oversight.
       `coverage.xml` reporting **90.81%** line coverage over the
       `episodic,alembic` production scope.
 
+## CodeScene review round progress
+
+- [x] Verified all findings against the current tree before editing; baseline
+      `a59935f` recorded.
+- [x] Duplication in `test_vidaimock_harness.py`: merged the two
+      executable-missing tests into one parametrized test; `cs check` 9.38 →
+      10.00, duplication cleared. CodeScene still warns `Complex Method
+      (cc = 9)` at `vidaimock_harness.py:328`.
+- [x] `_launch_server` extraction with the leaked-child fix; two new tests, each
+      shown to fail when its guard is removed.
+- [x] Three lint errors in the in-flight harness work fixed by their owning
+      agent: `F401` unused import, `FBT001` boolean positional (parametrized on
+      the environment value instead), `DOC502` `Raises: BaseException`.
+- [x] `utils_config.py` test half: 8 new cases (4 `bool`, 2 `-inf`, 2
+      boundary) plus an acceptance test; mutation-verified decisive; source
+      file untouched.
+- [x] `guest_bios_tei.py`: five locals replaced by the three shared helpers;
+      one new error-path test added and mutation-verified; module 104 → 69
+      lines.
+- [x] `launcher_persistence.py`: rename applied at both sites.
+- [x] `handlers.py`: required-field loop replaced by the existing helper.
+- [x] `docs/execplans/use-cpython-for-pylint.md`: stale developer-documentation
+      finding dispositioned with git evidence.
+- [x] `scripts/check_vidaimock_isolated.py` complexity reduction:
+      `_decode_response` holds the shared JSON/transport core, `_check_isolation`
+      compares the sorted lists directly and now *rejects* a duplicated
+      advertised ID, and `_verify_startup` returns the resolved path so `main`
+      resolves the executable once. `cs check` 9.38 → **10.00**, mean radon 3.70
+      → 2.67, `_check_isolation` 7 → 2. 19 new tests, including one that fails
+      when the comparison is regressed to a set.
+- [x] Deduplication fallout handled: making `guest_bios_tei.py` import the
+      shared helpers made its import block byte-identical to
+      `show_notes_enrichment.py`'s, which the duplication gate caught. Recorded
+      as a reasoned exception via `make duplication-allow`, following the
+      existing `_guest_bios_executor.py ~ _show_notes_executor.py` precedent
+      rather than extracting a helper purely to cross the threshold.
+- [x] `check-fmt` caught the table added by this very plan: `mdtablefix --wrap`
+      re-aligns every column, so a handwritten table is a formatting defect
+      even when it renders correctly. The change is whitespace-only and
+      invisible to a `git diff` read, which is why the post-turn hook found it
+      and review did not. Realigned with the Makefile's own `mdtablefix
+      --in-place` flags and confirmed with `mdtablefix --check` (exit 0) and
+      `ruff format --check` (601 already formatted). Lesson: a plan that
+      records the hash of its own tree is self-defeating, since every edit
+      changes the value it claims; record the *verification* instead.
+- [x] `lint` then caught two `C0302 too-many-lines` violations (423 and 473
+      lines against a ceiling of 400) that the new tests and the `_launch_server`
+      helper had pushed both harness modules over. The ceiling is stated policy,
+      `pyproject.toml` calls it "the project file-size ceiling enforced during
+      review", and no file in the repository suppresses it, so the remedy was to
+      split along real seams rather than disable the rule:
+      `resolve_vidaimock_executable` moved to `tests/steps/vidaimock_executable.py`
+      (it was the harness's only use of `os`, `shutil`, and `pytest`, so the
+      harness no longer imports `pytest` at all) and the stand-in child builders
+      moved to `tests/steps/vidaimock_harness_support.py`, following the
+      `*_support.py` convention already used across `tests/steps/`. The harness
+      re-exports `resolve_vidaimock_executable` so existing callers are
+      unaffected. Result: 390 / 44 / 138 / 365 lines, pylint 10.00/10 with no
+      C0302, and all 11 harness tests plus 19 script tests still pass.
+- [x] Recorded the trap that the lint failure exposed: an earlier `scrutineer`
+      run had reported `lint` as PASS while its own log showed the same two
+      C0302 errors and `Error 16`. Reading the cited log rather than the summary
+      is what settled it, so a gate report is only ever as good as the log
+      behind it.
+- [ ] Full gate run on the frozen tree; commit; push; request the CodeRabbit
+      review.
+
+### Final CodeScene delta
+
+`cs delta origin/main --output-format json --pretty` now names **one** finding,
+down from three. Both cleared findings are absent from the delta and both files
+score 10.00:
+
+| Finding                                                 | Baseline | Final                      |
+| ------------------------------------------------------- | -------- | -------------------------- |
+| Duplication, `test_vidaimock_harness.py`                | 9.38     | **10.00**, cleared         |
+| Overall Code Complexity, `check_vidaimock_isolated.py`  | 9.38     | **10.00**, cleared         |
+| Complex Method, `vidaimock_harness.py::start_vidaimock` | 9.68     | 9.68, **cc = 9 unchanged** |
+
+The surviving warning is reported as a miss. It is a deliberate trade: the two
+`except` clauses encode two different policies, and the alternative that would
+lower the count — one clause guarded by a compound condition, or a predicate
+helper — was declined because either makes the retryable and non-retryable
+paths harder to tell apart for a diagnostic that blocks nothing.
+
 ## Defects found and fixed while clearing lint
 
 - `RUF100` exposed a dead handler rather than a redundant suppression:
@@ -291,6 +376,94 @@ pull request updated in place:
 Recovery refs for `OLD_HEAD`, `OLD_BASE`, and `TARGET` are retained, so the
 pre-rebase history stays recoverable independently of the remote.
 
+## CodeScene review round
+
+`cs delta origin/main --output-format json --pretty` named exactly three
+findings, and the review mapped them onto the first three work items. Every
+finding was verified against the current tree before any edit.
+
+**Code Duplication in `tests/steps/test_vidaimock_harness.py` — cleared.** The
+two executable-missing tests differed only in the `CI` environment variable and
+the exception type; the `match=` text and the call were byte-identical. They
+are now one parametrized test over the environment value (`"1"` / `None`) with
+distinct descriptive case IDs. Measured before and after with `cs check`: 9.38
+→ 10.00, both duplication warnings gone. Decisive, not merely green: pointing
+`resolve_vidaimock_executable`'s CI branch at `skip` turns the CI case into a
+`SKIPPED` outcome rather than a pass, so the two cases remain discriminating.
+
+**Complex Method in `tests/steps/vidaimock_harness.py` — not cleared.** The
+extraction did happen: `_launch_server(launch) -> VidaiMockServer` now owns the
+single-attempt acquisition (fresh port, fresh capture, `_start_once`, close the
+capture and re-raise if no child was created) and returns the child, port,
+label, and capture together. It does not decide whether to retry. `cs check`
+confirms the finding is merely **relocated**, `292` → `328`, still `cc = 9`,
+and the file's score is unchanged at 9.68. This is reported as a miss rather
+than claimed as cleared: the extraction did not lower the count, because the
+function still carries two handlers for two genuinely different policies — a
+bind race that is retried with the attempt limit, and an unforeseen readiness
+failure that must reap the child and re-raise unchanged. Collapsing those into
+one clause guarded by a compound condition would satisfy the metric by making
+the two policies harder to tell apart, which is the wrong trade for a
+diagnostic-only gate.
+
+The extraction did fix a real defect: only `VidaiMockStartupError` was caught
+around `wait_for_port`, so any other exception leaked the child. Both that path
+and the close-the-capture-on-`Popen`-failure path had zero coverage; both now
+have a test that fails when its guard is removed.
+
+**Overall Code Complexity in `scripts/check_vidaimock_isolated.py` — in
+progress.** This is the finding the task identified as needing simplification
+rather than relocation, so it is the one item that was delegated in full.
+
+Two findings from the same review were dispositioned without a code change:
+
+- Replacing the five `isinstance` predicates in
+  `episodic/llm/openai_api/utils_config.py` with `match` cases. CodeScene
+  reports **no** finding against that file and it already scores 10.00; the
+  branch's own earlier review had declined the same suggestion. The **test
+  half** was worth taking regardless of syntax, and is the part that shipped.
+  The three numeric validators guard against `bool`, which is an `int`
+  subclass, and nothing exercised that guard. Four `bool` rejection cases, two
+  negative-infinity cases, and two inclusive-boundary cases were added, plus an
+  acceptance test that the boundary values survive — without which the
+  rejection table would still pass if the validator rejected everything.
+  Verified decisive by mutation: removing all four `bool` guards and the
+  `chars_per_token` floor fails 8 cases; loosening the floor from `>=` to `>`
+  fails the exact-floor case; the file was restored byte-identical afterwards.
+- The developer-documentation finding. It describes
+  `GenerationRunsResourceConfig`, a handler request DTO, and a
+  generation-resource/error module split. Verified against git rather than
+  accepted: `GenerationRunsResourceConfig` has **zero** matches anywhere in the
+  tree, and `episodic/api/handlers.py` is **not** in this PR's diff. The text
+  describes the decomposition of `e7e1f04`, the commit this branch deliberately
+  dropped during the second rebase because `main`'s `ced3f90` landed a
+  finer-grained decomposition of the same purpose. The finding is stale, not
+  actionable, and re-documenting modules that do not exist would be worse than
+  leaving it.
+
+Three further items from the same review are independent of CodeScene:
+
+- `_record_success_events_and_costs` → `_record_success_transition` in
+  `episodic/generation/launcher_persistence.py`. Verified first that the old
+  name had exactly two occurrences, both in its own module, and that the new
+  name was unclaimed. `LauncherHost` does not declare the method, so no
+  protocol surface changed. Unrelated `_record_success` methods elsewhere
+  cannot collide.
+- The five local TEI helpers in `episodic/generation/guest_bios_tei.py` were
+  replaced by `body_blocks_payload`, `build_text_inline`, and `is_div_payload`
+  from `episodic/generation/tei_payload.py`, with `"guest-bios"` passed to the
+  predicate. The count matters: the task named three helpers, but the module
+  held five, because `_require_payload_object` and `_require_payload_list` were
+  used only by the local `_body_blocks_payload` and became dead once it was
+  replaced. All seven call sites were in the one module. The `ValueError`
+  messages are byte-identical, since `_format_type_error_message` builds the
+  same `"TEI payload field {field} must be a {type}."` text; this was
+  established by reading the shared helper, not inferred. The module went from
+  104 to 69 lines.
+- The required-field loop in `handle_create_entity` was replaced by
+  `_require_payload_fields(payload, required_fields)`, matching the call
+  `handle_update_entity` already made.
+
 ## Lessons
 
 - Editing a document while a gate is running invalidates that gate for the
@@ -346,3 +519,31 @@ pre-rebase history stays recoverable independently of the remote.
   `typos.toml`-regeneration commit can rebase to empty — `main` had absorbed
   the same generated lines — which is worth confirming by hash before skipping
   it as redundant.
+- A refactor that satisfies a complexity metric is not the same as a refactor
+  that improves the code. Extracting `_launch_server` was worth doing on its
+  own merits — it fixed a leaked child and gave the single-attempt acquisition
+  a name — but it did not reduce `start_vidaimock`'s count, because what
+  remains is two exception handlers for two different policies. The honest
+  report is that the finding did not clear, which the metric states plainly.
+  Claiming otherwise would have required reading the count as "the function
+  moved", which is not what it measures.
+- A test that only asserts rejection is half a test. The rejection table in
+  `test_llm_openai_adapter_config.py` would have passed unchanged if the
+  validators had rejected every value, so the boundary work added an acceptance
+  test alongside it. Mutation is what settled the question: 8 cases failed when
+  their guards were removed, and the boundary cases failed when the comparison
+  was tightened. Note also that a single-line guard and its multi-line
+  equivalent need different mutation patterns — the first attempt at removing
+  the `bool` guards matched only three of the four and would have understated
+  the coverage.
+- `ty` scans untracked files, which is how a new test file's diagnostics
+  surface in `make typecheck` before `make lint` would report them. Scoping a
+  `ty` run to the files being changed is worth doing before handing the tree to
+  the gate runner, because it reports classes of defect that `ruff` does not.
+- The duplication gate's allow entries key on symbol locations, so a
+  deduplication can orphan one — but it does not follow that it did. The entry
+  naming `tei_payload.py::require_payload_object` and `::require_payload_list`
+  survives this change precisely because the shared `body_blocks_payload` still
+  calls both; they were only orphaned from the *guest-bios* module's copy.
+  Stale entries print a warning rather than failing the gate, which makes
+  checking cheaper than guessing.
