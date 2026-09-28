@@ -66,6 +66,7 @@ def _is_pricing_snapshot_hash_collision(exc: IntegrityError) -> bool:
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.dml import Insert
 
 
 def _new_id() -> uuid.UUID:
@@ -132,6 +133,32 @@ def _task_rollup_values(rollup: TaskRollupLedgerEntry) -> dict[str, object]:
             error_message="timestamp must include timezone information.",
         ),
     }
+
+
+def _pricing_snapshot_insert_statement(snapshot: PricingSnapshot) -> Insert:
+    """Build the idempotent insert statement for one pricing snapshot."""
+    return (
+        insert(PricingSnapshotRecord)
+        .values(
+            id=uuid.UUID(str(snapshot.pricing_snapshot_id)),
+            provider_name=snapshot.provider_name,
+            model=snapshot.model,
+            operation=snapshot.operation,
+            source_kind=str(snapshot.source_kind),
+            currency=str(snapshot.currency),
+            billing_period_key=str(snapshot.billing_period_key),
+            rates_minor_per_metric=dict(snapshot.rates_minor_per_metric),
+            source_metadata=dict(snapshot.source_metadata),
+            content_hash=snapshot.content_hash,
+            retrieved_at=parse_instant(
+                snapshot.retrieved_at,
+                error_message="timestamp must include timezone information.",
+            ),
+            effective_from=snapshot.effective_from,
+        )
+        .on_conflict_do_nothing(index_elements=["id"])
+        .returning(PricingSnapshotRecord.id)
+    )
 
 
 class SqlAlchemyCostLedgerStore:
@@ -209,28 +236,10 @@ class SqlAlchemyCostLedgerStore:
             ``parse_instant``'s ``"timestamp must include timezone
             information."`` error.
         """  # noqa: DOC502  # parse_instant raises on the adapter's behalf.
-        statement = (
-            insert(PricingSnapshotRecord)
-            .values(
-                id=uuid.UUID(str(snapshot.pricing_snapshot_id)),
-                provider_name=snapshot.provider_name,
-                model=snapshot.model,
-                operation=snapshot.operation,
-                source_kind=str(snapshot.source_kind),
-                currency=str(snapshot.currency),
-                billing_period_key=str(snapshot.billing_period_key),
-                rates_minor_per_metric=dict(snapshot.rates_minor_per_metric),
-                source_metadata=dict(snapshot.source_metadata),
-                content_hash=snapshot.content_hash,
-                retrieved_at=parse_instant(
-                    snapshot.retrieved_at,
-                    error_message="timestamp must include timezone information.",
-                ),
-                effective_from=snapshot.effective_from,
-            )
-            .on_conflict_do_nothing(index_elements=["id"])
-            .returning(PricingSnapshotRecord.id)
-        )
+        await self._record_snapshot_insert(snapshot)
+
+    async def _record_snapshot_insert(self, snapshot: PricingSnapshot) -> None:
+        """Instrument snapshot persistence while preserving its outcome."""
         started = self._clock.monotonic_seconds()
         outcome = "error"
         failure_category: str | None = None
@@ -239,32 +248,38 @@ class SqlAlchemyCostLedgerStore:
             attributes={"operation": "ensure_snapshot"},
         ) as span:
             try:
-                result = await self._session.execute(statement)
-            except IntegrityError as exc:
-                # The id conflict target does not cover the unique content
-                # hash; a duplicate hash under a different identifier is a
-                # catalogue defect, not a transient storage failure.
-                if _is_pricing_snapshot_hash_collision(exc):
-                    outcome, failure_category = (
-                        "collision",
-                        "pricing_snapshot.collision",
-                    )
-                    msg = (
-                        "pricing snapshot content hash "
-                        f"{snapshot.content_hash!r} is already stored under a "
-                        "different snapshot identifier"
-                    )
-                    raise PricingSnapshotCollisionError(msg) from exc
+                outcome = await self._persist_snapshot(snapshot)
+            except PricingSnapshotCollisionError:
+                outcome = "collision"
+                failure_category = "pricing_snapshot.collision"
+                raise
+            except IntegrityError:
                 failure_category = "pricing_snapshot.integrity"
                 raise
-            else:
-                inserted = result.scalar_one_or_none()
-                outcome = "persisted" if inserted is not None else "reused"
             finally:
                 span.set_attribute("outcome", outcome)
                 if failure_category is not None:
                     span.set_attribute("failure_category", failure_category)
                 self._record_ensure_outcome(started, outcome, failure_category)
+
+    async def _persist_snapshot(self, snapshot: PricingSnapshot) -> str:
+        """Insert or reuse a row, translating content-hash collisions."""
+        try:
+            result = await self._session.execute(
+                _pricing_snapshot_insert_statement(snapshot)
+            )
+        except IntegrityError as exc:
+            # The id conflict target does not cover the unique content hash;
+            # a duplicate hash under another ID is a catalogue defect.
+            if not _is_pricing_snapshot_hash_collision(exc):
+                raise
+            msg = (
+                "pricing snapshot content hash "
+                f"{snapshot.content_hash!r} is already stored under a "
+                "different snapshot identifier"
+            )
+            raise PricingSnapshotCollisionError(msg) from exc
+        return "persisted" if result.scalar_one_or_none() is not None else "reused"
 
     async def pin_run_pricing(
         self,

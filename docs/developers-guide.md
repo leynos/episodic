@@ -905,6 +905,12 @@ default test doubles for the boundary. For tracing, tests should reuse
 `RecordedSpan` (with its attributes and completion state) for deterministic
 assertions.
 
+When one composition seam must pass all three ports to multiple adapters, use
+the frozen `ObservabilityRuntime` bundle from `episodic.observability_runtime`.
+The runtime composition root should create one bundle and pass that same
+instance to each adapter that shares its sinks. Feature APIs that use only one
+port should continue to accept that port directly.
+
 ## Database migrations
 
 Database migrations are managed with Alembic. The migration environment lives
@@ -1399,8 +1405,8 @@ supplied runtime is returned unchanged, so an explicit bundle always wins. When
 time via `datetime.now(datetime.UTC)`, identifiers via `uuid.uuid4()`,
 `NoopMetrics`, and `PerfCounterClock`. The optional `metrics` and
 `monotonic_clock` keyword arguments override those two defaults individually,
-which is how the unit of work threads its configured observability ports
-through to the repositories.
+while the unit of work takes those ports from its shared `ObservabilityRuntime`
+and forwards them to the repositories.
 
 Tests inject deterministic providers instead of patching module state. The
 source-intake repository tests build a `SourceIntakeStorageRuntime` with a fixed
