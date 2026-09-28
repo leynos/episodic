@@ -87,7 +87,7 @@ class _PersistenceMixin(_MixinBase):
                     clock=self.clock,
                 ),
             )
-            await self._record_success_events_and_costs(
+            await self._record_success_transition(
                 uow,
                 claimed,
                 result,
@@ -104,7 +104,7 @@ class _PersistenceMixin(_MixinBase):
             claimed.run.id,
         )
 
-    async def _record_success_events_and_costs(
+    async def _record_success_transition(
         self,
         uow: CanonicalUnitOfWork,
         claimed: ClaimedRun,
