@@ -40,6 +40,7 @@ PUBLISHER = WORKFLOWS_DIRECTORY / "coverage-main.yml"
 JOB = "coverage-upload"
 AVAILABILITY_STEP_ID = "codescene_token"
 UPLOAD_ACTION = "upload-codescene-coverage"
+SKIP_NOTICE_STEP = "Report a skipped CodeScene upload"
 # The check's expression, which GitHub renders to `true` or `false` before the
 # shell runs.
 AVAILABILITY_EXPRESSION = "${{ secrets.CS_ACCESS_TOKEN != '' }}"
@@ -108,43 +109,72 @@ def _published_availability(tmp_path: pl.Path, *, has_token: bool) -> str:
     return outputs["available"]
 
 
-@pytest.mark.parametrize(
-    "scenario",
-    [
-        pytest.param(
-            Scenario(has_token=True, event_name="push", ref=TRUNK, uploads=True),
-            id="push-to-main",
+SCENARIOS = [
+    pytest.param(
+        Scenario(has_token=True, event_name="push", ref=TRUNK, uploads=True),
+        id="push-to-main",
+    ),
+    pytest.param(
+        Scenario(
+            has_token=True, event_name="workflow_dispatch", ref=TRUNK, uploads=True
         ),
-        pytest.param(
-            Scenario(
-                has_token=True, event_name="workflow_dispatch", ref=TRUNK, uploads=True
-            ),
-            id="dispatch-main",
+        id="dispatch-main",
+    ),
+    pytest.param(
+        Scenario(has_token=False, event_name="push", ref=TRUNK, uploads=False),
+        id="no-token",
+    ),
+    pytest.param(
+        Scenario(
+            has_token=False,
+            event_name="workflow_dispatch",
+            ref=TRUNK,
+            uploads=False,
         ),
-        pytest.param(
-            Scenario(has_token=False, event_name="push", ref=TRUNK, uploads=False),
-            id="no-token",
+        id="no-token-dispatch",
+    ),
+    pytest.param(
+        Scenario(
+            has_token=True,
+            event_name="workflow_dispatch",
+            ref=BRANCH,
+            uploads=False,
         ),
-        pytest.param(
-            Scenario(
-                has_token=False,
-                event_name="workflow_dispatch",
-                ref=TRUNK,
-                uploads=False,
-            ),
-            id="no-token-dispatch",
+        id="dispatch-branch",
+    ),
+]
+
+
+def _upload_step() -> dict[object, object]:
+    """Return the publisher's CodeScene upload step."""
+    return next(
+        step
+        for step in workflow_steps(PUBLISHER, JOB)
+        if UPLOAD_ACTION in str(step.get("uses", ""))
+    )
+
+
+def _job_decision(tmp_path: pl.Path, scenario: Scenario) -> tuple[bool, dict[str, str]]:
+    """Return whether the job runs, and the context its steps are judged in.
+
+    Returns
+    -------
+    tuple[bool, dict[str, str]]
+        The job condition's verdict and the evaluation context, including the
+        availability the check step's own script writes.
+    """
+    job = mapping(workflow_jobs(PUBLISHER).get(JOB), subject=f"{PUBLISHER} {JOB}")
+    context = {
+        "github.event_name": scenario.event_name,
+        "github.ref": scenario.ref,
+        AVAILABILITY_OUTPUT: _published_availability(
+            tmp_path, has_token=scenario.has_token
         ),
-        pytest.param(
-            Scenario(
-                has_token=True,
-                event_name="workflow_dispatch",
-                ref=BRANCH,
-                uploads=False,
-            ),
-            id="dispatch-branch",
-        ),
-    ],
-)
+    }
+    return _evaluate(job.get("if"), context), context
+
+
+@pytest.mark.parametrize("scenario", SCENARIOS)
 def test_the_publisher_uploads_only_with_a_token_on_main(
     tmp_path: pl.Path, scenario: Scenario
 ) -> None:
@@ -154,20 +184,36 @@ def test_the_publisher_uploads_only_with_a_token_on_main(
     must skip rather than fail, and a dispatch from a feature branch must never
     upload that branch's coverage as the trunk's.
     """
-    job = mapping(workflow_jobs(PUBLISHER).get(JOB), subject=f"{PUBLISHER} {JOB}")
-    upload = next(
-        step
-        for step in workflow_steps(PUBLISHER, JOB)
-        if UPLOAD_ACTION in str(step.get("uses", ""))
-    )
-    available = _published_availability(tmp_path, has_token=scenario.has_token)
-    context = {
-        "github.event_name": scenario.event_name,
-        "github.ref": scenario.ref,
-        AVAILABILITY_OUTPUT: available,
-    }
-    decided = _evaluate(job.get("if"), context) and _evaluate(upload.get("if"), context)
+    job_runs, context = _job_decision(tmp_path, scenario)
+    decided = job_runs and _evaluate(_upload_step().get("if"), context)
     assert decided is scenario.uploads, (
         f"{scenario}: expected upload={scenario.uploads}, the workflow decides "
         f"{decided}"
+    )
+
+
+@pytest.mark.parametrize("scenario", SCENARIOS)
+def test_a_skipped_upload_is_reported_without_the_secret(
+    tmp_path: pl.Path, scenario: Scenario
+) -> None:
+    """Report the skip exactly when the job runs and the upload does not.
+
+    A skipped step reads as success, so an absent token would otherwise go
+    unnoticed. The notice reads only the check's boolean output and names no
+    secret, so it cannot print the token.
+    """
+    notice = next(
+        step
+        for step in workflow_steps(PUBLISHER, JOB)
+        if step.get("name") == SKIP_NOTICE_STEP
+    )
+    command = str(notice.get("run", ""))
+    assert "secrets." not in command, f"the notice must read no secret: {command!r}"
+    assert "::notice" in command, f"the notice must annotate the run: {command!r}"
+    job_runs, context = _job_decision(tmp_path, scenario)
+    reported = job_runs and _evaluate(notice.get("if"), context)
+    uploads = job_runs and _evaluate(_upload_step().get("if"), context)
+    assert reported is (job_runs and not uploads), (
+        f"{scenario}: the skip notice must run exactly when the job runs and "
+        f"the upload does not; it runs={reported}, upload={uploads}"
     )
