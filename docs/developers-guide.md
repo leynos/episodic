@@ -73,17 +73,21 @@ floor until a default-branch run saves one.
 Publishers queue on the concurrency group `coverage-main-${{ github.ref }}`,
 with `cancel-in-progress: false`: two runs writing the baseline at once would
 be a lost update, and cancelling one would abandon its write half done. Runs in
-the group never overlap, and a newer trigger replaces an older pending run.
-GitHub does not promise to start runs in trigger order, so the workflow makes
-no commit-order promise either. This job saves the ratchet baseline on a
+the group never overlap, and a newly queued run replaces the existing pending
+run. GitHub does not promise to start runs in trigger order, so the workflow
+makes no commit-order promise either. This job saves the ratchet baseline on a
 dispatch as well as a push, under a cache key naming the run
 (`ratchet-baseline-<os>-<run_id>`), and pull requests restore the newest entry
 under that prefix. A manual "Re-run jobs" on an older `main` run keeps its
 `github.run_id`, so it republishes that commit's CodeScene coverage but cannot
 replace a ratchet baseline already saved under that run's key. If the original
-attempt never saved one, the re-run does, and as the newest entry it serves
-that older commit's baseline until the next push or dispatch on `main` saves a
-newer one.
+attempt never saved a key, a re-run saves one only if the action succeeds. It
+restores the newest prefix match. If the action succeeds, it can save that
+baseline unchanged, and advances it only when the older coverage exceeds it by
+more than one percentage point. Cache eviction can end a baseline's lifetime
+earlier than the next push or dispatch on `main`: if it removes the
+prefix-matched entry first, the pinned action can initialize the missing
+baseline to zero, and a later pull request then ratchets against zero.
 
 No `env` that the publisher workflow declares holds the token, whether at
 workflow, job or step level. The upload is a composite action, and a composite
