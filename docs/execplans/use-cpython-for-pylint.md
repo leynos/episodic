@@ -617,13 +617,12 @@ evidence is recorded below.
    identity. Existing real-child tests remain. The focused selection passed 110
    tests; the latest full suite passed 1,578 tests with 1 skipped and 50
    snapshots.
-5. **Plan and final validation — local gates complete; hosted checks open.**
-   This section reconciles the local implementation, gates, CI, review, and
-   remaining work. Local gates, pinned smoke, and PR coverage are recorded
-   below. The last review found two minor issues, now fixed locally. The
-   follow-up tree passes all named local gates after formatting; its current
-   review and CI results remain open until the changes are published and
-   checked at the resulting PR head.
+5. **Plan and final validation — CI passed; CodeScene remains open.**
+   The latest code and test changes are published and verified at the PR head
+   recorded below. Local formatting, lint, typecheck, and full-test gates
+   passed, as did hosted CI and coverage. CodeScene remains a separate failed
+   external check; its current result and remaining review evidence are
+   recorded below.
 
 Local evidence for commits `69775ef` and `9f6f639`:
 
@@ -746,20 +745,48 @@ lint, typecheck, VidaiMock smoke, and coverage. The fresh
 `coderabbit review --agent` invocation also completed on that SHA with zero
 findings across 30 reviewed files. Its output is
 `/tmp/coderabbit-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-9644fd7.out`.
-This is the completed review outcome for that head; it is separate from the
-earlier review that identified the two minor issues, which were then fixed.
+This completed invocation is evidence for `9644fd7`; it does not establish a
+review result for a later commit or close earlier review threads by itself.
 
-CodeScene separately reports `fail` at
-[delta result 7761470](https://codescene.io/projects/76628/delta/results/7761470).
-The open CodeScene comments identify `_configured_provider_names` complexity
-(13 versus threshold 9), module mean complexity (4.45 versus threshold 4), and
-similar structure in the invalid-UTF-8 and malformed-YAML tests. A separate
-open CodeScene-backed thread flags `start_vidaimock` complexity. These are
-maintainability findings outside the five requested items. No suppression was
-added, and production control flow was not rewritten solely to lower a
-complexity score. The five requested findings meet their stated criteria; the
-CodeScene findings remain explicit follow-up work.
+The latest code and test follow-up is commit
+`2f2b9d3a58e010e250bffd27c23cadf45050713d` on `origin/use-cpython-for-pylint`
+and pull request 339. It adds explicit `False` cases for all numeric
+configuration fields and pins acceptance of the smallest positive timeout. On
+this commit, the OpenAI configuration suite passed 53 tests and one snapshot on
+CPython 3.14.4. `make check-fmt`, `make lint`, `make typecheck`, and
+`make test` passed sequentially; the full test target reported 1,583 passed,
+one skipped, and 50 snapshots. The logs are
+`/tmp/focused-llm-config-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-managed.out`,
+`/tmp/check-fmt-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-after-config-tests.out`,
+`/tmp/lint-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-after-config-tests.out`,
+`/tmp/typecheck-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-after-config-tests.out`,
+and
+`/tmp/test-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-2f2b9d.out`.
+The lint log confirms CPython 3.14 and `--jobs=2` in all three Pylint
+invocations.
 
-This documentation-only evidence update passes local formatting, Markdown lint,
-and Mermaid checks. Hosted CI and review above apply to code-bearing commit
-`9644fd7`; they do not establish a result for a later documentation-only head.
+Hosted CI run
+[36788025929](https://github.com/leynos/episodic/actions/runs/36788025929)
+passed on the exact PR head `2f2b9d3`; job
+[110134011134](https://github.com/leynos/episodic/actions/runs/36788025929/job/110134011134)
+completed all steps, including coverage. The synthetic merge used CPython
+3.14.7 and `--jobs=2`; its full test run reported 1,586 passed, three skipped,
+and 50 snapshots, with 90.57% line coverage. The complete job log is in
+`/tmp/actions-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-2f2b9d-uywSjF/run-36788025929-attempt-1/job-110134011134.log`.
+
+No `coderabbit review --agent` invocation was made on `2f2b9d3`. The latest
+completed invocation remains the zero-finding review on `09aee8f`; the current
+CodeRabbit PR check says `Review paused`, so that invocation is not treated as
+confirmation that all current findings are resolved. The five requested
+findings were separately verified against their live PR threads as resolved or
+outdated. CodeScene still reports `fail`, now at
+[delta result 7761818](https://codescene.io/projects/76628/delta/results/7761818).
+The detailed report for this latest result was not retrieved. The prior
+CodeScene result listed complexity and duplication findings, including
+`start_vidaimock`; these remain separate follow-up work. No suppression was
+added and production control flow was not rewritten solely to lower a
+complexity score.
+
+The five requested findings meet their stated criteria. Local gates and hosted
+CI pass at the verified code and test head. The external CodeScene failure
+remains open pending inspection and disposition of its latest report.
