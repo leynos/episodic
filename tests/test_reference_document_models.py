@@ -1,6 +1,7 @@
 """Unit tests for reusable reference-document domain models."""
 
 import datetime as dt
+import typing as typ
 import uuid
 
 import pytest
@@ -13,6 +14,37 @@ from episodic.canonical.domain import (
     ReferenceDocumentLifecycleState,
     ReferenceDocumentRevision,
 )
+
+
+def _build_reference_document(*, lock_version: int = 1) -> ReferenceDocument:
+    """Build a reference document with a configurable lock version."""
+    now = dt.datetime.now(dt.UTC)
+    return ReferenceDocument(
+        id=uuid.uuid4(),
+        owner_series_profile_id=uuid.uuid4(),
+        kind=ReferenceDocumentKind.HOST_PROFILE,
+        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+        metadata={},
+        created_at=now,
+        updated_at=now,
+        lock_version=lock_version,
+    )
+
+
+def _build_reference_document_revision(
+    *,
+    content_hash: str = "hash",
+) -> ReferenceDocumentRevision:
+    """Build a revision with a configurable content hash."""
+    return ReferenceDocumentRevision(
+        id=uuid.uuid4(),
+        reference_document_id=uuid.uuid4(),
+        content={},
+        content_hash=content_hash,
+        author="author@example.com",
+        change_note="Regression test revision.",
+        created_at=dt.datetime.now(dt.UTC),
+    )
 
 
 def _build_reference_binding(
@@ -44,21 +76,110 @@ def test_reference_document_kind_supports_host_and_guest_profiles() -> None:
     )
 
 
-def test_reference_document_revision_requires_non_empty_content_hash() -> None:
-    """Revision content hash must be a non-empty string."""
-    now = dt.datetime.now(dt.UTC)
+@pytest.mark.parametrize(
+    "lock_version",
+    [
+        pytest.param(True, id="true-is-not-an-integer"),
+        pytest.param(False, id="false-is-not-an-integer"),
+        pytest.param(0, id="zero"),
+        pytest.param(-1, id="negative"),
+        pytest.param(1.5, id="float"),
+        pytest.param("1", id="string"),
+        pytest.param(None, id="none"),
+        pytest.param(object(), id="object"),
+    ],
+)
+def test_reference_document_rejects_invalid_lock_version(
+    lock_version: object,
+) -> None:
+    """The dataclass constructor rejects non-positive exact integers."""
+    with pytest.raises(
+        ValueError,
+        match=r"^lock_version must be a positive integer\.$",
+    ) as raised:
+        _build_reference_document(lock_version=typ.cast("int", lock_version))
 
-    for invalid_hash in ("", "   "):
-        with pytest.raises(ValueError, match="content_hash"):
-            ReferenceDocumentRevision(
-                id=uuid.uuid4(),
-                reference_document_id=uuid.uuid4(),
-                content={},
-                content_hash=invalid_hash,
-                author="author@example.com",
-                change_note="Empty or whitespace-only hash should fail.",
-                created_at=now,
-            )
+    assert str(raised.value) == "lock_version must be a positive integer.", (
+        f"unexpected lock_version validation message: {raised.value!s}."
+    )
+
+
+@pytest.mark.parametrize(
+    "lock_version",
+    [pytest.param(1, id="smallest-positive"), pytest.param(42, id="larger-positive")],
+)
+def test_reference_document_accepts_positive_lock_version(lock_version: int) -> None:
+    """Positive integer lock versions survive construction unchanged."""
+    assert _build_reference_document(lock_version=lock_version).lock_version == (
+        lock_version
+    ), f"expected lock_version {lock_version}, got a different value."
+
+
+def test_reference_document_defaults_lock_version_to_one() -> None:
+    """A newly constructed document starts at lock version one."""
+    now = dt.datetime.now(dt.UTC)
+    document = ReferenceDocument(
+        id=uuid.uuid4(),
+        owner_series_profile_id=uuid.uuid4(),
+        kind=ReferenceDocumentKind.HOST_PROFILE,
+        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+        metadata={},
+        created_at=now,
+        updated_at=now,
+    )
+
+    assert document.lock_version == 1, "expected the default lock_version to be one."
+
+
+@pytest.mark.parametrize(
+    "content_hash",
+    [
+        pytest.param(object(), id="object"),
+        pytest.param(None, id="none"),
+        pytest.param(123, id="integer"),
+        pytest.param(True, id="boolean"),
+        pytest.param([], id="list"),
+    ],
+)
+def test_reference_document_revision_rejects_non_string_content_hash(
+    content_hash: object,
+) -> None:
+    """The revision constructor requires a string content hash."""
+    with pytest.raises(TypeError) as raised:
+        _build_reference_document_revision(content_hash=typ.cast("str", content_hash))
+
+    assert str(raised.value) == "content_hash must be a string.", (
+        f"unexpected content_hash type message: {raised.value!s}."
+    )
+
+
+@pytest.mark.parametrize(
+    "content_hash",
+    [pytest.param("", id="empty"), pytest.param(" \t\n", id="whitespace-only")],
+)
+def test_reference_document_revision_rejects_blank_content_hash(
+    content_hash: str,
+) -> None:
+    """Empty and whitespace-only hashes fail at the dataclass boundary."""
+    with pytest.raises(
+        ValueError,
+        match=r"^content_hash must be a non-empty string\.$",
+    ) as raised:
+        _build_reference_document_revision(content_hash=content_hash)
+
+    assert str(raised.value) == "content_hash must be a non-empty string.", (
+        f"unexpected blank content_hash message: {raised.value!s}."
+    )
+
+
+def test_reference_document_revision_accepts_non_empty_content_hash() -> None:
+    """A valid content hash survives revision construction unchanged."""
+    revision = _build_reference_document_revision(content_hash="sha256:abc123")
+
+    assert revision.content_hash == "sha256:abc123", (
+        "expected the valid hash to survive construction, got "
+        f"{revision.content_hash!r}."
+    )
 
 
 def test_reference_binding_rejects_missing_target_identifier() -> None:

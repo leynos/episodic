@@ -31,6 +31,7 @@ It exits non-zero with a diagnostic on any failed step, so CI can gate on it.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -194,7 +195,7 @@ def _configured_provider_names(config_dir: Path) -> list[str]:
     """Return the provider names the fixture wrote into *config_dir*.
 
     A provider's `name` field, not its filename, is what the server advertises
-    on `/v1/models`; the fixture writes `orchestration.yaml` declaring
+    on `/v1/models`; the orchestration fixture writes `openai.yaml` declaring
     `orchestration`. Reading the declared name keeps this comparison honest as
     the fixture changes.
 
@@ -206,15 +207,33 @@ def _configured_provider_names(config_dir: Path) -> list[str]:
     Raises
     ------
     SmokeTestError
-        If the fixture wrote no providers, or a provider declares no name.
+        If provider discovery or loading fails, the fixture wrote no providers,
+        or a provider declares no name. Filesystem, Unicode, and YAML errors
+        retain their original exception as the cause.
     """
     providers = config_dir / "providers"
     names: list[str] = []
-    for path in sorted(providers.glob("*.yaml")):
-        document = _as_mapping(
-            yaml.safe_load(path.read_text(encoding="utf-8")),
-            f"provider {path}",
-        )
+    try:
+        with os.scandir(providers) as entries:
+            paths = sorted(
+                providers / entry.name
+                for entry in entries
+                if entry.name.endswith(".yaml")
+            )
+    except (OSError, UnicodeError) as exc:
+        msg = f"could not discover provider files in {providers}: {exc}"
+        raise SmokeTestError(msg) from exc
+
+    for path in paths:
+        try:
+            raw_document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            msg = f"could not load provider file {path}: {exc}"
+            raise SmokeTestError(msg) from exc
+        if not isinstance(raw_document, dict):
+            msg = f"provider {path} must contain a mapping: {raw_document!r}"
+            raise SmokeTestError(msg)
+        document = typ.cast("dict[str, object]", raw_document)
         if "name" not in document:
             msg = f"provider {path} declares no name: {document!r}"
             raise SmokeTestError(msg)
