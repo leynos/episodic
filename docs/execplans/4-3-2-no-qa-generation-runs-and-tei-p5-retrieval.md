@@ -1181,9 +1181,7 @@ In `episodic/generation/draft_script.py` (new):
 
 ```python
 class DraftScriptGenerator(typing.Protocol):
-    async def generate(
-        self, request: DraftScriptRequest
-    ) -> DraftScriptResult: ...
+    async def generate(self, request: DraftScriptRequest) -> DraftScriptResult: ...
 ```
 
 - `DraftScriptRequest` carries the source material (normalized text or source

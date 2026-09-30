@@ -9,7 +9,7 @@ if typ.TYPE_CHECKING:
 
 
 def test_load_runtime_config_uses_configured_pricing_directory(
-    tmp_path: "Path",  # noqa: UP037  # Imported only during type checking.
+    tmp_path: "Path",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
 ) -> None:
     """Pricing snapshots should be loaded from a validated configured directory."""
     from episodic.api.runtime import _load_runtime_config
@@ -61,7 +61,7 @@ def test_load_runtime_config_uses_configured_pricing_directory(
 
 @pytest.mark.parametrize("value", ["0", "-1", "not-an-integer"])
 def test_load_runtime_config_rejects_invalid_generation_source_limit(
-    tmp_path: "Path",  # noqa: UP037  # Imported only during type checking.
+    tmp_path: "Path",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
     value: str,
 ) -> None:
     """Generation source limits must be positive integer runtime settings."""
@@ -88,7 +88,7 @@ def test_load_runtime_config_rejects_invalid_generation_source_limit(
     ["GENERATION_MAX_OUTPUT_TOKENS", "GENERATION_MAX_RESPONSE_BYTES"],
 )
 def test_load_runtime_config_rejects_invalid_generation_output_limit(
-    tmp_path: "Path",  # noqa: UP037  # Imported only during type checking.
+    tmp_path: "Path",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
     setting: str,
 ) -> None:
     """Generation output limits must be positive integer runtime settings."""
@@ -111,7 +111,7 @@ def test_load_runtime_config_rejects_invalid_generation_output_limit(
 
 
 def test_load_runtime_config_rejects_missing_pricing_directory(
-    tmp_path: "Path",  # noqa: UP037  # Imported only during type checking.
+    tmp_path: "Path",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
 ) -> None:
     """Pricing configuration should fail before launcher construction."""
     from episodic.api.runtime import RuntimeConfigurationError, _load_runtime_config

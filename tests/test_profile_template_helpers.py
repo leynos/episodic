@@ -109,7 +109,7 @@ async def test_update_versioned_entity_rolls_back_on_translated_conflict() -> No
     entity_repo = _RecordingEntityRepository(profile)
     history_repo = _ConflictingHistoryRepository(profile.id)
 
-    async def fetch_latest(_entity_id: uuid.UUID) -> _RevisionStub:  # noqa: RUF029  # awaited via the fetch_latest contract, so it must be a coroutine
+    async def fetch_latest(_entity_id: uuid.UUID) -> _RevisionStub:  # ruff: ignore[unused-async]  # awaited via the fetch_latest contract, so it must be a coroutine
         return _RevisionStub(revision=1)
 
     def update_fields(entity: SeriesProfile, _now: dt.datetime) -> SeriesProfile:

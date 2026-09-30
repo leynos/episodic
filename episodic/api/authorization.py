@@ -52,7 +52,7 @@ class AuthorizationPort(typ.Protocol):
 class PermitAll:
     """Default authorization adapter that permits every request."""
 
-    async def decide(  # noqa: PLR6301 - must match AuthorizationPort instance method.
+    async def decide(  # ruff: ignore[no-self-use] - must match AuthorizationPort instance method.
         self,
         context: AuthorizationContext,
     ) -> AuthorizationResult:

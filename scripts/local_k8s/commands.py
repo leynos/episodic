@@ -44,7 +44,7 @@ class CommandRunner:
                 stdout="",
                 stderr="",
             )
-        return subprocess.run(  # noqa: S603 - commands are constructed internally.
+        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - commands are constructed internally.
             args,
             input=input_text,
             check=check,

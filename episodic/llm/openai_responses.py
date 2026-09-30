@@ -1,6 +1,6 @@
 """OpenAI Responses payload normalization."""
 
-import collections.abc as cabc  # noqa: TC003  # Runtime casts use mapping aliases.
+import collections.abc as cabc  # ruff: ignore[typing-only-standard-library-import]  # Runtime casts use mapping aliases.
 import typing as typ
 
 from episodic.llm.ports import LLMResponse

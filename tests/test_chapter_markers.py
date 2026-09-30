@@ -7,10 +7,10 @@ file.
 """
 
 import asyncio
-import collections.abc as cabc  # noqa: TC003 - Hypothesis evaluates annotations during collection
+import collections.abc as cabc  # ruff: ignore[typing-only-standard-library-import] - Hypothesis evaluates annotations during collection
 import re
 import xml.sax.saxutils as xml_utils
-from typing import TYPE_CHECKING  # noqa: ICN003 - requested direct type-checking guard
+from typing import TYPE_CHECKING  # ruff: ignore[banned-import-from] - requested direct type-checking guard
 
 import hypothesis.strategies as st
 import pytest

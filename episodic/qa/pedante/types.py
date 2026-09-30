@@ -220,7 +220,7 @@ class PedanteFinding:
 
     @property
     def is_blocking(self) -> bool:
-        """Return whether the finding should force a refinement loop."""
+        """Whether the finding should force a refinement loop."""
         return self.support_level in _BLOCKING_SUPPORT_LEVELS
 
 
@@ -247,7 +247,7 @@ class PedanteEvaluationResult:
 
     @property
     def requires_revision(self) -> bool:
-        """Return whether any finding blocks editorial approval."""
+        """Whether any finding blocks editorial approval."""
         return any(finding.is_blocking for finding in self.findings)
 
     @classmethod

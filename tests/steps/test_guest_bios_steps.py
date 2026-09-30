@@ -14,15 +14,15 @@ Then steps.
 
 from __future__ import annotations
 
-import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
+import asyncio  # ruff: ignore[typing-only-standard-library-import] - pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
 import json
 import shutil
 import socket
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - required to start a local Vidai Mock test server
 import time
 import typing as typ
-from pathlib import Path  # noqa: TC003 - pytest-bdd inspects step annotations.
+from pathlib import Path  # ruff: ignore[typing-only-standard-library-import] - pytest-bdd inspects step annotations.
 
 import pytest
 import yaml
@@ -236,7 +236,7 @@ def _start_vidaimock_process(
     last_error: RuntimeError | None = None
     for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
         port = _find_free_port()
-        process = subprocess.Popen(  # pylint: disable=consider-using-with  # noqa: S603 - vidaimock_path comes from shutil.which and subprocess.Popen receives only controlled test arguments.
+        process = subprocess.Popen(  # pylint: disable=consider-using-with  # ruff: ignore[subprocess-without-shell-equals-true] - vidaimock_path comes from shutil.which and subprocess.Popen receives only controlled test arguments.
             [
                 vidaimock_path,
                 "--host",

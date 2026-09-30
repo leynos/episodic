@@ -44,7 +44,7 @@ if typ.TYPE_CHECKING:
 # Pylint reports the finding the Ruff noqa below already accepts; the
 # refactor to parameter objects is tracked in leynos/episodic#345.
 # pylint: disable-next=too-many-arguments,too-many-positional-arguments
-async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared handler signature for resource adapters
+async def handle_get_entity[EntityT](  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared handler signature for resource adapters
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,
@@ -77,7 +77,7 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
         If ``entity_id`` is not a valid UUID.
     falcon.HTTPNotFound
         If the requested entity does not exist.
-    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     try:
         async with uow_factory() as uow:
@@ -132,7 +132,7 @@ async def handle_get_history[EntityT](
         If the parent entity identifier is not a valid UUID.
     falcon.HTTPNotFound
         If the requested parent entity does not exist.
-    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
     try:
         async with uow_factory() as uow:
@@ -184,7 +184,7 @@ def _raise_mapped_update_error(
         If the target entity does not exist.
     falcon.HTTPConflict
         If the expected revision does not match the persisted revision.
-    """  # noqa: DOC501, DOC502  # The mapper returns these concrete Falcon exceptions.
+    """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # The mapper returns these concrete Falcon exceptions.
     raise map_profile_template_error(
         exc,
         entity_id=entity_id,
@@ -197,7 +197,7 @@ def _raise_mapped_update_error(
 # Pylint reports the finding the Ruff noqa below already accepts; the
 # refactor to parameter objects is tracked in leynos/episodic#345.
 # pylint: disable-next=too-many-arguments,too-many-positional-arguments
-async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared handler signature for resource adapters
+async def handle_update_entity[EntityT](  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared handler signature for resource adapters
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,
@@ -247,7 +247,7 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
         If the target entity does not exist.
     falcon.HTTPConflict
         If the expected revision does not match the persisted revision.
-    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     _require_payload_fields(payload, required_fields)
     update_request = request_builder(parsed_entity_id, payload)
@@ -266,7 +266,7 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
 # Pylint reports the finding the Ruff noqa below already accepts; the
 # refactor to parameter objects is tracked in leynos/episodic#345.
 # pylint: disable-next=too-many-arguments
-async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared creator signature for resource adapters
+async def handle_create_entity[EntityT](  # ruff: ignore[too-many-arguments]  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared creator signature for resource adapters
     uow_factory: UowFactory,
     payload: JsonPayload,
     *,
@@ -303,7 +303,7 @@ async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev)
         If a required field is missing or the create payload is invalid.
     falcon.HTTPNotFound
         If a referenced entity required for creation does not exist.
-    """  # noqa: DOC501, DOC502  # Indirect exceptions form part of this public contract.
+    """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     for field_name in required_fields:
         if field_name not in payload:
             msg = f"Missing required field: {field_name}"

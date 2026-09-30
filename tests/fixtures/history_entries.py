@@ -65,7 +65,7 @@ def build_history_entry(
     parent_id: uuid.UUID,
     *,
     revision: int,
-) -> typ.Any:  # noqa: ANN401  # builds heterogeneous history entry dataclasses
+) -> typ.Any:  # ruff: ignore[any-type]  # builds heterogeneous history entry dataclasses
     """Build a history entry of ``entry_cls`` at ``revision``.
 
     ``parent_field`` is the keyword argument name that holds the parent entity

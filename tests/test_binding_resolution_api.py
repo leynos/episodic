@@ -100,7 +100,7 @@ def _assert_resolved_bindings_payload(
 
 def test_resolved_bindings_endpoint_returns_resolved_payloads(
     canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019  # Requesting the runner fixture preserves the test's event-loop lifetime.
+    _function_scoped_runner: asyncio.Runner,  # ruff: ignore[pytest-fixture-param-without-value]  # Requesting the runner fixture preserves the test's event-loop lifetime.
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Resolved-bindings endpoint should return document, revision, and binding data."""
@@ -195,7 +195,7 @@ def test_resolved_bindings_endpoint_returns_404_for_unknown_profile(
 )
 def test_endpoint_returns_404_for_episode_not_in_profile(
     canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019  # Requesting the runner fixture preserves the test's event-loop lifetime.
+    _function_scoped_runner: asyncio.Runner,  # ruff: ignore[pytest-fixture-param-without-value]  # Requesting the runner fixture preserves the test's event-loop lifetime.
     session_factory: async_sessionmaker[AsyncSession],
     endpoint: str,
 ) -> None:
@@ -225,7 +225,7 @@ def test_endpoint_returns_404_for_episode_not_in_profile(
 )
 def test_resolved_bindings_endpoint_returns_404_for_invalid_template(
     canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019  # Requesting the runner fixture preserves the test's event-loop lifetime.
+    _function_scoped_runner: asyncio.Runner,  # ruff: ignore[pytest-fixture-param-without-value]  # Requesting the runner fixture preserves the test's event-loop lifetime.
     session_factory: async_sessionmaker[AsyncSession],
     use_secondary_template: object,
 ) -> None:

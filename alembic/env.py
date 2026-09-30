@@ -49,7 +49,7 @@ def run_migrations_offline() -> None:
     ------
     ValueError
         If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
-    """  # noqa: DOC502  # Documents an exception propagated by configuration.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Documents an exception propagated by configuration.
     _configure_database_url()
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -82,7 +82,7 @@ async def run_migrations_online_async() -> None:
     ------
     ValueError
         If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
-    """  # noqa: DOC502  # Documents an exception propagated by configuration.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Documents an exception propagated by configuration.
     connectable = config.attributes.get("connection")
     match connectable:
         case AsyncConnection():
@@ -115,7 +115,7 @@ def run_migrations_online() -> None:
     ------
     ValueError
         If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
-    """  # noqa: DOC502  # Documents an exception propagated by configuration.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Documents an exception propagated by configuration.
     connectable = config.attributes.get("connection")
     match connectable:
         case AsyncConnection():

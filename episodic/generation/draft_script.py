@@ -128,7 +128,7 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
         Notes
         -----
         Provider errors are translated before parsing and TEI emission.
-        """  # noqa: DOC502  # Parsing and TEI helpers raise these documented exceptions.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Parsing and TEI helpers raise these documented exceptions.
         llm_request = LLMRequest(
             model=self.config.model,
             prompt=_build_prompt(request),

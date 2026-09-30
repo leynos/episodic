@@ -29,7 +29,7 @@ def _raise_on_negative(value: int) -> int:
 )
 def test_interpreter_executor_shutdown_race_preserves_state(
     item_count: int,
-    release_before_shutdown: bool,  # noqa: FBT001  # Pytest parametrization makes the boolean dimension explicit at each call site.
+    release_before_shutdown: bool,  # ruff: ignore[boolean-type-hint-positional-argument]  # Pytest parametrization makes the boolean dimension explicit at each call site.
 ) -> None:
     """Generated map/shutdown races leave the executor terminal after shutdown."""
 

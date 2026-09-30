@@ -85,9 +85,9 @@ def summarize_throughput(readings: list[float]) -> dict[str, float]:
     maximum = readings[0]
     total = 0.0
     for reading in readings:
-        if reading < minimum:  # noqa: PLR1730 - retain the copied bounds-tracking fixture.
+        if reading < minimum:  # ruff: ignore[if-stmt-min-max] - retain the copied bounds-tracking fixture.
             minimum = reading
-        if reading > maximum:  # noqa: PLR1730 - retain the copied bounds-tracking fixture.
+        if reading > maximum:  # ruff: ignore[if-stmt-min-max] - retain the copied bounds-tracking fixture.
             maximum = reading
         total += reading
     count = float(len(readings))
@@ -127,7 +127,7 @@ def mean_weighted_rating(entries: list[dict[str, float]]) -> float:
 class InvoiceExporter:
     """Export invoices after structural validation."""
 
-    def validate(  # noqa: PLR6301 - the method-clone fixture requires instance methods.
+    def validate(  # ruff: ignore[no-self-use] - the method-clone fixture requires instance methods.
         self, document: dict[str, object]
     ) -> list[str]:
         """Return the validation problems for an invoice document.
@@ -146,7 +146,7 @@ class InvoiceExporter:
         faults: list[str] = []
         for field in ("identifier", "customer", "total"):
             if field not in document:
-                faults.append(f"missing field: {field}")  # noqa: PERF401 - retain the copied guard-loop fixture.
+                faults.append(f"missing field: {field}")  # ruff: ignore[manual-list-comprehension] - retain the copied guard-loop fixture.
         raw_amount = document.get("total")
         if isinstance(raw_amount, int | float) and raw_amount < 0:
             faults.append("total must not be negative")

@@ -208,6 +208,7 @@ they miswire a call. A complete round trip therefore looks like:
 doc = tei.Document("Bridgewater")
 payload = tei.to_msgpack(doc)
 from tei_rapporteur.structs import Episode
+
 episode = msgspec.msgpack.decode(payload, type=Episode)
 ```
 

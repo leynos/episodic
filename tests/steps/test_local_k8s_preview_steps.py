@@ -1,7 +1,7 @@
 """Behavioural coverage for the local Kubernetes preview CLI surface."""
 
 import dataclasses as dc
-import subprocess  # noqa: S404 - behavioural test invokes the local CLI.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - behavioural test invokes the local CLI.
 import sys
 
 from pytest_bdd import scenario, then, when
@@ -26,14 +26,14 @@ def test_local_preview_cli_surface() -> None:
 @when("an operator asks for local preview CLI help", target_fixture="cli_context")
 def when_operator_asks_for_help() -> LocalK8sCliContext:
     """Capture root and subcommand help from the local preview CLI."""
-    root_help = subprocess.run(  # noqa: S603 - test invokes known script with static arguments.
+    root_help = subprocess.run(
         [sys.executable, "scripts/local_k8s.py", "--help"],
         check=True,
         capture_output=True,
         text=True,
         timeout=30,
     ).stdout
-    up_help = subprocess.run(  # noqa: S603 - test invokes known script with static arguments.
+    up_help = subprocess.run(
         [sys.executable, "scripts/local_k8s.py", "up", "--help"],
         check=True,
         capture_output=True,

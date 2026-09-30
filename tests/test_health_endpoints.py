@@ -74,7 +74,7 @@ async def test_health_endpoints_without_probes_return_ok(
     ],
 )
 async def test_health_ready_route_reflects_probe_result(
-    probe_result: bool,  # noqa: FBT001  # pytest.mark.parametrize injects a bool fixture value directly
+    probe_result: bool,  # ruff: ignore[boolean-type-hint-positional-argument]  # pytest.mark.parametrize injects a bool fixture value directly
     expected_status: int,
     expected_body: dict[str, object],
 ) -> None:

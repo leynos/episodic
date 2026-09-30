@@ -1,7 +1,7 @@
 """Reference-document SQLAlchemy ORM models for canonical persistence."""
 
-import datetime as dt  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
-import uuid  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
+import datetime as dt  # ruff: ignore[typing-only-standard-library-import]  # SQLAlchemy evaluates annotations at runtime.
+import uuid  # ruff: ignore[typing-only-standard-library-import]  # SQLAlchemy evaluates annotations at runtime.
 
 import sqlalchemy as sa
 from sqlalchemy import orm

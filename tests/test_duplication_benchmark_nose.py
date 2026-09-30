@@ -51,7 +51,7 @@ class TestParseNosePairs:
         assert findings[0].second == _fragment("pkg/b.py", 15, 23), "second member"
         assert findings[0].lane is Lane.SYNTACTIC_CLONE, "copy-paste lane"
         assert findings[0].category == "copy-paste", "witness category"
-        assert findings[0].similarity == 0.925, "mean score"
+        assert findings[0].similarity == pytest.approx(0.925), "mean score"
 
     def test_expands_multi_member_family_into_unordered_pairs(
         self, tmp_path: Path

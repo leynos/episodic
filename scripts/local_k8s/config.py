@@ -27,7 +27,7 @@ class PreviewConfig:
     cluster_provider: ClusterProvider = "k3d"
     chart_path: pl.Path = REPOSITORY_ROOT / "charts" / "episodic"
     values_path: pl.Path = REPOSITORY_ROOT / "charts" / "episodic" / "values.local.yaml"
-    secret_name: str = "episodic-local"  # noqa: S105 - Kubernetes Secret name.
+    secret_name: str = "episodic-local"  # ruff: ignore[hardcoded-password-string] - Kubernetes Secret name.
     # Local-preview credentials match the default local Postgres container only.
     # Production deployments must inject real credentials through Kubernetes
     # Secrets or ExternalSecret resources.

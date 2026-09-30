@@ -72,7 +72,7 @@ class EpisodeTeiResource:
         ``application/tei+xml`` selects the generated XML attachment. A
         matching or wildcard ``If-None-Match`` validator returns HTTP 304 with
         no response body.
-        """  # noqa: DOC501, DOC502  # Indirect exceptions form part of this public contract.
+        """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
         with self._tracer.start_span(
             "episode_tei.read",
             attributes={"operation": "episode_tei.read"},
@@ -135,7 +135,7 @@ def negotiate_tei_media_type(accept: str | None) -> str:
     ------
     falcon.HTTPNotAcceptable
         Raised when neither supported representation has a positive quality.
-    """  # noqa: DOC502 - http_error() preserves the concrete Falcon exception.
+    """  # ruff: ignore[docstring-extraneous-exception] - http_error() preserves the concrete Falcon exception.
     if accept is None or not accept.strip():
         return _JSON_MEDIA_TYPE
     tei_quality = falcon.mediatypes.quality(_TEI_MEDIA_TYPE, accept)

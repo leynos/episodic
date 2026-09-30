@@ -79,7 +79,7 @@ async def test_source_document_weight_check_constraint(
 
 
 @pytest.mark.asyncio
-async def test_reference_document_revision_id_round_trip(  # noqa: PLR0914 - test requires fixtures for reference doc, revision, series, header, episode, job, source doc, and uow
+async def test_reference_document_revision_id_round_trip(  # ruff: ignore[too-many-locals] - test requires fixtures for reference doc, revision, series, header, episode, job, source doc, and uow
     session_factory: object,
     episode_fixture: tuple[
         SeriesProfile,

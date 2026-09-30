@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio  # noqa: TC003  # pytest-bdd inspects step annotations at runtime.
+import asyncio  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - required to start a local Vidai Mock test server
 import typing as typ
 from pathlib import (
-    Path,  # noqa: TC003  # pytest-bdd inspects step annotations at runtime.
+    Path,  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd inspects step annotations at runtime.
 )
 
 import pytest
@@ -255,7 +255,7 @@ def run_suspend_resume_orchestration(
 ) -> None:
     """Call the checkpointing LangGraph flow with a live LLM adapter."""
 
-    async def _orchestrate() -> None:  # noqa: PLR0914  # The scenario keeps distinct intermediate values for readable behavioural assertions.
+    async def _orchestrate() -> None:  # ruff: ignore[too-many-locals]  # The scenario keeps distinct intermediate values for readable behavioural assertions.
         request = orchestration_context.request
         if request is None:
             msg = "generation request was not prepared"

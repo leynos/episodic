@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typing as typ
 
-from falcon import testing  # noqa: TC002  # pytest-bdd evaluates step annotations.
+from falcon import testing  # ruff: ignore[typing-only-third-party-import]  # pytest-bdd evaluates step annotations.
 from pytest_bdd import given, scenario, then, when
 
 

@@ -21,7 +21,7 @@ def _require_payload_object(value: object, field_name: str) -> dict[str, object]
         msg = f"TEI payload field {field_name} must be an object."
         # _require_payload_object treats this as invalid TEI payload content,
         # not Python call-site type misuse.
-        raise ValueError(msg)  # noqa: TRY004
+        raise ValueError(msg)  # ruff: ignore[type-check-without-type-error]
     return typ.cast("dict[str, object]", value)
 
 
@@ -31,7 +31,7 @@ def _require_payload_list(value: object, field_name: str) -> list[object]:
         msg = f"TEI payload field {field_name} must be a list."
         # _require_payload_list treats this as invalid TEI payload content,
         # not Python call-site type misuse.
-        raise ValueError(msg)  # noqa: TRY004
+        raise ValueError(msg)  # ruff: ignore[type-check-without-type-error]
     return typ.cast("list[object]", value)
 
 

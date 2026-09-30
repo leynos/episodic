@@ -99,7 +99,7 @@ def _parse_finding(raw_finding: object) -> PedanteFinding:
 _TEnum = typ.TypeVar("_TEnum", bound=enum.StrEnum)
 
 
-def _coerce_enum(  # noqa: UP047  # TODO(leynos): https://github.com/leynos/episodic/pull/49 - keep legacy TypeVar syntax for checker parity.
+def _coerce_enum(  # ruff: ignore[non-pep695-generic-function]  # TODO(leynos): https://github.com/leynos/episodic/pull/49 - keep legacy TypeVar syntax for checker parity.
     enum_type: type[_TEnum],
     raw_value: object,
     *,

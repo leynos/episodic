@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
+import asyncio  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json
 import shutil
 import socket
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - required to start a local Vidai Mock test server
 import time
 import typing as typ
-from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
+from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 
 import pytest
 from pytest_bdd import given, scenario, then, when
@@ -199,7 +199,7 @@ def _start_vidaimock_process(
         raise RuntimeError(msg)
 
     pedante_context.base_url = f"http://127.0.0.1:{port}/v1"
-    pedante_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
+    pedante_context.process = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true]  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
         [
             vidaimock_path,
             "--host",

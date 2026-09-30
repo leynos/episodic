@@ -28,8 +28,8 @@ class _ScenarioParams(typ.NamedTuple):
 @pytest.mark.parametrize(
     "scenario",
     [
-        _ScenarioParams("episode_middle", "revision_v2", "episode_middle", False),  # noqa: FBT003  # Named tuple fields document these compact table-driven scenario values.
-        _ScenarioParams("episode_late", "revision_v3", "episode_early", True),  # noqa: FBT003  # Named tuple fields document these compact table-driven scenario values.
+        _ScenarioParams("episode_middle", "revision_v2", "episode_middle", False),  # ruff: ignore[boolean-positional-value-in-call]  # Named tuple fields document these compact table-driven scenario values.
+        _ScenarioParams("episode_late", "revision_v3", "episode_early", True),  # ruff: ignore[boolean-positional-value-in-call]  # Named tuple fields document these compact table-driven scenario values.
     ],
     ids=["episode_specific_over_default", "fallback_to_default"],
 )

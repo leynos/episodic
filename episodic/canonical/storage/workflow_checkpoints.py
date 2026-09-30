@@ -56,7 +56,7 @@ class SqlAlchemyWorkflowCheckpointStore:
 
     def __init__(
         self,
-        session: "AsyncSession",  # noqa: UP037  # AsyncSession is TYPE_CHECKING-only in __init__.
+        session: "AsyncSession",  # ruff: ignore[quoted-annotation]  # AsyncSession is TYPE_CHECKING-only in __init__.
         *,
         metrics: MetricsPort | None = None,
         clock: MonotonicClockPort | None = None,

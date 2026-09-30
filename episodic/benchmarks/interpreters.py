@@ -59,12 +59,12 @@ class BenchmarkResult:
 
     @property
     def mean_seconds(self) -> float:
-        """Return average runtime in seconds."""
+        """Average runtime in seconds."""
         return statistics.fmean(self.durations)
 
     @property
     def throughput_tasks_per_second(self) -> float:
-        """Return throughput in tasks per second across one benchmark run."""
+        """Throughput in tasks per second across one benchmark run."""
         mean = self.mean_seconds
         if mean <= 0.0:
             return float("inf")

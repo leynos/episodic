@@ -114,6 +114,6 @@ class ProbeHealthObserver:
         """Treat unexpected check exceptions as a failed observation."""
         try:
             result = await callback()
-        except Exception:  # noqa: BLE001 - health probes degrade to not-ready
+        except Exception:  # ruff: ignore[blind-except] - health probes degrade to not-ready
             return HealthStatus.ERROR
         return HealthStatus.OK if result else HealthStatus.ERROR

@@ -9,7 +9,7 @@ version the test needs, and a stub `cargo-binstall` records how it was called.
 
 import os
 import shutil
-import subprocess  # noqa: S404 - tests exercise the real Make target.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - tests exercise the real Make target.
 import typing as typ
 from pathlib import Path
 
@@ -124,7 +124,7 @@ def _run_install_nose(
     detonator = _stub_nose(tmp_path / "payload", NOSE_VERSION)
     binstall = _stub_binstall(tmp_path, binstall_log, detonator)
 
-    result = subprocess.run(  # noqa: S603 - fixed target and stubbed tools.
+    result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed target and stubbed tools.
         [
             make,
             "--no-print-directory",
@@ -207,7 +207,7 @@ class TestMakeInstallNose:
         assert (tmp_path / "tools" / "nose").exists(), (
             "Installation must place the detector at NOSE_TOOLS_DIR."
         )
-        verified = subprocess.run(  # noqa: S603 - the stub written by this test.
+        verified = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - the stub written by this test.
             [str(tmp_path / "tools" / "nose"), "--version"],
             check=False,
             capture_output=True,

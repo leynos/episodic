@@ -120,7 +120,7 @@ def _require_history_entity_field(
 # Pylint reports the finding the Ruff noqa below already accepts; the
 # refactor to parameter objects is tracked in leynos/episodic#345.
 # pylint: disable-next=too-many-arguments
-async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 dependency-injected collaborators keep this explicit
+async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # ruff: ignore[too-many-arguments]  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 dependency-injected collaborators keep this explicit
     uow: CanonicalUnitOfWork,
     *,
     entity_id: uuid.UUID,

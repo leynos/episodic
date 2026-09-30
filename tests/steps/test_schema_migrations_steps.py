@@ -9,14 +9,14 @@ Run the schema migration BDD scenarios:
 
 from __future__ import annotations
 
-import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
+import asyncio  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 import typing as typ
 
 import pytest
 import sqlalchemy as sa
 from pytest_bdd import given, scenario, then, when
 from sqlalchemy.ext.asyncio import (
-    AsyncEngine,  # noqa: TC002  # pytest-bdd evaluates step annotations.
+    AsyncEngine,  # ruff: ignore[typing-only-third-party-import]  # pytest-bdd evaluates step annotations.
 )
 
 from episodic.canonical.storage.migration_check import detect_schema_drift

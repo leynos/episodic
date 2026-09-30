@@ -44,7 +44,7 @@ class TestParsePychasePairs:
         assert findings[0].first == _fragment("pkg/a.py", 4, 12), "left member"
         assert findings[0].second == _fragment("pkg/b.py", 15, 23), "right member"
         assert findings[0].lane is Lane.SYNTACTIC_CLONE, "candidate lane"
-        assert findings[0].similarity == 0.925, "candidate score"
+        assert findings[0].similarity == pytest.approx(0.925), "candidate score"
 
     @pytest.mark.parametrize(
         ("payload", "expected_error", "diagnostic"),

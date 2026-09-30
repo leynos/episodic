@@ -757,6 +757,7 @@ class GenerationRunRepository(typing.Protocol):
         ended_at: dt.datetime | None,
     ) -> GenerationRun: ...
 
+
 class GenerationEventLog(typing.Protocol):
     async def append_event(
         self,
@@ -773,6 +774,7 @@ class GenerationEventLog(typing.Protocol):
         after_seq: EventSeq | None = None,
         limit: int = 100,
     ) -> tuple[GenerationEvent, ...]: ...
+
 
 class GenerationCheckpointPort(typing.Protocol):
     async def create_checkpoint(
@@ -801,6 +803,7 @@ class GenerationCheckpointPort(typing.Protocol):
         *,
         at: dt.datetime,
     ) -> Checkpoint: ...
+
 
 class GenerationRunPort(
     GenerationRunRepository,
@@ -1082,6 +1085,7 @@ class GenerationRunStatus(enum.StrEnum):
 
     def is_terminal(self) -> bool: ...
 
+
 class CheckpointStatus(enum.StrEnum):
     CREATED = "created"
     RESPONDED = "responded"
@@ -1090,10 +1094,12 @@ class CheckpointStatus(enum.StrEnum):
 
     def is_terminal(self) -> bool: ...
 
+
 class CheckpointAction(enum.StrEnum):
     APPROVE = "approve"
     REQUEST_CHANGES = "request_changes"
     EDIT = "edit"
+
 
 @dc.dataclass(frozen=True, slots=True)
 class GenerationRun:
@@ -1111,6 +1117,7 @@ class GenerationRun:
     created_at: dt.datetime
     updated_at: dt.datetime
 
+
 @dc.dataclass(frozen=True, slots=True)
 class GenerationEvent:
     id: uuid.UUID
@@ -1119,6 +1126,7 @@ class GenerationEvent:
     kind: str
     payload: JsonMapping
     created_at: dt.datetime
+
 
 @dc.dataclass(frozen=True, slots=True)
 class Checkpoint:
@@ -1150,6 +1158,7 @@ In `episodic/canonical/generation_run_ports.py`:
 ```python
 EventSeq = typing.NewType("EventSeq", int)
 
+
 @typing.runtime_checkable
 class GenerationRunRepository(typing.Protocol):
     async def create_run(
@@ -1176,6 +1185,7 @@ class GenerationRunRepository(typing.Protocol):
         ended_at: dt.datetime | None,
     ) -> GenerationRun: ...
 
+
 @typing.runtime_checkable
 class GenerationEventLog(typing.Protocol):
     async def append_event(
@@ -1193,6 +1203,7 @@ class GenerationEventLog(typing.Protocol):
         after_seq: EventSeq | None = None,
         limit: int = 100,
     ) -> tuple[GenerationEvent, ...]: ...
+
 
 @typing.runtime_checkable
 class GenerationCheckpointPort(typing.Protocol):
@@ -1214,6 +1225,7 @@ class GenerationCheckpointPort(typing.Protocol):
         responded_by: str,
     ) -> Checkpoint: ...
 
+
 @typing.runtime_checkable
 class GenerationRunPort(
     GenerationRunRepository,
@@ -1228,6 +1240,7 @@ In `episodic/canonical/adapters/generation_runs.py`:
 ```python
 class InMemoryGenerationRunStore:
     """Reference adapter satisfying `GenerationRunPort` for tests."""
+
     def __init__(
         self,
         *,
@@ -1239,10 +1252,20 @@ In `episodic/canonical/generation_run_errors.py`:
 
 ```python
 class GenerationRunError(Exception): ...
+
+
 class RunNotFound(GenerationRunError): ...
+
+
 class RunAlreadyTerminal(GenerationRunError): ...
+
+
 class StaleEventSequence(GenerationRunError): ...
+
+
 class CheckpointNotFound(GenerationRunError): ...
+
+
 class CheckpointAlreadyTerminal(GenerationRunError): ...
 ```
 

@@ -5,10 +5,10 @@ import typing as typ
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import (
-    CompiledStateGraph,  # noqa: TC002  # This type remains available at runtime for annotation introspection.
+    CompiledStateGraph,  # ruff: ignore[typing-only-third-party-import]  # This type remains available at runtime for annotation introspection.
 )
 
-from .pedante import (  # noqa: TC001 - required for LangGraph state introspection
+from .pedante import (  # ruff: ignore[typing-only-first-party-import] - required for LangGraph state introspection
     PedanteEvaluationRequest,
     PedanteEvaluationResult,
 )

@@ -86,7 +86,7 @@ class GenerationRunsResource:
     # Pylint reports the finding the Ruff noqa below already accepts; the
     # refactor to parameter objects is tracked in leynos/episodic#345.
     # pylint: disable-next=too-many-arguments
-    def __init__(  # noqa: PLR0913  # HTTP composition requires independent test seams.
+    def __init__(  # ruff: ignore[too-many-arguments]  # HTTP composition requires independent test seams.
         self,
         uow_factory: UowFactory,
         *,

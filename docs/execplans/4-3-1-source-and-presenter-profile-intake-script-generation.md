@@ -1397,9 +1397,7 @@ class ObjectStorePort(typ.Protocol):
         content_type: str,
     ) -> StoredObject: ...
 
-    def open(
-        self, key: str
-    ) -> cabc.AsyncContextManager[cabc.AsyncIterable[bytes]]: ...
+    def open(self, key: str) -> cabc.AsyncContextManager[cabc.AsyncIterable[bytes]]: ...
 
     async def delete(self, key: str) -> None: ...
 ```
@@ -1466,6 +1464,7 @@ In `episodic/api/resources/uploads.py`:
 class UploadsResource:
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None: ...
 
+
 class UploadResource:
     async def on_get(
         self, req: falcon.Request, resp: falcon.Response, upload_id: str
@@ -1479,10 +1478,12 @@ class IngestionJobsResource:
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None: ...
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None: ...
 
+
 class IngestionJobResource:
     async def on_get(
         self, req: falcon.Request, resp: falcon.Response, job_id: str
     ) -> None: ...
+
 
 class IngestionJobSourcesResource:
     async def on_post(

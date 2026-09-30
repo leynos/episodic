@@ -21,7 +21,7 @@ commit.
 
 import re
 import shutil
-import subprocess  # noqa: S404  # The check step's own script is under test.
+import subprocess  # ruff: ignore[suspicious-subprocess-import]  # The check step's own script is under test.
 import typing as typ
 
 import pytest
@@ -100,7 +100,7 @@ def _published_availability(tmp_path: pl.Path, *, has_token: bool) -> str:
     bash = shutil.which("bash")
     assert bash is not None, "bash must be installed to run the check step"
     rendered = script.replace(AVAILABILITY_EXPRESSION, str(has_token).lower())
-    subprocess.run(  # noqa: S603  # The workflow's own script, rendered here.
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The workflow's own script, rendered here.
         [bash, "-c", rendered],
         check=True,
         env={"PATH": "/usr/bin:/bin", "GITHUB_OUTPUT": str(output)},

@@ -46,7 +46,7 @@ class SqlAlchemyGenerationRunStore:
 
     def __init__(
         self,
-        session: "AsyncSession",  # noqa: UP037  # Imported only during type checking.
+        session: "AsyncSession",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
         *,
         runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:

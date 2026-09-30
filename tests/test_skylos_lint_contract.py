@@ -2,7 +2,7 @@
 
 import os
 import shutil
-import subprocess  # noqa: S404 - regression test executes make without a shell
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - regression test executes make without a shell
 import tomllib
 import typing as typ
 from pathlib import Path
@@ -97,7 +97,7 @@ def test_make_lint_runs_local_blocking_dead_code_scan() -> None:
     make_executable = shutil.which("make")
     assert make_executable is not None, "Expected make to be available for the test."
 
-    result = subprocess.run(  # noqa: S603 - test executes make without a shell
+    result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - test executes make without a shell
         [make_executable, "--no-print-directory", "--dry-run", "lint"],
         cwd=REPOSITORY_ROOT,
         check=False,
@@ -169,7 +169,7 @@ def test_skylos_allow_preserves_metacharacters_as_arguments(tmp_path: Path) -> N
     make_executable = shutil.which("make")
     assert make_executable is not None, "Expected make to be available for the test."
 
-    result = subprocess.run(  # noqa: S603 - arguments exercise shell injection safely
+    result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - arguments exercise shell injection safely
         [
             make_executable,
             "--no-print-directory",
@@ -227,7 +227,7 @@ def test_skylos_allow_rejects_missing_required_value(
     subprocess_environment.pop("NAME", None)
     subprocess_environment.pop("REASON", None)
 
-    result = subprocess.run(  # noqa: S603 - tests Makefile validation safely
+    result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - tests Makefile validation safely
         [
             make_executable,
             "--no-print-directory",
@@ -259,7 +259,7 @@ def test_skylos_allow_ignores_wsl_host_name(tmp_path: Path) -> None:
     make_executable = shutil.which("make")
     assert make_executable is not None, "Expected make to be available for the test."
 
-    result = subprocess.run(  # noqa: S603 - tests Makefile validation safely
+    result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - tests Makefile validation safely
         [
             make_executable,
             "--no-print-directory",

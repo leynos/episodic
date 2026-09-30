@@ -140,7 +140,7 @@ class NoopMetrics:
 class NoopValueMetrics(NoopMetrics):
     """Default scalar-metrics sink used when no backend is wired."""
 
-    def observe_value(  # noqa: PLR6301  # No-op metrics intentionally retain no state.
+    def observe_value(  # ruff: ignore[no-self-use]  # No-op metrics intentionally retain no state.
         self,
         name: str,
         value: float,
@@ -155,7 +155,7 @@ class NoopValueMetrics(NoopMetrics):
 class StructuredLogMetrics:
     """Production metrics adapter that emits bounded structured observations."""
 
-    logger: "_StructuredLogSink" = dc.field(  # noqa: UP037  # Defined below its adapter.
+    logger: "_StructuredLogSink" = dc.field(  # ruff: ignore[quoted-annotation]  # Defined below its adapter.
         default_factory=lambda: logging.getLogger(__name__),
     )
 
@@ -221,7 +221,7 @@ class _NoopSpan:
         del exc_type, exc_value, traceback
         return False
 
-    def set_attribute(  # noqa: PLR6301  # No-op spans intentionally retain no state.
+    def set_attribute(  # ruff: ignore[no-self-use]  # No-op spans intentionally retain no state.
         self,
         name: str,
         value: str,
@@ -237,7 +237,7 @@ _NOOP_SPAN = _NoopSpan()
 class NoopTracer:
     """Default tracer that adds no tracing overhead or side effects."""
 
-    def start_span(  # noqa: PLR6301  # No-op tracer intentionally retains no state.
+    def start_span(  # ruff: ignore[no-self-use]  # No-op tracer intentionally retains no state.
         self,
         name: str,
         *,

@@ -1,3 +1,3 @@
 """Fixture package that star-re-exports an outbound adapter."""
 
-from .barrel import *  # noqa: F403  # The fixture deliberately exercises architecture analysis of star re-exports.
+from .barrel import *  # ruff: ignore[undefined-local-with-import-star]  # The fixture deliberately exercises architecture analysis of star re-exports.

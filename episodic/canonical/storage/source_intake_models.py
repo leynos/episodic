@@ -1,20 +1,20 @@
 """SQLAlchemy models for source-intake upload persistence."""
 
-import datetime as dt  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
-import uuid  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
+import datetime as dt  # ruff: ignore[typing-only-standard-library-import]  # SQLAlchemy evaluates annotations at runtime.
+import uuid  # ruff: ignore[typing-only-standard-library-import]  # SQLAlchemy evaluates annotations at runtime.
 
 import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
-from episodic.canonical.idempotency import (  # noqa: TC001  # SQLAlchemy evaluates these mapped model annotations at runtime.
+from episodic.canonical.idempotency import (  # ruff: ignore[typing-only-first-party-import]  # SQLAlchemy evaluates these mapped model annotations at runtime.
     IdempotencyState,
 )
-from episodic.canonical.ingestion_sources import (  # noqa: TC001  # SQLAlchemy evaluates these mapped model annotations at runtime.
+from episodic.canonical.ingestion_sources import (  # ruff: ignore[typing-only-first-party-import]  # SQLAlchemy evaluates these mapped model annotations at runtime.
     AttachmentKind,
 )
 from episodic.canonical.uploads import (
-    UploadState,  # noqa: TC001  # SQLAlchemy evaluates these mapped model annotations at runtime.
+    UploadState,  # ruff: ignore[typing-only-first-party-import]  # SQLAlchemy evaluates these mapped model annotations at runtime.
 )
 
 from .models_base import (

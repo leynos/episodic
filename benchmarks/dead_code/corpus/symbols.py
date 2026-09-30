@@ -1,7 +1,7 @@
 # Benchmark source locations are intentionally stable.
 """Ordinary live and unused Python symbols for detector comparison."""
 
-import math  # noqa: F401
+import math  # ruff: ignore[unused-import]
 import statistics
 
 
@@ -41,7 +41,7 @@ def _used_function(value: int) -> float:
     float
         Mean of ``value`` and one.
     """
-    unused_local = 17  # noqa: F841
+    unused_local = 17  # ruff: ignore[unused-variable]
     return statistics.mean([value, 1])
 
 
@@ -69,7 +69,7 @@ def _function_with_unused_parameter(
 class UsedClass:
     """Provide a method used by the benchmark fixture."""
 
-    def value(self) -> int:  # noqa: PLR6301 - instance call retains the instantiated-class fixture.
+    def value(self) -> int:  # ruff: ignore[no-self-use] - instance call retains the instantiated-class fixture.
         """Return the class fixture's constant value.
 
         Returns

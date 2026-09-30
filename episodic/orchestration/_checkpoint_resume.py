@@ -202,7 +202,7 @@ async def resume_generation_orchestration(
     ValueError
         If the checkpoint does not exist or its plan does not contain exactly
         one step.
-    """  # noqa: DOC502  # Payload validation is delegated to the restore helper.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Payload validation is delegated to the restore helper.
     _log_event(
         "debug",
         "generation_graph.resume.start",

@@ -804,31 +804,37 @@ extends the Hecate configuration.
    import enum
    import typing as typ
 
+
    class LedgerScope(enum.StrEnum):
        TASK = "task"
        PROVIDER_CALL = "provider_call"
        INTERNAL_ESTIMATE = "internal_estimate"
        FIXED_ALLOCATION = "fixed_allocation"
 
+
    class PricingModel(enum.StrEnum):
        PAYG = "payg"
        QUOTA_OVERAGE = "quota_overage"
        SUBSCRIPTION_ALLOCATED = "subscription_allocated"
 
+
    class PricingSourceKind(enum.StrEnum):
        PROVIDER_RATE_CARD = "provider_rate_card"
        SLA4OAI_PLAN = "sla4oai_plan"
+
 
    class UsageSource(enum.StrEnum):
        PROVIDER = "provider"
        ESTIMATED = "estimated"
 
+
    PricingSnapshotId = typ.NewType("PricingSnapshotId", str)
    CostLedgerEntryId = typ.NewType("CostLedgerEntryId", str)
-   IdempotencyKey   = typ.NewType("IdempotencyKey", str)
-   CurrencyCode     = typ.NewType("CurrencyCode", str)
+   IdempotencyKey = typ.NewType("IdempotencyKey", str)
+   CurrencyCode = typ.NewType("CurrencyCode", str)
    BillingPeriodKey = typ.NewType("BillingPeriodKey", str)
    MeteringCounterKey = typ.NewType("MeteringCounterKey", str)
+
 
    @dc.dataclass(frozen=True, slots=True)
    class PricingSnapshot:
@@ -844,18 +850,20 @@ extends the Hecate configuration.
        content_hash: str
        retrieved_at: str  # ISO 8601 UTC
 
+
    @dc.dataclass(frozen=True, slots=True)
    class PricedCall:
        computed_cost_minor: int
        currency: CurrencyCode
        is_estimated: bool
 
+
    @dc.dataclass(frozen=True, slots=True)
    class ProviderCallLedgerEntry:
        idempotency_key: IdempotencyKey
        parent_cost_entry_id: CostLedgerEntryId | None
        scope: LedgerScope
-       provider_type: str               # "llm" | "internal" | "tts" (tts unused here)
+       provider_type: str  # "llm" | "internal" | "tts" (tts unused here)
        provider_name: str
        workflow_node: str
        operation: str
@@ -869,22 +877,29 @@ extends the Hecate configuration.
        retry_attempt: int
        billing_period_key: BillingPeriodKey
        workflow_run_id: str
-       recorded_at: str                 # ISO 8601 UTC
+       recorded_at: str  # ISO 8601 UTC
+
 
    @dc.dataclass(frozen=True, slots=True)
    class TaskRollupLedgerEntry:
        idempotency_key: IdempotencyKey
        workflow_run_id: str
-       workflow_node: str | None        # None for the run-level roll-up
+       workflow_node: str | None  # None for the run-level roll-up
        computed_cost_minor: int
        currency: CurrencyCode
        billing_period_key: BillingPeriodKey
        recorded_at: str
 
+
    @typ.runtime_checkable
    class CostLedgerPort(typ.Protocol):
-       async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId: ...
-       async def record_task_rollup(self, rollup: TaskRollupLedgerEntry) -> CostLedgerEntryId: ...
+       async def record_call(
+           self, entry: ProviderCallLedgerEntry
+       ) -> CostLedgerEntryId: ...
+       async def record_task_rollup(
+           self, rollup: TaskRollupLedgerEntry
+       ) -> CostLedgerEntryId: ...
+
 
    @typ.runtime_checkable
    class PricingCataloguePort(typ.Protocol):
@@ -895,6 +910,7 @@ extends the Hecate configuration.
            operation: str,
            billing_period_key: BillingPeriodKey,
        ) -> PricingSnapshot: ...
+
 
    @typ.runtime_checkable
    class MeteringPort(typ.Protocol):
@@ -942,8 +958,8 @@ extends the Hecate configuration.
    ```python
    @dc.dataclass(frozen=True, slots=True)
    class ProviderCallUsage:
-       usage_metrics: typ.Mapping[str, int]   # canonical vocabulary
-       usage_source: UsageSource              # provider | estimated
+       usage_metrics: typ.Mapping[str, int]  # canonical vocabulary
+       usage_source: UsageSource  # provider | estimated
        usage_complete: bool
        provider_response_id: str
        finish_reason: str | None
@@ -1263,26 +1279,42 @@ In `episodic.cost.ports`:
 
 ```python
 class LedgerScope(enum.StrEnum): ...
+
+
 class PricingModel(enum.StrEnum): ...
+
+
 class PricingSourceKind(enum.StrEnum): ...
+
+
 class UsageSource(enum.StrEnum): ...
+
 
 @dc.dataclass(frozen=True, slots=True)
 class PricingSnapshot: ...
 
+
 @dc.dataclass(frozen=True, slots=True)
 class PricedCall: ...
+
 
 @dc.dataclass(frozen=True, slots=True)
 class ProviderCallLedgerEntry: ...
 
+
 @dc.dataclass(frozen=True, slots=True)
 class TaskRollupLedgerEntry: ...
 
+
 @typ.runtime_checkable
 class CostLedgerPort(typ.Protocol):
-    async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId: ...
-    async def record_task_rollup(self, rollup: TaskRollupLedgerEntry) -> CostLedgerEntryId: ...
+    async def record_call(
+        self, entry: ProviderCallLedgerEntry
+    ) -> CostLedgerEntryId: ...
+    async def record_task_rollup(
+        self, rollup: TaskRollupLedgerEntry
+    ) -> CostLedgerEntryId: ...
+
 
 @typ.runtime_checkable
 class PricingCataloguePort(typ.Protocol):
@@ -1293,6 +1325,7 @@ class PricingCataloguePort(typ.Protocol):
         operation: str,
         billing_period_key: BillingPeriodKey,
     ) -> PricingSnapshot: ...
+
 
 @typ.runtime_checkable
 class MeteringPort(typ.Protocol):
@@ -1320,7 +1353,10 @@ class PricingEngine:
         is_estimated: bool = False,
     ) -> PricedCall: ...
 
+
 class UnknownPricedMetricError(ValueError): ...
+
+
 class OperationMismatchError(ValueError): ...
 ```
 
@@ -1375,6 +1411,7 @@ class ProviderCallUsage:
     finish_reason: str | None
     started_at: str
     latency_ms: int
+
 
 @dc.dataclass(frozen=True, slots=True)
 class LLMResponse:

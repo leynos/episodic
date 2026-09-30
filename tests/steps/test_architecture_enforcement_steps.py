@@ -12,8 +12,8 @@ contract.
 from __future__ import annotations
 
 import dataclasses as dc
-import subprocess  # noqa: S404, TC003  # pytest-bdd evaluates step annotations.
-from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
+import subprocess  # ruff: ignore[suspicious-subprocess-import, typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
+from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 
 import pytest
 from architecture_hecate_config import run_hecate_fixture_check, write_fixture_config

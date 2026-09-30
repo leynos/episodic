@@ -2,7 +2,7 @@
 
 import dataclasses as dc
 import json
-import subprocess  # noqa: S404 - terminates a controlled local test process.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - terminates a controlled local test process.
 import typing as typ
 
 import httpx

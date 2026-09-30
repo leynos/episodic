@@ -107,7 +107,7 @@ class _GenerationRouteMetricsMiddleware:
         req: asgi.Request,
         resp: asgi.Response,
         resource: object,
-        req_succeeded: bool,  # noqa: FBT001  # Falcon ASGI middleware contract.
+        req_succeeded: bool,  # ruff: ignore[boolean-type-hint-positional-argument]  # Falcon ASGI middleware contract.
     ) -> None:
         """Record the completed response without retaining request data."""
         del resource, req_succeeded
@@ -159,7 +159,7 @@ class _ShutdownHooksMiddleware:
         for shutdown_hook in self._shutdown_hooks:
             try:
                 await shutdown_hook()
-            except Exception as exc:  # noqa: BLE001 - cleanup must attempt every hook.
+            except Exception as exc:  # ruff: ignore[blind-except] - cleanup must attempt every hook.
                 log_error(logger, "ASGI shutdown hook failed.", exc_info=True)
                 if first_failure is None:
                     first_failure = exc
