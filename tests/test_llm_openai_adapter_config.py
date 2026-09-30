@@ -35,9 +35,11 @@ if typ.TYPE_CHECKING:
         ({"retry_delay_seconds": -1}, "retry_delay_seconds"),
         ({"retry_delay_seconds": None}, "retry_delay_seconds"),
         ({"retry_delay_seconds": float("-inf")}, "retry_delay_seconds"),
+        ({"retry_delay_seconds": float("inf")}, "retry_delay_seconds"),
         ({"timeout_seconds": 0}, "timeout_seconds"),
         ({"timeout_seconds": "10"}, "timeout_seconds"),
         ({"timeout_seconds": float("-inf")}, "timeout_seconds"),
+        ({"timeout_seconds": float("inf")}, "timeout_seconds"),
         ({"chars_per_token": 0}, "chars_per_token"),
         # The largest float below the minimum pins the `>=` boundary.
         (

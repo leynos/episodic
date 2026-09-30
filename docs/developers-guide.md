@@ -291,6 +291,12 @@ environment. It runs on CPython rather than PyPy because the source uses Python
 3.14 syntax, PEP 758 unparenthesized `except` lists, that no managed PyPy
 parses.
 
+All three Pylint passes use `--jobs=$(PYLINT_JOBS)`. By default, the Makefile
+assigns one tenth of the available cores to Pylint, with a floor of two workers
+so small CI runners still run in parallel and other agents and builds retain
+most of the machine. Override `PYLINT_JOBS` when invoking `make` to tune the
+worker count.
+
 Pylint's message selection is allow-listed in `pyproject.toml` with
 `disable = ["all"]` and explicit `enable` entries for the logging, match,
 refactoring, standard-library, and modified-iteration checks this repository
