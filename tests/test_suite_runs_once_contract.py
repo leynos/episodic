@@ -99,8 +99,8 @@ def test_the_publisher_runs_the_whole_suite_on_every_push_to_main() -> None:
         subject="coverage-upload job",
     )
     assert "if" not in job, (
-        "the publisher job must carry no condition; the codescene environment "
-        "admits main alone, so a dispatch elsewhere is refused before any step"
+        "the publisher job must carry no condition; the upload step's own "
+        "guard keeps a dispatch on another ref from uploading"
     )
     assert job.get("environment") == "codescene", (
         "the publisher job must run in the environment that admits main alone"

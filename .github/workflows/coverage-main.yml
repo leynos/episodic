@@ -24,11 +24,11 @@ concurrency:
 jobs:
   coverage-upload:
     # `publish-baseline: always` below also supports the manual main dispatch
-    # used after an automerge that does not emit a push event. A dispatch on
-    # another ref cannot advance the baseline: the job carries no `if:` (the
-    # shared contract refuses one on a publisher, since it could skip the
-    # baseline), and the environment below admits `main` alone, so the job
-    # is refused before any step runs.
+    # used after an automerge that does not emit a push event. The job carries
+    # no `if:` (the shared contract refuses one on a publisher, since it could
+    # skip the baseline); the upload step's own guard requires the main ref, so
+    # a dispatch on another ref uploads nothing, and the environment below
+    # admits `main` alone as a second layer.
     runs-on: ubuntu-latest
     # The CodeScene token lives in this environment, whose deployment policy
     # admits `main` alone; the shared contract holds it to this job.
