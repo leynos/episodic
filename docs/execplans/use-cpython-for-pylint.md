@@ -370,6 +370,10 @@ against a pinned `pylint==4.0.9`, and the worker heuristic is a statement about
 this machine's topology rather than about the VidaiMock defect this branch
 exists to fix. Reinstating it would widen the change beyond its purpose, so it
 is recorded here as a decision rather than left as an unexplained omission.
+That decision was superseded by the requested follow-up: `PYLINT_JOBS` was
+restored in the Makefile, applied to the built-in and both df12 Pylint passes,
+and documented. The current disposition and validation evidence are recorded in
+the follow-up section below.
 
 The two special-case reconciliations are worth naming as a pattern. Where main
 has already landed a *renamed* equivalent of a file this branch modified, the
@@ -576,14 +580,16 @@ Three further items from the same review are independent of CodeScene:
 ## Current follow-up evidence — 2026-09-30
 
 The review baseline supplied for this follow-up was
-`7439d269ece932b209cb3bc3755e60e3b88a3977`; GitHub still reports that as the
-head of pull request 339. The source at that commit was checked before editing:
-the five requested validators still used `isinstance`. The implementation
-commits are `69775efedab0f56f9d6583c7b333beea5b696d7c`
+`7439d269ece932b209cb3bc3755e60e3b88a3977`; at the start of the follow-up,
+GitHub reported that as the head of pull request 339. The source at that
+baseline was checked before editing: the five requested validators still used
+`isinstance`. The implementation commits are
+`69775efedab0f56f9d6583c7b333beea5b696d7c`
 (`Address outstanding PR review findings`) and
 `9f6f639b214f04186294b591d07531dd5e114612`
-(`Bound Pylint workers and test finite values`). Both are local; the branch
-tracks `origin/use-cpython-for-pylint`.
+(`Bound Pylint workers and test finite values`); both are pushed on the branch
+tracking `origin/use-cpython-for-pylint`. Later published head and review
+evidence is recorded below.
 
 1. **Direct domain-model regressions — addressed in code.**
    `tests/test_reference_document_models.py` now constructs the dataclasses
@@ -609,12 +615,15 @@ tracks `origin/use-cpython-for-pylint`.
    process and capture doubles, covers explicit terminal and retry examples,
    and checks cleanup, retry limits, diagnostics, and unexpected exception
    identity. Existing real-child tests remain. The focused selection passed 110
-   tests; the full suite passed 1,574 tests with 1 skipped and 50 snapshots.
-5. **Plan and final validation — locally complete; publication open.**
+   tests; the latest full suite passed 1,578 tests with 1 skipped and 50
+   snapshots.
+5. **Plan and final validation — local gates complete; hosted checks open.**
    This section reconciles the local implementation, gates, CI, review, and
-   remaining publication work. Local gates, pinned smoke, and PR coverage are
-   recorded below. Current-head CI and post-fix review confirmation still need
-   publication of the validated branch.
+   remaining work. Local gates, pinned smoke, and PR coverage are recorded
+   below. The last review found two minor issues, now fixed locally. The
+   follow-up tree passes all named local gates after formatting; its current
+   review and CI results remain open until the changes are published and
+   checked at the resulting PR head.
 
 Local evidence for commits `69775ef` and `9f6f639`:
 
@@ -666,6 +675,34 @@ Local evidence for commits `69775ef` and `9f6f639`:
   baseline cache was available, so the ratchet comparison is not claimed as
   verified.
 
+After the two CodeRabbit fixes and the additional NaN cases for retry delay and
+timeout, the focused tests passed 84/84 on CPython 3.14.4. `make lint`,
+`make typecheck`, and `make test` passed sequentially; the full suite reported
+1,578 passed, 1 skipped, and 50 snapshots. On the first final pass,
+`make check-fmt` found the execution-plan table needed `make fmt`; after
+formatting, `make check-fmt`, the pinned-builder markdownlint target, and
+`make nixie` all passed. The lint run used 24 reported cores, resolved
+`PYLINT_JOBS` to 2, and used `--jobs=2` in all three Pylint invocations.
+Markdownlint used the already installed pinned builder because its default uv
+fetch intermittently fails through Lody. Logs are
+`/tmp/focused-tests-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-latest-review-fixes.out`,
+`/tmp/lint-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-latest-review-fixes.out`,
+`/tmp/typecheck-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-latest-review-fixes.out`,
+`/tmp/test-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-latest-review-fixes.out`,
+`/tmp/check-fmt-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-postfmt.out`,
+`/tmp/markdownlint-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-postfmt.out`,
+and
+`/tmp/nixie-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-postfmt.out`.
+
+The final pinned VidaiMock 0.2.11 smoke test passed; the fixture advertised only
+`orchestration` and rendered its template
+(`/tmp/vidaimock-smoke-final-openai-match-76ca8268-d606-4699-97a2-0a33c4262211.out`).
+The workflow-matched Slipcover command passed 1,578 tests with one skip and 50
+snapshots. It reported 90.57% line coverage (17,009/18,780) and 75.05% branch
+coverage (1,573/2,096) for `episodic,alembic`. The XML report was inspected and
+removed. The local PR ratchet baseline was unavailable
+(`/tmp/pr-coverage-final-openai-match-76ca8268-d606-4699-97a2-0a33c4262211.out`).
+
 Hosted evidence is older than the local follow-up. CI run
 [36418797888](https://github.com/leynos/episodic/actions/runs/36418797888)
 completed successfully on the baseline commit `7439d269`; it is not CI evidence
@@ -702,6 +739,18 @@ Remote-SHA parity was verified, and PR metadata reports the same head. Two
 earlier pushes stopped before contacting GitHub because the Lody helper could
 not verify identity preferences; the third attempt succeeded. Current-head CI
 and post-fix review confirmation remain open until their results are inspected.
-A fresh `coderabbit review --agent` invocation on `289d87d` stopped during
-setup when this plan-only follow-up became necessary; it produced no findings.
-Request and inspect the review on the final published plan revision.
+A fresh review on `cefaa3fae2a64590e358a2c8d8be59423f03e299` completed with two
+low-severity findings: descriptive messages for bare assertions in
+`scripts/tests/test_check_vidaimock_provider_config.py`, and a note that the
+earlier PYLINT_JOBS decision had been superseded. Both are fixed in the current
+working tree and pass local gates; a new review is still needed to confirm
+their disposition. CI run
+[36779494179](https://github.com/leynos/episodic/actions/runs/36779494179) for
+that same head remained queued through two bounded watch attempts. Its
+`lint-test` job is
+[110105696690](https://github.com/leynos/episodic/actions/runs/36779494179/job/110105696690).
+CodeRabbit logs are in
+`/tmp/coderabbit-episodic-use-cpython-for-pylint-cefaa3.out`; watch evidence is
+in `/tmp/episodic-pr339-final-actions-lci8s2E2/`. Neither the paused review
+check nor the queued workflow establishes a final outcome. The next step is to
+publish the fixes, watch CI, and request a fresh review on the resulting head.
