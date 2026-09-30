@@ -46,6 +46,8 @@ jobs:
       # from a warm npm cache keeps a slow registry from failing the suite.
       # The key carries the pinned py-pglite version, so a bump misses the
       # cache and refetches.
+      - name: Check the CV-005 contracts
+        run: make test-workflow-contracts
       - name: Cache npm packages for py-pglite
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -191,3 +193,4 @@ jobs:
           python-source: episodic,alembic
           with-ratchet: 'true'
           pytest-workers: ''
+          publish-artefact: 'false'
