@@ -219,10 +219,14 @@ self-derived. Recorded as a deliberate decision, not an oversight.
       `make check-fmt`, `make markdownlint` using the locally installed
       `typos-config-builder` v0.1.1, and `make nixie`. The default uv fetch for
       that pinned builder remains intermittently unavailable through Lody.
-- [ ] Push the local commits, verify workflow runs on the published head, and
-      obtain a post-fix review. Publication is blocked by the offline Lody
-      GitHub transport; the previous review invocation is recorded below and
-      does not confirm resolution.
+- [x] Push the local commits and verify remote branch parity. PR #339's
+      description now has current validation results and the Lody session link
+      as its terminal `## References` section.
+- [ ] Verify hosted workflow results and complete a fresh post-fix review
+      after publishing this plan revision. A trial review on `289d87d` stopped
+      during setup when the plan-only head change became necessary; it returned
+      no findings. The earlier baseline review invocation does not confirm
+      resolution.
 
 ### CodeScene delta at `bf2acc8` (historical)
 
@@ -665,19 +669,39 @@ Local evidence for commits `69775ef` and `9f6f639`:
 Hosted evidence is older than the local follow-up. CI run
 [36418797888](https://github.com/leynos/episodic/actions/runs/36418797888)
 completed successfully on the baseline commit `7439d269`; it is not CI evidence
-for either local commit. GitHub's current PR metadata still reports head
-`7439d269ece932b209cb3bc3755e60e3b88a3977`. CodeRabbit's completed invocation
-on that baseline is recorded at
+for the follow-up. The implementation commits were pushed through
+`289d87de66e89cc4f16007ace2bdd5f528315a25`; `git ls-remote` and PR metadata
+matched at that point. The PR description was updated with current results and
+the terminal `## References` section. Current hosted CI and review should be
+verified after the plan-only follow-up is published. CodeRabbit's completed
+invocation on the earlier baseline is recorded at
 [the PR review comment](https://github.com/leynos/episodic/pull/339#issuecomment-5760687503).
 It reported five findings and said its automatic review was paused after three
 errors and two warnings. That invocation does not confirm the fixes are
 resolved, and no post-fix review has completed.
 
-The branch has not been pushed. The latest `git push` attempt failed before a
-GitHub operation with `Cannot verify GitHub identity preferences with Lody` and
-`remote helper 'lody-github' aborted session`; the push log is
-`/tmp/git-push-final-76ca8268-d606-4699-97a2-0a33c4262211.out`. The session
-machine reported online before this retry, but the identity check still failed.
-GitHub still reports the PR head as the baseline. Current-head CI and post-fix
-review confirmation remain open until the Lody GitHub transport can publish the
-local commits.
+The PR check snapshot for head `289d87de66e89cc4f16007ace2bdd5f528315a25`
+showed CI run
+[36778508476](https://github.com/leynos/episodic/actions/runs/36778508476)
+queued; it was not watched before the plan-only head update. The same snapshot
+reported CodeScene failed at
+[delta result 7761060](https://codescene.io/projects/76628/delta/results/7761060)
+and CodeRabbit `pass` with `Review paused`. The separate
+`coderabbit review --agent` invocation exited 130 during `preparing_sandbox`
+and returned no findings
+(`/tmp/coderabbit-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint.out`).
+Neither the paused PR check nor the interrupted invocation confirms that the
+five findings are resolved. The next step is to watch CI and request a fresh
+review on the final published plan revision. CodeScene's complexity warning
+remains a separate maintainability issue; no production control flow was
+rewritten solely to lower its score.
+
+The successful push advanced `use-cpython-for-pylint` from `7439d26` to
+`289d87d` (`/tmp/git-push-final-2-76ca8268-d606-4699-97a2-0a33c4262211.out`).
+Remote-SHA parity was verified, and PR metadata reports the same head. Two
+earlier pushes stopped before contacting GitHub because the Lody helper could
+not verify identity preferences; the third attempt succeeded. Current-head CI
+and post-fix review confirmation remain open until their results are inspected.
+A fresh `coderabbit review --agent` invocation on `289d87d` stopped during
+setup when this plan-only follow-up became necessary; it produced no findings.
+Request and inspect the review on the final published plan revision.
