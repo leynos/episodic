@@ -68,10 +68,10 @@ workflow's token fires no push event (see
 [shared-actions issue 518](https://github.com/leynos/shared-actions/issues/518)).
 That job uses `publish-baseline: 'always'` and carries no `if:` (the shared
 contract refuses one on a publisher, per the library owner's ruling in
-shared-actions); the upload step's own guard requires `main`, so a dispatch on a
-feature branch uploads nothing, and the `codescene` environment's deployment
-policy admits `main` alone as a second layer. The first ratcheting run has no floor until a
-default-branch run saves one.
+shared-actions); the upload step's own guard requires `main`, so a dispatch on
+a feature branch uploads nothing, and the `codescene` environment's deployment
+policy admits `main` alone as a second layer. The first ratcheting run has no
+floor until a default-branch run saves one.
 
 Publishers queue on the concurrency group `coverage-main-${{ github.ref }}`,
 with `cancel-in-progress: false`: two runs writing the baseline at once would
