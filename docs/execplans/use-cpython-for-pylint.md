@@ -703,54 +703,63 @@ coverage (1,573/2,096) for `episodic,alembic`. The XML report was inspected and
 removed. The local PR ratchet baseline was unavailable
 (`/tmp/pr-coverage-final-openai-match-76ca8268-d606-4699-97a2-0a33c4262211.out`).
 
-Hosted evidence is older than the local follow-up. CI run
+Earlier hosted evidence on baseline commit `7439d269` is retained for history:
+CI run
 [36418797888](https://github.com/leynos/episodic/actions/runs/36418797888)
-completed successfully on the baseline commit `7439d269`; it is not CI evidence
-for the follow-up. The implementation commits were pushed through
-`289d87de66e89cc4f16007ace2bdd5f528315a25`; `git ls-remote` and PR metadata
-matched at that point. The PR description was updated with current results and
-the terminal `## References` section. Current hosted CI and review should be
-verified after the plan-only follow-up is published. CodeRabbit's completed
-invocation on the earlier baseline is recorded at
-[the PR review comment](https://github.com/leynos/episodic/pull/339#issuecomment-5760687503).
-It reported five findings and said its automatic review was paused after three
-errors and two warnings. That invocation does not confirm the fixes are
-resolved, and no post-fix review has completed.
-
-The PR check snapshot for head `289d87de66e89cc4f16007ace2bdd5f528315a25`
-showed CI run
-[36778508476](https://github.com/leynos/episodic/actions/runs/36778508476)
-queued; it was not watched before the plan-only head update. The same snapshot
-reported CodeScene failed at
-[delta result 7761060](https://codescene.io/projects/76628/delta/results/7761060)
-and CodeRabbit `pass` with `Review paused`. The separate
+passed, and the initial CodeRabbit review reported five findings before its
+automatic review paused after three errors and two warnings. Later, CI on
+`289d87de66e89cc4f16007ace2bdd5f528315a25` remained queued in run
+[36778508476](https://github.com/leynos/episodic/actions/runs/36778508476), and
+the CodeRabbit app check said `Review paused`. The separate
 `coderabbit review --agent` invocation exited 130 during `preparing_sandbox`
 and returned no findings
 (`/tmp/coderabbit-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint.out`).
-Neither the paused PR check nor the interrupted invocation confirms that the
-five findings are resolved. The next step is to watch CI and request a fresh
-review on the final published plan revision. CodeScene's complexity warning
-remains a separate maintainability issue; no production control flow was
-rewritten solely to lower its score.
+These older results did not establish whether the five findings were fixed;
+later exact-head CI and review evidence follows.
 
-The successful push advanced `use-cpython-for-pylint` from `7439d26` to
-`289d87d` (`/tmp/git-push-final-2-76ca8268-d606-4699-97a2-0a33c4262211.out`).
-Remote-SHA parity was verified, and PR metadata reports the same head. Two
-earlier pushes stopped before contacting GitHub because the Lody helper could
-not verify identity preferences; the third attempt succeeded. Current-head CI
-and post-fix review confirmation remain open until their results are inspected.
-A fresh review on `cefaa3fae2a64590e358a2c8d8be59423f03e299` completed with two
-low-severity findings: descriptive messages for bare assertions in
+An intermediate review on `cefaa3fae2a64590e358a2c8d8be59423f03e299` reported
+two low-severity findings: descriptive messages for bare assertions in
 `scripts/tests/test_check_vidaimock_provider_config.py`, and a note that the
-earlier PYLINT_JOBS decision had been superseded. Both are fixed in the current
-working tree and pass local gates; a new review is still needed to confirm
-their disposition. CI run
+earlier PYLINT_JOBS decision had been superseded. Both were fixed in the next
+follow-up. CI run
 [36779494179](https://github.com/leynos/episodic/actions/runs/36779494179) for
 that same head remained queued through two bounded watch attempts. Its
-`lint-test` job is
+`lint-test` job was
 [110105696690](https://github.com/leynos/episodic/actions/runs/36779494179/job/110105696690).
-CodeRabbit logs are in
-`/tmp/coderabbit-episodic-use-cpython-for-pylint-cefaa3.out`; watch evidence is
-in `/tmp/episodic-pr339-final-actions-lci8s2E2/`. Neither the paused review
-check nor the queued workflow establishes a final outcome. The next step is to
-publish the fixes, watch CI, and request a fresh review on the resulting head.
+Those historical CodeRabbit and watch logs are in
+`/tmp/coderabbit-episodic-use-cpython-for-pylint-cefaa3.out` and
+`/tmp/episodic-pr339-final-actions-lci8s2E2/`.
+
+The latest code-bearing commit examined for hosted checks is
+`9644fd715a40e6328d720c0efaccb1d482d72a07` (`Complete PR review follow-up`). At
+that evidence point, the local branch, `origin/use-cpython-for-pylint`, and
+pull request 339 all reported this same SHA. The PR body was refreshed with the
+latest validation and retains the terminal `## References` link to the Lody
+session.
+
+The exact-head CI run
+[36783997490](https://github.com/leynos/episodic/actions/runs/36783997490)
+passed on `9644fd7`; its `lint-test` job
+[110120894934](https://github.com/leynos/episodic/actions/runs/36783997490/job/110120894934)
+completed all 28 steps successfully, including formatting, Markdown lint,
+lint, typecheck, VidaiMock smoke, and coverage. The fresh
+`coderabbit review --agent` invocation also completed on that SHA with zero
+findings across 30 reviewed files. Its output is
+`/tmp/coderabbit-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-9644fd7.out`.
+This is the completed review outcome for that head; it is separate from the
+earlier review that identified the two minor issues, which were then fixed.
+
+CodeScene separately reports `fail` at
+[delta result 7761470](https://codescene.io/projects/76628/delta/results/7761470).
+The open CodeScene comments identify `_configured_provider_names` complexity
+(13 versus threshold 9), module mean complexity (4.45 versus threshold 4), and
+similar structure in the invalid-UTF-8 and malformed-YAML tests. A separate
+open CodeScene-backed thread flags `start_vidaimock` complexity. These are
+maintainability findings outside the five requested items. No suppression was
+added, and production control flow was not rewritten solely to lower a
+complexity score. The five requested findings meet their stated criteria; the
+CodeScene findings remain explicit follow-up work.
+
+This documentation-only evidence update passes local formatting, Markdown lint,
+and Mermaid checks. Hosted CI and review above apply to code-bearing commit
+`9644fd7`; they do not establish a result for a later documentation-only head.
