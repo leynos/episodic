@@ -14,6 +14,7 @@ from tests.workflow_reading import (
     REPOSITORY_ROOT,
     Mapping,
     mapping,
+    uses_in,
     workflow_paths,
     workflow_uses,
 )
@@ -78,3 +79,12 @@ def test_retired_pins_do_not_reappear_in_workflows() -> None:
         text = workflow_path.read_text(encoding="utf-8")
         for pin in retired:
             assert str(pin) not in text, f"{workflow_path} references retired pin {pin}"
+
+
+def test_a_quoted_reference_splits_like_an_unquoted_one() -> None:
+    """A quoted publisher reference cannot hide an unrecorded revision."""
+    quoted = {"jobs": {"a": {"steps": [{"uses": f"{GENERATE_COVERAGE_ACTION}@abc"}]}}}
+    reference = f"{GENERATE_COVERAGE_ACTION}@abc"
+    assert uses_in(quoted) == [reference], "a step reference must be found"
+    local = {"jobs": {"a": {"uses": "./.github/workflows/x.yml"}}}
+    assert uses_in(local) == ["./.github/workflows/x.yml"], "a job call is found"
