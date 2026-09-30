@@ -30,14 +30,17 @@ LOCAL_K8S_PROVIDER ?= k3d
 PYLINT_PYTHON ?= 3.14
 PYLINT_VERSION ?= 4.0.9
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
+# Limit Pylint to a tenth of the available cores, with two workers minimum.
+PYLINT_JOBS ?= $(shell n=$$(nproc 2>/dev/null || echo 2); \
+	echo $$(( n / 10 > 2 ? n / 10 : 2 )))
 DF12_PYTHON_LINTS_REF ?= v0.2.0
 DF12_PYTHON_LINTS = git+https://github.com/leynos/df12-python-lints.git@$(DF12_PYTHON_LINTS_REF)
 DF12_PYTHON ?= 3.14
 PYLINT = $(UV_ENV) $(UV) tool run --managed-python --python $(PYLINT_PYTHON) \
-	--from 'pylint==$(PYLINT_VERSION)' pylint --load-plugins=
+	--from 'pylint==$(PYLINT_VERSION)' pylint --jobs=$(PYLINT_JOBS) --load-plugins=
 DF12_PYLINT_MESSAGES = R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111
 DF12_PYLINT_BASE = $(UV_ENV) $(UV) run --python $(DF12_PYTHON) pylint \
-	--disable=all --load-plugins=df12_python_lints
+	--jobs=$(PYLINT_JOBS) --disable=all --load-plugins=df12_python_lints
 DF12_PYLINT = $(DF12_PYLINT_BASE) --enable=$(DF12_PYLINT_MESSAGES)
 DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
 	--ignore-paths='^tests/steps/test_.*_steps[.]py$$'
