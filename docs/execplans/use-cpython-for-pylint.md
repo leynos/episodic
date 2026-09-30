@@ -676,6 +676,8 @@ resolved, and no post-fix review has completed.
 The branch has not been pushed. The latest `git push` attempt failed before a
 GitHub operation with `Cannot verify GitHub identity preferences with Lody` and
 `remote helper 'lody-github' aborted session`; the push log is
-`/tmp/git-push-76ca8268-d606-4699-97a2-0a33c4262211.out`. GitHub still reports
-the PR head as the baseline. Current-head CI and post-fix review confirmation
-remain open until the Lody GitHub transport can publish the local commits.
+`/tmp/git-push-final-76ca8268-d606-4699-97a2-0a33c4262211.out`. The session
+machine reported online before this retry, but the identity check still failed.
+GitHub still reports the PR head as the baseline. Current-head CI and post-fix
+review confirmation remain open until the Lody GitHub transport can publish the
+local commits.
