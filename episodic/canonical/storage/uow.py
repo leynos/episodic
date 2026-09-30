@@ -22,10 +22,7 @@ from sqlalchemy.ext.asyncio import (
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.cost.storage import SqlAlchemyCostLedgerStore
 from episodic.logging import get_logger
-from episodic.observability import (  # noqa: TC001 - autospec resolves annotations
-    MetricsPort,
-    MonotonicClockPort,
-)
+from episodic.observability_runtime import ObservabilityRuntime
 
 from .episode_repository import SqlAlchemyEpisodeRepository
 from .generation_run_storage_runtime import (  # noqa: TC001 - autospec resolves annotations
@@ -63,12 +60,10 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
     ----------
     session_factory : collections.abc.Callable[[], AsyncSession]
         Factory that produces new async sessions for the unit-of-work scope.
-    metrics : MetricsPort | None, optional
-        Optional metrics collector used to record UoW counters and timings,
-        forwarded to the workflow checkpoint store.  Defaults to *None*.
-    clock : MonotonicClockPort | None, optional
-        Optional monotonic clock used to measure elapsed operation time,
-        forwarded to the workflow checkpoint store.  Defaults to *None*.
+    observability : ObservabilityRuntime | None, optional
+        Shared metrics, monotonic-clock, and tracing ports forwarded to the
+        storage adapters. Defaults to the canonical no-op and system-clock
+        adapters.
 
     Attributes
     ----------
@@ -106,13 +101,13 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         self,
         session_factory: cabc.Callable[[], AsyncSession],
         *,
-        metrics: MetricsPort | None = None,
-        clock: MonotonicClockPort | None = None,
+        observability: ObservabilityRuntime | None = None,
         generation_run_runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:
         self._session_factory = session_factory
-        self._metrics = metrics
-        self._clock = clock
+        self._observability = (
+            ObservabilityRuntime() if observability is None else observability
+        )
         self._generation_run_runtime = generation_run_runtime
         self._session: AsyncSession | None = None
 
@@ -151,19 +146,24 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             self._session,
             runtime=source_intake_storage_runtime(
                 None,
-                metrics=self._metrics,
-                monotonic_clock=self._clock,
+                metrics=self._observability.metrics,
+                monotonic_clock=self._observability.clock,
             ),
         )
         self.generation_runs = SqlAlchemyGenerationRunStore(
             self._session,
             runtime=self._generation_run_runtime,
         )
-        self.cost_ledger = SqlAlchemyCostLedgerStore(self._session)
+        self.cost_ledger = SqlAlchemyCostLedgerStore(
+            self._session,
+            metrics=self._observability.metrics,
+            tracer=self._observability.tracer,
+            clock=self._observability.clock,
+        )
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
             self._session,
-            metrics=self._metrics,
-            clock=self._clock,
+            metrics=self._observability.metrics,
+            clock=self._observability.clock,
         )
         return self
 

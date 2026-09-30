@@ -25,6 +25,7 @@ from tenacity import (
 )
 
 from episodic.llm.openai_api.request import (
+    OpenAIPayloadOptions,
     _build_payload,
     _coerce_operation,
     _path_for_operation,
@@ -41,16 +42,25 @@ from episodic.llm.openai_api.utils import (
     _validate_preflight_budget,
     _validate_usage_budget,
 )
+from episodic.llm.openai_validation import OpenAIUsageDetailError
 from episodic.llm.ports import (
     LLMPort,
     LLMProviderOperation,
+    LLMProviderResponseError,
     LLMRequest,
     LLMResponse,
     LLMTransientProviderError,
 )
+from episodic.observability_runtime import ObservabilityRuntime
 
 if typ.TYPE_CHECKING:
     from types import TracebackType
+
+    from episodic.observability import (
+        MetricsPort,
+        MonotonicClockPort,
+        TracerPort,
+    )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -96,6 +106,10 @@ class OpenAICompatibleLLMConfig:
     retry_delay_seconds: float = 0.5
     timeout_seconds: float = 30.0
     chars_per_token: float = 4.0
+    # Optional provider-specific request options; see OpenAIPayloadOptions.
+    reasoning_effort: str | None = None
+    service_tier: str | None = None
+    token_limit_param: str = "max_tokens"  # noqa: S105 - parameter name, not a secret.
 
     __post_init__ = _validate_llm_config
 
@@ -113,6 +127,9 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         adapter creates its own client and sets ``_owns_client`` to ``True``.
         When supplied, ``_owns_client`` is ``False`` and caller-owned client
         lifecycle remains outside the adapter.
+    observability
+        Shared metrics, tracing, and monotonic-clock ports. When omitted, the
+        adapter uses the canonical no-op sinks and system clock.
 
     Raises
     ------
@@ -128,7 +145,12 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         *,
         config: OpenAICompatibleLLMConfig,
         client: httpx.AsyncClient | None = None,
+        observability: ObservabilityRuntime | None = None,
     ) -> None:
+        ports = ObservabilityRuntime() if observability is None else observability
+        self._tracer: TracerPort = ports.tracer
+        self._metrics: MetricsPort = ports.metrics
+        self._clock: MonotonicClockPort = ports.clock
         self._base_url = config.base_url.rstrip("/")
         self._api_key = config.api_key
         self._provider_operation = _coerce_operation(config.provider_operation)
@@ -138,6 +160,12 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         self._retry_delay_seconds = config.retry_delay_seconds
         self._timeout_seconds = config.timeout_seconds
         self._chars_per_token = config.chars_per_token
+        # OpenAIPayloadOptions validates token_limit_param at construction.
+        self._payload_options = OpenAIPayloadOptions(
+            reasoning_effort=config.reasoning_effort,
+            service_tier=config.service_tier,
+            token_limit_param=config.token_limit_param,
+        )
 
     async def __aenter__(self) -> OpenAICompatibleLLMAdapter:
         """Return the adapter for use as an async context manager.
@@ -208,11 +236,35 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         )
         response_payload = await self._send_with_retries(
             path=_path_for_operation(operation),
-            payload=_build_payload(request, operation),
+            payload=_build_payload(request, operation, options=self._payload_options),
+            operation_value=operation.value,
         )
-        if token_budget is not None:
-            _require_concrete_usage_counts(response_payload, operation)
-        response = _normalize_payload(response_payload, operation)
+        with self._tracer.start_span(
+            "llm.provider_response_validation",
+            attributes={"operation": operation.value},
+        ) as span:
+            try:
+                if token_budget is not None:
+                    _require_concrete_usage_counts(response_payload, operation)
+                response = _normalize_payload(response_payload, operation)
+            except LLMProviderResponseError as exc:
+                failure_category = (
+                    "provider.usage_details_invalid"
+                    if isinstance(exc.__cause__, OpenAIUsageDetailError)
+                    else "provider.response_invalid"
+                )
+                span.set_attribute("outcome", "error")
+                span.set_attribute("failure_category", failure_category)
+                self._metrics.increment_counter(
+                    "llm.provider_validation",
+                    labels={
+                        "operation": operation.value,
+                        "outcome": "error",
+                        "failure_category": failure_category,
+                    },
+                )
+                raise
+            span.set_attribute("outcome", "success")
 
         if token_budget is not None:
             _validate_usage_budget(response, token_budget, operation)
@@ -223,6 +275,7 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         *,
         path: str,
         payload: dict[str, object],
+        operation_value: str,
     ) -> dict[str, object]:
         """Send a provider request with retry handling for transient failures."""
         try:
@@ -239,7 +292,11 @@ class OpenAICompatibleLLMAdapter(LLMPort):
                 reraise=False,
             ):
                 with attempt:
-                    return await self._send_once(path=path, payload=payload)
+                    return await self._send_once(
+                        path=path,
+                        payload=payload,
+                        operation_value=operation_value,
+                    )
         except RetryError as exc:
             last = exc.last_attempt.exception()
             _log_error_event(
@@ -259,16 +316,70 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         *,
         path: str,
         payload: dict[str, object],
+        operation_value: str,
     ) -> dict[str, object]:
-        """Send one provider request and return the decoded JSON payload."""
-        response = await self._client.post(
-            f"{self._base_url}{path}",
-            json=payload,
-            headers={
-                "authorization": f"Bearer {self._api_key}",
-                "content-type": "application/json",
-            },
-            timeout=self._timeout_seconds,
-        )
-        _check_http_status(response)
-        return _decode_json_response(response)
+        """Send one instrumented provider request and decode its payload.
+
+        Each attempt emits one span, one bounded outcome counter, and one
+        latency observation. Labels stay bounded: no attempt identifiers,
+        payloads, or credentials are recorded.
+
+        Returns
+        -------
+        dict[str, object]
+            Decoded JSON payload of a successful provider response.
+
+        Raises
+        ------
+        httpx.TimeoutException
+            If the provider request exceeds the configured timeout.
+        httpx.TransportError
+            If the HTTP transport fails before a response arrives.
+        LLMTransientProviderError
+            If the provider returns a retryable HTTP status.
+        LLMProviderResponseError
+            If the provider returns a non-retryable or malformed response.
+        """
+        started = self._clock.monotonic_seconds()
+        outcome = "success"
+        failure_category: str | None = None
+        with self._tracer.start_span(
+            "llm.provider_request",
+            attributes={"operation": operation_value},
+        ) as span:
+            try:
+                response = await self._client.post(
+                    f"{self._base_url}{path}",
+                    json=payload,
+                    headers={
+                        "authorization": f"Bearer {self._api_key}",
+                        "content-type": "application/json",
+                    },
+                    timeout=self._timeout_seconds,
+                )
+                _check_http_status(response)
+                return _decode_json_response(response)
+            except httpx.TimeoutException:
+                outcome, failure_category = "timeout", "provider.timeout"
+                raise
+            except httpx.TransportError, LLMTransientProviderError:
+                outcome, failure_category = "retry", "provider.transient"
+                raise
+            except LLMProviderResponseError:
+                outcome, failure_category = "error", "provider.response_invalid"
+                raise
+            finally:
+                span.set_attribute("outcome", outcome)
+                labels = {"operation": operation_value, "outcome": outcome}
+                if failure_category is not None:
+                    span.set_attribute("failure_category", failure_category)
+                    labels["failure_category"] = failure_category
+                self._metrics.increment_counter(
+                    "llm.provider_request",
+                    labels=labels,
+                )
+                self._metrics.observe_latency_ms(
+                    "llm.provider_request.duration_ms",
+                    (self._clock.monotonic_seconds() - started) * 1000.0,
+                    labels={"operation": operation_value, "outcome": outcome},
+                )

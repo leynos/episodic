@@ -18,7 +18,7 @@ if typ.TYPE_CHECKING:
 
     from episodic.api.dependencies import ApiDependencies
     from episodic.llm import LLMRequest, LLMResponse
-    from episodic.observability import MetricsPort
+    from episodic.observability_runtime import ObservabilityRuntime
 
 
 def test_create_app_from_env_requires_database_url(
@@ -107,12 +107,15 @@ async def test_build_generation_launcher_wires_cost_recorder(
         GenerationSourceLimits,
         InProcessGenerationRunLauncher,
     )
-    from episodic.observability import StructuredLogMetrics
+    from episodic.observability import StructuredLogMetrics, StructuredLogTracer
 
     launcher = _build_generation_launcher(
         lambda: SqlAlchemyUnitOfWork(session_factory),
         _UnusedLLMPort(),
-        _GenerationLauncherRuntime(metrics=StructuredLogMetrics()),
+        _GenerationLauncherRuntime(
+            metrics=StructuredLogMetrics(),
+            tracer=StructuredLogTracer(),
+        ),
         config=RuntimeConfig(
             database_url="postgresql+psycopg://unused",
             source_intake_object_store_root=tmp_path,
@@ -282,9 +285,11 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
     def _tracking_build(
         database_url: str,
         *,
-        metrics: "MetricsPort",  # noqa: UP037 - imported only during type checking.
+        observability: ObservabilityRuntime,
     ) -> tuple[object, ...]:
-        probe, uow, original_hook = original_build(database_url, metrics=metrics)
+        probe, uow, original_hook = original_build(
+            database_url, observability=observability
+        )
 
         async def _tracked_hook() -> None:
             nonlocal shutdown_hook_called

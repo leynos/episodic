@@ -1,6 +1,10 @@
 """Port contract tests for cost accounting protocols."""
 
+import dataclasses as dc
+import datetime as dt
 import inspect
+
+import pytest
 
 from episodic.cost.engine import PricingEngine, PricingRequest
 from episodic.cost.ports import (
@@ -57,6 +61,10 @@ def _make_snapshot(
 
 
 class _InMemoryCostLedger:
+    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
+        """Accept a fake snapshot persistence request."""
+        _ = snapshot
+
     async def pin_run_pricing(
         self,
         key: RunPricingKey,
@@ -231,3 +239,25 @@ def test_llm_response_accepts_optional_provider_call_usage() -> None:
 
     assert response.provider_call_usage == provider_usage, "Expected values to match"
     assert legacy_response.provider_call_usage is None, "Expected value to be absent"
+
+
+def test_pricing_snapshot_rejects_naive_effective_from() -> None:
+    """A naive effective date must fail value-object validation."""
+    aware = _make_snapshot(PricingSnapshotId("snapshot:aware"))
+
+    with pytest.raises(ValueError, match="effective_from must be timezone-aware"):
+        dc.replace(
+            aware,
+            effective_from=dt.datetime(2026, 6, 1),  # noqa: DTZ001 - naive on purpose.
+        )
+
+
+def test_pricing_snapshot_rejects_non_datetime_effective_from() -> None:
+    """A non-datetime effective date must fail with a TypeError."""
+    aware = _make_snapshot(PricingSnapshotId("snapshot:typed"))
+
+    with pytest.raises(TypeError, match="effective_from must be a datetime"):
+        dc.replace(
+            aware,
+            effective_from="2026-06-01T00:00:00Z",  # type: ignore[arg-type]  # invalid on purpose.
+        )

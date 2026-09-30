@@ -22,6 +22,7 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMConfig,
 )
 from episodic.observability import StructuredLogMetrics, StructuredLogTracer
+from episodic.observability_runtime import ObservabilityRuntime
 
 from . import create_app
 from .authorization import StaticBearerTokenAuthorization
@@ -40,7 +41,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.llm import LLMPort
-    from episodic.observability import MetricsPort, ValueMetricsPort
+    from episodic.observability import TracerPort, ValueMetricsPort
 
     from .types import UowFactory
 
@@ -50,6 +51,7 @@ class _GenerationLauncherRuntime:
     """Composition inputs for the in-process generation launcher."""
 
     metrics: ValueMetricsPort
+    tracer: TracerPort
     object_store: ObjectStorePort | None = None
 
 
@@ -74,7 +76,11 @@ class PsycopgConnectKwargs(typ.TypedDict, total=False):
     sslmode: str
 
 
-def _build_llm_port(config: RuntimeConfig) -> OpenAICompatibleLLMAdapter | None:
+def _build_llm_port(
+    config: RuntimeConfig,
+    *,
+    observability: ObservabilityRuntime,
+) -> OpenAICompatibleLLMAdapter | None:
     """Build the environment-configured OpenAI-compatible LLM adapter."""
     if config.llm_base_url is None or config.llm_api_key is None:
         return None
@@ -83,14 +89,19 @@ def _build_llm_port(config: RuntimeConfig) -> OpenAICompatibleLLMAdapter | None:
             base_url=config.llm_base_url,
             api_key=config.llm_api_key,
             provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
-        )
+            reasoning_effort=config.llm_reasoning_effort,
+            service_tier=config.llm_service_tier,
+            token_limit_param=config.llm_token_limit_param,
+            timeout_seconds=config.llm_timeout_seconds,
+        ),
+        observability=observability,
     )
 
 
 def _build_database_probe(
     database_url: str,
     *,
-    metrics: MetricsPort,
+    observability: ObservabilityRuntime,
 ) -> tuple[ReadinessProbe, UowFactory, ShutdownHook]:
     """Build the database readiness probe and unit-of-work factory."""
     async_database_url, probe_connection_kwargs = _normalize_database_urls(database_url)
@@ -115,7 +126,10 @@ def _build_database_probe(
         return True
 
     def uow_factory() -> CanonicalUnitOfWork:
-        return SqlAlchemyUnitOfWork(session_factory, metrics=metrics)
+        return SqlAlchemyUnitOfWork(
+            session_factory,
+            observability=observability,
+        )
 
     return (
         ReadinessProbe(name="database", check=check_database),
@@ -131,7 +145,7 @@ def _build_generation_launcher(
     *,
     config: RuntimeConfig,
 ) -> InProcessGenerationRunLauncher:
-    """Build the no-QA generation-run launcher when an LLM port is configured."""
+    """Build the no-QA generation-run launcher from configured runtime inputs."""
     pricing_catalogue = FilePricingCatalogue(config.pricing_snapshot_directory)
 
     def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
@@ -163,7 +177,7 @@ def _build_generation_launcher(
         provider_name=_DEFAULT_LLM_PROVIDER_NAME,
         provider_operation=LLMProviderOperation.CHAT_COMPLETIONS.value,
         metrics=runtime.metrics,
-        tracer=StructuredLogTracer(),
+        tracer=runtime.tracer,
         source_limits=config.generation_source_limits,
     )
 
@@ -238,14 +252,17 @@ def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
 def create_app_from_env() -> asgi.App:
     """Build the Falcon ASGI service from environment configuration."""
     config = _load_runtime_config()
-    metrics = StructuredLogMetrics()
+    metrics: ValueMetricsPort = StructuredLogMetrics()
+    observability = ObservabilityRuntime(
+        metrics=metrics,
+        tracer=StructuredLogTracer(),
+    )
     database_probe, uow_factory, shutdown_hook = _build_database_probe(
         config.database_url,
-        metrics=metrics,
+        observability=observability,
     )
     object_store = FilesystemObjectStore(config.source_intake_object_store_root)
-    llm_port = _build_llm_port(config)
-    tracer = StructuredLogTracer()
+    llm_port = _build_llm_port(config, observability=observability)
     if llm_port is None:
         launcher = None
         shutdown_hooks = (shutdown_hook,)
@@ -255,6 +272,7 @@ def create_app_from_env() -> asgi.App:
             llm_port,
             _GenerationLauncherRuntime(
                 metrics=metrics,
+                tracer=observability.tracer,
                 object_store=object_store,
             ),
             config=config,
@@ -278,7 +296,7 @@ def create_app_from_env() -> asgi.App:
             launcher=launcher,
             generation_source_limits=config.generation_source_limits,
             metrics=metrics,
-            tracer=tracer,
+            tracer=observability.tracer,
             authorization=StaticBearerTokenAuthorization(
                 token=config.authorization_bearer_token,
                 principal_id=config.authorization_principal_id,
