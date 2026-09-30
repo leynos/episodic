@@ -7,7 +7,6 @@ than growing a second parser.
 """
 
 import pathlib as pl
-import re
 import typing as typ
 
 import yaml
@@ -243,8 +242,38 @@ def all_workflow_steps() -> list[tuple[pl.Path, str, Step]]:
     return collected
 
 
+def uses_in(value: object) -> list[str]:
+    """Return every `uses` string found anywhere in a parsed workflow value.
+
+    Parameters
+    ----------
+    value : object
+        A parsed YAML value: a mapping, a sequence or a scalar.
+
+    Returns
+    -------
+    list[str]
+        The `uses` values of jobs and steps, however the YAML quotes them.
+    """
+    found: list[str] = []
+    match value:
+        case dict():
+            for key, item in value.items():
+                if key == "uses" and isinstance(item, str):
+                    found.append(item)
+                else:
+                    found.extend(uses_in(item))
+        case list():
+            for item in value:
+                found.extend(uses_in(item))
+    return found
+
+
 def workflow_uses() -> list[tuple[str, str]]:
     """Return every action reference and revision across the workflows.
+
+    Parameters are read from the parsed documents, so a quoted reference
+    splits the same way as an unquoted one and a comment is never read.
 
     Returns
     -------
@@ -253,8 +282,10 @@ def workflow_uses() -> list[tuple[str, str]]:
     """
     references: list[tuple[str, str]] = []
     for path in workflow_paths():
-        text = path.read_text(encoding="utf-8")
-        references.extend(re.findall(r"uses:\s*(\S+?)@(\S+)", text))
+        for reference in uses_in(load_workflow(path)):
+            action, separator, revision = reference.partition("@")
+            if separator:
+                references.append((action, revision))
     return references
 
 
