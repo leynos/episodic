@@ -49,10 +49,10 @@ extend-ignore-re = [
     "\\brust-analyzer\\b",
     "\\bserialised_outcome\\b",
     "\\bspeech_render_artifacts\\b",
-    "\\bvar\\.iamge_id\\b",
     "\\{COLOR\\}",
     "\\{color\\}",
     "`color`",
+    "`var\\.iamge_id` instead of `var\\.image_id`",
     "currentColor",
 ]
 
