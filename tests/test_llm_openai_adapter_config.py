@@ -27,9 +27,13 @@ if typ.TYPE_CHECKING:
         # `bool` is an `int` subclass, so every numeric validator needs an
         # explicit guard to reject it. One case per guarded field.
         ({"max_attempts": True}, "max_attempts"),
+        ({"max_attempts": False}, "max_attempts"),
         ({"retry_delay_seconds": True}, "retry_delay_seconds"),
+        ({"retry_delay_seconds": False}, "retry_delay_seconds"),
         ({"timeout_seconds": True}, "timeout_seconds"),
+        ({"timeout_seconds": False}, "timeout_seconds"),
         ({"chars_per_token": True}, "chars_per_token"),
+        ({"chars_per_token": False}, "chars_per_token"),
         ({"max_attempts": 0}, "max_attempts"),
         ({"max_attempts": "3"}, "max_attempts"),
         ({"retry_delay_seconds": -1}, "retry_delay_seconds"),
@@ -78,6 +82,10 @@ def test_openai_adapter_config_rejects_invalid_values(
         pytest.param({"max_attempts": 1}, id="smallest-positive-int"),
         pytest.param({"retry_delay_seconds": 0}, id="zero-delay"),
         pytest.param({"retry_delay_seconds": 0.0}, id="zero-float-delay"),
+        pytest.param(
+            {"timeout_seconds": math.nextafter(0.0, math.inf)},
+            id="smallest-positive-timeout",
+        ),
         pytest.param({"chars_per_token": 4}, id="int-chars-per-token"),
         # Exactly the minimum is accepted; the rejection cases above cover the
         # largest representable float below it.
