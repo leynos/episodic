@@ -7,6 +7,7 @@ rules stay aligned with the adapter factory used by behavioural LLM tests.
 
 import json
 import math
+import re
 import typing as typ
 
 import pytest
@@ -165,6 +166,67 @@ def test_openai_adapter_numeric_config_type_rejections_log_stable_event(
     )
     assert payload["field"] == field, (
         f"Expected config rejection field {field!r}, got {payload['field']!r}."
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        ("max_attempts", "max_attempts must be greater than zero."),
+        ("retry_delay_seconds", "retry_delay_seconds must be non-negative."),
+        ("timeout_seconds", "timeout_seconds must be greater than zero."),
+    ],
+)
+def test_unserializable_numeric_config_values_keep_validation_error(
+    field: str,
+    message: str,
+    openai_invalid_config_builder: _OpenAIInvalidConfigBuilder,
+    openai_log_spy: _OpenAILogSpy,
+) -> None:
+    """Logging falls back to repr without masking the validation failure."""
+    value = object()
+
+    with pytest.raises(ValueError, match=rf"^{re.escape(message)}$") as raised:
+        _ = openai_invalid_config_builder({field: value})
+
+    assert str(raised.value) == message, (
+        f"expected validation message {message!r}, got {raised.value!s}."
+    )
+    payload = json.loads(openai_log_spy.messages[0])
+    assert payload["event"] == "openai_adapter.config_rejected", (
+        f"unexpected rejection event: {payload['event']!r}."
+    )
+    assert payload["field"] == field, (
+        f"expected rejected field {field!r}, got {payload['field']!r}."
+    )
+    assert payload[field] == repr(value), (
+        f"expected repr fallback {repr(value)!r}, got {payload[field]!r}."
+    )
+
+
+def test_circular_numeric_config_value_keeps_validation_error(
+    openai_invalid_config_builder: _OpenAIInvalidConfigBuilder,
+    openai_log_spy: _OpenAILogSpy,
+) -> None:
+    """A JSON circular-reference ValueError also uses the repr fallback."""
+    value: list[object] = []
+    value.append(value)
+
+    with pytest.raises(
+        ValueError,
+        match=r"max_attempts must be greater than zero\.",
+    ):
+        _ = openai_invalid_config_builder({"max_attempts": value})
+
+    payload = json.loads(openai_log_spy.messages[0])
+    assert payload["event"] == "openai_adapter.config_rejected", (
+        f"unexpected rejection event: {payload['event']!r}."
+    )
+    assert payload["field"] == "max_attempts", (
+        f"expected rejected field 'max_attempts', got {payload['field']!r}."
+    )
+    assert payload["max_attempts"] == repr(value), (
+        f"expected repr fallback {repr(value)!r}, got {payload['max_attempts']!r}."
     )
 
 

@@ -48,7 +48,7 @@ def _show_notes_content_literal() -> str:
 
 def write_provider_config(provider_dir: Path) -> None:
     """Write the Vidai Mock provider configuration for orchestration tests."""
-    provider_file = provider_dir / "orchestration.yaml"
+    provider_file = provider_dir / "openai.yaml"
     provider_file.write_text(
         "\n".join((
             'name: "orchestration"',
