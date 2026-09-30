@@ -332,23 +332,9 @@ class ActionExecutionResult:
             object.__setattr__(
                 self, field_name, _normalize_non_empty_text(value, field_name)
             )
-        try:
-            action_kind = (
-                self.action_kind
-                if isinstance(self.action_kind, ActionKind)
-                else ActionKind(str(self.action_kind).strip())
-            )
-        except ValueError:
-            msg = f"Unknown action kind: {self.action_kind!r}"
-            raise ValueError(msg) from None
-        try:
-            model_tier = (
-                self.model_tier
-                if isinstance(self.model_tier, ModelTier)
-                else ModelTier(str(self.model_tier).strip())
-            )
-        except ValueError:
-            msg = f"Unknown model tier: {self.model_tier!r}"
-            raise ValueError(msg) from None
-        object.__setattr__(self, "action_kind", action_kind)
-        object.__setattr__(self, "model_tier", model_tier)
+        object.__setattr__(
+            self, "action_kind", _coerce_single_action_kind(self.action_kind)
+        )
+        object.__setattr__(
+            self, "model_tier", _coerce_single_model_tier(self.model_tier)
+        )

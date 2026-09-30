@@ -12,9 +12,9 @@ SDK integrations live in adapters. Ruff enforces general import hygiene, but it
 does not know the repository's dependency graph. A module can therefore import
 in the wrong direction while still satisfying ordinary lint rules.
 
-The immediate need was roadmap item `1.5.4`: enforce the current service
-scaffold boundaries. ADR-022 records the later orchestration-specific checks
-for LangGraph nodes, Celery task payloads, and checkpoint state.
+The immediate need is roadmap item `1.5.4`: enforce the current service
+scaffold boundaries. The deeper orchestration-specific checks for LangGraph
+nodes, Celery task payloads, and checkpoint state remain roadmap item `2.4.5`.
 
 ## Decision
 
@@ -35,9 +35,7 @@ The first enforced groups are:
   canonical constraint names, and LLM ports.
 - `application`: canonical application services, profile/template services,
   reference-document services, and generation services.
-- The initial `inbound_adapter` classification covered Falcon API modules and
-  worker task/topology seams. Celery task entrypoints are now classified as
-  `orchestration_tasks`, as described in ADR-022.
+- `inbound_adapter`: Falcon API modules and worker task/topology seams.
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
   OpenAI-compatible LLM adapters.
 - `composition_root`: runtime modules whose job is to wire concrete adapters,
@@ -75,8 +73,8 @@ published structural surface.
 - Constraint-name constants used by service-layer conflict handling now live in
   `episodic.canonical.constraints`. SQLAlchemy models import those constants
   rather than owning the only copy.
-- ADR-022 extends this base policy with LangGraph-node-specific policies,
-  Celery task checks, and checkpoint payload audits.
+- `2.4.5` remains responsible for LangGraph-node-specific policies, Celery
+  checkpoint payload audits, and deeper orchestration checks.
 - Hecate replaces the former repo-local `episodic.architecture` checker. New
   architecture groups are added in `pyproject.toml`; generic checker semantics
   belong upstream in Hecate.
@@ -89,8 +87,7 @@ Hecate adoption ExecPlan: `docs/execplans/adopt-hecate.md`.[^3] Hecate
 configuration: `[tool.hecate]` in `pyproject.toml`.[^4] Tests:
 `tests/test_architecture_enforcement.py`, `tests/test_port_contracts.py`,
 `tests/features/architecture_enforcement.feature`, and
-`tests/steps/test_architecture_enforcement_steps.py`.[^5] Orchestration
-enforcement extension: ADR-022.[^6]
+`tests/steps/test_architecture_enforcement_steps.py`.[^5]
 
 [^1]: Roadmap items `1.5.4` and `2.4.5` in `docs/roadmap.md`
 [^2]: ExecPlan:
@@ -101,5 +98,9 @@ enforcement extension: ADR-022.[^6]
   `tests/test_port_contracts.py`,
   `tests/features/architecture_enforcement.feature`, and
   `tests/steps/test_architecture_enforcement_steps.py`
-[^6]: Orchestration architecture enforcement:
-  `docs/adr/adr-022-orchestration-architecture-enforcement.md`
+
+## Addendum (2026-09-30)
+
+The orchestration-specific extension reserved for roadmap item `2.4.5` is
+complete. Celery task entrypoints now use the `orchestration_tasks` Hecate
+group. ADR-022 records the detailed orchestration enforcement decision.

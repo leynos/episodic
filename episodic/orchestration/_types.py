@@ -2,10 +2,6 @@
 
 import enum
 
-from episodic.logging import (
-    log_event as _log_event,  # noqa: F401 - Compatibility re-export for orchestration callers.
-)
-
 
 class ActionKind(enum.StrEnum):
     """Supported generation-enrichment actions for this orchestration slice."""

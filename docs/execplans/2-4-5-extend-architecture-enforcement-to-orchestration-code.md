@@ -10,13 +10,14 @@ Status: COMPLETE
 
 Episodic enforces hexagonal architecture (ports and adapters) with the Hecate
 import checker, run by `make check-architecture` (a dependency of `make lint`)
-against the `[tool.hecate]` configuration in `pyproject.toml`. Today the
-orchestration code is lumped into the generic `application` group and the
-Celery worker tasks sit in the permissive `inbound_adapter` group. The system
-design explicitly reserved orchestration-specific enforcement for this roadmap
-slice (see `docs/episodic-podcast-generation-system-design.md`, the "Hexagonal
-architecture enforcement" section, which states that "direct adapter access is
-reserved for the later orchestration-specific enforcement slice").
+against the `[tool.hecate]` configuration in `pyproject.toml`. Before this
+extension, orchestration code was lumped into the generic `application` group
+and Celery worker tasks sat in the permissive `inbound_adapter` group. The
+system design explicitly reserved orchestration-specific enforcement for this
+roadmap slice (see the "Hexagonal architecture enforcement" section of
+`docs/episodic-podcast-generation-system-design.md`, which states that "direct
+adapter access is reserved for the later orchestration-specific enforcement
+slice").
 
 Roadmap item 2.4.5 (`docs/roadmap.md`) defines three requirements:
 
@@ -334,6 +335,11 @@ validation passed: focused production Hecate regression (1 passed),
   dependency unrelated to graph policy; the logging module is the existing
   neutral home for logging helpers. Date/Author: 2026-06-26, implementation
   agent.
+
+- Follow-up: review removed the logging alias from
+  `episodic.orchestration._types`; orchestration call sites import directly from
+  `episodic.logging`. This supersedes the compatibility choice above. Date:
+  2026-09-30.
 
 - Decision: classify `episodic.worker.workloads` as `domain_ports`, not
   `application`. Rationale: `WorkloadClass` is a provider-neutral routing

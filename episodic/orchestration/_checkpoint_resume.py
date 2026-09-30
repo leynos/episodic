@@ -15,12 +15,12 @@ marks the checkpoint resumed.
 import typing as typ
 import uuid
 
+from episodic.logging import log_event as _log_event
 from episodic.orchestration._checkpoint_payload import (
     _planner_result_from_payload,
     _planner_result_to_payload,
 )
 from episodic.orchestration._graph_state import _require_request_and_planner
-from episodic.orchestration._types import _log_event
 from episodic.orchestration._usage import build_generation_result
 
 if typ.TYPE_CHECKING:
@@ -136,8 +136,8 @@ async def _suspend_execute_node(
     # from the returned checkpoint id. Concrete ports own the idempotency
     # boundary, so concurrent invocations for the same workflow step converge
     # without a time-of-check/time-of-use window.
-    existing = await checkpoint_port.save_or_reuse(
-        dto.WorkflowCheckpoint(
+    try:
+        checkpoint = dto.WorkflowCheckpoint(
             checkpoint_id=fresh_id,
             workflow_id=identity.workflow_id,
             workflow_type=identity.workflow_type,
@@ -148,7 +148,19 @@ async def _suspend_execute_node(
                 planner_result=planner_result,
             ),
         )
-    )
+    except TypeError:
+        _log_event(
+            "error",
+            "generation_graph.suspend_execute_node.checkpoint_payload_rejected",
+            correlation_id=request.correlation_id,
+            workflow_id=identity.workflow_id,
+            workflow_type=identity.workflow_type,
+            step_name=identity.step_name,
+            action_id=identity.action_id,
+            failure_category="invalid_checkpoint_payload",
+        )
+        raise
+    existing = await checkpoint_port.save_or_reuse(checkpoint)
     reused_checkpoint = existing.checkpoint_id != fresh_id
     _log_event(
         "debug",

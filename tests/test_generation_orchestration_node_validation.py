@@ -2,7 +2,11 @@
 
 import pytest
 
-from episodic.orchestration import _graph_nodes
+from episodic.orchestration import (
+    InMemoryCheckpointStore,
+    _checkpoint_resume,
+    _graph_nodes,
+)
 from episodic.orchestration.langgraph import (
     GenerationGraphState,
     _execute_node,
@@ -77,6 +81,56 @@ class TestLangGraphNodeValidation:
         )
         assert action_finish["elapsed_ms"] == 125.0, (
             "elapsed time should be calculated from the injected monotonic clock"
+        )
+
+    @pytest.mark.asyncio
+    async def test_suspend_logs_checkpoint_payload_validation_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Rejected checkpoint payloads emit identifiers without payload data."""
+        events: list[tuple[str, str, dict[str, object]]] = []
+
+        def record_log_event(level: str, message: str, **fields: object) -> None:
+            events.append((level, message, fields))
+
+        def invalid_payload(**_: object) -> dict[str, object]:
+            return {"bad": object()}
+
+        monkeypatch.setattr(_checkpoint_resume, "_log_event", record_log_event)
+        monkeypatch.setattr(
+            _checkpoint_resume, "_build_checkpoint_payload", invalid_payload
+        )
+        state = GenerationGraphState(
+            request=_request(),
+            planner_result=_planner_result(),
+        )
+
+        with pytest.raises(TypeError, match="payload must be JSON-serializable"):
+            await _checkpoint_resume._suspend_execute_node(
+                state,
+                checkpoint_port=InMemoryCheckpointStore(),
+            )
+
+        error_events = [event for event in events if event[0] == "error"]
+        assert len(error_events) == 1, (
+            "payload rejection should emit exactly one error event"
+        )
+        level, message, fields = error_events[0]
+        expected_fields = {
+            "correlation_id": "corr-graph",
+            "workflow_id": "corr-graph",
+            "workflow_type": "generation_orchestration",
+            "step_name": "execute",
+            "action_id": "action-1",
+            "failure_category": "invalid_checkpoint_payload",
+        }
+        assert level == "error", "payload rejection should be logged at error level"
+        assert message == (
+            "generation_graph.suspend_execute_node.checkpoint_payload_rejected"
+        ), "payload rejection should use its stable event name"
+        assert fields == expected_fields, (
+            "payload rejection should log only bounded workflow context"
         )
 
     def test_finish_node_requires_request(self) -> None:

@@ -8,6 +8,7 @@ from episodic.llm.ports import (
     LLMPort,
     LLMRequest,
 )
+from episodic.logging import log_event as _log_event
 
 from ._dto import (
     ActionExecutionResult,
@@ -43,7 +44,6 @@ from ._types import (
     ShowNotesFormatError,
     ToolExecutionError,
     UnsupportedActionError,
-    _log_event,
 )
 from ._usage import build_generation_result
 

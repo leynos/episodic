@@ -375,6 +375,10 @@ source limits and event cursor contract described in this guide. Generation-run
 pollers must also handle the terminal lifecycle contract: terminal responses
 have `current_node: null` and a populated `ended_at`.
 
+Structured events can be emitted with `episodic.logging.log_event`, which
+encodes event fields as JSON; existing logging calls remain available. See
+[Logging](#logging) for details.
+
 Health endpoints:
 
 - `GET /health/live` reports whether the Falcon application booted

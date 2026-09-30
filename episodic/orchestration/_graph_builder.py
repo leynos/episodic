@@ -7,6 +7,7 @@ import typing as typ
 
 from langgraph.graph import END, START, StateGraph
 
+from episodic.logging import log_event as _log_event
 from episodic.orchestration._checkpoint_resume import _suspend_execute_node
 from episodic.orchestration._graph_nodes import (
     ExecuteNodeFn,
@@ -15,7 +16,6 @@ from episodic.orchestration._graph_nodes import (
     _plan_node,
 )
 from episodic.orchestration._graph_state import GenerationGraphState
-from episodic.orchestration._types import _log_event
 from episodic.orchestration.langgraph_costs import (
     _record_costs_from_finished_state,
 )

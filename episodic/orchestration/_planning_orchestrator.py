@@ -8,13 +8,13 @@ import typing as typ
 from episodic.cost.ports import BillingPeriodKey, IdempotencyKey, PricingModel
 from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
 from episodic.llm.ports import LLMError
+from episodic.logging import log_event as _log_event
 
 from ._types import (
     ActionKind,
     PlanningResponseFormatError,
     ToolExecutionError,
     UnsupportedActionError,
-    _log_event,
 )
 from ._usage import build_generation_result
 

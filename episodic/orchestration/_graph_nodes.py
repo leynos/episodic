@@ -4,8 +4,8 @@ import dataclasses as dc
 import importlib
 import typing as typ
 
+from episodic.logging import log_event as _log_event
 from episodic.orchestration._graph_state import _require_request_and_planner
-from episodic.orchestration._types import _log_event
 from episodic.orchestration._usage import build_generation_result
 
 if typ.TYPE_CHECKING:

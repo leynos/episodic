@@ -67,10 +67,11 @@ The accepted groups are:
   serialization modules, allowed to depend on itself and domain-port value
   types only.
 
-`episodic.orchestration._types` is classified as `domain_ports`. This is why
+`episodic.orchestration._types` is classified as `domain_ports` so
 `orchestration_nodes` and `orchestration_checkpoint` can import its
-compatibility `_log_event` alias and provider-neutral `ActionKind` and
-`ModelTier` under the existing domain-port allowance.
+provider-neutral `ActionKind` and `ModelTier` enums under the existing
+domain-port allowance. Orchestration logging call sites import `log_event`
+directly from `episodic.logging`.
 
 `episodic.worker.workloads.WorkloadClass` is the canonical domain-port-like
 worker contract, so task modules can describe workload routing without
