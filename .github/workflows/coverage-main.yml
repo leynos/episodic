@@ -122,7 +122,7 @@ jobs:
         # coverage for an automerge, which is the case the dispatch exists
         # to cover.
         if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@8250c914bd32aeacfdf8d9e87b804ec0024ee83e
         with:
           format: cobertura
           mode: upload
