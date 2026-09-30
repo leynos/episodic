@@ -30,8 +30,12 @@ def test_discovery_failure_names_provider_directory_and_preserves_cause(
     with pytest.raises(smoke.SmokeTestError) as raised:
         smoke._configured_provider_names(tmp_path)
 
-    assert str(provider_dir) in str(raised.value)
-    assert raised.value.__cause__ is cause
+    assert str(provider_dir) in str(raised.value), (
+        "discovery failures should identify the providers directory"
+    )
+    assert raised.value.__cause__ is cause, (
+        "discovery failures should preserve the filesystem error"
+    )
 
 
 def test_file_read_failure_names_file_and_preserves_cause(
@@ -50,7 +54,7 @@ def test_file_read_failure_names_file_and_preserves_cause(
         errors: str | None = None,
     ) -> str:
         del encoding, errors
-        assert path == provider_file
+        assert path == provider_file, "read the discovered provider YAML file"
         raise cause
 
     monkeypatch.setattr(Path, "read_text", fail_provider_read)
@@ -58,8 +62,12 @@ def test_file_read_failure_names_file_and_preserves_cause(
     with pytest.raises(smoke.SmokeTestError) as raised:
         smoke._configured_provider_names(tmp_path)
 
-    assert str(provider_file) in str(raised.value)
-    assert raised.value.__cause__ is cause
+    assert str(provider_file) in str(raised.value), (
+        "read failures should identify the provider file"
+    )
+    assert raised.value.__cause__ is cause, (
+        "read failures should preserve the filesystem error"
+    )
 
 
 def test_invalid_utf8_names_file_and_preserves_decode_error(tmp_path: Path) -> None:
@@ -71,8 +79,12 @@ def test_invalid_utf8_names_file_and_preserves_decode_error(tmp_path: Path) -> N
     with pytest.raises(smoke.SmokeTestError) as raised:
         smoke._configured_provider_names(tmp_path)
 
-    assert str(provider_file) in str(raised.value)
-    assert isinstance(raised.value.__cause__, UnicodeDecodeError)
+    assert str(provider_file) in str(raised.value), (
+        "decode failures should identify the provider file"
+    )
+    assert isinstance(raised.value.__cause__, UnicodeDecodeError), (
+        "decode failures should preserve the Unicode error"
+    )
 
 
 def test_malformed_yaml_names_file_and_preserves_parse_error(tmp_path: Path) -> None:
@@ -84,8 +96,12 @@ def test_malformed_yaml_names_file_and_preserves_parse_error(tmp_path: Path) -> 
     with pytest.raises(smoke.SmokeTestError) as raised:
         smoke._configured_provider_names(tmp_path)
 
-    assert str(provider_file) in str(raised.value)
-    assert isinstance(raised.value.__cause__, yaml.YAMLError)
+    assert str(provider_file) in str(raised.value), (
+        "YAML failures should identify the provider file"
+    )
+    assert isinstance(raised.value.__cause__, yaml.YAMLError), (
+        "YAML failures should preserve the parser error"
+    )
 
 
 @pytest.mark.parametrize("yaml_text", ["- orchestration\n", "null\n"])
@@ -101,8 +117,12 @@ def test_non_mapping_yaml_names_file(
     with pytest.raises(smoke.SmokeTestError) as raised:
         smoke._configured_provider_names(tmp_path)
 
-    assert str(provider_file) in str(raised.value)
-    assert raised.value.__cause__ is None
+    assert str(provider_file) in str(raised.value), (
+        "non-mapping YAML errors should identify the provider file"
+    )
+    assert raised.value.__cause__ is None, (
+        "valid YAML with the wrong shape has no parser error to chain"
+    )
 
 
 def test_missing_provider_name_names_file(tmp_path: Path) -> None:
@@ -114,8 +134,12 @@ def test_missing_provider_name_names_file(tmp_path: Path) -> None:
     with pytest.raises(smoke.SmokeTestError) as raised:
         smoke._configured_provider_names(tmp_path)
 
-    assert str(provider_file) in str(raised.value)
-    assert "declares no name" in str(raised.value)
+    assert str(provider_file) in str(raised.value), (
+        "missing provider names should identify the provider file"
+    )
+    assert "declares no name" in str(raised.value), (
+        "missing provider names should explain the invalid mapping"
+    )
 
 
 def test_no_providers_names_directory(tmp_path: Path) -> None:
@@ -125,8 +149,12 @@ def test_no_providers_names_directory(tmp_path: Path) -> None:
     with pytest.raises(smoke.SmokeTestError) as raised:
         smoke._configured_provider_names(tmp_path)
 
-    assert str(provider_dir) in str(raised.value)
-    assert raised.value.__cause__ is None
+    assert str(provider_dir) in str(raised.value), (
+        "empty provider discovery should identify the providers directory"
+    )
+    assert raised.value.__cause__ is None, (
+        "an empty directory has no filesystem error to chain"
+    )
 
 
 def test_provider_names_are_sorted_and_yaml_suffix_is_selected(tmp_path: Path) -> None:
@@ -137,4 +165,6 @@ def test_provider_names_are_sorted_and_yaml_suffix_is_selected(tmp_path: Path) -
     (provider_dir / "ignored.yml").write_text("name: ignored\n", encoding="utf-8")
     (provider_dir / "notes.txt").write_text("name: notes\n", encoding="utf-8")
 
-    assert smoke._configured_provider_names(tmp_path) == ["alpha", "zulu"]
+    assert smoke._configured_provider_names(tmp_path) == ["alpha", "zulu"], (
+        "provider names should be sorted and non-YAML files ignored"
+    )
