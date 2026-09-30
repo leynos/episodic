@@ -28,6 +28,6 @@ jobs:
       # The token is not used for any external cloud auth.
       id-token: write
     if: ${{ github.event_name == 'workflow_dispatch' || github.actor == 'dependabot[bot]' }}
-    uses: leynos/shared-actions/.github/workflows/dependabot-automerge.yml@dbe2e22ceaf498d85512679ccded38be9dbe7777
+    uses: leynos/shared-actions/.github/workflows/dependabot-automerge.yml@8250c914bd32aeacfdf8d9e87b804ec0024ee83e
     with:
       pull-request-number: ${{ inputs.pull-request-number || github.event.pull_request.number }}
