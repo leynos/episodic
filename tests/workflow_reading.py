@@ -14,6 +14,8 @@ import yaml
 
 from tests.workflow_call_graph import local_workflow_name, reachable
 
+#: The events on which a workflow runs for a pull request.
+PULL_REQUEST_TRIGGERS = frozenset({"pull_request", "pull_request_target"})
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 WORKFLOWS_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
 

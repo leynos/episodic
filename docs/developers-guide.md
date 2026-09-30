@@ -66,9 +66,11 @@ publication mode saves on a push to `main`; this repository also permits a
 manual dispatch on `main`, because a merge made by the Dependabot automerge
 workflow's token fires no push event (see
 [shared-actions issue 518](https://github.com/leynos/shared-actions/issues/518)).
-That job uses `publish-baseline: 'always'` and is restricted to `main`, so a
-feature branch cannot advance the baseline. The first ratcheting run has no
-floor until a default-branch run saves one.
+That job uses `publish-baseline: 'always'` and carries no `if:` (the shared
+contract refuses one on a publisher); its `codescene` environment admits `main`
+alone, so a dispatch on a feature branch is refused before any step runs and
+cannot advance the baseline. The first ratcheting run has no floor until a
+default-branch run saves one.
 
 Publishers queue on the concurrency group `coverage-main-${{ github.ref }}`,
 with `cancel-in-progress: false`: two runs writing the baseline at once would
@@ -100,21 +102,15 @@ sees the token alone; the action's other nested steps do not. A
 `Check CodeScene token availability` step publishes only
 `available=${{ secrets.CS_ACCESS_TOKEN != '' }}`, the upload's condition reads
 that output, and the upload takes
-`access-token: ${{ secrets.CS_ACCESS_TOKEN }}` directly.
-`tests/test_codescene_publisher_token.py` holds the shape, including the
-positive half: the token is named exactly in the check's command and the
-upload's input, so deleting it cannot pass for keeping it out of an `env`.
-`tests/test_codescene_publisher_scenarios.py` runs the decision rather than
-reading it. It executes the check step's own script, with its secret expression
-rendered as GitHub renders it, then evaluates the job's and the upload's `if:`
-conditions for each token, event and ref. The upload happens exactly when the
-token exists and the run is on `main`, and an absent token skips it rather than
-failing. A skipped step reads as success, so a
-`Report a skipped CodeScene upload` step then writes a `::notice` annotation
-saying coverage was not uploaded. It reads only the check's boolean output and
-names no secret. The same module asserts that the notice runs exactly when the
-job runs and the upload does not, and that its command reads no `secrets.`
-value.
+`access-token: ${{ secrets.CS_ACCESS_TOKEN }}` directly. The shared contract
+(`cv005-contracts`, its `token.check-step` and `publisher.upload` clauses)
+holds the shape, including the positive half: the token is named exactly in the
+check's command and the upload's input, so deleting it cannot pass for keeping
+it out of an `env`. The upload happens exactly when the token exists and the
+run is on `main`, and an absent token skips it rather than failing. A skipped
+step reads as success, so a `Report a skipped CodeScene upload` step then
+writes a `::notice` annotation saying coverage was not uploaded. It reads only
+the check's boolean output and names no secret.
 
 No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
@@ -230,10 +226,10 @@ fail during action preparation before its first step runs.
 
 The [approved-revision fixture](../tests/support/approved_action_revisions.json)
 records the nested actions for the approved coverage revisions. The
-[CodeScene contract](../tests/test_codescene_workflow_contract.py) checks that
-record without network access and rejects retired pins. Refresh the fixture
-whenever a tracked action pin changes, so the dependency change is reviewed
-with the caller change.
+[action-revision contract](../tests/test_action_revisions_contract.py) checks
+that record without network access and rejects retired pins. Refresh the
+fixture whenever a tracked action pin changes, so the dependency change is
+reviewed with the caller change.
 
 ## Linting
 
@@ -534,7 +530,7 @@ revision values can express.
 
 `generate-coverage` and `upload-codescene-coverage` therefore carry their
 current revisions in
-[`tests/test_codescene_workflow_contract.py`](../tests/test_codescene_workflow_contract.py)
+[`tests/test_action_revisions_contract.py`](../tests/test_action_revisions_contract.py)
 and in the approved-revision fixture. A Dependabot bump of either action is
 expected to fail the contract until the fixture is refreshed with the new
 revision's nested pins. That failure is the review step, not a chore: it is

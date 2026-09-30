@@ -124,6 +124,7 @@ extend-ignore = [
 "scripts/local_k8s/*.py" = ["suspicious-subprocess-import"]
 "tests/test_local_k8s_kind_tooling.py" = ["suspicious-subprocess-import"]
 "tests/test_local_k8s_tooling.py" = ["suspicious-subprocess-import"]
+"tests/workflow_reading.py" = ["assert"]
 
 [tool.ruff.lint.flake8-import-conventions]
 # Declare the banned `from` imports.

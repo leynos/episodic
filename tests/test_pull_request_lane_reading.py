@@ -11,10 +11,9 @@ import typing as typ
 
 import pytest
 
-from tests import test_codescene_workflow_contract_support as support
-from tests.test_codescene_workflow_contract import PULL_REQUEST_TRIGGERS
-from tests.test_codescene_workflow_contract_support import workflows_reachable_from
+from tests import workflow_reading as support
 from tests.workflow_call_graph import UnresolvedWorkflowCallError, local_workflow_name
+from tests.workflow_reading import PULL_REQUEST_TRIGGERS, workflows_reachable_from
 
 if typ.TYPE_CHECKING:
     import pathlib as pl
