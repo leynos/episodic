@@ -2,6 +2,9 @@
 
 import typing as typ
 
+import pytest
+import tei_rapporteur as tei
+
 from episodic.generation.guest_bios import (
     GuestBioEntry,
     GuestBiosResult,
@@ -99,3 +102,33 @@ def test_enrich_tei_with_empty_guest_bios_result_returns_original() -> None:
     assert enrich_tei_with_guest_bios(SCRIPT_TEI, result) == SCRIPT_TEI, (
         "An empty GuestBiosResult must preserve the original TEI XML"
     )
+
+
+def test_enrich_tei_with_missing_payload_fields_raises_value_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Structurally valid TEI missing payload fields should raise ValueError.
+
+    The body-block and div-predicate helpers are shared with the other TEI
+    enrichment modules, so this pins the guest-bios call sites to the same
+    ``TEI payload field`` contract they raise.
+    """
+    monkeypatch.setattr(
+        tei,
+        "to_dict",
+        lambda _document: {"text": {"body": {}}},
+    )
+
+    result = GuestBiosResult(
+        entries=(
+            GuestBioEntry(
+                display_name="Ada Lovelace",
+                bio="Ada Lovelace writes about analytical engines.",
+                reference_document_revision_id="rev-ada",
+            ),
+        ),
+        usage=_usage(),
+    )
+
+    with pytest.raises(ValueError, match=r"TEI payload field"):
+        enrich_tei_with_guest_bios(SCRIPT_TEI, result)

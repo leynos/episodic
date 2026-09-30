@@ -6,6 +6,7 @@ token-estimation ratio) and emits a structured `openai_adapter.config_rejected`
 error event before raising when any field is invalid.
 """
 
+import json
 import math
 import typing as typ
 
@@ -51,42 +52,83 @@ class _OpenAIConfigForValidation(typ.Protocol):
 
 def _is_positive_int(value: object) -> bool:
     """Return whether value is a positive integer, excluding booleans."""
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+    match value:
+        case bool():
+            return False
+        case int() as number:
+            return number > 0
+        case _:
+            return False
+
+
+def _json_safe(value: object) -> object:
+    """Return *value* in a form the error logger can always serialize.
+
+    A rejected config value is logged before the validator raises. The logger
+    encodes its fields with `json.dumps`, so an unserializable value such as
+    `object()` would raise `TypeError` from the logging path and mask the
+    documented `ValueError`. Values JSON already encodes are passed through
+    unchanged, keeping the logged types stable for ordinary mistyping;
+    anything else is described with `repr`, which always returns a string.
+
+    Returns
+    -------
+    object
+        *value* itself when JSON can encode it, otherwise ``repr(value)``.
+    """
+    try:
+        json.dumps(value)
+    except TypeError, ValueError:
+        return repr(value)
+    return value
 
 
 def _is_non_negative_number(value: object) -> bool:
     """Return whether value is a finite non-negative number."""
-    return (
-        isinstance(value, int | float)
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-        and value >= 0
-    )
+    match value:
+        case bool():
+            return False
+        case int() as number:
+            return math.isfinite(number) and number >= 0
+        case float() as number:
+            return math.isfinite(number) and number >= 0
+        case _:
+            return False
 
 
 def _is_positive_number(value: object) -> bool:
     """Return whether value is a finite positive number."""
-    return (
-        isinstance(value, int | float)
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-        and value > 0
-    )
+    match value:
+        case bool():
+            return False
+        case int() as number:
+            return math.isfinite(number) and number > 0
+        case float() as number:
+            return math.isfinite(number) and number > 0
+        case _:
+            return False
 
 
 def _is_non_empty_string(value: object) -> bool:
     """Return True when *value* is a non-empty, non-whitespace string."""
-    return isinstance(value, str) and bool(value.strip())
+    match value:
+        case str() as text:
+            return bool(text.strip())
+        case _:
+            return False
 
 
 def _is_valid_chars_per_token(value: object) -> bool:
     """Return True when *value* can produce stable token-count estimates."""
-    return (
-        isinstance(value, int | float)
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-        and value >= _MIN_CHARS_PER_TOKEN
-    )
+    match value:
+        case bool():
+            return False
+        case int() as number:
+            return math.isfinite(number) and number >= _MIN_CHARS_PER_TOKEN
+        case float() as number:
+            return math.isfinite(number) and number >= _MIN_CHARS_PER_TOKEN
+        case _:
+            return False
 
 
 def _llm_config_checks(
@@ -136,9 +178,9 @@ def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
     is_api_key_configured = _is_non_empty_string(api_key)
     rejection_fields = {
         "provider_operation": _operation_label(config.provider_operation),
-        "max_attempts": config.max_attempts,
-        "retry_delay_seconds": config.retry_delay_seconds,
-        "timeout_seconds": config.timeout_seconds,
+        "max_attempts": _json_safe(config.max_attempts),
+        "retry_delay_seconds": _json_safe(config.retry_delay_seconds),
+        "timeout_seconds": _json_safe(config.timeout_seconds),
         "chars_per_token": repr(chars_per_token),
         "base_url_configured": is_base_url_configured,
         "api_key_configured": is_api_key_configured,
