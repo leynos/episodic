@@ -1,5 +1,7 @@
 """Unit tests for generation LangGraph node state validation."""
 
+import collections.abc as cabc  # noqa: TC003 - pytest resolves test annotations at collection
+
 import pytest
 
 from episodic.orchestration import (
@@ -35,26 +37,40 @@ class TestLangGraphNodeValidation:
             )
 
     @pytest.mark.asyncio
-    async def test_execute_node_requires_request(self) -> None:
-        """Execution node should fail loudly when request state is missing."""
-        with pytest.raises(ValueError, match="missing required state value: request"):
+    @pytest.mark.parametrize(
+        ("state_factory", "missing_field"),
+        [
+            pytest.param(
+                lambda: GenerationGraphState(planner_result=_planner_result()),
+                "request",
+                id="missing-request",
+            ),
+            pytest.param(
+                lambda: GenerationGraphState(request=_request()),
+                "planner_result",
+                id="missing-planner-result",
+            ),
+        ],
+    )
+    async def test_execute_node_requires_required_state(
+        self,
+        state_factory: cabc.Callable[[], GenerationGraphState],
+        missing_field: str,
+    ) -> None:
+        """Execution rejects each missing required state value independently."""
+        state = state_factory()
+        with pytest.raises(
+            ValueError, match=f"missing required state value: {missing_field}"
+        ) as exc_info:
             await _execute_node(
-                GenerationGraphState(planner_result=_planner_result()),
+                state,
                 tool_executor=_FakeToolExecutor(_action_result()),
                 monotonic_clock=lambda: 0.0,
             )
 
-    @pytest.mark.asyncio
-    async def test_execute_node_requires_planner_result(self) -> None:
-        """Execution node should fail loudly when planning state is missing."""
-        with pytest.raises(
-            ValueError, match="missing required state value: planner_result"
-        ):
-            await _execute_node(
-                GenerationGraphState(request=_request()),
-                tool_executor=_FakeToolExecutor(_action_result()),
-                monotonic_clock=lambda: 0.0,
-            )
+        assert (
+            str(exc_info.value) == f"missing required state value: {missing_field}"
+        ), "execution should identify the missing required state value"
 
     @pytest.mark.asyncio
     async def test_execute_node_uses_injected_monotonic_clock(
