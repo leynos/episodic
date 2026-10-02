@@ -1,6 +1,6 @@
 """Unit tests for generation LangGraph node state validation."""
 
-import collections.abc as cabc  # noqa: TC003 - pytest resolves test annotations at collection
+import collections.abc as cabc  # ruff: ignore[typing-only-standard-library-import] - pytest resolves test annotations at collection
 
 import pytest
 
@@ -95,7 +95,7 @@ class TestLangGraphNodeValidation:
             for message, fields in logged_events
             if message == "generation_graph.execute_node.action.finish"
         )
-        assert action_finish["elapsed_ms"] == 125.0, (
+        assert action_finish["elapsed_ms"] == pytest.approx(125.0), (
             "elapsed time should be calculated from the injected monotonic clock"
         )
 

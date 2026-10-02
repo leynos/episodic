@@ -2,7 +2,7 @@
 
 import contextlib
 import dataclasses as dc
-import subprocess  # noqa: S404 - required to manage the local Vidai Mock process
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - required to manage the local Vidai Mock process
 import typing as typ
 
 import pytest

@@ -1,7 +1,7 @@
 """Checkpoint DTOs for resumable generation orchestration."""
 
 import dataclasses as dc
-import datetime as dt  # noqa: TC003 - runtime annotation inspection needs this name.
+import datetime as dt  # ruff: ignore[typing-only-standard-library-import] - runtime annotation inspection needs this name.
 import json
 
 from ._payload_dto import (

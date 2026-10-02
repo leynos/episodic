@@ -248,12 +248,12 @@ class ShowNotesEntryAttachment(typ.Protocol):
 
     @property
     def topic(self) -> str:
-        """Return the show-note topic."""
+        """The show-note topic."""
         raise NotImplementedError
 
     @property
     def tei_locator(self) -> str | None:
-        """Return the optional source TEI locator."""
+        """The optional source TEI locator."""
         raise NotImplementedError
 
 
@@ -262,12 +262,12 @@ class ShowNotesResultAttachment(typ.Protocol):
 
     @property
     def usage(self) -> LLMUsage:
-        """Return token usage for the attached tool result."""
+        """Token usage for the attached tool result."""
         raise NotImplementedError
 
     @property
     def entries(self) -> tuple[ShowNotesEntryAttachment, ...]:
-        """Return show-note entries without importing generation DTOs."""
+        """Show-note entries without importing generation DTOs."""
         raise NotImplementedError
 
 
@@ -276,7 +276,7 @@ class GenerationResultAttachment(typ.Protocol):
 
     @property
     def model(self) -> str:
-        """Return the provider model recorded by the nested generation result."""
+        """The provider model recorded by the nested generation result."""
         raise NotImplementedError
 
 
@@ -285,7 +285,7 @@ class GuestBioSourceAttachment(typ.Protocol):
 
     @property
     def reference_document_revision_id(self) -> str:
-        """Return the pinned source revision identifier."""
+        """The pinned source revision identifier."""
         raise NotImplementedError
 
 
@@ -294,17 +294,17 @@ class GuestBiosResultAttachment(typ.Protocol):
 
     @property
     def generation_result(self) -> GenerationResultAttachment:
-        """Return the nested generation result attachment."""
+        """The nested generation result attachment."""
         raise NotImplementedError
 
     @property
     def sources(self) -> tuple[GuestBioSourceAttachment, ...]:
-        """Return source attachments without importing canonical DTOs."""
+        """Source attachments without importing canonical DTOs."""
         raise NotImplementedError
 
     @property
     def tei_xml(self) -> str:
-        """Return the enriched TEI payload."""
+        """The enriched TEI payload."""
         raise NotImplementedError
 
 
