@@ -113,7 +113,7 @@ class StructuredPlanningOrchestrator:
         """Execute each plan step sequentially through the tool-execution port."""
         results: list[ActionExecutionResult] = []
         for action in plan.steps:
-            results.append(  # noqa: PERF401 - keep execution sequential and explicit.
+            results.append(  # ruff: ignore[manual-list-comprehension] - keep execution sequential and explicit.
                 await self._execute_single_action(action, request, plan)
             )
         return tuple(results)
@@ -190,7 +190,7 @@ class StructuredPlanningOrchestrator:
         if self.cost_recorder is not None:
             await self.cost_recorder.finalize_run(request.correlation_id, None)
 
-    def _log_orchestrate_error(  # noqa: PLR6301 - keep orchestration log helper on the instance.
+    def _log_orchestrate_error(  # ruff: ignore[no-self-use] - keep orchestration log helper on the instance.
         self,
         exc: Exception,
         *,

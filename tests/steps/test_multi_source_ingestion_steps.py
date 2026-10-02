@@ -9,8 +9,8 @@ Run the multi-source ingestion BDD scenarios:
 
 from __future__ import annotations
 
-import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
-import collections.abc as cabc  # noqa: TC003 - pytest-bdd inspects annotations.
+import asyncio  # ruff: ignore[typing-only-standard-library-import] - pytest-bdd inspects step annotations at runtime.
+import collections.abc as cabc  # ruff: ignore[typing-only-standard-library-import] - pytest-bdd inspects annotations.
 import datetime as dt
 import typing as typ
 import uuid
@@ -18,7 +18,7 @@ import uuid
 import pytest
 import sqlalchemy as sa
 from pytest_bdd import given, parsers, scenario, then, when
-from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002 - used by pytest-bdd.
+from sqlalchemy.ext.asyncio import AsyncSession  # ruff: ignore[typing-only-third-party-import] - used by pytest-bdd.
 
 from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
 from episodic.canonical.adapters.resolver import HighestWeightConflictResolver

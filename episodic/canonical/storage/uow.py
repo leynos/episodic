@@ -12,23 +12,23 @@ Commit work in a single unit-of-work:
 ...     await uow.commit()
 """
 
-import collections.abc as cabc  # noqa: TC003 - autospec resolves annotations
-from types import TracebackType  # noqa: TC003 - autospec resolves annotations
+import collections.abc as cabc  # ruff: ignore[typing-only-standard-library-import] - autospec resolves annotations
+from types import TracebackType  # ruff: ignore[typing-only-standard-library-import] - autospec resolves annotations
 
 from sqlalchemy.ext.asyncio import (
-    AsyncSession,  # noqa: TC002 - autospec resolves annotations
+    AsyncSession,  # ruff: ignore[typing-only-third-party-import] - autospec resolves annotations
 )
 
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.cost.storage import SqlAlchemyCostLedgerStore
 from episodic.logging import get_logger
-from episodic.observability import (  # noqa: TC001 - autospec resolves annotations
+from episodic.observability import (  # ruff: ignore[typing-only-first-party-import] - autospec resolves annotations
     MetricsPort,
     MonotonicClockPort,
 )
 
 from .episode_repository import SqlAlchemyEpisodeRepository
-from .generation_run_storage_runtime import (  # noqa: TC001 - autospec resolves annotations
+from .generation_run_storage_runtime import (  # ruff: ignore[typing-only-first-party-import] - autospec resolves annotations
     GenerationRunStorageRuntime,
 )
 from .generation_runs import SqlAlchemyGenerationRunStore
@@ -211,7 +211,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         ------
         RuntimeError
             If no unit-of-work session is active.
-        """  # noqa: DOC502  # Documents an exception propagated by the helper.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Documents an exception propagated by the helper.
         await self._apply_session_action("commit")
         logger.info("Committed canonical unit of work.")
 

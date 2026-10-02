@@ -5,14 +5,14 @@ import os
 import pathlib as pl
 import shlex
 import shutil
-import subprocess  # noqa: S404 - the opt-in smoke test drives Docker.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - the opt-in smoke test drives Docker.
 
 import pytest
 
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 DOCKERFILE_PATH = REPOSITORY_ROOT / "Dockerfile"
 DOCKER_IMAGE_TAG = "episodic:contract-test"
-CONTAINER_BIND_HOST = "0.0.0.0"  # noqa: S104 - container traffic must bind externally.
+CONTAINER_BIND_HOST = "0.0.0.0"  # ruff: ignore[hardcoded-bind-all-interfaces] - container traffic must bind externally.
 
 
 def _dockerfile_text() -> str:
@@ -148,7 +148,7 @@ def test_docker_image_serves_liveness_when_docker_smoke_enabled() -> None:
 
     from episodic.api import runtime
 
-    build = subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
+    build = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The test executes a fixed argument vector with shell expansion disabled.
         [docker_path, "build", "--tag", DOCKER_IMAGE_TAG, "."],
         check=False,
         cwd=REPOSITORY_ROOT,
@@ -159,7 +159,7 @@ def test_docker_image_serves_liveness_when_docker_smoke_enabled() -> None:
         f"docker build failed\nstdout:\n{build.stdout}\nstderr:\n{build.stderr}"
     )
 
-    run = subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
+    run = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The test executes a fixed argument vector with shell expansion disabled.
         [
             docker_path,
             "run",

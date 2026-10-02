@@ -1,8 +1,8 @@
 """GuestBiosToolExecutor: tool adapter for guest-bio enrichment."""
 
-import collections.abc as cabc  # noqa: TC003 - BindingResolver protocol is part of the runtime executor contract.
+import collections.abc as cabc  # ruff: ignore[typing-only-standard-library-import] - BindingResolver protocol is part of the runtime executor contract.
 import dataclasses as dc
-import typing  # noqa: ICN001  # Qualified typing names distinguish the module's dense protocol annotations.
+import typing  # ruff: ignore[unconventional-import-alias]  # Qualified typing names distinguish the module's dense protocol annotations.
 
 from episodic.generation import (
     GuestBiosEnrichmentRequest,
@@ -237,7 +237,7 @@ class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments  # The parame
                 generator=self._get_generator(),
                 **generation_kwargs,
             )
-        except Exception as exc:  # noqa: BLE001  # This adapter boundary must translate arbitrary third-party failures.
+        except Exception as exc:  # ruff: ignore[blind-except]  # This adapter boundary must translate arbitrary third-party failures.
             _handle_generator_error(exc, context, action)
 
         entry_count = len(result.generation_result.entries)

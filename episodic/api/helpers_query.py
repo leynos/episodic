@@ -50,7 +50,7 @@ def parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
     falcon.HTTPBadRequest
         If ``raw_value`` cannot be parsed as a UUID; the exception carries the
         validation error envelope for ``field_name``.
-    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
+    """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # validation_error returns this concrete Falcon exception.
     try:
         return uuid.UUID(raw_value)
     except (TypeError, ValueError, AttributeError) as exc:
@@ -76,7 +76,7 @@ def require_payload_dict(payload: object) -> JsonPayload:
     falcon.HTTPBadRequest
         If request media is not a JSON object; the exception carries the
         validation error envelope.
-    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
+    """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # validation_error returns this concrete Falcon exception.
     if not isinstance(payload, dict):
         msg = "JSON object payload is required."
         raise validation_error(msg, constraint="object")

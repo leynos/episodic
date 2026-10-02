@@ -19,7 +19,7 @@ ChronoEstimatorMetadata __post_init__ guards):
 - words_per_minute > 0
 """
 
-import subprocess  # noqa: S404  # Runs a fixed local CrossHair verification command.
+import subprocess  # ruff: ignore[suspicious-subprocess-import]  # Runs a fixed local CrossHair verification command.
 import sys
 from pathlib import Path
 
@@ -91,7 +91,7 @@ class TestChronoContracts:
     @pytest.mark.crosshair
     def test_chrono_crosshair_contracts_pass(self) -> None:
         """CrossHair should verify Chrono's PEP 316 contracts automatically."""
-        completed = subprocess.run(  # noqa: S603 - fixed argv, shell=False, no user input.
+        completed = subprocess.run(
             [
                 sys.executable,
                 "-m",

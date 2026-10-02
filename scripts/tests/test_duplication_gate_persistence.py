@@ -1,6 +1,6 @@
 """Persistence and contention tests for duplication-gate allow entries."""
 
-import subprocess  # noqa: S404 - tests exercise copied gate commands.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - tests exercise copied gate commands.
 import tomllib
 from pathlib import Path
 
@@ -175,7 +175,7 @@ class TestAppendAllowEntry:
         """Two blocked writers retain both exceptions after the lock releases."""
         _, script = copied_gate_workspace(tmp_path)
         with allowlist._locked_file(script.parent.parent / "pyproject.toml"):
-            first = subprocess.Popen(  # noqa: S603 - fixed copied gate command.
+            first = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed copied gate command.
                 gate_command(
                     script,
                     "allow",
@@ -190,7 +190,7 @@ class TestAppendAllowEntry:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            second = subprocess.Popen(  # noqa: S603 - fixed copied gate command.
+            second = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed copied gate command.
                 gate_command(
                     script,
                     "allow",

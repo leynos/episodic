@@ -17,7 +17,7 @@ import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
 import uuid
-from typing import TYPE_CHECKING  # noqa: ICN003  # Review requires this import form.
+from typing import TYPE_CHECKING  # ruff: ignore[banned-import-from]  # Review requires this import form.
 
 from episodic.observability import NoopMetrics, PerfCounterClock
 

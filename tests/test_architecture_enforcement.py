@@ -18,7 +18,7 @@ from architecture_hecate_config import (
 )
 
 if typ.TYPE_CHECKING:
-    import subprocess  # noqa: S404  # Type-only CompletedProcess reference.
+    import subprocess  # Type-only CompletedProcess reference.
     from pathlib import Path
 
     from syrupy.assertion import SnapshotAssertion

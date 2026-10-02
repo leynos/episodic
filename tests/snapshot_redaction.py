@@ -23,11 +23,6 @@ def redact_snapshot_uuids(value: object) -> object:
         UUID, string, dictionary, list, or tuple to traverse recursively.
         Values of other types pass through unchanged.
 
-    Examples
-    --------
-    ``redact_snapshot_uuids({"id": UUID(int=0)})`` returns
-    ``{"id": "<uuid>"}``.
-
     Returns
     -------
     object
@@ -37,6 +32,11 @@ def redact_snapshot_uuids(value: object) -> object:
     ------
     ValueError
         If distinct dictionary keys collide after UUID redaction.
+
+    Examples
+    --------
+    ``redact_snapshot_uuids({"id": UUID(int=0)})`` returns
+    ``{"id": "<uuid>"}``.
     """
     match value:
         case uuid.UUID():

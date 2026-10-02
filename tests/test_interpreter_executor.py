@@ -274,7 +274,7 @@ async def test_interpreter_executor_handles_empty_input(
 )
 def test_builder_selects_executor_based_on_environment(
     env_flag: str,
-    mock_support: bool | None,  # noqa: FBT001  # Pytest parametrization makes the boolean dimension explicit at each call site.
+    mock_support: bool | None,  # ruff: ignore[boolean-type-hint-positional-argument]  # Pytest parametrization makes the boolean dimension explicit at each call site.
     expected_type: type[object],
 ) -> None:
     """Builder picks the expected executor for each environment combination."""

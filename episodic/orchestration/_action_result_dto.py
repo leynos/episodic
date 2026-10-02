@@ -3,8 +3,8 @@
 import dataclasses as dc
 
 from episodic.generation import (
-    GuestBiosEnrichmentResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
-    ShowNotesResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
+    GuestBiosEnrichmentResult,  # ruff: ignore[typing-only-first-party-import] -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
+    ShowNotesResult,  # ruff: ignore[typing-only-first-party-import] -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
 )
 from episodic.llm import (
     LLMProviderOperation,

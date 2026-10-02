@@ -5,10 +5,10 @@ from __future__ import annotations
 import dataclasses as dc
 import os
 import shutil
-import subprocess  # noqa: S404 - required to start a local Granian server
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - required to start a local Granian server
 import time
 import typing as typ
-from pathlib import Path  # noqa: TC003  # pytest inspects fixture annotations.
+from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]  # pytest inspects fixture annotations.
 
 import httpx
 import pytest
@@ -123,7 +123,7 @@ def _read_granian_listening_ports(
     lsof_path: str,
 ) -> list[int]:
     """Inspect a Granian process and return any listening TCP ports."""
-    result = subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
+    result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The test executes a fixed argument vector with shell expansion disabled.
         [
             lsof_path,
             "-Pan",
@@ -214,7 +214,7 @@ def given_granian_service_running(
     }
     from episodic.api import runtime
 
-    http_service_scaffold_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
+    http_service_scaffold_context.process = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true]  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
         [
             granian_path,
             runtime.GRANIAN_FACTORY_TARGET,

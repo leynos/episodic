@@ -19,7 +19,7 @@ class ResolvedBindingsResource:
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
 
-    async def on_get(  # noqa: PLR0914  # Falcon adapter validates and coordinates several route/query inputs.
+    async def on_get(  # ruff: ignore[too-many-locals]  # Falcon adapter validates and coordinates several route/query inputs.
         self,
         req: falcon.Request,
         resp: falcon.Response,

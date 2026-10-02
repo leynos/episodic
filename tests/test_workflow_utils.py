@@ -3,7 +3,7 @@
 import json
 import os
 import socket
-import subprocess  # noqa: S404  # The test utility owns controlled subprocess lifecycle operations.
+import subprocess  # ruff: ignore[suspicious-subprocess-import]  # The test utility owns controlled subprocess lifecycle operations.
 import typing as typ
 import uuid
 from shutil import which
@@ -94,7 +94,7 @@ def artifact_server_port() -> str:
 
 def artifact_server_addr() -> str:
     """Bind act's artifact server where rootless Podman containers can reach it."""
-    return "0.0.0.0"  # noqa: S104 - local test server must accept job containers.
+    return "0.0.0.0"  # ruff: ignore[hardcoded-bind-all-interfaces] - local test server must accept job containers.
 
 
 def _ensure_string_kv(key: object, item: object) -> tuple[str, str]:
@@ -167,7 +167,7 @@ def _run_preflight_container(
         ACT_RUNNER_IMAGE,
     ]
     try:
-        return subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
+        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The test executes a fixed argument vector with shell expansion disabled.
             cmd,
             text=True,
             capture_output=True,
@@ -188,7 +188,7 @@ def _cleanup_preflight_container(
     container_name: str,
 ) -> None:
     """Force-remove a stalled preflight container."""
-    subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The test executes a fixed argument vector with shell expansion disabled.
         [podman_path, "--remote", "--url", socket_uri, "rm", "-f", container_name],
         text=True,
         capture_output=True,
@@ -216,7 +216,7 @@ def _ensure_act_runner_backend(socket_uri: str) -> None:
 def _run_act_subprocess(cmd: list[str], env: dict[str, str]) -> tuple[int, str]:
     """Execute act and return (returncode, combined_logs); raise on timeout."""
     try:
-        completed = subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
+        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The test executes a fixed argument vector with shell expansion disabled.
             cmd,
             text=True,
             capture_output=True,

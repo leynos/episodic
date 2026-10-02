@@ -3,7 +3,7 @@
 import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
-import uuid  # noqa: TC003 - runtime annotation inspection needs this name.
+import uuid  # ruff: ignore[typing-only-standard-library-import] - runtime annotation inspection needs this name.
 
 from episodic.llm import (
     LLMProviderOperation,
@@ -166,7 +166,7 @@ def _normalize_non_empty_text(value: object, field_name: str) -> str:
     """Strip value and raise ValueError if the result is empty."""
     if not isinstance(value, str):
         msg = f"{field_name} must be a non-empty string."
-        raise ValueError(msg)  # noqa: TRY004 -- ValueError is intentional at this DTO validation raise: normalisation enforces string-shaped fields; TypeError is used for wrong Python types elsewhere.
+        raise ValueError(msg)  # ruff: ignore[type-check-without-type-error] -- ValueError is intentional at this DTO validation raise: normalisation enforces string-shaped fields; TypeError is used for wrong Python types elsewhere.
     stripped = value.strip()
     if not stripped:
         msg = f"{field_name} must be a non-empty string."
@@ -325,27 +325,27 @@ class ExecutionPlan:
         object.__setattr__(self, "steps", steps)
 
 
-from ._action_result_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+from ._action_result_dto import (  # ruff: ignore[module-import-not-at-top-of-file]  # Re-export after dependent DTOs exist.
     ActionExecutionResult as ActionExecutionResult,
 )
-from ._action_result_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+from ._action_result_dto import (  # ruff: ignore[module-import-not-at-top-of-file]  # Re-export after dependent DTOs exist.
     PlannerResult as PlannerResult,
 )
-from ._checkpoint_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+from ._checkpoint_dto import (  # ruff: ignore[module-import-not-at-top-of-file]  # Re-export after dependent DTOs exist.
     ResumeWorkflowCommand as ResumeWorkflowCommand,
 )
-from ._checkpoint_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+from ._checkpoint_dto import (  # ruff: ignore[module-import-not-at-top-of-file]  # Re-export after dependent DTOs exist.
     SuspendedWorkflowResult as SuspendedWorkflowResult,
 )
-from ._checkpoint_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+from ._checkpoint_dto import (  # ruff: ignore[module-import-not-at-top-of-file]  # Re-export after dependent DTOs exist.
     WorkflowCheckpoint as WorkflowCheckpoint,
 )
-from ._checkpoint_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+from ._checkpoint_dto import (  # ruff: ignore[module-import-not-at-top-of-file]  # Re-export after dependent DTOs exist.
     WorkflowStepIdentity as WorkflowStepIdentity,
 )
-from ._checkpoint_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+from ._checkpoint_dto import (  # ruff: ignore[module-import-not-at-top-of-file]  # Re-export after dependent DTOs exist.
     build_workflow_step_idempotency_key as build_workflow_step_idempotency_key,
 )
-from ._result_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+from ._result_dto import (  # ruff: ignore[module-import-not-at-top-of-file]  # Re-export after dependent DTOs exist.
     GenerationOrchestrationResult as GenerationOrchestrationResult,
 )

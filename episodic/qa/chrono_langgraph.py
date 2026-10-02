@@ -27,7 +27,7 @@ import typing as typ
 
 from langgraph.graph import END, START, StateGraph
 
-from .chrono import (  # noqa: TC001  # LangGraph evaluates state annotations at runtime.
+from .chrono import (  # ruff: ignore[typing-only-first-party-import]  # LangGraph evaluates state annotations at runtime.
     ChronoEvaluationRequest,
     ChronoRuntimeEstimate,
 )

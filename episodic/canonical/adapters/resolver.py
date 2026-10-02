@@ -50,7 +50,7 @@ class HighestWeightConflictResolver:
     their weights and factor breakdowns preserved for audit and provenance.
     """
 
-    async def resolve(  # noqa: PLR6301  # The adapter signature is fixed by its state-independent port contract.
+    async def resolve(  # ruff: ignore[no-self-use]  # The adapter signature is fixed by its state-independent port contract.
         self,
         weighted_sources: list[WeightingResult],
     ) -> ConflictOutcome:

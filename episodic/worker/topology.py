@@ -6,7 +6,7 @@ exchanges, and route metadata consumed by
 :func:`episodic.worker.runtime.create_celery_app`.
 """
 
-import collections.abc as cabc  # noqa: TC003  # This type remains available at runtime for annotation introspection.
+import collections.abc as cabc  # ruff: ignore[typing-only-standard-library-import]  # This type remains available at runtime for annotation introspection.
 import dataclasses as dc
 import enum
 import types

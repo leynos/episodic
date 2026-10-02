@@ -3,7 +3,7 @@
 import pathlib as pl
 import re
 import shutil
-import subprocess  # noqa: S404 - chart tests invoke the Helm CLI.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - chart tests invoke the Helm CLI.
 import typing as typ
 
 import pytest
@@ -144,7 +144,7 @@ def _helm_path() -> str:
 
 def _run_helm(args: list[str]) -> str:
     """Run Helm and return stdout, failing with useful stderr on errors."""
-    result = subprocess.run(  # noqa: S603 - trusted Helm CLI args from tests.
+    result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - trusted Helm CLI args from tests.
         [_helm_path(), *args],
         check=False,
         cwd=REPOSITORY_ROOT,

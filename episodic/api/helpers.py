@@ -105,7 +105,7 @@ def parse_expected_revision(payload: JsonPayload) -> int:
     falcon.HTTPBadRequest
         If ``expected_revision`` is missing, not an integer, or not strictly
         positive; the exception carries the validation error envelope.
-    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
+    """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # validation_error returns this concrete Falcon exception.
     raw = _require_field(payload, "expected_revision")
     parsed = _coerce_strict_positive_int(raw)
     if parsed is not None:

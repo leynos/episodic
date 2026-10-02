@@ -5,7 +5,7 @@ source-intake resources, generation runs and events, and TEI envelopes.
 """
 
 import typing as typ
-import uuid  # noqa: TC003  # This type remains available at runtime for annotation introspection.
+import uuid  # ruff: ignore[typing-only-standard-library-import]  # This type remains available at runtime for annotation introspection.
 
 from episodic.canonical.generation_quality import QualityMode
 

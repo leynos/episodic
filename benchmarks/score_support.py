@@ -156,15 +156,15 @@ def relative_source_path(
     str
         A normalized POSIX path relative to ``corpus_root``.
 
-    Notes
-    -----
-    The :class:`TypeError` raised by :func:`string` is propagated when
-    ``raw_path`` is not a string.
-
     Raises
     ------
     ValueError
         If the resolved path escapes ``corpus_root``.
+
+    Notes
+    -----
+    The :class:`TypeError` raised by :func:`string` is propagated when
+    ``raw_path`` is not a string.
     """
     root = corpus_root.resolve()
     path = Path(string(raw_path, context=f"{subject} path"))

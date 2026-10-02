@@ -1,7 +1,7 @@
 """ShowNotesToolExecutor: tool adapter for the show-notes enrichment path."""
 
 import dataclasses as dc
-import typing  # noqa: ICN001  # Qualified typing names distinguish the module's dense protocol annotations.
+import typing  # ruff: ignore[unconventional-import-alias]  # Qualified typing names distinguish the module's dense protocol annotations.
 
 from episodic.generation import (
     ShowNotesGenerator,
@@ -217,7 +217,7 @@ class ShowNotesToolExecutor:
                 context.script_tei_xml,
                 template_structure=context.template_structure,
             )
-        except Exception as exc:  # noqa: BLE001  # This adapter boundary must translate arbitrary third-party failures.
+        except Exception as exc:  # ruff: ignore[blind-except]  # This adapter boundary must translate arbitrary third-party failures.
             _handle_generator_error(exc, context, action)
 
     async def execute(
@@ -250,7 +250,7 @@ class ShowNotesToolExecutor:
         ToolExecutionError
             If a tool-domain failure propagates or another generator failure
             is translated at the tool boundary.
-        """  # noqa: DOC502  # Generator failures are translated by a helper.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Generator failures are translated by a helper.
         action_kind = str(action.action_kind)
         _log_event(
             "debug",

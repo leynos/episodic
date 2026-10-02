@@ -196,7 +196,7 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         LLMTokenBudgetExceededError
             If preflight validation or provider-reported usage exceeds the
             request token budget.
-        """  # noqa: DOC502  # Documents exceptions propagated by collaborators.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Documents exceptions propagated by collaborators.
         token_budget = request.token_budget
         if token_budget is not None:
             _validate_preflight_budget(request, token_budget, self._chars_per_token)

@@ -1,17 +1,17 @@
 """SQLAlchemy models for durable generation runs and event logs."""
 
-import datetime as dt  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
-import uuid  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
+import datetime as dt  # ruff: ignore[typing-only-standard-library-import]  # SQLAlchemy evaluates annotations at runtime.
+import uuid  # ruff: ignore[typing-only-standard-library-import]  # SQLAlchemy evaluates annotations at runtime.
 
 import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
-from episodic.canonical.domain import (  # noqa: TC001  # SQLAlchemy evaluates annotations at runtime.
+from episodic.canonical.domain import (  # ruff: ignore[typing-only-first-party-import]  # SQLAlchemy evaluates annotations at runtime.
     GenerationRunStatus,
     JsonMapping,
 )
-from episodic.canonical.generation_quality import (  # noqa: TC001  # SQLAlchemy evaluates annotations at runtime.
+from episodic.canonical.generation_quality import (  # ruff: ignore[typing-only-first-party-import]  # SQLAlchemy evaluates annotations at runtime.
     QaStatus,
     QualityMode,
 )

@@ -81,9 +81,9 @@ def summarize_latencies(samples: list[float]) -> dict[str, float]:
     maximum = samples[0]
     total = 0.0
     for sample in samples:
-        if sample < minimum:  # noqa: PLR1730 - retain the copied bounds-tracking fixture.
+        if sample < minimum:  # ruff: ignore[if-stmt-min-max] - retain the copied bounds-tracking fixture.
             minimum = sample
-        if sample > maximum:  # noqa: PLR1730 - retain the copied bounds-tracking fixture.
+        if sample > maximum:  # ruff: ignore[if-stmt-min-max] - retain the copied bounds-tracking fixture.
             maximum = sample
         total += sample
     return {"minimum": minimum, "maximum": maximum, "mean": total / len(samples)}
@@ -110,7 +110,7 @@ def weighted_average_score(rows: list[dict[str, float]]) -> float:
         weight = row.get("weight", 1.0)
         weighted_total += row["score"] * weight
         weight_sum += weight
-    if weight_sum == 0.0:
+    if not weight_sum:
         return 0.0
     return weighted_total / weight_sum
 
@@ -118,7 +118,7 @@ def weighted_average_score(rows: list[dict[str, float]]) -> float:
 class OrderExporter:
     """Export orders after structural validation."""
 
-    def validate(  # noqa: PLR6301 - the method-clone fixture requires instance methods.
+    def validate(  # ruff: ignore[no-self-use] - the method-clone fixture requires instance methods.
         self, payload: dict[str, object]
     ) -> list[str]:
         """Return the validation problems for an order payload.
@@ -136,7 +136,7 @@ class OrderExporter:
         problems: list[str] = []
         for field in ("identifier", "customer", "total"):
             if field not in payload:
-                problems.append(f"missing field: {field}")  # noqa: PERF401 - retain the copied guard-loop fixture.
+                problems.append(f"missing field: {field}")  # ruff: ignore[manual-list-comprehension] - retain the copied guard-loop fixture.
         raw_total = payload.get("total")
         if isinstance(raw_total, int | float) and raw_total < 0:
             problems.append("total must not be negative")

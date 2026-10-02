@@ -63,7 +63,7 @@ class _KindDispatch:
     ]
 
 
-def _get_repos_for_kind(  # noqa: C901  # Inlining mandated by design; arm-extraction was previously flagged as duplication.
+def _get_repos_for_kind(  # ruff: ignore[complex-structure]  # Inlining mandated by design; arm-extraction was previously flagged as duplication.
     uow: CanonicalUnitOfWork,
     kind: EntityKind | str,
 ) -> _KindDispatch:

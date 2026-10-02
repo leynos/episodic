@@ -129,7 +129,7 @@ async def insert_with_conflict_translation(
     IntegrityError
         If ``translate`` returns ``None`` for an unrecognised integrity
         failure.
-    """  # noqa: DOC502  # The translation callback selects the domain exception.
+    """  # ruff: ignore[docstring-extraneous-exception]  # The translation callback selects the domain exception.
     try:
         async with session.begin_nested():
             session.add(record)

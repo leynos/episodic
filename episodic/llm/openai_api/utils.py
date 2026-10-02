@@ -19,19 +19,25 @@ used by preflight budget validation:
 """
 
 from episodic.llm.openai_api.utils_config import (
-    _validate_llm_config,  # noqa: F401  # Re-exported for callers of the original path.
+    _validate_llm_config,  # ruff: ignore[unused-import]  # Re-exported for callers of the original path.
 )
 from episodic.llm.openai_api.utils_logging import (
-    _log_error_event,  # noqa: F401  # Re-exported for callers of the original path.
-    _log_override,  # noqa: F401  # Re-exported for callers of the original path.
-    _operation_label,  # noqa: F401  # Re-exported for callers of the original path.
+    # Re-exported for callers of the original path.
+    _log_error_event as _log_error_event,
+)
+from episodic.llm.openai_api.utils_logging import (
+    # Re-exported for callers of the original path.
+    _log_override as _log_override,
+)
+from episodic.llm.openai_api.utils_logging import (
+    _operation_label,  # ruff: ignore[unused-import]  # Re-exported for callers of the original path.
 )
 from episodic.llm.openai_api.utils_preflight import (
-    _estimate_token_count,  # noqa: F401  # Re-exported for callers of the original path.
-    _validate_preflight_budget,  # noqa: F401  # Re-exported for callers of the original path.
+    _estimate_token_count,  # ruff: ignore[unused-import]  # Re-exported for callers of the original path.
+    _validate_preflight_budget,  # ruff: ignore[unused-import]  # Re-exported for callers of the original path.
 )
 from episodic.llm.openai_api.utils_usage import (
-    _has_non_negative_int_mapping_value,  # noqa: F401  # Re-exported for callers of the original path.
-    _require_concrete_usage_counts,  # noqa: F401  # Re-exported for callers of the original path.
-    _validate_usage_budget,  # noqa: F401  # Re-exported for callers of the original path.
+    _has_non_negative_int_mapping_value,  # ruff: ignore[unused-import]  # Re-exported for callers of the original path.
+    _require_concrete_usage_counts,  # ruff: ignore[unused-import]  # Re-exported for callers of the original path.
+    _validate_usage_budget,  # ruff: ignore[unused-import]  # Re-exported for callers of the original path.
 )

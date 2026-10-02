@@ -191,7 +191,7 @@ def reviewer_attempts_second_response(
                 ),
             )
         )
-    except Exception as exc:  # noqa: BLE001 - BDD step captures the outcome.
+    except Exception as exc:  # ruff: ignore[blind-except] - BDD step captures the outcome.
         generation_run_context.error = exc
 
 

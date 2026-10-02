@@ -1,7 +1,7 @@
 """Content SQLAlchemy ORM models for canonical content."""
 
-import datetime as dt  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
-import uuid  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
+import datetime as dt  # ruff: ignore[typing-only-standard-library-import]  # SQLAlchemy evaluates annotations at runtime.
+import uuid  # ruff: ignore[typing-only-standard-library-import]  # SQLAlchemy evaluates annotations at runtime.
 
 import sqlalchemy as sa
 from sqlalchemy import orm
@@ -13,7 +13,7 @@ from episodic.canonical.domain import (  # SQLAlchemy evaluates annotations at r
     IngestionStatus,
     IntakeState,
 )
-from episodic.canonical.generation_quality import (  # noqa: TC001  # SQLAlchemy evaluates annotations at runtime.
+from episodic.canonical.generation_quality import (  # ruff: ignore[typing-only-first-party-import]  # SQLAlchemy evaluates annotations at runtime.
     QaStatus,
 )
 

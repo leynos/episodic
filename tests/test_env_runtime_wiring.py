@@ -216,7 +216,7 @@ async def test_create_app_from_env_wires_database_readiness_probe(
     migrated_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    strip_driver: bool,  # noqa: FBT001  # pytest.mark.parametrize injects a bool fixture value directly
+    strip_driver: bool,  # ruff: ignore[boolean-type-hint-positional-argument]  # pytest.mark.parametrize injects a bool fixture value directly
 ) -> None:
     """Use DATABASE_URL to build a live readiness probe in the runtime factory."""
     from urllib.parse import urlsplit, urlunsplit
@@ -282,7 +282,7 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
     def _tracking_build(
         database_url: str,
         *,
-        metrics: "MetricsPort",  # noqa: UP037 - imported only during type checking.
+        metrics: "MetricsPort",  # ruff: ignore[quoted-annotation] - imported only during type checking.
     ) -> tuple[object, ...]:
         probe, uow, original_hook = original_build(database_url, metrics=metrics)
 
@@ -345,8 +345,8 @@ class _UnusedLLMPort:
 
     async def generate(
         self,
-        request: "LLMRequest",  # noqa: UP037 - imported only during type checking
-    ) -> "LLMResponse":  # noqa: UP037 - imported only during type checking
+        request: "LLMRequest",  # ruff: ignore[quoted-annotation] - imported only during type checking
+    ) -> "LLMResponse":  # ruff: ignore[quoted-annotation] - imported only during type checking
         """Fail if runtime wiring accidentally invokes the fake."""
         _ = request
         raise AssertionError

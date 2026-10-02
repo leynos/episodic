@@ -21,7 +21,7 @@ class _RepositoryBase:
     async def _get_one_or_none[RecordT, DomainT](
         self,
         record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        where_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> DomainT | None:
         """Return a mapped record for the query or None."""
@@ -34,7 +34,7 @@ class _RepositoryBase:
     async def _get_many[RecordT, DomainT](
         self,
         record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        where_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> list[DomainT]:
         """Return mapped records matching the query."""
@@ -44,8 +44,8 @@ class _RepositoryBase:
     async def _list_where[RecordT, DomainT](
         self,
         record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        order_by_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        where_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        order_by_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> list[DomainT]:
         """List mapped records matching a filter and ordering."""
@@ -56,7 +56,7 @@ class _RepositoryBase:
 
     async def _list_by_ids(
         self,
-        record_cls: typ.Any,  # noqa: ANN401  # SQLAlchemy mapped class exposing id/created_at columns
+        record_cls: typ.Any,  # ruff: ignore[any-type]  # SQLAlchemy mapped class exposing id/created_at columns
         ids: cabc.Collection[uuid.UUID],
         mapper: cabc.Callable[[typ.Any], typ.Any],
     ) -> list[typ.Any]:
@@ -73,11 +73,11 @@ class _RepositoryBase:
     # Pylint reports the finding the Ruff noqa below already accepts; the
     # refactor to parameter objects is tracked in leynos/episodic#345.
     # pylint: disable-next=too-many-arguments
-    async def _list_paginated[RecordT, DomainT](  # noqa: PLR0913  # filters and pagination bounds are independent inputs
+    async def _list_paginated[RecordT, DomainT](  # ruff: ignore[too-many-arguments]  # filters and pagination bounds are independent inputs
         self,
         record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        order_by_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        where_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        order_by_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
         mapper: cabc.Callable[[RecordT], DomainT],
         *,
         limit: int | None = None,
@@ -99,8 +99,8 @@ class _RepositoryBase:
     async def _get_latest_where[RecordT, DomainT](
         self,
         record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        order_by_desc_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        where_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        order_by_desc_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> DomainT | None:
         """Return the latest mapped record matching a filter."""
@@ -119,7 +119,7 @@ class _RepositoryBase:
     async def _update_where(
         self,
         record_type: type[object],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        where_clause: typ.Any,  # ruff: ignore[any-type]  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
         values: dict[str, typ.Any],
     ) -> None:
         """Execute an update statement for matching records."""

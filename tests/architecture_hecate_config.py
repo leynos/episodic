@@ -15,7 +15,7 @@ assert result.returncode == 1
 ```
 """
 
-import subprocess  # noqa: S404  # Tests exercise the Hecate CLI contract.
+import subprocess  # ruff: ignore[suspicious-subprocess-import]  # Tests exercise the Hecate CLI contract.
 import sys
 import textwrap
 from pathlib import Path
@@ -145,7 +145,7 @@ def run_hecate_fixture_check(
         str(package_root),
     ]
     try:
-        return subprocess.run(  # noqa: S603  # shell=False with trusted test args.
+        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # shell=False with trusted test args.
             command,
             check=False,
             capture_output=True,
@@ -191,7 +191,7 @@ def run_hecate_production_check(
     `pyproject.toml`.
     """
     try:
-        return subprocess.run(  # noqa: S603  # shell=False with static arguments.
+        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # shell=False with static arguments.
             [str(python_executable), "-m", "hecate", "check"],
             check=False,
             capture_output=True,

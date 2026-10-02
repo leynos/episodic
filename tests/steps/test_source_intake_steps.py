@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import typing as typ
-from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
+from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 
 from pytest_bdd import given, parsers, scenario, then, when
-from sqlalchemy.ext.asyncio import (  # noqa: TC002  # pytest-bdd evaluates step annotations.
+from sqlalchemy.ext.asyncio import (  # ruff: ignore[typing-only-third-party-import]  # pytest-bdd evaluates step annotations.
     AsyncSession,
     async_sessionmaker,
 )

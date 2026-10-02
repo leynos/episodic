@@ -4,7 +4,7 @@ import json
 import os
 import shutil
 import socket
-import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - required to start a local Vidai Mock test server
 import time
 import typing as typ
 
@@ -156,7 +156,7 @@ def start_vidaimock_process(
         pytest.skip("vidaimock executable not found in PATH")
 
     orchestration_context.base_url = f"http://127.0.0.1:{port}/v1"
-    orchestration_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
+    orchestration_context.process = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true]  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
         [
             vidaimock_path,
             "--host",

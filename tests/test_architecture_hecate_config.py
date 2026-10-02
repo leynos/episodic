@@ -6,7 +6,7 @@ The broader architecture behaviour remains covered in
 `tests/test_architecture_enforcement.py` and the BDD step tests.
 """
 
-import subprocess  # noqa: S404  # Tests validate Hecate subprocess wrapping.
+import subprocess  # ruff: ignore[suspicious-subprocess-import]  # Tests validate Hecate subprocess wrapping.
 import tomllib
 import typing as typ
 

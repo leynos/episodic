@@ -2,7 +2,7 @@
 
 import dataclasses as dc
 import shutil
-import subprocess  # noqa: S404 - tests exercise the real Make target.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - tests exercise the real Make target.
 import sys
 import typing as typ
 
@@ -50,7 +50,7 @@ def _make_allow(
         command.append(f"SECOND={request.second}")
     if request.reason is not None:
         command.append(f"REASON={request.reason}")
-    return subprocess.run(  # noqa: S603 - fixed Make target and copied workspace.
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed Make target and copied workspace.
         command,
         cwd=workspace,
         env=gate_environment() if environment is None else environment,
@@ -135,7 +135,7 @@ def _make_dry_run(target: str) -> subprocess.CompletedProcess[str]:
     """Expand a Make target's recipe without running it."""
     make = shutil.which("make")
     assert make is not None, "Expected make to be available for contract tests."
-    return subprocess.run(  # noqa: S603 - fixed Make target in the repository root.
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed Make target in the repository root.
         [
             make,
             "--dry-run",

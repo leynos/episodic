@@ -104,7 +104,7 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
             pytest.fail("resolved result must contain one ResolvedBinding")
 
 
-async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914  # The scenario keeps distinct intermediate values for readable behavioural assertions.
+async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # ruff: ignore[too-many-locals]  # The scenario keeps distinct intermediate values for readable behavioural assertions.
     uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Resolution selects the binding with the latest effective_from_episode_id."""

@@ -275,7 +275,7 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
     """Persist reusable reference bindings using SQLAlchemy."""
 
     @staticmethod
-    def _target_field(target_kind: ReferenceBindingTargetKind) -> typ.Any:  # noqa: ANN401  # SQLAlchemy row values are dynamically shaped at this repository boundary.
+    def _target_field(target_kind: ReferenceBindingTargetKind) -> typ.Any:  # ruff: ignore[any-type]  # SQLAlchemy row values are dynamically shaped at this repository boundary.
         """Resolve the SQLAlchemy target column for a binding target kind."""
         match target_kind:
             case ReferenceBindingTargetKind.SERIES_PROFILE:
@@ -384,7 +384,7 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
 def _document_series_filter(
     series_profile_id: uuid.UUID,
     kind: ReferenceDocumentKind | None,
-) -> typ.Any:  # noqa: ANN401  # SQLAlchemy row values are dynamically shaped at this repository boundary.
+) -> typ.Any:  # ruff: ignore[any-type]  # SQLAlchemy row values are dynamically shaped at this repository boundary.
     """Return the reusable-reference document series filter."""
     where_clause = ReferenceDocumentRecord.owner_series_profile_id == series_profile_id
     if kind is not None:

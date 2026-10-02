@@ -193,7 +193,7 @@ class ShowNotesGenerator:
         LLMTokenBudgetExceededError
             If preflight validation or provider-reported usage exceeds the
             request token budget.
-        """  # noqa: DOC502  # Documents exceptions propagated by collaborators.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Documents exceptions propagated by collaborators.
         prompt = self.build_prompt(
             script_tei_xml, template_structure=template_structure
         )

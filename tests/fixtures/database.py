@@ -179,25 +179,25 @@ async def pglite_sqlalchemy_manager(
 @pytest_asyncio.fixture
 async def pglite_engine(
     pglite_sqlalchemy_manager: SQLAlchemyAsyncPGliteManager,
-) -> cabc.AsyncIterator[AsyncEngine]:
-    """Yield an async SQLAlchemy engine provided by py-pglite's helper manager."""
+) -> AsyncEngine:
+    """Provide an async SQLAlchemy engine from py-pglite's helper manager."""
     from sqlalchemy.pool import NullPool
 
     engine = typ.cast(
         "AsyncEngine", pglite_sqlalchemy_manager.get_engine(poolclass=NullPool)
     )
     await asyncio.sleep(0)
-    yield engine
+    return engine
 
 
 @pytest_asyncio.fixture
 async def migrated_engine(
     pglite_engine: AsyncEngine,
-) -> cabc.AsyncIterator[AsyncEngine]:
-    """Yield a py-pglite engine with migrations applied."""
+) -> AsyncEngine:
+    """Provide a py-pglite engine with migrations applied."""
     await _reset_public_schema(pglite_engine)
     await apply_migrations(pglite_engine)
-    yield pglite_engine
+    return pglite_engine
 
 
 async def _start_migrated_pglite(

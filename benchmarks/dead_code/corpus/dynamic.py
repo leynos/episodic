@@ -61,7 +61,7 @@ def registered_plugin() -> int:
 class DynamicHandler:
     """Provide a method resolved through dynamic attribute lookup."""
 
-    def invoked_by_name(self) -> int:  # noqa: PLR6301 - dynamic getattr requires an instance method.
+    def invoked_by_name(self) -> int:  # ruff: ignore[no-self-use] - dynamic getattr requires an instance method.
         """Return the result of the dynamically selected method.
 
         Returns
@@ -86,6 +86,6 @@ class CallableHandler:
         return 37
 
 
-DYNAMIC_RESULT = getattr(DynamicHandler(), "invoked_by_name")()  # noqa: B009
+DYNAMIC_RESULT = getattr(DynamicHandler(), "invoked_by_name")()  # ruff: ignore[get-attr-with-constant]
 REGISTERED_RESULT = REGISTRY["registered_plugin"]()
 CALLABLE_RESULT = CallableHandler()()

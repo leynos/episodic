@@ -99,7 +99,7 @@ class TestParsePyscnPairs:
         assert findings[0].second == _fragment("pkg/b.py", 15, 23), "second member"
         assert findings[0].lane is Lane.SEMANTIC_CLONE, "type 4 lane"
         assert findings[0].category == "type-4", "category label"
-        assert findings[0].similarity == 0.75, "similarity value"
+        assert findings[0].similarity == pytest.approx(0.75), "similarity value"
 
     def test_null_pair_array_is_empty_report(self, tmp_path: Path) -> None:
         """Null pair arrays parse as empty pyscn reports."""

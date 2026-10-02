@@ -1,6 +1,5 @@
 """Integration tests for brief reference-document resolution strategies."""
 
-import collections.abc as cabc
 import datetime as dt
 import types as pytypes
 import typing as typ

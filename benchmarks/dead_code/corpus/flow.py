@@ -4,7 +4,7 @@
 EXPECTED_BENCHMARK_EXCEPTION_MESSAGE = "expected benchmark exception"
 
 
-def after_return() -> int:  # noqa: RET503 - preserve the required return-unreachability fixture.
+def after_return() -> int:  # ruff: ignore[implicit-return] - preserve the required return-unreachability fixture.
     """Return the fixed benchmark value.
 
     Returns
@@ -13,7 +13,7 @@ def after_return() -> int:  # noqa: RET503 - preserve the required return-unreac
         The fixed benchmark value.
     """
     return 41
-    unreachable_after_return = 43  # noqa: F841 - retain the return-unreachability fixture.
+    unreachable_after_return = 43  # ruff: ignore[unused-variable] - retain the return-unreachability fixture.
 
 
 def after_raise() -> None:
@@ -25,7 +25,7 @@ def after_raise() -> None:
         Always, as required to exercise the unreachable assignment.
     """
     raise ValueError(EXPECTED_BENCHMARK_EXCEPTION_MESSAGE)
-    unreachable_after_raise = 47  # noqa: F841 - retain the raise-unreachability fixture.
+    unreachable_after_raise = 47  # ruff: ignore[unused-variable] - retain the raise-unreachability fixture.
 
 
 def after_continue(values: tuple[int, ...]) -> int:
@@ -43,7 +43,7 @@ def after_continue(values: tuple[int, ...]) -> int:
     """
     for value in values:
         continue
-        unreachable_after_continue = value  # noqa: F841 - retain the continue-unreachability fixture.
+        unreachable_after_continue = value  # ruff: ignore[unused-variable] - retain the continue-unreachability fixture.
     return len(values)
 
 
@@ -62,7 +62,7 @@ def after_break(values: tuple[int, ...]) -> int:
     """
     for value in values:
         break
-        unreachable_after_break = value  # noqa: F841 - retain the break-unreachability fixture.
+        unreachable_after_break = value  # ruff: ignore[unused-variable] - retain the break-unreachability fixture.
     return len(values)
 
 
@@ -75,11 +75,11 @@ def constant_false_branch() -> int:
         The fixed benchmark value.
     """
     if False:
-        unreachable_false_branch = 53  # noqa: F841 - retain the false-branch fixture.
+        unreachable_false_branch = 53  # ruff: ignore[unused-variable] - retain the false-branch fixture.
     return 59
 
 
-def conditional_return(flag: bool) -> int:  # noqa: FBT001 - boolean selects the conditional-return fixture.
+def conditional_return(flag: bool) -> int:  # ruff: ignore[boolean-type-hint-positional-argument] - boolean selects the conditional-return fixture.
     """Return the fixed value after the conditional branch.
 
     Parameters
@@ -95,15 +95,15 @@ def conditional_return(flag: bool) -> int:  # noqa: FBT001 - boolean selects the
     if flag:
         return 61
     reachable_after_conditional = 67
-    return reachable_after_conditional  # noqa: RET504 - keep the explicit reachable fall-through fixture.
+    return reachable_after_conditional  # ruff: ignore[unnecessary-assign] - keep the explicit reachable fall-through fixture.
 
 
 RETURN_RESULT = after_return()
-try:  # noqa: SIM105
+try:  # ruff: ignore[suppressible-exception]
     after_raise()
 except ValueError:
     pass
 CONTINUE_RESULT = after_continue((1, 2))
 BREAK_RESULT = after_break((3, 4))
 FALSE_RESULT = constant_false_branch()
-CONDITIONAL_RESULT = conditional_return(False)  # noqa: FBT003
+CONDITIONAL_RESULT = conditional_return(False)  # ruff: ignore[boolean-positional-value-in-call]

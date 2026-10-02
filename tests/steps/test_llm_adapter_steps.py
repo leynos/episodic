@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
+import asyncio  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json
 import threading

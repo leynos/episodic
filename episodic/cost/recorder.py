@@ -152,7 +152,7 @@ class CostRecorder:
             If the catalogue cannot resolve a pricing snapshot.
         CostAccountingError
             If pricing or ledger validation fails.
-        """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Collaborating ports propagate these domain exceptions.
         pinned_at = dt.datetime.now(dt.UTC).isoformat()
         for provider in providers:
             key = RunPricingKey(
@@ -248,7 +248,7 @@ class CostRecorder:
             If the catalogue cannot resolve a pricing snapshot.
         CostAccountingError
             If pricing or ledger validation fails.
-        """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Collaborating ports propagate these domain exceptions.
         snapshot = await self._resolve_snapshot_for_record(record)
         priced_call = self.pricing_engine.price(
             snapshot,

@@ -6,7 +6,6 @@ test modules reuse them to keep transport setup and config construction
 consistent while focusing each test file on one behavioural concern.
 """
 
-import collections.abc as cabc
 import contextlib
 import json
 import typing as typ
@@ -161,7 +160,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
     """Build async context managers yielding configured OpenAI adapters."""
 
     @contextlib.asynccontextmanager
-    async def _build_adapter(  # noqa: TD001, TD002  # pylint: disable=too-many-arguments  # FIXME: https://github.com/leynos/episodic/pull/49 - narrow suppression pending helper signature refactor
+    async def _build_adapter(  # ruff: ignore[invalid-todo-tag, missing-todo-author]  # pylint: disable=too-many-arguments  # FIXME: https://github.com/leynos/episodic/pull/49 - narrow suppression pending helper signature refactor
         *,
         transport: httpx.AsyncBaseTransport,
         provider_operation: str | LLMProviderOperation = "chat_completions",

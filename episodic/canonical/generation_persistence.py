@@ -29,7 +29,6 @@ from episodic.canonical.generation_persistence_projection import (
 )
 from episodic.canonical.generation_persistence_types import (
     DraftContentHashMismatchError,
-    DraftScriptPersistenceError,  # noqa: F401  # Re-exported service contract.
     DraftScriptPersistenceRequest,
     EpisodeMaterialisationRequest,
     GenerationSourceUploadNotFoundError,
@@ -39,6 +38,10 @@ from episodic.canonical.generation_persistence_types import (
     SourceCountLimitExceededError,
     SourceDocumentProjectionError,
     _SourceDocumentProjection,
+)
+from episodic.canonical.generation_persistence_types import (
+    # Re-exported service contract.
+    DraftScriptPersistenceError as DraftScriptPersistenceError,
 )
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.hashing import sha256_text
@@ -88,7 +91,7 @@ async def materialise_episode_from_ingestion(
     Propagates :class:`IngestionJobNotFoundError` if no ingestion job exists,
     and :class:`IngestionJobNotReadyError` if the job is not ready for
     generation.
-    """  # noqa: DOC502  # Typed projection failures propagate through helpers.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Typed projection failures propagate through helpers.
     sources = await _list_all_sources(
         uow,
         request.ingestion_job_id,

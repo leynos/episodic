@@ -15,7 +15,7 @@ that make its removal safe:
 """
 
 import re
-import subprocess  # noqa: S404  # Runs a fixed pytest collection command.
+import subprocess  # ruff: ignore[suspicious-subprocess-import]  # Runs a fixed pytest collection command.
 import sys
 
 import pytest
@@ -121,7 +121,7 @@ def test_a_default_collection_selects_the_crosshair_proof() -> None:
     narrowing, a marker deselection in `addopts` or a collection hook drops
     the node here exactly as it would there.
     """
-    completed = subprocess.run(  # noqa: S603 - fixed argv, shell=False, no user input.
+    completed = subprocess.run(
         [
             sys.executable,
             "-m",

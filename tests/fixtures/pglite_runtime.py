@@ -10,7 +10,7 @@ into a single attempt.
 
 import os
 import shutil
-import subprocess  # noqa: S404 - py-pglite shell-out shape is mirrored for retry handling.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - py-pglite shell-out shape is mirrored for retry handling.
 import typing as typ
 
 import pytest

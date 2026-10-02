@@ -70,7 +70,7 @@ class _SchedulingMixin(_MixinBase):
 
     @property
     def scheduled_run_count(self) -> int:
-        """Return the number of background runs retained by the launcher."""
+        """The number of background runs retained by the launcher."""
         return len(self._tasks)
 
     async def shutdown(self) -> None:
@@ -143,7 +143,7 @@ class _SchedulingMixin(_MixinBase):
             await self._record_draft_generated(claimed.run.id, result)
             await self._persist_success(claimed, result)
             return _ExecutionOutcome(outcome="completed")
-        except Exception as exc:  # noqa: BLE001  # Task boundary must persist unexpected failures.
+        except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
             failure = classify_failure(exc)
             await self._record_failure(run_id, failure)
             return _ExecutionOutcome(

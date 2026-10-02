@@ -22,31 +22,31 @@ class _OpenAIConfigForValidation(typ.Protocol):
 
     @property
     def base_url(self) -> str:
-        """Return the OpenAI-compatible provider base URL."""
+        """The OpenAI-compatible provider base URL."""
 
     @property
     def api_key(self) -> str:
-        """Return the provider API key."""
+        """The provider API key."""
 
     @property
     def provider_operation(self) -> LLMProviderOperation | str:
-        """Return the default provider operation."""
+        """The default provider operation."""
 
     @property
     def max_attempts(self) -> int:
-        """Return the maximum retry attempts."""
+        """The maximum retry attempts."""
 
     @property
     def retry_delay_seconds(self) -> float:
-        """Return the retry backoff multiplier."""
+        """The retry backoff multiplier."""
 
     @property
     def timeout_seconds(self) -> float:
-        """Return the provider request timeout."""
+        """The provider request timeout."""
 
     @property
     def chars_per_token(self) -> float:
-        """Return the preflight token-estimation divisor."""
+        """The preflight token-estimation divisor."""
 
 
 def _is_positive_int(value: object) -> bool:

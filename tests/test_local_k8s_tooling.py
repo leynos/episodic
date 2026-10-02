@@ -3,7 +3,7 @@
 import socket
 import subprocess
 import typing as typ
-from collections.abc import Callable  # noqa: ICN003, TC003 - requested test shape.
+from collections.abc import Callable  # ruff: ignore[banned-import-from, typing-only-standard-library-import] - requested test shape.
 
 import pytest
 

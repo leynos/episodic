@@ -91,8 +91,8 @@ def _result(*, blocking: bool) -> PedanteEvaluationResult:
     ids=["supported_to_pass", "blocking_to_refine"],
 )
 async def test_pedante_graph_propagates_result(
-    blocking: bool,  # noqa: FBT001  # Pytest parametrization makes the boolean dimension explicit at each call site.
-    expected_requires_revision: bool,  # noqa: FBT001  # Pytest parametrization makes the boolean dimension explicit at each call site.
+    blocking: bool,  # ruff: ignore[boolean-type-hint-positional-argument]  # Pytest parametrization makes the boolean dimension explicit at each call site.
+    expected_requires_revision: bool,  # ruff: ignore[boolean-type-hint-positional-argument]  # Pytest parametrization makes the boolean dimension explicit at each call site.
 ) -> None:
     """Graph should propagate the canned result and honour requires_revision."""
     canned = _result(blocking=blocking)

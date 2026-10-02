@@ -263,7 +263,7 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
 
 @pytest.mark.parametrize(
     "spec",
-    (  # noqa: PT007 - single-parameter values are clearer as direct specs here.
+    (  # ruff: ignore[pytest-parametrize-values-wrong-type] - single-parameter values are clearer as direct specs here.
         _OrchestrationResultSpec(action_usage=LLMUsage(5, 7, 12)),
         _OrchestrationResultSpec(planner_usage=LLMUsage(5, 7, 12)),
     ),
