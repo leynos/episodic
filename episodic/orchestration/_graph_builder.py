@@ -54,6 +54,17 @@ class GenerationGraphExtensions:
     cost_recorder: CostRecorderPort | None = None
 
 
+class _FinishNodeFn(typ.Protocol):
+    """Callable protocol for the async finish graph node."""
+
+    def __call__(
+        self,
+        state: GenerationGraphState,
+    ) -> cabc.Awaitable[dict[str, dto.GenerationOrchestrationResult]]:
+        """Return the finish-node state update for *state*."""
+        ...
+
+
 def _invoke_finish_callback(
     finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None],
     result: dto.GenerationOrchestrationResult,
@@ -125,6 +136,33 @@ def _build_execute_node(
     return _run_suspend_execute_node, END
 
 
+def _build_finish_node(
+    extensions: GenerationGraphExtensions,
+) -> _FinishNodeFn:
+    """Return the finish graph node for the supplied extensions."""
+
+    async def _run_finish_node(
+        state: GenerationGraphState,
+    ) -> dict[str, dto.GenerationOrchestrationResult]:
+        """Entry point for the finish graph node."""
+        result = _finish_node(state)
+        await _record_costs_from_finished_state(
+            state, cost_recorder=extensions.cost_recorder
+        )
+        if extensions.finish_callback is not None:
+            correlation_id = (
+                state.request.correlation_id if state.request is not None else None
+            )
+            _invoke_finish_callback(
+                extensions.finish_callback,
+                result["orchestration_result"],
+                correlation_id,
+            )
+        return result
+
+    return _run_finish_node
+
+
 def build_generation_orchestration_graph(
     *,
     planner: protocols.PlannerPort,
@@ -171,25 +209,6 @@ def build_generation_orchestration_graph(
         """Async entry point for the plan graph node."""
         return await _plan_node(state, planner=planner)
 
-    async def _run_finish_node(
-        state: GenerationGraphState,
-    ) -> dict[str, dto.GenerationOrchestrationResult]:
-        """Entry point for the finish graph node."""
-        result = _finish_node(state)
-        await _record_costs_from_finished_state(
-            state, cost_recorder=graph_extensions.cost_recorder
-        )
-        if graph_extensions.finish_callback is not None:
-            correlation_id = (
-                state.request.correlation_id if state.request is not None else None
-            )
-            _invoke_finish_callback(
-                graph_extensions.finish_callback,
-                result["orchestration_result"],
-                correlation_id,
-            )
-        return result
-
     execute_node, execute_target = _build_execute_node(
         tool_executor,
         graph_extensions.checkpoint_port,
@@ -198,7 +217,7 @@ def build_generation_orchestration_graph(
 
     graph.add_node("plan", _run_plan_node)
     graph.add_node("execute", execute_node)
-    graph.add_node("finish", _run_finish_node)
+    graph.add_node("finish", _build_finish_node(graph_extensions))
     graph.add_edge(START, "plan")
     graph.add_edge("plan", "execute")
     graph.add_edge("execute", execute_target)

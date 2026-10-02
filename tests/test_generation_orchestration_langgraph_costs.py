@@ -14,6 +14,7 @@ from episodic.orchestration import (
     GenerationGraphExtensions,
     GenerationGraphState,
     GenerationOrchestrationRequest,
+    GenerationOrchestrationResult,
     ModelTier,
     PlannedAction,
     PlannerResult,
@@ -65,6 +66,7 @@ class _RecordingCostRecorder:
 
     provider_calls: list[ProviderCallRecord] = dc.field(default_factory=list)
     finalized_runs: list[tuple[str, str | None]] = dc.field(default_factory=list)
+    events: list[str] = dc.field(default_factory=list)
 
     async def pin_run_pricing(
         self,
@@ -74,6 +76,7 @@ class _RecordingCostRecorder:
     ) -> None:
         """Accept pricing-pin requests for graph tests."""
         _ = (workflow_run_id, providers, billing_period_key)
+        self.events.append("pin_run_pricing")
 
     async def record_provider_call(
         self,
@@ -81,6 +84,7 @@ class _RecordingCostRecorder:
     ) -> CostLedgerEntryId:
         """Record a provider-call command."""
         self.provider_calls.append(record)
+        self.events.append("record_provider_call")
         return CostLedgerEntryId(f"cost-{len(self.provider_calls)}")
 
     async def finalize_run(
@@ -90,6 +94,7 @@ class _RecordingCostRecorder:
     ) -> CostLedgerEntryId:
         """Record run finalization."""
         self.finalized_runs.append((workflow_run_id, workflow_node))
+        self.events.append("finalize_run")
         return CostLedgerEntryId("rollup")
 
 
@@ -187,3 +192,32 @@ async def test_generation_graph_records_costs_on_direct_finish_path() -> None:
     assert action_record.workflow_node == "generate_show_notes", (
         "action provider call should be attributed to the show-notes node"
     )
+
+
+@pytest.mark.asyncio
+async def test_generation_graph_records_costs_before_finish_callback() -> None:
+    """Cost recording completes before the finish callback is invoked."""
+    events: list[str] = []
+    cost_recorder = _RecordingCostRecorder(events=events)
+
+    def record_finish_callback(_result: GenerationOrchestrationResult) -> None:
+        events.append("finish_callback")
+
+    graph = build_generation_orchestration_graph(
+        planner=_Planner(_planner_result()),
+        tool_executor=_ToolExecutor(_action_result()),
+        extensions=GenerationGraphExtensions(
+            cost_recorder=cost_recorder,
+            finish_callback=record_finish_callback,
+        ),
+    )
+
+    await graph.ainvoke(GenerationGraphState(request=_request()))
+
+    assert events == [
+        "pin_run_pricing",
+        "record_provider_call",
+        "record_provider_call",
+        "finalize_run",
+        "finish_callback",
+    ], "cost recording must finish before invoking the callback"
