@@ -26,6 +26,7 @@ if typ.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
     from episodic.cost import CostRecorderPort
+    from episodic.metrics_ports import BoundedMetricsPort
     from episodic.orchestration import _dto as dto
     from episodic.orchestration import _protocols as protocols
 else:
@@ -45,6 +46,8 @@ class GenerationGraphExtensions:
         Optional callback invoked with the completed orchestration result.
     cost_recorder : CostRecorderPort | None
         Optional port used to persist provider-call cost records.
+    metrics : BoundedMetricsPort | None
+        Optional metrics sink used to count rejected checkpoint payloads.
     """
 
     checkpoint_port: protocols.CheckpointPort | None = None
@@ -52,6 +55,7 @@ class GenerationGraphExtensions:
         None
     )
     cost_recorder: CostRecorderPort | None = None
+    metrics: BoundedMetricsPort | None = None
 
 
 class _FinishNodeFn(typ.Protocol):
@@ -99,6 +103,7 @@ def _build_execute_node(
     checkpoint_port: protocols.CheckpointPort | None,
     *,
     monotonic_clock: cabc.Callable[[], float],
+    metrics: BoundedMetricsPort | None,
 ) -> tuple[ExecuteNodeFn, str]:
     """Return *(execute_node_fn, execute_target)* for the graph.
 
@@ -131,6 +136,7 @@ def _build_execute_node(
         return await _suspend_execute_node(
             state,
             checkpoint_port=checkpoint_port,
+            metrics=metrics,
         )
 
     return _run_suspend_execute_node, END
@@ -187,8 +193,9 @@ def build_generation_orchestration_graph(
     tool_executor : protocols.ToolExecutorPort
         Port used by the direct ``execute`` node to run each planned action.
     extensions : GenerationGraphExtensions | None
-        Optional persistence, callback, and cost-recording collaborators. Its
-        ``checkpoint_port`` selects suspension after planning.
+        Optional persistence, callback, cost-recording, and metrics
+        collaborators. Its ``checkpoint_port`` selects suspension after
+        planning.
 
     Returns
     -------
@@ -213,6 +220,7 @@ def build_generation_orchestration_graph(
         tool_executor,
         graph_extensions.checkpoint_port,
         monotonic_clock=time.monotonic,
+        metrics=graph_extensions.metrics,
     )
 
     graph.add_node("plan", _run_plan_node)

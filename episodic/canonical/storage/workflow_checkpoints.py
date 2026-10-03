@@ -34,6 +34,7 @@ _METRIC_SAVE_LATENCY_MS = "workflow_checkpoint.save_or_reuse.latency_ms"
 _METRIC_RESUME_OPERATIONS = "workflow_checkpoint.mark_resumed.operations"
 _METRIC_RESUME_LATENCY_MS = "workflow_checkpoint.mark_resumed.latency_ms"
 _METRIC_RECOVERY_FAILURES = "workflow_checkpoint.recovery_failures"
+_METRIC_PAYLOAD_VALIDATION_FAILURES = "workflow_checkpoint.payload_validation_failures"
 
 
 def _map_checkpoint(record: WorkflowCheckpointRecord) -> WorkflowCheckpoint:
@@ -49,6 +50,30 @@ def _map_checkpoint(record: WorkflowCheckpointRecord) -> WorkflowCheckpoint:
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
+
+
+def _payload_action_id(payload: object) -> str | None:
+    """Extract an optional action id from a checkpoint payload."""
+    if not isinstance(payload, dict):
+        return None
+    payload_mapping = typ.cast("dict[str, object]", payload)
+    planner_result = payload_mapping.get("planner_result")
+    if not isinstance(planner_result, dict):
+        return None
+    planner_mapping = typ.cast("dict[str, object]", planner_result)
+    plan = planner_mapping.get("plan")
+    if not isinstance(plan, dict):
+        return None
+    plan_mapping = typ.cast("dict[str, object]", plan)
+    steps = plan_mapping.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return None
+    first_step = typ.cast("list[object]", steps)[0]
+    if not isinstance(first_step, dict):
+        return None
+    step_mapping = typ.cast("dict[str, object]", first_step)
+    action_id = step_mapping.get("action_id")
+    return action_id if isinstance(action_id, str) else None
 
 
 class SqlAlchemyWorkflowCheckpointStore:
@@ -88,6 +113,33 @@ class SqlAlchemyWorkflowCheckpointStore:
         self._metrics.increment_counter(_METRIC_RESUME_OPERATIONS, labels=labels)
         self._record_latency(_METRIC_RESUME_LATENCY_MS, started_at, labels=labels)
 
+    def _map_checkpoint_with_observability(
+        self,
+        record: WorkflowCheckpointRecord,
+        *,
+        operation: typ.Literal["load", "persist", "resume"],
+    ) -> WorkflowCheckpoint:
+        """Map a checkpoint and report rejected stored payloads."""
+        try:
+            return _map_checkpoint(record)
+        except TypeError:
+            # Workflow ids are built from request correlation ids at suspension.
+            _log_event(
+                "error",
+                "sql_checkpoint_store.checkpoint_payload_rejected",
+                correlation_id=record.workflow_id,
+                workflow_id=record.workflow_id,
+                workflow_type=record.workflow_type,
+                step_name=record.step_name,
+                action_id=_payload_action_id(record.payload),
+                failure_category="invalid_checkpoint_payload",
+            )
+            self._metrics.increment_counter(
+                _METRIC_PAYLOAD_VALIDATION_FAILURES,
+                labels={"operation": operation, "reason": "invalid_payload"},
+            )
+            raise
+
     async def get(self, checkpoint_id: str) -> WorkflowCheckpoint | None:
         """Return a checkpoint by identifier."""
         record = await self._session.get(
@@ -102,7 +154,7 @@ class SqlAlchemyWorkflowCheckpointStore:
         )
         if record is None:
             return None
-        return _map_checkpoint(record)
+        return self._map_checkpoint_with_observability(record, operation="load")
 
     async def get_by_idempotency_key(
         self,
@@ -123,7 +175,7 @@ class SqlAlchemyWorkflowCheckpointStore:
         )
         if record is None:
             return None
-        return _map_checkpoint(record)
+        return self._map_checkpoint_with_observability(record, operation="load")
 
     async def save_or_reuse(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
         """Persist a checkpoint or return the existing record for its key.
@@ -199,7 +251,7 @@ class SqlAlchemyWorkflowCheckpointStore:
             )
             self._record_save_outcome(started_at, "recovery_failure")
             raise
-        return _map_checkpoint(record)
+        return self._map_checkpoint_with_observability(record, operation="persist")
 
     async def mark_resumed(self, checkpoint_id: str) -> WorkflowCheckpoint:
         """Mark a checkpoint as resumed and return the updated record.
@@ -237,4 +289,4 @@ class SqlAlchemyWorkflowCheckpointStore:
         )
         self._record_resume_outcome(started_at, "marked")
         await self._session.refresh(record)
-        return _map_checkpoint(record)
+        return self._map_checkpoint_with_observability(record, operation="resume")

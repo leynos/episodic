@@ -1,6 +1,8 @@
 """Unit tests for generation LangGraph node state validation."""
 
 import collections.abc as cabc  # ruff: ignore[typing-only-standard-library-import] - pytest resolves test annotations at collection
+import typing as typ
+from unittest import mock
 
 import pytest
 
@@ -10,10 +12,12 @@ from episodic.orchestration import (
     _graph_nodes,
 )
 from episodic.orchestration.langgraph import (
+    GenerationGraphExtensions,
     GenerationGraphState,
     _execute_node,
     _finish_node,
     _plan_node,
+    build_generation_orchestration_graph,
 )
 from tests.test_generation_orchestration_langgraph import (
     _action_result,
@@ -22,6 +26,9 @@ from tests.test_generation_orchestration_langgraph import (
     _planner_result,
     _request,
 )
+
+if typ.TYPE_CHECKING:
+    from episodic.metrics_ports import BoundedMetricsPort
 
 
 class TestLangGraphNodeValidation:
@@ -106,6 +113,7 @@ class TestLangGraphNodeValidation:
     ) -> None:
         """Rejected checkpoint payloads emit identifiers without payload data."""
         events: list[tuple[str, str, dict[str, object]]] = []
+        metrics = mock.Mock()
 
         def record_log_event(level: str, message: str, **fields: object) -> None:
             events.append((level, message, fields))
@@ -117,16 +125,17 @@ class TestLangGraphNodeValidation:
         monkeypatch.setattr(
             _checkpoint_resume, "_build_checkpoint_payload", invalid_payload
         )
-        state = GenerationGraphState(
-            request=_request(),
-            planner_result=_planner_result(),
+        graph = build_generation_orchestration_graph(
+            planner=_FakePlanner(_planner_result()),
+            tool_executor=_FakeToolExecutor(_action_result()),
+            extensions=GenerationGraphExtensions(
+                checkpoint_port=InMemoryCheckpointStore(),
+                metrics=typ.cast("BoundedMetricsPort", metrics),
+            ),
         )
 
         with pytest.raises(TypeError, match="payload must be JSON-serializable"):
-            await _checkpoint_resume._suspend_execute_node(
-                state,
-                checkpoint_port=InMemoryCheckpointStore(),
-            )
+            await graph.ainvoke(GenerationGraphState(request=_request()))
 
         error_events = [event for event in events if event[0] == "error"]
         assert len(error_events) == 1, (
@@ -147,6 +156,10 @@ class TestLangGraphNodeValidation:
         ), "payload rejection should use its stable event name"
         assert fields == expected_fields, (
             "payload rejection should log only bounded workflow context"
+        )
+        metrics.increment_counter.assert_called_once_with(
+            "workflow_checkpoint.payload_validation_failures",
+            labels={"operation": "suspend", "reason": "invalid_payload"},
         )
 
     def test_finish_node_requires_request(self) -> None:

@@ -26,6 +26,7 @@ from episodic.orchestration._usage import build_generation_result
 if typ.TYPE_CHECKING:
     import importlib
 
+    from episodic.metrics_ports import BoundedMetricsPort
     from episodic.orchestration import _dto as dto
     from episodic.orchestration import _protocols as protocols
     from episodic.orchestration._graph_state import GenerationGraphState
@@ -34,6 +35,8 @@ else:
 
     dto = importlib.import_module("episodic.orchestration._dto")
     protocols = importlib.import_module("episodic.orchestration._protocols")
+
+_METRIC_PAYLOAD_VALIDATION_FAILURES = "workflow_checkpoint.payload_validation_failures"
 
 
 def _build_execute_step_identity(
@@ -108,6 +111,7 @@ async def _suspend_execute_node(
     state: GenerationGraphState,
     *,
     checkpoint_port: protocols.CheckpointPort,
+    metrics: BoundedMetricsPort | None = None,
     workflow_type: str = "generation_orchestration",
 ) -> dict[str, dto.SuspendedWorkflowResult]:
     """Persist or reuse a checkpoint before executing the first action."""
@@ -159,6 +163,11 @@ async def _suspend_execute_node(
             action_id=identity.action_id,
             failure_category="invalid_checkpoint_payload",
         )
+        if metrics is not None:
+            metrics.increment_counter(
+                _METRIC_PAYLOAD_VALIDATION_FAILURES,
+                labels={"operation": "suspend", "reason": "invalid_payload"},
+            )
         raise
     existing = await checkpoint_port.save_or_reuse(checkpoint)
     reused_checkpoint = existing.checkpoint_id != fresh_id

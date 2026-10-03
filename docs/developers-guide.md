@@ -1793,6 +1793,12 @@ already computed graph result. The graph does not serialize concurrent
 invocations of a shared callback; callbacks that mutate shared state must
 provide their own synchronization.
 
+`GenerationGraphExtensions.metrics` optionally supplies a bounded metrics port
+for checkpoint payload validation failures during suspension. A rejected
+payload increments `workflow_checkpoint.payload_validation_failures` with
+`operation=suspend` and `reason=invalid_payload`. Workflow and action
+identifiers may appear in rejection logs, but are not metric labels.
+
 `GenerationGraphState` is part of the public orchestration API for callers that
 invoke the LangGraph graph directly. Treat it as the framework state carrier
 for graph nodes rather than as a domain DTO exposed through hooks.
@@ -1826,6 +1832,11 @@ adapter treating duplicate resume commands idempotently.
 Checkpoint storage metrics use the shared `MetricsPort` contract from
 `episodic.observability` and must keep labels bounded. The SQLAlchemy adapter
 emits:
+
+- `workflow_checkpoint.payload_validation_failures` when a SQL row cannot be
+  mapped to a checkpoint DTO because its payload is invalid, with `operation`
+  set to `load`, `persist`, or `resume` and `reason=invalid_payload`. Rejection
+  logs may include workflow and action identifiers; these are not metric labels.
 
 - `workflow_checkpoint.save_or_reuse.operations` with `outcome` values
   `persisted`, `reused`, or `recovery_failure`.
