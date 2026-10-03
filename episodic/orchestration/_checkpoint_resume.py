@@ -107,6 +107,28 @@ def _restore_resume_planner_result(
     return planner_result
 
 
+def _record_checkpoint_payload_validation_failure(
+    identity: dto.WorkflowStepIdentity,
+    metrics: BoundedMetricsPort | None,
+) -> None:
+    """Log a rejected suspend payload and count the bounded failure."""
+    _log_event(
+        "error",
+        "generation_graph.suspend_execute_node.checkpoint_payload_rejected",
+        correlation_id=identity.workflow_id,
+        workflow_id=identity.workflow_id,
+        workflow_type=identity.workflow_type,
+        step_name=identity.step_name,
+        action_id=identity.action_id,
+        failure_category="invalid_checkpoint_payload",
+    )
+    if metrics is not None:
+        metrics.increment_counter(
+            _METRIC_PAYLOAD_VALIDATION_FAILURES,
+            labels={"operation": "suspend", "reason": "invalid_payload"},
+        )
+
+
 async def _suspend_execute_node(
     state: GenerationGraphState,
     *,
@@ -153,21 +175,7 @@ async def _suspend_execute_node(
             ),
         )
     except TypeError:
-        _log_event(
-            "error",
-            "generation_graph.suspend_execute_node.checkpoint_payload_rejected",
-            correlation_id=request.correlation_id,
-            workflow_id=identity.workflow_id,
-            workflow_type=identity.workflow_type,
-            step_name=identity.step_name,
-            action_id=identity.action_id,
-            failure_category="invalid_checkpoint_payload",
-        )
-        if metrics is not None:
-            metrics.increment_counter(
-                _METRIC_PAYLOAD_VALIDATION_FAILURES,
-                labels={"operation": "suspend", "reason": "invalid_payload"},
-            )
+        _record_checkpoint_payload_validation_failure(identity, metrics)
         raise
     existing = await checkpoint_port.save_or_reuse(checkpoint)
     reused_checkpoint = existing.checkpoint_id != fresh_id
