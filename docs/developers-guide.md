@@ -117,6 +117,30 @@ No caller checksum is passed to the upload action. It verifies its downloaded
 archive against the `cli-manifest.json` stored in its pinned revision, so a
 caller-supplied digest would add another value that can become stale.
 
+### The shared contract checker
+
+`make test-workflow-contracts` runs `cv005-contracts check --repository .`, the
+shared contract library in `leynos/shared-actions`
+(`packages/cv005-contracts`), from the full commit named by
+`CV005_CONTRACTS_REF` in the `Makefile`. CI runs it as its own
+`Check the CV-005 contracts` step in `lint-test`, and `make all` includes it.
+The target needs `uv`, which fetches the Python 3.13 the library runs under; no
+other install is needed. The repository's parameters are in
+`.github/cv005.toml`: its `repository` name, `environment = true` (the
+uploading job alone declares the `codescene` environment), and a `[selection]`
+table holding the inputs the ratchet baseline measures, which the publisher's
+generator must carry and every pull-request lane must match. A fix to the rules
+is a pin bump: set `CV005_CONTRACTS_REF` to a full commit on shared-actions'
+default branch, and re-run the target. The checker prints one `clause: message`
+line per violation and exits non-zero. The library's own suite proves each rule
+refuses the shape it exists to refuse, so this repository keeps no copy of the
+readers.
+
+What stays local is what the library does not know:
+`tests/test_action_revisions_contract.py` records each approved shared-action
+revision with the actions nested in it and refuses any unrecorded revision or
+retired pin.
+
 ### Production-only coverage scope
 
 Both `Generate coverage` steps pass `python-source: episodic,alembic`, which
