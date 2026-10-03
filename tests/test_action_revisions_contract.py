@@ -10,6 +10,9 @@ does not carry or any retired pin anywhere in the workflows.
 
 import json
 
+from hypothesis import given
+from hypothesis import strategies as st
+
 from tests.workflow_reading import (
     REPOSITORY_ROOT,
     Mapping,
@@ -88,3 +91,44 @@ def test_a_quoted_reference_splits_like_an_unquoted_one() -> None:
     assert uses_in(quoted) == [reference], "a step reference must be found"
     local = {"jobs": {"a": {"uses": "./.github/workflows/x.yml"}}}
     assert uses_in(local) == ["./.github/workflows/x.yml"], "a job call is found"
+
+
+_SCALARS = st.one_of(st.none(), st.booleans(), st.integers(), st.text(max_size=8))
+_YAML_VALUES = st.recursive(
+    _SCALARS,
+    lambda children: st.one_of(
+        st.lists(children, max_size=3),
+        st.dictionaries(st.text(max_size=6), children, max_size=3),
+    ),
+    max_leaves=12,
+)
+
+
+@given(value=_YAML_VALUES, reference=st.text(min_size=1, max_size=12))
+def test_uses_in_finds_a_reference_planted_at_any_depth(
+    value: object, reference: str
+) -> None:
+    """Every `uses` string planted in arbitrary nesting is found exactly once.
+
+    The planted reference sits under a `uses` key inside a mapping wrapped in
+    random lists and mappings, and the generated filler is stripped of `uses`
+    keys so it cannot add or hide a reference. Non-string `uses` values are
+    ignored.
+    """
+    filler = _without_uses(value)
+    planted = {"jobs": {"a": [{"x": filler}, {"uses": reference}]}}
+    assert uses_in(planted) == [reference], "the planted reference must be found once"
+    assert uses_in({"uses": 7, "n": [{"uses": None}]}) == [], (
+        "a non-string uses value is not a reference"
+    )
+
+
+def _without_uses(value: object) -> object:
+    """Return `value` with every `uses` mapping key removed at any depth."""
+    match value:
+        case dict():
+            return {k: _without_uses(v) for k, v in value.items() if k != "uses"}
+        case list():
+            return [_without_uses(item) for item in value]
+        case _:
+            return value
