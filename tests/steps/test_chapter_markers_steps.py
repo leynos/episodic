@@ -5,10 +5,9 @@ avoid. It starts Vidai Mock with an OpenAI-compatible chat-completion template,
 uses the real `OpenAICompatibleLLMAdapter`, records the outbound `LLMRequest`,
 and drives `ChapterMarkersGenerator` through pytest-bdd steps.
 
-The scenario proves the component relationships across the generation service,
-LLM port, OpenAI-compatible adapter, Vidai Mock test server, and TEI enrichment
-helper. The local server is process-scoped to the fixture and cleaned up
-through the same termination helper used when startup retries fail.
+The scenario proves generation, LLM, adapter, Vidai Mock, and TEI components
+work together. The fixture owns server cleanup and shares its termination
+helper with startup retries.
 """
 
 from __future__ import annotations
@@ -243,6 +242,7 @@ def _start_vidaimock_process(
                 str(port),
                 "--config-dir",
                 str(config_dir),
+                "--isolated",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

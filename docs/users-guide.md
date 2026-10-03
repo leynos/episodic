@@ -375,6 +375,10 @@ source limits and event cursor contract described in this guide. Generation-run
 pollers must also handle the terminal lifecycle contract: terminal responses
 have `current_node: null` and a populated `ended_at`.
 
+Structured events can be emitted with `episodic.logging.log_event`, which
+encodes event fields as JSON; existing logging calls remain available. See
+[Logging](#logging) for details.
+
 Health endpoints:
 
 - `GET /health/live` reports whether the Falcon application booted
@@ -436,6 +440,24 @@ argument is case-insensitive, and the function returns a
 `tuple[LogLevel, bool]`: the normalized `LogLevel` value and a flag indicating
 whether the default (`INFO`) was substituted because the input was absent or
 unrecognized.
+
+Use `episodic.logging.log_event(level, message, **fields)` to emit an event.
+Its signature is
+`log_event(level: str, message: str, **fields: object) -> None`. `level` is a
+lowercase femtologging method name: `debug`, `info`, `warning`, `error`,
+`critical`, or `exception`. Structured fields are encoded as one JSON message
+with the event name in the `event` field. Enums become their values, dates and
+times use ISO 8601 strings, and other non-JSON values become strings. The
+`exc_info` and `stack_info` keyword fields are passed to the logger rather than
+included in the JSON. With no structured fields, the message is logged
+unchanged. If that plain-message call raises `TypeError`, `log_event` retries
+with a JSON object containing the event name.
+
+```python
+from episodic.logging import log_event
+
+log_event("info", "generation.started", workflow_id="workflow-42")
+```
 
 ### Worker runtime
 

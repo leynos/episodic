@@ -1089,17 +1089,45 @@ The enforced groups are:
   canonical constraint names, and LLM ports.
 - `application`: canonical services, profile/template workflows,
   reference-document workflows, and generation services.
-- `inbound_adapter`: Falcon API modules and worker task/topology seams.
+- `inbound_adapter`: Falcon API modules (`episodic.api`) and the worker
+  topology seam (`episodic.worker.topology`).
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
   OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
   `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
+- `orchestration_nodes`: `episodic.orchestration._graph_nodes`,
+  `episodic.orchestration._graph_protocols`,
+  `episodic.orchestration._graph_state`, and `episodic.orchestration._usage`.
+  This group may depend on the `orchestration_checkpoint` DTO group and
+  `domain_ports`, and must be ordered before the broader `orchestration` group.
+- `orchestration_checkpoint`: `episodic.orchestration._dto`,
+  `episodic.orchestration._action_result_dto`,
+  `episodic.orchestration._result_dto`,
+  `episodic.orchestration._checkpoint_payload`,
+  `episodic.orchestration._checkpoint_dto`, and
+  `episodic.orchestration._payload_dto`, the provider-neutral checkpoint
+  payload DTO and serialization modules.
+- `orchestration`: LangGraph builders, planning orchestration, tool execution
+  policy, and `episodic.orchestration.langgraph_costs`, which records provider
+  costs for the direct generation path. This broad group excludes the dedicated
+  node group and may depend on `orchestration_nodes` because graph builders and
+  the public facade assemble and expose those nodes.
+- `orchestration_tasks`: Celery task entrypoints.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
 
 When adding a new port or adapter, update `[tool.hecate]` in `pyproject.toml`
-in the same change as the package. Keep composition-root prefixes before
-broader adapter prefixes because Hecate uses first-match group ordering. Add or
-adjust fixture coverage in `tests/fixtures/architecture/` and run:
+in the same change as the package. Keep specific prefixes before broader
+prefixes because Hecate uses first-match group ordering: `composition_root`
+before adapter prefixes, `orchestration_nodes` before the broad `orchestration`
+prefix, and `orchestration_tasks` before worker adapter prefixes.
+
+`episodic.worker.workloads.WorkloadClass` is the canonical worker workload
+contract that task modules may import without pulling in the Celery app or
+runtime wiring. `episodic.worker.topology.WorkloadClass` remains an explicit
+compatibility alias only. Worker runtime modules own concrete Celery
+configuration.
+
+Add or adjust fixture coverage in `tests/fixtures/architecture/` and run:
 
 ```shell
 uv run pytest -q tests/test_architecture_enforcement.py \
@@ -1109,6 +1137,13 @@ uv run pytest -q tests/test_architecture_enforcement.py \
 Port contract coverage lives in `tests/test_port_contracts.py`. Future
 behavioural tests that exercise real `LLMPort` inference paths should use Vidai
 Mock; structural conformance tests do not need an inference server.
+
+For orchestration boundary fixtures, model the violating importer under the
+same prefix Hecate will classify in production. Use
+`orchestration/_graph_nodes.py` for node-only checks, `worker/tasks.py` for
+Celery task checks, and `orchestration/_checkpoint_payload.py` for checkpoint
+payload checks. Snapshot JSON diagnostics only after normalizing workspace
+paths.
 
 ### TEI payload compression
 
@@ -1714,8 +1749,13 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 
 ### Package structure
 
-- `episodic/orchestration/_dto.py` contains the orchestration DTOs and shared
-  checkpoint DTOs.
+- `episodic/orchestration/_dto.py` contains public request/config DTOs and
+  compatibility re-exports.
+- `episodic/orchestration/_payload_dto.py` contains provider-neutral planner,
+  plan, and action-result payload DTOs.
+- `episodic/orchestration/_checkpoint_dto.py` and
+  `episodic/orchestration/_checkpoint_payload.py` contain checkpoint state DTOs
+  and JSON payload serialization helpers.
 - `episodic/orchestration/_protocols.py` contains the planner, executor,
   checkpoint, and resume ports that keep graph policy independent of storage,
   queue, and provider adapters.
@@ -1729,10 +1769,15 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   `GuestBiosToolExecutor` implementation. It resolves the request's
   `series_profile_id`, optional `episode_id`, and optional `template_id`
   through the configured binding resolver before invoking the generation helper.
-- `episodic/orchestration/langgraph.py` assembles the in-process LangGraph
-  path used for `plan -> execute -> finish` and the checkpointing path that
-  pauses after planning. The node bodies live in `langgraph_nodes.py` and the
-  direct-path cost recording in `langgraph_costs.py`.
+- `episodic/orchestration/_graph_nodes.py` contains node functions that depend
+  on orchestration ports and DTOs only.
+- `episodic/orchestration/langgraph_costs.py` records provider costs for the
+  direct graph execution path.
+- `episodic/orchestration/_graph_builder.py` wires nodes, callbacks, and cost
+  recording into the compiled graph.
+- `episodic/orchestration/langgraph.py` is the public graph facade for
+  `plan -> execute -> finish` and the checkpointing path that pauses after
+  planning.
 - `episodic/orchestration/checkpoints.py` contains the in-memory checkpoint
   adapter used by fast tests.
 - `episodic/canonical/storage/workflow_checkpoints.py` contains the SQLAlchemy
@@ -1747,6 +1792,12 @@ checkpoint suspend path. Callback exceptions are logged without replacing the
 already computed graph result. The graph does not serialize concurrent
 invocations of a shared callback; callbacks that mutate shared state must
 provide their own synchronization.
+
+`GenerationGraphExtensions.metrics` optionally supplies a bounded metrics port
+for checkpoint payload validation failures during suspension. A rejected
+payload increments `workflow_checkpoint.payload_validation_failures` with
+`operation=suspend` and `reason=invalid_payload`. Workflow and action
+identifiers may appear in rejection logs, but are not metric labels.
 
 `GenerationGraphState` is part of the public orchestration API for callers that
 invoke the LangGraph graph directly. Treat it as the framework state carrier
@@ -1781,6 +1832,11 @@ adapter treating duplicate resume commands idempotently.
 Checkpoint storage metrics use the shared `MetricsPort` contract from
 `episodic.observability` and must keep labels bounded. The SQLAlchemy adapter
 emits:
+
+- `workflow_checkpoint.payload_validation_failures` when a SQL row cannot be
+  mapped to a checkpoint DTO because its payload is invalid, with `operation`
+  set to `load`, `persist`, or `resume` and `reason=invalid_payload`. Rejection
+  logs may include workflow and action identifiers; these are not metric labels.
 
 - `workflow_checkpoint.save_or_reuse.operations` with `outcome` values
   `persisted`, `reused`, or `recovery_failure`.
@@ -2278,10 +2334,40 @@ Structured logging uses femtologging v0.1.0-style logger methods. Import
 
 Keep `episodic.logging.configure_logging(...)` as the local configuration seam.
 The legacy `log_info`, `log_warning`, and `log_error` helpers remain available
-for compatibility, but new code should prefer calling the logger methods
-directly. Femtologging still expects pre-formatted messages rather than stdlib
+for compatibility. Use logger methods for ordinary messages and
+`episodic.logging.log_event(...)` for structured event payloads. Femtologging
+still expects pre-formatted messages rather than stdlib
 `logger.info("%s", value)` lazy formatting, so build the final string before
 calling the method.
+
+`episodic.logging.log_event(level, message, **fields)` is the public helper for
+event-oriented logging. Its signature is:
+
+```python
+def log_event(level: str, message: str, **fields: object) -> None: ...
+```
+
+The `level` argument is a lowercase logger method name: `debug`, `info`,
+`warning`, `error`, `critical`, or `exception` (it is looked up directly and is
+not normalized). The `message` is the event name. Other keyword fields are
+combined with it in a JSON object and serialized as one message; enum values
+are normalized to their underlying values, dates and times to ISO 8601 strings,
+and other non-JSON values to strings. `exc_info` and `stack_info` are forwarded
+to the logger and excluded from the JSON fields. With no structured fields, the
+message passes through unchanged. If this plain-message call raises
+`TypeError`, the helper retries with a JSON object containing only the `event`
+field.
+
+```python
+from episodic.logging import log_event
+
+log_event(
+    "error",
+    "generation.failed",
+    workflow_id="workflow-42",
+    exc_info=True,
+)
+```
 
 ### LogLevel
 

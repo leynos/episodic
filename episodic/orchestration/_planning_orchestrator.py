@@ -7,14 +7,14 @@ import typing as typ
 
 from episodic.cost.ports import BillingPeriodKey, IdempotencyKey, PricingModel
 from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
-from episodic.llm import LLMError
+from episodic.llm.ports import LLMError
+from episodic.logging import log_event as _log_event
 
 from ._types import (
     ActionKind,
     PlanningResponseFormatError,
     ToolExecutionError,
     UnsupportedActionError,
-    _log_event,
 )
 from ._usage import build_generation_result
 
@@ -22,7 +22,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.cost import CostRecorderPort
-    from episodic.llm import ProviderCallUsage
+    from episodic.llm.ports import ProviderCallUsage
 
     from ._dto import (
         ActionExecutionResult,

@@ -1,36 +1,36 @@
-"""Graph node bodies for the generation orchestration LangGraph.
+"""Ports-only graph nodes for structured generation orchestration."""
 
-This module owns the `plan`, `execute`, and `finish` node implementations
-that `langgraph.py` wires into the compiled `StateGraph`. Each node validates
-the required state, delegates to the relevant port, and emits structured
-log events around the call. `_invoke_finish_callback` runs the optional
-finish callback supplied through `GenerationGraphExtensions` after the
-`finish` node has produced its result.
-"""
-
+import dataclasses as dc
 import importlib
-import time
 import typing as typ
 
+from episodic.logging import log_event as _log_event
 from episodic.orchestration._graph_state import _require_request_and_planner
-from episodic.orchestration._types import _log_event
 from episodic.orchestration._usage import build_generation_result
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from episodic.orchestration import _dto as dto
-    from episodic.orchestration import _protocols as protocols
+    import episodic.orchestration._dto as dto
+    import episodic.orchestration._graph_protocols as protocols
     from episodic.orchestration._graph_state import GenerationGraphState
 else:
     dto = importlib.import_module("episodic.orchestration._dto")
-    protocols = importlib.import_module("episodic.orchestration._protocols")
+    protocols = importlib.import_module("episodic.orchestration._graph_protocols")
 
 
 type ExecuteNodeResult = (
     dict[str, tuple[dto.ActionExecutionResult, ...]]
     | dict[str, dto.SuspendedWorkflowResult]
 )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ActionExecutionContext:
+    """Collaborators and model selection shared by one planned execution."""
+
+    tool_executor: protocols.ToolExecutorPort
+    selected_execution_model: str
 
 
 class ExecuteNodeFn(typ.Protocol):
@@ -82,26 +82,26 @@ async def _execute_single_action(
     action: dto.PlannedAction,
     request: dto.GenerationOrchestrationRequest,
     *,
-    tool_executor: protocols.ToolExecutorPort,
-    selected_execution_model: str,
+    execution_context: _ActionExecutionContext,
+    monotonic_clock: cabc.Callable[[], float],
 ) -> dto.ActionExecutionResult:
     """Execute one planned action and emit diagnostic log events."""
-    started_at = time.monotonic()
+    started_at = monotonic_clock()
     action_fields = {
         "correlation_id": request.correlation_id,
         "action_id": action.action_id,
         "action_kind": str(action.action_kind),
         "model_tier": str(action.model_tier),
-        "execution_model": selected_execution_model,
+        "execution_model": execution_context.selected_execution_model,
     }
     try:
-        action_result = await tool_executor.execute(action, request)
+        action_result = await execution_context.tool_executor.execute(action, request)
     except Exception as exc:
         _log_event(
             "error",
             "generation_graph.execute_node.action.error",
             **action_fields,
-            elapsed_ms=round((time.monotonic() - started_at) * 1000, 1),
+            elapsed_ms=round((monotonic_clock() - started_at) * 1000, 1),
             error=str(exc),
         )
         raise
@@ -110,7 +110,7 @@ async def _execute_single_action(
         "debug",
         "generation_graph.execute_node.action.finish",
         **action_fields,
-        elapsed_ms=round((time.monotonic() - started_at) * 1000, 1),
+        elapsed_ms=round((monotonic_clock() - started_at) * 1000, 1),
     )
     return action_result
 
@@ -119,6 +119,7 @@ async def _execute_node(
     state: GenerationGraphState,
     *,
     tool_executor: protocols.ToolExecutorPort,
+    monotonic_clock: cabc.Callable[[], float],
 ) -> dict[str, tuple[dto.ActionExecutionResult, ...]]:
     """Validate state and execute each planned action through the tool executor."""
     request = state.request
@@ -129,14 +130,18 @@ async def _execute_node(
         correlation_id=correlation_id,
     )
     request, planner_result = _require_request_and_planner(state)
+    execution_context = _ActionExecutionContext(
+        tool_executor=tool_executor,
+        selected_execution_model=planner_result.plan.selected_execution_model,
+    )
 
     # Keep tool execution ordered so the graph mirrors application-service semantics.
     action_results = [
         await _execute_single_action(
             action,
             request,
-            tool_executor=tool_executor,
-            selected_execution_model=planner_result.plan.selected_execution_model,
+            execution_context=execution_context,
+            monotonic_clock=monotonic_clock,
         )
         for action in planner_result.plan.steps
     ]
@@ -160,7 +165,7 @@ def _finish_node(
         "generation_graph.finish_node.start",
         correlation_id=correlation_id,
     )
-    _, planner_result = _require_request_and_planner(state)
+    request, planner_result = _require_request_and_planner(state)
     try:
         orchestration_result = build_generation_result(
             planner_result,
@@ -181,32 +186,3 @@ def _finish_node(
         correlation_id=correlation_id,
     )
     return result
-
-
-def _invoke_finish_callback(
-    finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None],
-    result: dict[str, dto.GenerationOrchestrationResult],
-    correlation_id: str | None,
-) -> None:
-    """Invoke *finish_callback* with the aggregated domain result.
-
-    Logs a debug event on success and an error event on failure.
-    Exceptions are swallowed so that callback failures do not replace
-    the already-computed graph result. The callback is invoked synchronously
-    in the graph execution context; callbacks shared across concurrent graph
-    invocations must provide their own synchronization.
-    """
-    try:
-        finish_callback(result["orchestration_result"])
-        _log_event(
-            "debug",
-            "generation_graph.finish_node.callback.finish",
-            correlation_id=correlation_id,
-        )
-    except Exception as exc:  # ruff: ignore[blind-except]  # Deliberately swallow callback failures to preserve the computed graph result.
-        _log_event(
-            "error",
-            "generation_graph.finish_node.callback.error",
-            correlation_id=correlation_id,
-            error=str(exc),
-        )

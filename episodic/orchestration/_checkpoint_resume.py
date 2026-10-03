@@ -15,17 +15,18 @@ marks the checkpoint resumed.
 import typing as typ
 import uuid
 
+from episodic.logging import log_event as _log_event
 from episodic.orchestration._checkpoint_payload import (
     _planner_result_from_payload,
     _planner_result_to_payload,
 )
 from episodic.orchestration._graph_state import _require_request_and_planner
-from episodic.orchestration._types import _log_event
 from episodic.orchestration._usage import build_generation_result
 
 if typ.TYPE_CHECKING:
     import importlib
 
+    from episodic.metrics_ports import BoundedMetricsPort
     from episodic.orchestration import _dto as dto
     from episodic.orchestration import _protocols as protocols
     from episodic.orchestration._graph_state import GenerationGraphState
@@ -34,6 +35,8 @@ else:
 
     dto = importlib.import_module("episodic.orchestration._dto")
     protocols = importlib.import_module("episodic.orchestration._protocols")
+
+_METRIC_PAYLOAD_VALIDATION_FAILURES = "workflow_checkpoint.payload_validation_failures"
 
 
 def _build_execute_step_identity(
@@ -104,10 +107,33 @@ def _restore_resume_planner_result(
     return planner_result
 
 
+def _record_checkpoint_payload_validation_failure(
+    identity: dto.WorkflowStepIdentity,
+    metrics: BoundedMetricsPort | None,
+) -> None:
+    """Log a rejected suspend payload and count the bounded failure."""
+    _log_event(
+        "error",
+        "generation_graph.suspend_execute_node.checkpoint_payload_rejected",
+        correlation_id=identity.workflow_id,
+        workflow_id=identity.workflow_id,
+        workflow_type=identity.workflow_type,
+        step_name=identity.step_name,
+        action_id=identity.action_id,
+        failure_category="invalid_checkpoint_payload",
+    )
+    if metrics is not None:
+        metrics.increment_counter(
+            _METRIC_PAYLOAD_VALIDATION_FAILURES,
+            labels={"operation": "suspend", "reason": "invalid_payload"},
+        )
+
+
 async def _suspend_execute_node(
     state: GenerationGraphState,
     *,
     checkpoint_port: protocols.CheckpointPort,
+    metrics: BoundedMetricsPort | None = None,
     workflow_type: str = "generation_orchestration",
 ) -> dict[str, dto.SuspendedWorkflowResult]:
     """Persist or reuse a checkpoint before executing the first action."""
@@ -136,8 +162,8 @@ async def _suspend_execute_node(
     # from the returned checkpoint id. Concrete ports own the idempotency
     # boundary, so concurrent invocations for the same workflow step converge
     # without a time-of-check/time-of-use window.
-    existing = await checkpoint_port.save_or_reuse(
-        dto.WorkflowCheckpoint(
+    try:
+        checkpoint = dto.WorkflowCheckpoint(
             checkpoint_id=fresh_id,
             workflow_id=identity.workflow_id,
             workflow_type=identity.workflow_type,
@@ -148,7 +174,10 @@ async def _suspend_execute_node(
                 planner_result=planner_result,
             ),
         )
-    )
+    except TypeError:
+        _record_checkpoint_payload_validation_failure(identity, metrics)
+        raise
+    existing = await checkpoint_port.save_or_reuse(checkpoint)
     reused_checkpoint = existing.checkpoint_id != fresh_id
     _log_event(
         "debug",

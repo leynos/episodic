@@ -18,7 +18,7 @@ from episodic.canonical.generation_run_errors import (
     CheckpointNotFound,
     RunNotFound,
 )
-from episodic.orchestration._types import _log_event
+from episodic.logging import log_event as _log_event
 
 if typ.TYPE_CHECKING:
     import asyncio

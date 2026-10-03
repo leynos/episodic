@@ -9,12 +9,13 @@ from episodic.generation import (
     ShowNotesResult,
 )
 from episodic.generation.show_notes import ShowNotesResponseFormatError
-from episodic.llm import (
+from episodic.llm.ports import (
     LLMError,
     LLMPort,
     LLMProviderResponseError,
     LLMTransientProviderError,
 )
+from episodic.logging import log_event as _log_event
 
 from ._dto import (
     ActionExecutionResult,
@@ -29,7 +30,6 @@ from ._types import (
     ShowNotesGeneratorNotInitializedError,
     ToolExecutionError,
     UnsupportedActionError,
-    _log_event,
 )
 
 if typing.TYPE_CHECKING:

@@ -3,11 +3,12 @@
 import dataclasses as dc
 import json
 
-from episodic.llm import (
+from episodic.llm.ports import (
     LLMError,
     LLMPort,
     LLMRequest,
 )
+from episodic.logging import log_event as _log_event
 
 from ._dto import (
     ActionExecutionResult,
@@ -43,7 +44,6 @@ from ._types import (
     ShowNotesFormatError,
     ToolExecutionError,
     UnsupportedActionError,
-    _log_event,
 )
 from ._usage import build_generation_result
 

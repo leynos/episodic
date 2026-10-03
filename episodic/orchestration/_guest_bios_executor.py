@@ -11,12 +11,13 @@ from episodic.generation import (
     generate_guest_bios_from_reference_bindings,
 )
 from episodic.generation.guest_bios import GuestBiosResponseFormatError
-from episodic.llm import (
+from episodic.llm.ports import (
     LLMError,
     LLMPort,
     LLMProviderResponseError,
     LLMTransientProviderError,
 )
+from episodic.logging import log_event as _log_event
 
 from ._dto import (
     ActionExecutionResult,
@@ -30,7 +31,6 @@ from ._types import (
     ModelTier,
     ToolExecutionError,
     UnsupportedActionError,
-    _log_event,
 )
 
 if typing.TYPE_CHECKING:

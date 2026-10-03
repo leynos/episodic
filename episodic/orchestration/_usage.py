@@ -1,12 +1,12 @@
 """Usage aggregation helpers for generation orchestration."""
 
-from episodic.llm import LLMUsage
+from episodic.llm.ports import LLMUsage
+from episodic.logging import log_event as _log_event
 from episodic.orchestration._dto import (
     ActionExecutionResult,
     GenerationOrchestrationResult,
     PlannerResult,
 )
-from episodic.orchestration._types import _log_event
 
 
 def _sum_usage(*usage_values: LLMUsage | None) -> LLMUsage:

@@ -117,6 +117,8 @@ or delivery planning.
     ADR-021.
 - [ADR 021: Adopt nose duplication gate](adr/adr-021-adopt-nose-duplication-gate.md)
   - current duplication detector, version pinning, and allowlist key policy.
+- [ADR 022: Orchestration architecture enforcement](adr/adr-022-orchestration-architecture-enforcement.md)
+  - LangGraph node, Celery task, and checkpoint payload enforcement decisions.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 
@@ -169,6 +171,8 @@ or delivery planning.
   - orchestration checkpoint plan.
 - [Configure Celery queue routing](execplans/2-4-3-configure-celery-queue-routing.md)
   - worker routing plan.
+- [Extend architecture enforcement to orchestration code](execplans/2-4-5-extend-architecture-enforcement-to-orchestration-code.md)
+  - orchestration architecture enforcement plan.
 - [LLM port adapter](execplans/3-2-1-llm-port-adapter.md) - large language
   model adapter plan.
 - [Introduce v1 target API prefix](execplans/4-1-1-introduce-v1-target-api-prefix.md)

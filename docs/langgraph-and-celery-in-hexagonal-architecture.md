@@ -36,6 +36,46 @@ mixing infrastructure calls into what should be a domain workflow. Therefore,
 logic should remain in the application layer and invoke only domain services or
 ports, never directly calling outbound adapters in-line.
 
+## Enforced Orchestration Boundaries
+
+Roadmap item `2.4.5` makes those orchestration rules executable through Hecate.
+The production configuration gives LangGraph nodes a dedicated group before the
+broad `orchestration` group and broader adapter prefixes, so the first matching
+group is the strictest useful boundary.
+
+- `orchestration_nodes` covers all production-classified modules:
+  `episodic.orchestration._graph_nodes`, `_graph_protocols`, `_graph_state`, and
+  `_usage`. Node functions may import the `orchestration_checkpoint` DTO group
+  and `domain_ports`, but not Falcon, Celery, SQLAlchemy, OpenAI adapters, or
+  other concrete infrastructure.
+- `orchestration` covers graph builders, planning orchestration, tool execution
+  policy, and `episodic.orchestration.langgraph_costs`, which records provider
+  costs for the direct generation path. This layer may depend on application
+  services, domain ports, and `orchestration_nodes`, but still cannot import
+  inbound or outbound adapters.
+- `orchestration_tasks` covers `episodic.worker.tasks`. Tasks may import
+  `episodic.worker.workloads.WorkloadClass`, domain services, and ports; the
+  worker runtime remains the composition root that wires Celery.
+- `orchestration_checkpoint` covers checkpoint DTO and payload serialization
+  modules. These modules may import domain-port value types and their own DTO
+  group only. `WorkflowCheckpoint` also rejects non-JSON payload values at
+  construction time.
+
+The node/builder split keeps framework mechanics out of node functions without
+making LangGraph itself a domain dependency. `_graph_nodes.py` is the strict,
+ports-and-DTO-only node implementation: its side-effect-free node bodies
+receive planner and tool-executor ports only. `_checkpoint_resume.py` owns
+checkpoint suspension and resume; `_graph_builder.py` assembles those functions
+with the nodes, callbacks, and direct-path cost recording through
+`langgraph_costs.py`. The public `langgraph.py` module remains the
+compatibility facade.
+
+Checkpoint payload auditing is both static and runtime checked. Hecate prevents
+payload modules from importing storage or application services. A structural
+test walks the persisted checkpoint DTO annotations to reject provider-specific
+or ORM-shaped fields, whilst the `WorkflowCheckpoint` constructor verifies that
+payload mappings can be serialized as JSON.
+
 **Graph-Based Logic vs. Domain Rules Clarity:** Another friction point is how
 business rules are encoded. In a hexagonal design, business rules belong in the
 domain layer or application logic, not scattered across infrastructure.

@@ -98,3 +98,9 @@ configuration: `[tool.hecate]` in `pyproject.toml`.[^4] Tests:
   `tests/test_port_contracts.py`,
   `tests/features/architecture_enforcement.feature`, and
   `tests/steps/test_architecture_enforcement_steps.py`
+
+## Addendum (2026-09-30)
+
+The orchestration-specific extension reserved for roadmap item `2.4.5` is
+complete. Celery task entrypoints now use the `orchestration_tasks` Hecate
+group. ADR-022 records the detailed orchestration enforcement decision.
