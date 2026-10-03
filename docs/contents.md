@@ -119,6 +119,10 @@ or delivery planning.
   - current duplication detector, version pinning, and allowlist key policy.
 - [ADR 022: Orchestration architecture enforcement](adr/adr-022-orchestration-architecture-enforcement.md)
   - LangGraph node, Celery task, and checkpoint payload enforcement decisions.
+- [ADR 023: Adopt the shared CV-005 contract
+  library](adr/adr-023-adopt-the-shared-cv005-contract-library.md)
+  - why the CV-005 contract runs from a pinned shared library, and what stays
+    local.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 
