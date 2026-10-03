@@ -9,10 +9,12 @@ does not carry or any retired pin anywhere in the workflows.
 """
 
 import json
+import typing as typ
 
 from hypothesis import given
 from hypothesis import strategies as st
 
+from tests import workflow_reading
 from tests.workflow_reading import (
     REPOSITORY_ROOT,
     Mapping,
@@ -21,6 +23,11 @@ from tests.workflow_reading import (
     workflow_paths,
     workflow_uses,
 )
+
+if typ.TYPE_CHECKING:
+    import pathlib as pl
+
+    import pytest
 
 GENERATE_COVERAGE_ACTION = "leynos/shared-actions/.github/actions/generate-coverage"
 UPLOAD_CODESCENE_ACTION = (
@@ -84,13 +91,33 @@ def test_retired_pins_do_not_reappear_in_workflows() -> None:
             assert str(pin) not in text, f"{workflow_path} references retired pin {pin}"
 
 
-def test_a_quoted_reference_splits_like_an_unquoted_one() -> None:
-    """A quoted publisher reference cannot hide an unrecorded revision."""
-    quoted = {"jobs": {"a": {"steps": [{"uses": f"{GENERATE_COVERAGE_ACTION}@abc"}]}}}
-    reference = f"{GENERATE_COVERAGE_ACTION}@abc"
-    assert uses_in(quoted) == [reference], "a step reference must be found"
-    local = {"jobs": {"a": {"uses": "./.github/workflows/x.yml"}}}
-    assert uses_in(local) == ["./.github/workflows/x.yml"], "a job call is found"
+def test_a_quoted_reference_splits_like_an_unquoted_one(
+    tmp_path: pl.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A quoted publisher reference is split into action and revision as written.
+
+    The workflow below is real YAML text, one quoted and one unquoted
+    reference, read through the same loader and splitting the contract uses, so
+    a regex over the raw text (which kept the quotes) would fail here.
+    """
+    workflow = tmp_path / "w.yml"
+    workflow.write_text(
+        "name: w\n"
+        "on: pull_request\n"
+        "jobs:\n"
+        "  a:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        f"      - uses: '{GENERATE_COVERAGE_ACTION}@abc'\n"
+        f"      - uses: {UPLOAD_CODESCENE_ACTION}@def\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(workflow_reading, "workflow_paths", lambda: (workflow,))
+
+    assert workflow_uses() == [
+        (GENERATE_COVERAGE_ACTION, "abc"),
+        (UPLOAD_CODESCENE_ACTION, "def"),
+    ], "quoted and unquoted references must split identically"
 
 
 _SCALARS = st.one_of(st.none(), st.booleans(), st.integers(), st.text(max_size=8))
@@ -118,7 +145,7 @@ def test_uses_in_finds_a_reference_planted_at_any_depth(
     filler = _without_uses(value)
     planted = {"jobs": {"a": [{"x": filler}, {"uses": reference}]}}
     assert uses_in(planted) == [reference], "the planted reference must be found once"
-    assert uses_in({"uses": 7, "n": [{"uses": None}]}) == [], (
+    assert not uses_in({"uses": 7, "n": [{"uses": None}]}), (
         "a non-string uses value is not a reference"
     )
 

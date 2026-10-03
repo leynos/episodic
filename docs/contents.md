@@ -117,6 +117,9 @@ or delivery planning.
     ADR-021.
 - [ADR 021: Adopt nose duplication gate](adr/adr-021-adopt-nose-duplication-gate.md)
   - current duplication detector, version pinning, and allowlist key policy.
+- [ADR 022: Adopt the shared CV-005 contract library](adr/adr-022-adopt-the-shared-cv005-contract-library.md)
+  - why the CV-005 contract runs from a pinned shared library, and what stays
+    local.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 

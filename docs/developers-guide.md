@@ -136,7 +136,9 @@ line per violation and exits non-zero. The library's own suite proves each rule
 refuses the shape it exists to refuse, so this repository keeps no copy of the
 readers.
 
-What stays local is what the library does not know:
+The decision is recorded in
+[ADR 022](adr/adr-022-adopt-the-shared-cv005-contract-library.md). What stays
+local is what the library does not know:
 `tests/test_action_revisions_contract.py` records each approved shared-action
 revision with the actions nested in it and refuses any unrecorded revision or
 retired pin.
