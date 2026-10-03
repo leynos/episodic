@@ -24,13 +24,14 @@ concurrency:
 jobs:
   coverage-upload:
     # `publish-baseline: always` below also supports the manual main dispatch
-    # used after an automerge that does not emit a push event. Do not let a
-    # dispatch on another ref advance the baseline.
-    if: github.ref == 'refs/heads/main'
+    # used after an automerge that does not emit a push event. The job carries
+    # no `if:` (the shared contract refuses one on a publisher, since it could
+    # skip the baseline); the upload step's own guard requires the main ref, so
+    # a dispatch on another ref uploads nothing, and the environment below
+    # admits `main` alone as a second layer.
     runs-on: ubuntu-latest
     # The CodeScene token lives in this environment, whose deployment policy
-    # admits `main` alone; the codescene environment contract holds it to
-    # this job.
+    # admits `main` alone; the shared contract holds it to this job.
     environment: codescene
     permissions:
       contents: read
@@ -44,6 +45,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
