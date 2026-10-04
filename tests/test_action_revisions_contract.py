@@ -120,42 +120,74 @@ def test_a_quoted_reference_splits_like_an_unquoted_one(
     ], "quoted and unquoted references must split identically"
 
 
-_SCALARS = st.one_of(st.none(), st.booleans(), st.integers(), st.text(max_size=8))
-_YAML_VALUES = st.recursive(
-    _SCALARS,
+_REFERENCES = st.text(min_size=1, max_size=12)
+_KEYS = st.text(max_size=6).filter(lambda key: key != "uses")
+_LEAVES = st.one_of(
+    st.none(),
+    st.booleans(),
+    st.integers(),
+    st.text(max_size=8),
+    _REFERENCES.map(lambda reference: {"uses": reference}),
+    st.integers().map(lambda number: {"uses": number}),
+)
+_WORKFLOWS = st.recursive(
+    _LEAVES,
     lambda children: st.one_of(
-        st.lists(children, max_size=3),
-        st.dictionaries(st.text(max_size=6), children, max_size=3),
+        st.lists(children, max_size=4),
+        st.dictionaries(_KEYS, children, max_size=4),
+        st.tuples(_REFERENCES, children).map(
+            lambda pair: {"uses": pair[0], "with": pair[1]}
+        ),
     ),
-    max_leaves=12,
+    max_leaves=25,
 )
 
 
-@given(value=_YAML_VALUES, reference=st.text(min_size=1, max_size=12))
-def test_uses_in_finds_a_reference_planted_at_any_depth(
-    value: object, reference: str
-) -> None:
-    """Every `uses` string planted in arbitrary nesting is found exactly once.
+def _oracle(value: object) -> list[str]:
+    """List every string stored under a `uses` key, by explicit stack walk.
 
-    The planted reference sits under a `uses` key inside a mapping wrapped in
-    random lists and mappings, and the generated filler is stripped of `uses`
-    keys so it cannot add or hide a reference. Non-string `uses` values are
-    ignored.
+    Deliberately not recursive, so a recursion slip in `uses_in` (a skipped
+    branch, a stop at a `uses` sibling, a wrong type test) cannot be shared by
+    the oracle.
+
+    Parameters
+    ----------
+    value : object
+        A parsed YAML value.
+
+    Returns
+    -------
+    list[str]
+        The `uses` strings, in no particular order.
     """
-    filler = _without_uses(value)
-    planted = {"jobs": {"a": [{"x": filler}, {"uses": reference}]}}
-    assert uses_in(planted) == [reference], "the planted reference must be found once"
-    assert not uses_in({"uses": 7, "n": [{"uses": None}]}), (
-        "a non-string uses value is not a reference"
+    found: list[str] = []
+    pending = [value]
+    while pending:
+        node = pending.pop()
+        match node:
+            case dict():
+                for key, item in node.items():
+                    if key == "uses" and isinstance(item, str):
+                        found.append(item)
+                    if isinstance(item, dict | list):
+                        pending.append(item)
+            case list():
+                pending.extend(node)
+    return found
+
+
+@given(workflow=_WORKFLOWS)
+def test_uses_in_finds_exactly_the_string_uses_values_at_any_depth(
+    workflow: object,
+) -> None:
+    """`uses_in` returns every string under a `uses` key, once, and nothing else.
+
+    Generated trees mix lists, mappings, scalars, `uses` leaves with string and
+    integer values, and mappings that carry both a `uses` string and a nested
+    `with` subtree, so a reference sits at a different depth and beside
+    different siblings on each example. The result is compared, as a multiset,
+    with an independent iterative oracle.
+    """
+    assert sorted(uses_in(workflow)) == sorted(_oracle(workflow)), (
+        "uses_in must match the oracle on every generated tree"
     )
-
-
-def _without_uses(value: object) -> object:
-    """Return `value` with every `uses` mapping key removed at any depth."""
-    match value:
-        case dict():
-            return {k: _without_uses(v) for k, v in value.items() if k != "uses"}
-        case list():
-            return [_without_uses(item) for item in value]
-        case _:
-            return value
