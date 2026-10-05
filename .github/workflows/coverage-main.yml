@@ -84,7 +84,7 @@ jobs:
           "$HOME/.local/bin/vidaimock" --version
 
       - name: Generate coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@7d751eded578e48dacf43ab173d5820e6437c474
         with:
           language: python
           format: cobertura
