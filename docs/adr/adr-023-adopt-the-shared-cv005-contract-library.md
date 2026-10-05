@@ -6,19 +6,23 @@
 
 ## Context and decision
 
-In the context of keeping CodeScene coverage owned by `main` (the estate rule
-CV-005) in Episodic, facing a repository-local copy of the contract that ran as
-six test modules and had to be re-edited whenever the rule gained a clause, the
-decision is to run `cv005-contracts check` from `leynos/shared-actions`
-(`packages/cv005-contracts`) through `make test-workflow-contracts`, fetched by
-`uv tool run` from the full commit named by `CV005_CONTRACTS_REF` in the
-`Makefile`, with this repository's parameters in `.github/cv005.toml`, and
-against keeping the local copy, vendoring the library, or running it from a
-floating branch, to achieve one definition of the rule that every repository
-shares and that is proved by its own suite, accepting that a fix to the rules
-reaches this repository only as a pin bump, that the target needs `uv` and the
-Python 3.13 it fetches, and that anything the library does not know stays a
-small local test.
+Episodic keeps CodeScene coverage owned by `main`, the estate rule CV-005. Its
+repository-local copy of the contract ran as six test modules and had to be
+re-edited whenever the rule gained a clause.
+
+The decision is to run `cv005-contracts check` from `leynos/shared-actions`
+(`packages/cv005-contracts`) through `make test-workflow-contracts`.
+`uv tool run` fetches it from the full commit named by `CV005_CONTRACTS_REF` in
+the `Makefile`, and `.github/cv005.toml` holds this repository's parameters.
+
+The alternatives were to keep the local copy, to vendor the library, and to run
+it from a floating branch. All three were rejected. Adopting the library gives
+one definition of the rule that every repository shares and that its own suite
+proves.
+
+The trade-offs are accepted. A fix to the rules reaches this repository only as
+a pin bump. The target needs `uv` and the Python 3.13 it fetches. Anything the
+library does not know stays a small local test.
 
 ## Consequences
 

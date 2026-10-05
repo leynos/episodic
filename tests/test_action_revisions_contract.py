@@ -80,15 +80,19 @@ def test_tracked_composites_carry_no_retired_dependency() -> None:
 
 
 def test_retired_pins_do_not_reappear_in_workflows() -> None:
-    """Every retired pin in the checked-in record remains absent from workflows."""
+    """No parsed `uses` value in a workflow equals a retired pin in the record.
+
+    A retired pin mentioned only in a YAML comment is inert and does not fail.
+    """
     retired = mapping(_revision_fixture()["retired"], subject="retired action pins")
     assert retired, (
         "the record must name at least one retired pin, or this asserts nothing"
     )
     for workflow_path in workflow_paths():
-        text = workflow_path.read_text(encoding="utf-8")
-        for pin in retired:
-            assert str(pin) not in text, f"{workflow_path} references retired pin {pin}"
+        for reference in uses_in(workflow_reading.load_workflow(workflow_path)):
+            assert reference not in retired, (
+                f"{workflow_path} references retired pin {reference}"
+            )
 
 
 def test_a_quoted_reference_splits_like_an_unquoted_one(
