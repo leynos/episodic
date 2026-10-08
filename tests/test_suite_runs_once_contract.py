@@ -20,7 +20,7 @@ import sys
 
 import pytest
 
-from tests.test_codescene_workflow_contract_support import (
+from tests.workflow_reading import (
     REPOSITORY_ROOT,
     WORKFLOWS_DIRECTORY,
     mapping,
@@ -98,8 +98,12 @@ def test_the_publisher_runs_the_whole_suite_on_every_push_to_main() -> None:
         workflow_jobs(COVERAGE_MAIN_WORKFLOW)[COVERAGE_MAIN_JOB],
         subject="coverage-upload job",
     )
-    assert job.get("if") == "github.ref == 'refs/heads/main'", (
-        "the publisher job may be guarded only by the main ref"
+    assert "if" not in job, (
+        "the publisher job must carry no condition; the upload step's own "
+        "guard keeps a dispatch on another ref from uploading"
+    )
+    assert job.get("environment") == "codescene", (
+        "the publisher job must run in the environment that admits main alone"
     )
 
     step = named_step(COVERAGE_MAIN_WORKFLOW, COVERAGE_MAIN_JOB, "Generate coverage")

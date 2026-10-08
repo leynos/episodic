@@ -70,6 +70,11 @@ jobs:
           restore-keys: |
             uv-envs-${{ runner.os }}-
 
+      # After the uv cache restore, so the checker's pinned environment is
+      # served from `.uv-tools` instead of being fetched on every clean runner.
+      - name: Check the CV-005 contracts
+        run: make test-workflow-contracts
+
       # cargo-binstall clones the nose repository before it downloads the
       # release artefact, so cache the installed binary and skip the whole
       # install on a hit. The key carries the pinned version, so a bump
@@ -191,3 +196,4 @@ jobs:
           python-source: episodic,alembic
           with-ratchet: 'true'
           pytest-workers: ''
+          publish-artefact: 'false'

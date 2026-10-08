@@ -1,0 +1,12 @@
+repository = "leynos/episodic"
+environment = true
+
+# What the ratchet baseline measures: the publisher's generator must carry
+# exactly these inputs, and every lane must measure the same selection.
+[selection]
+language = "python"
+output-path = "coverage.xml"
+format = "cobertura"
+python-source = "episodic,alembic"
+pytest-workers = ""
+with-ratchet = "true"

@@ -13,6 +13,15 @@ UV ?= $(shell command -v uv 2>/dev/null || printf '%s/.local/bin/uv' "$$HOME")
 TOOLS =
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
+
+# The CV-005 CodeScene contracts live in shared-actions and run from a full
+# commit, so a fix is a pin bump. `.github/cv005.toml` holds this repository's
+# only parameters.
+CV005_CONTRACTS_REF ?= a38feb9be25755c30eca5bda96bd3786a5b89c6b
+CV005_CONTRACTS = $(UV_ENV) $(UV) tool run --python 3.13 \
+	--from 'git+https://github.com/leynos/shared-actions@$(CV005_CONTRACTS_REF)\#subdirectory=packages/cv005-contracts' \
+	cv005-contracts
+
 TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.3
 TYPOS_CONFIG_BUILDER = $(UV) tool run --from \
 	"git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_VERSION)" \
@@ -64,11 +73,14 @@ DUPLICATION_GATE = $(UV_ENV) NOSE_BIN=$(NOSE_BIN) $(UV) run scripts/duplication_
         crosshair check-migrations skylos-allow validate \
         install-nose duplication duplication-test duplication-allow \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
-        $(TOOLS) $(VENV_TOOLS)
+        $(TOOLS) $(VENV_TOOLS) test-workflow-contracts
 
 .DEFAULT_GOAL := all
 
-all: build check-fmt test typecheck spelling
+test-workflow-contracts: ## Check the CV-005 CodeScene workflow contracts
+	$(CV005_CONTRACTS) check --repository .
+
+all: build check-fmt test typecheck spelling test-workflow-contracts
 
 .venv: pyproject.toml
 	$(UV_ENV) $(UV) venv --clear
@@ -204,7 +216,7 @@ nixie: ## Validate Mermaid diagrams
 	$(call ensure_tool,nixie)
 	$(NIXIE) --no-sandbox
 
-test: build crosshair $(VENV_TOOLS) ## Run tests
+test: build crosshair test-workflow-contracts $(VENV_TOOLS) ## Run tests, including the workflow contracts
 	$(UV_ENV) $(UV) run pytest -v $(PYTEST_XDIST_ARGS)
 
 check-migrations: build $(VENV_TOOLS) ## Check for schema drift between models and migrations

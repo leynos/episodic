@@ -6,7 +6,9 @@ condition as text. This one runs them. The check step's own script runs under
 output it writes feeds the job's and the upload's declared `if:` conditions.
 So the decision is read end to end from the workflow file: an absent token
 skips the upload, and so does any ref but `main`, on a push or a dispatch
-alike.
+alike. The job carries no condition (the shared contract refuses one on a
+publisher), which reads as always running; the upload step's own guard and the
+`codescene` environment keep another ref from uploading.
 
 The conditions are evaluated by a deliberately tiny reader: `&&`-joined
 `==`/`!=` comparisons of a `github.<field>` or `steps.<id>.outputs.<name>`
@@ -26,7 +28,7 @@ import typing as typ
 
 import pytest
 
-from tests.test_codescene_workflow_contract_support import (
+from tests.workflow_reading import (
     WORKFLOWS_DIRECTORY,
     mapping,
     workflow_jobs,
@@ -142,6 +144,15 @@ SCENARIOS = [
         ),
         id="dispatch-branch",
     ),
+    pytest.param(
+        Scenario(
+            has_token=False,
+            event_name="workflow_dispatch",
+            ref=BRANCH,
+            uploads=False,
+        ),
+        id="no-token-dispatch-branch",
+    ),
 ]
 
 
@@ -211,6 +222,9 @@ def test_a_skipped_upload_is_reported_without_the_secret(
     assert "secrets." not in command, f"the notice must read no secret: {command!r}"
     assert "::notice" in command, f"the notice must annotate the run: {command!r}"
     job_runs, context = _job_decision(tmp_path, scenario)
+    # The `codescene` environment admits `main` alone, so a run on another ref
+    # is refused before any step; only a main run can need the notice.
+    job_runs = job_runs and scenario.ref == TRUNK
     reported = job_runs and _evaluate(notice.get("if"), context)
     uploads = job_runs and _evaluate(_upload_step().get("if"), context)
     assert reported is (job_runs and not uploads), (
