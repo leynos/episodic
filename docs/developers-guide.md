@@ -244,6 +244,14 @@ CrossHair test. A new coverage input must be added to the contract's
 collection-neutral set deliberately, after checking that it does not narrow the
 suite.
 
+[`tests/test_publisher_upload_scenarios.py`](../tests/test_publisher_upload_scenarios.py)
+runs the upload decision rather than reading its text. It renders the check
+step's own script with and without a token, then evaluates the declared `if:`
+conditions for a push and a dispatch on `main` and on a feature branch. The
+publisher job carries no condition, which reads as always running, so only a
+main run with a token uploads, and the skip notice runs exactly when the job
+runs and the upload does not.
+
 ### Maintain composite action pins
 
 An immutable full SHA prevents a tag from moving, but does not freeze the
