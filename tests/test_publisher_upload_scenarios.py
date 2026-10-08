@@ -144,6 +144,15 @@ SCENARIOS = [
         ),
         id="dispatch-branch",
     ),
+    pytest.param(
+        Scenario(
+            has_token=False,
+            event_name="workflow_dispatch",
+            ref=BRANCH,
+            uploads=False,
+        ),
+        id="no-token-dispatch-branch",
+    ),
 ]
 
 
