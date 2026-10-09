@@ -1,8 +1,14 @@
 # VidaiMock release/CLI mismatch: upgrade the pin and consolidate startup logic
 
 Branch: `use-cpython-for-pylint` PR:
-<https://github.com/leynos/episodic/pull/339> Baseline commit before this work:
-`e7e1f04` (post-rebase head); rebased onto `main` at `f1bdaca`, head `bf2acc8`
+<https://github.com/leynos/episodic/pull/339>
+
+Current recorded code commit: `23c09aab9b6735f1efb8d88f93340ca80ca39704`. The
+branch was rebased from `b97e00477b7575ef0ba61ebb9af707763126ae44` onto
+`origin/main` at `6aa6e93074abca1b4f458ca9bce32ad2fe956a58`, preserving the
+branch-only range beginning at `f1bdacae79426f5453f52fc87caa29cd90aa1e2f`. The
+history below records earlier checkpoints; the latest verified disposition is
+in the 2026-10-09 section at the end.
 
 ## Goal
 
@@ -222,11 +228,11 @@ self-derived. Recorded as a deliberate decision, not an oversight.
 - [x] Push the local commits and verify remote branch parity. PR #339's
       description now has current validation results and the Lody session link
       as its terminal `## References` section.
-- [ ] Verify hosted workflow results and complete a fresh post-fix review
-      after publishing this plan revision. A trial review on `289d87d` stopped
-      during setup when the plan-only head change became necessary; it returned
-      no findings. The earlier baseline review invocation does not confirm
-      resolution.
+- [x] Earlier hosted workflow and review invocations are recorded with their
+      exact historical heads and outcomes below. They do not establish current
+      results for a subsequently rebased head.
+- [ ] After publishing the current rebased head, inspect its hosted workflow
+      results and obtain a fresh review if the review service accepts one.
 
 ### CodeScene delta at `bf2acc8` (historical)
 
@@ -790,3 +796,77 @@ complexity score.
 The five requested findings meet their stated criteria. Local gates and hosted
 CI pass at the verified code and test head. The external CodeScene failure
 remains open pending inspection and disposition of its latest report.
+
+## Rebase and provider-reader follow-up — 2026-10-09
+
+The branch was rebased onto `origin/main` at
+`6aa6e93074abca1b4f458ca9bce32ad2fe956a58`. The pre-rebase head was
+`b97e00477b7575ef0ba61ebb9af707763126ae44`; the replayed branch-only range
+began at `f1bdacae79426f5453f52fc87caa29cd90aa1e2f`. Conflicts were resolved
+after examining both sides: the merge retained main's newer VidaiMock `0.3.1`
+pin and smoke workflow, kept the branch's shared harness and refactors,
+retained main's `_require_payload_fields` and import/docstring improvements,
+and skipped the final regenerated `typos.toml` commit because its output
+matched the target. The semantic range comparison matched all 24 non-empty
+branch commits, and `git diff --check` passed against the target.
+
+The provider reader now delegates filesystem discovery to
+`_discover_provider_paths` and document reading/validation to
+`_read_provider_name`. The discovery helper consumes and closes the `scandir`
+iterator inside the `OSError`/`UnicodeError` boundary, selects only case-
+sensitive `.yaml` names, and preserves sorted processing and the directory
+diagnostic with the original exception chained. The reader helper preserves
+UTF-8 parsing, the `OSError`/`UnicodeError`/`yaml.YAMLError` translation,
+mapping and required-name checks, file diagnostics, exception causes, and
+`str(document["name"])` conversion. `_configured_provider_names` still owns
+empty-directory rejection and sorted output; it preserves declared names and
+duplicates. No new name validation was introduced.
+
+The provider configuration and smoke-script test modules passed together: 29
+tests passed. The parameterized invalid-file test was also run verbosely; both
+`invalid-utf8` and `malformed-yaml` cases appeared and passed. The scan
+iteration failure test verified translation, cause identity, diagnostic path,
+and iterator closure. The script was smoke-tested using the workflow-pinned
+VidaiMock `0.3.1` archive; its SHA-256 matched the workflow value and the
+orchestration provider/template exchange passed. Logs:
+`/tmp/pytest-use-cpython-for-pylint-provider-reader-final.out`,
+`/tmp/pytest-use-cpython-for-pylint-provider-reader-parameter-cases-final.out`,
+and `/tmp/vidaimock-smoke-use-cpython-for-pylint-rebased.out`.
+
+CodeScene's local `cs check` scored `scripts/check_vidaimock_isolated.py` 10.00
+with no warnings; local `cs review` returned an empty review. CodeGraph's
+complexity measurement reported `_configured_provider_names` at cyclomatic
+complexity 3, with 13 module functions averaging 3.23 and a maximum of 6. The
+local measurements show the method below the historical complexity threshold;
+no helper was added solely to lower the module mean. The hosted CodeScene delta
+was not rerun for this rebased head, so no current hosted finding clearance is
+claimed.
+
+All six repository gates passed sequentially on the final source tree before
+its code commit `23c09aab9b6735f1efb8d88f93340ca80ca39704`: `make check-fmt`,
+`make lint`, `make typecheck`, `make test` (1,609 passed, 3 skipped, 50
+snapshots), `make markdownlint`, and `make nixie`. Lint used CPython 3.14 and
+`--jobs=2` for all three Pylint passes. Logs are recorded in the preceding gate
+section. The shared-action PR coverage invocation was reproduced with Slipcover
+on CPython 3.14.4 using the workflow's serial `episodic,alembic` scope: 1,608
+passed, 4 skipped, and 50 snapshots. The Cobertura report was inspected: 17,172
+of 18,953 lines (90.60%) and 75.04% branch coverage. Logs are
+`/tmp/pr-coverage-sync-use-cpython-for-pylint.out`,
+`/tmp/pr-coverage-tools-use-cpython-for-pylint.out`, and
+`/tmp/pr-coverage-use-cpython-for-pylint.out`; the XML report is
+`/tmp/pr-coverage-use-cpython-for-pylint.xml`. No local ratchet baseline was
+available, so the hosted baseline comparison remains unverified.
+
+The provider-reader code and tests are committed locally in
+`23c09aab9b6735f1efb8d88f93340ca80ca39704`
+(`Split VidaiMock provider configuration checks`). At the time this section was
+written, the remote PR still pointed to the pre-rebase head. Publication and
+exact-head hosted CI and review checks therefore remain outstanding; the older
+hosted runs above are not evidence for this rebased commit. The current
+contract requires those results to be recorded against their observed commit,
+and any unavailable or paused review remains an explicit limitation.
+
+Revision note: reconciled rebase conflicts and provider-reader findings with
+the current source, recorded focused and full local validation plus measured
+complexity, and separated pending publication checks from historical hosted
+results.
