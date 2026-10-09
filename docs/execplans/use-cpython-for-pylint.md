@@ -231,8 +231,11 @@ self-derived. Recorded as a deliberate decision, not an oversight.
 - [x] Earlier hosted workflow and review invocations are recorded with their
       exact historical heads and outcomes below. They do not establish current
       results for a subsequently rebased head.
-- [ ] After publishing the current rebased head, inspect its hosted workflow
-      results and obtain a fresh review if the review service accepts one.
+- [x] Published the rebased candidate and inspected its exact-head CI and
+      CodeScene results; see the 2026-10-09 publication evidence below.
+- [ ] The existing managed CodeRabbit request remains queued. Verify its
+      inspected commit and outcome if it posts; the automatic status check and
+      older completed invocation do not establish fresh review coverage.
 
 ### CodeScene delta at `bf2acc8` (historical)
 
@@ -855,7 +858,8 @@ of 18,953 lines (90.60%) and 75.04% branch coverage. Logs are
 `/tmp/pr-coverage-tools-use-cpython-for-pylint.out`, and
 `/tmp/pr-coverage-use-cpython-for-pylint.out`; the XML report is
 `/tmp/pr-coverage-use-cpython-for-pylint.xml`. No local ratchet baseline was
-available, so the hosted baseline comparison remains unverified.
+available. The hosted CI coverage step compared against a 90.85% baseline with
+a ±1.00 percentage-point tolerance and passed.
 
 The provider-reader code and tests are committed locally in
 `23c09aab9b6735f1efb8d88f93340ca80ca39704`
@@ -870,3 +874,47 @@ Revision note: reconciled rebase conflicts and provider-reader findings with
 the current source, recorded focused and full local validation plus measured
 complexity, and separated pending publication checks from historical hosted
 results.
+
+## Published candidate evidence — 2026-10-09
+
+The source commit and plan reconciliation commit were pushed to PR #339 with
+`--force-with-lease` against the observed remote feature head
+`b97e00477b7575ef0ba61ebb9af707763126ae44`. At publication, local `HEAD`,
+`origin/use-cpython-for-pylint`, and the pull request head are
+`b5fa74988aa96aec9ec3909162c4384b87e10bdb`; PR #339 remains open and targets
+`main`, whose observed SHA is `6aa6e93074abca1b4f458ca9bce32ad2fe956a58`.
+
+Hosted CI run
+[37922457194](https://github.com/leynos/episodic/actions/runs/37922457194)
+completed successfully on `b5fa74988aa96aec9ec3909162c4384b87e10bdb`. Its
+`lint-test` job and all 32 steps passed formatting, Markdown lint, lint,
+duplication tests, spelling, typecheck, VidaiMock availability and smoke
+checks, and coverage. Hosted coverage was 90.60% against a 90.85% previous
+baseline; the ±1.00 percentage-point ratchet passed. The local
+action-equivalent run and inspected Cobertura report are recorded above.
+
+Hosted CodeScene result
+[7880590](https://codescene.io/projects/76628/delta/results/7880590) completed
+with five quality gates passed and one advisory Code Duplication failure. Its
+finding is in `episodic/llm/openai_api/utils_config.py`, where it reports
+similar structure in `_is_non_negative_number`, `_is_positive_number`, and
+`_is_valid_chars_per_token`. The previously reported duplication in
+`scripts/tests/test_check_vidaimock_provider_config.py` is absent from this
+current report. Local `cs check` scored both changed files 10.00 and local
+`cs review` returned no findings; the local test-file `cs delta` emitted no
+finding. These local results do not replace the hosted report. The numeric
+validator advisory remains open as a separate finding; no suppression was
+added. CodeGraph measured `_configured_provider_names` at complexity 3 and the
+13-function module mean at 3.23 (maximum 6), so no current complex-method
+finding is reported for that method.
+
+The CodeRabbit status context is `SUCCESS`, but no CodeRabbit review entry was
+submitted on this head. The managed queue already contains review request
+`3be21dc8` for `leynos/episodic#339`; it remains pending, so no duplicate was
+enqueued. The latest completed `coderabbit review --agent` invocation is still
+the zero-finding review on `09aee8f`, which is not evidence for this rebased
+candidate. The review outcome on the current head is therefore pending.
+
+Revision note: recorded the force-with-lease publication, successful exact-head
+CI, current hosted CodeScene advisory, local complexity results, and the
+existing queued review without treating its status as completed evidence.
