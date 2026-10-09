@@ -135,7 +135,7 @@ def _task_rollup_values(rollup: TaskRollupLedgerEntry) -> dict[str, object]:
     }
 
 
-def _pricing_snapshot_insert_statement(snapshot: PricingSnapshot) -> Insert:
+def _snapshot_insert_statement(snapshot: PricingSnapshot) -> Insert:
     """Build the idempotent insert statement for one pricing snapshot."""
     return (
         insert(PricingSnapshotRecord)
@@ -236,9 +236,14 @@ class SqlAlchemyCostLedgerStore:
             ``parse_instant``'s ``"timestamp must include timezone
             information."`` error.
         """  # noqa: DOC502  # parse_instant raises on the adapter's behalf.
-        await self._record_snapshot_insert(snapshot)
+        statement = _snapshot_insert_statement(snapshot)
+        await self._record_snapshot_insert(snapshot, statement)
 
-    async def _record_snapshot_insert(self, snapshot: PricingSnapshot) -> None:
+    async def _record_snapshot_insert(
+        self,
+        snapshot: PricingSnapshot,
+        statement: Insert,
+    ) -> None:
         """Instrument snapshot persistence while preserving its outcome."""
         started = self._clock.monotonic_seconds()
         outcome = "error"
@@ -248,7 +253,7 @@ class SqlAlchemyCostLedgerStore:
             attributes={"operation": "ensure_snapshot"},
         ) as span:
             try:
-                outcome = await self._persist_snapshot(snapshot)
+                outcome = await self._persist_snapshot(snapshot, statement)
             except PricingSnapshotCollisionError:
                 outcome = "collision"
                 failure_category = "pricing_snapshot.collision"
@@ -262,12 +267,14 @@ class SqlAlchemyCostLedgerStore:
                     span.set_attribute("failure_category", failure_category)
                 self._record_ensure_outcome(started, outcome, failure_category)
 
-    async def _persist_snapshot(self, snapshot: PricingSnapshot) -> str:
+    async def _persist_snapshot(
+        self,
+        snapshot: PricingSnapshot,
+        statement: Insert,
+    ) -> str:
         """Insert or reuse a row, translating content-hash collisions."""
         try:
-            result = await self._session.execute(
-                _pricing_snapshot_insert_statement(snapshot)
-            )
+            result = await self._session.execute(statement)
         except IntegrityError as exc:
             # The id conflict target does not cover the unique content hash;
             # a duplicate hash under another ID is a catalogue defect.
