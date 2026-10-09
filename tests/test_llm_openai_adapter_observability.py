@@ -78,6 +78,47 @@ def _success_payload() -> dict[str, object]:
 
 
 @pytest.mark.asyncio
+async def test_explicit_runtime_collaborators_reach_adapter_unchanged() -> None:
+    """Retain each collaborator from an explicitly supplied runtime object."""
+    from episodic.llm.openai_adapter import (
+        OpenAICompatibleLLMAdapter,
+        OpenAICompatibleLLMConfig,
+        OpenAICompatibleLLMRuntime,
+    )
+
+    tracer = RecordingTracer()
+    metrics = _RecordingMetrics()
+    clock = _SteppingClock()
+    runtime = OpenAICompatibleLLMRuntime(
+        tracer=tracer,
+        metrics=metrics,
+        clock=clock,
+    )
+    config = OpenAICompatibleLLMConfig(
+        base_url="https://example.test/v1",
+        api_key="test-key",
+    )
+
+    async with (
+        httpx.AsyncClient() as client,
+        OpenAICompatibleLLMAdapter(
+            config=config,
+            client=client,
+            runtime=runtime,
+        ) as adapter,
+    ):
+        assert adapter._tracer is runtime.tracer, (
+            "the adapter must retain the supplied tracer"
+        )
+        assert adapter._metrics is runtime.metrics, (
+            "the adapter must retain the supplied metrics sink"
+        )
+        assert adapter._clock is runtime.clock, (
+            "the adapter must retain the supplied monotonic clock"
+        )
+
+
+@pytest.mark.asyncio
 async def test_successful_request_emits_span_counter_and_latency(
     openai_adapter_factory: _OpenAIAdapterFactory,
     openai_json_response: _OpenAIJsonResponseBuilder,

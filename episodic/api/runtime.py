@@ -7,7 +7,11 @@ import psycopg
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
+from episodic.canonical.storage import (
+    FilesystemObjectStore,
+    SqlAlchemyUnitOfWork,
+    UnitOfWorkRuntime,
+)
 from episodic.cost.engine import PricingEngine
 from episodic.cost.pricing_catalogue import FilePricingCatalogue
 from episodic.cost.recorder import CostRecorder
@@ -20,9 +24,14 @@ from episodic.llm import LLMProviderOperation, LLMTokenBudget
 from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
+    OpenAICompatibleLLMRuntime,
 )
-from episodic.observability import StructuredLogMetrics, StructuredLogTracer
-from episodic.observability_runtime import ObservabilityRuntime
+from episodic.observability import (
+    NoopMetrics,
+    NoopTracer,
+    StructuredLogMetrics,
+    StructuredLogTracer,
+)
 
 from . import create_app
 from .authorization import StaticBearerTokenAuthorization
@@ -41,7 +50,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.llm import LLMPort
-    from episodic.observability import TracerPort, ValueMetricsPort
+    from episodic.observability import MetricsPort, TracerPort, ValueMetricsPort
 
     from .types import UowFactory
 
@@ -79,7 +88,8 @@ class PsycopgConnectKwargs(typ.TypedDict, total=False):
 def _build_llm_port(
     config: RuntimeConfig,
     *,
-    observability: ObservabilityRuntime,
+    tracer: TracerPort | None = None,
+    metrics: MetricsPort | None = None,
 ) -> OpenAICompatibleLLMAdapter | None:
     """Build the environment-configured OpenAI-compatible LLM adapter."""
     if config.llm_base_url is None or config.llm_api_key is None:
@@ -94,14 +104,18 @@ def _build_llm_port(
             token_limit_param=config.llm_token_limit_param,
             timeout_seconds=config.llm_timeout_seconds,
         ),
-        observability=observability,
+        runtime=OpenAICompatibleLLMRuntime(
+            tracer=NoopTracer() if tracer is None else tracer,
+            metrics=NoopMetrics() if metrics is None else metrics,
+        ),
     )
 
 
 def _build_database_probe(
     database_url: str,
     *,
-    observability: ObservabilityRuntime,
+    metrics: MetricsPort | None = None,
+    tracer: TracerPort | None = None,
 ) -> tuple[ReadinessProbe, UowFactory, ShutdownHook]:
     """Build the database readiness probe and unit-of-work factory."""
     async_database_url, probe_connection_kwargs = _normalize_database_urls(database_url)
@@ -128,7 +142,7 @@ def _build_database_probe(
     def uow_factory() -> CanonicalUnitOfWork:
         return SqlAlchemyUnitOfWork(
             session_factory,
-            observability=observability,
+            runtime=UnitOfWorkRuntime(metrics=metrics, tracer=tracer),
         )
 
     return (
@@ -253,16 +267,14 @@ def create_app_from_env() -> asgi.App:
     """Build the Falcon ASGI service from environment configuration."""
     config = _load_runtime_config()
     metrics: ValueMetricsPort = StructuredLogMetrics()
-    observability = ObservabilityRuntime(
-        metrics=metrics,
-        tracer=StructuredLogTracer(),
-    )
+    tracer = StructuredLogTracer()
     database_probe, uow_factory, shutdown_hook = _build_database_probe(
         config.database_url,
-        observability=observability,
+        metrics=metrics,
+        tracer=tracer,
     )
     object_store = FilesystemObjectStore(config.source_intake_object_store_root)
-    llm_port = _build_llm_port(config, observability=observability)
+    llm_port = _build_llm_port(config, tracer=tracer, metrics=metrics)
     if llm_port is None:
         launcher = None
         shutdown_hooks = (shutdown_hook,)
@@ -272,7 +284,7 @@ def create_app_from_env() -> asgi.App:
             llm_port,
             _GenerationLauncherRuntime(
                 metrics=metrics,
-                tracer=observability.tracer,
+                tracer=tracer,
                 object_store=object_store,
             ),
             config=config,
@@ -296,7 +308,7 @@ def create_app_from_env() -> asgi.App:
             launcher=launcher,
             generation_source_limits=config.generation_source_limits,
             metrics=metrics,
-            tracer=observability.tracer,
+            tracer=tracer,
             authorization=StaticBearerTokenAuthorization(
                 token=config.authorization_bearer_token,
                 principal_id=config.authorization_principal_id,

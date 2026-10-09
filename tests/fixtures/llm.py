@@ -17,9 +17,9 @@ from episodic.llm import LLMProviderOperation, LLMRequest, LLMTokenBudget
 from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
+    OpenAICompatibleLLMRuntime,
 )
 from episodic.observability import NoopMetrics, NoopTracer, PerfCounterClock
-from episodic.observability_runtime import ObservabilityRuntime
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -194,7 +194,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
                     chars_per_token=chars_per_token,
                 ),
                 client=client,
-                observability=ObservabilityRuntime(
+                runtime=OpenAICompatibleLLMRuntime(
                     metrics=NoopMetrics() if metrics is None else metrics,
                     clock=PerfCounterClock() if clock is None else clock,
                     tracer=NoopTracer() if tracer is None else tracer,

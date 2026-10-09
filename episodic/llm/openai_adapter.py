@@ -9,6 +9,7 @@ tests and callers that import adapter internals directly.
 from episodic.llm.openai_api.adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
+    OpenAICompatibleLLMRuntime,
 )
 from episodic.llm.openai_api.request import (
     _build_payload,
@@ -33,6 +34,7 @@ from episodic.llm.openai_api.utils import (
 __all__ = [
     "OpenAICompatibleLLMAdapter",
     "OpenAICompatibleLLMConfig",
+    "OpenAICompatibleLLMRuntime",
     "_build_payload",
     "_check_http_status",
     "_coerce_operation",

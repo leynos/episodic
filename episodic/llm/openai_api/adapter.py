@@ -51,16 +51,17 @@ from episodic.llm.ports import (
     LLMResponse,
     LLMTransientProviderError,
 )
-from episodic.observability_runtime import ObservabilityRuntime
+from episodic.observability import (
+    MetricsPort,
+    MonotonicClockPort,
+    NoopMetrics,
+    NoopTracer,
+    PerfCounterClock,
+    TracerPort,
+)
 
 if typ.TYPE_CHECKING:
     from types import TracebackType
-
-    from episodic.observability import (
-        MetricsPort,
-        MonotonicClockPort,
-        TracerPort,
-    )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -114,6 +115,15 @@ class OpenAICompatibleLLMConfig:
     __post_init__ = _validate_llm_config
 
 
+@dc.dataclass(frozen=True, slots=True)
+class OpenAICompatibleLLMRuntime:
+    """Runtime collaborators used by the OpenAI-compatible LLM adapter."""
+
+    tracer: TracerPort = dc.field(default_factory=NoopTracer)
+    metrics: MetricsPort = dc.field(default_factory=NoopMetrics)
+    clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
+
+
 class OpenAICompatibleLLMAdapter(LLMPort):
     """Call an OpenAI-compatible HTTP endpoint.
 
@@ -127,9 +137,9 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         adapter creates its own client and sets ``_owns_client`` to ``True``.
         When supplied, ``_owns_client`` is ``False`` and caller-owned client
         lifecycle remains outside the adapter.
-    observability
-        Shared metrics, tracing, and monotonic-clock ports. When omitted, the
-        adapter uses the canonical no-op sinks and system clock.
+    runtime
+        Optional runtime collaborators for tracing, metrics, and monotonic
+        timing. Defaults to the canonical no-op sinks and system clock.
 
     Raises
     ------
@@ -145,12 +155,12 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         *,
         config: OpenAICompatibleLLMConfig,
         client: httpx.AsyncClient | None = None,
-        observability: ObservabilityRuntime | None = None,
+        runtime: OpenAICompatibleLLMRuntime | None = None,
     ) -> None:
-        ports = ObservabilityRuntime() if observability is None else observability
-        self._tracer: TracerPort = ports.tracer
-        self._metrics: MetricsPort = ports.metrics
-        self._clock: MonotonicClockPort = ports.clock
+        effective_runtime = OpenAICompatibleLLMRuntime() if runtime is None else runtime
+        self._tracer = effective_runtime.tracer
+        self._metrics = effective_runtime.metrics
+        self._clock = effective_runtime.clock
         self._base_url = config.base_url.rstrip("/")
         self._api_key = config.api_key
         self._provider_operation = _coerce_operation(config.provider_operation)

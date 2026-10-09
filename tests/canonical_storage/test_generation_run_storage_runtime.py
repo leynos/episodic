@@ -8,7 +8,7 @@ import pytest
 
 from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage import SqlAlchemyUnitOfWork, UnitOfWorkRuntime
 from episodic.canonical.storage.generation_run_storage_runtime import (
     GenerationRunStorageRuntime,
 )
@@ -37,7 +37,7 @@ async def test_generation_run_store_uses_injected_runtime(
 
     async with SqlAlchemyUnitOfWork(
         session_factory,
-        generation_run_runtime=runtime,
+        runtime=UnitOfWorkRuntime(generation_run_runtime=runtime),
     ) as uow:
         await uow.generation_runs.create_run(run)
         updated = await uow.generation_runs.update_run_status(

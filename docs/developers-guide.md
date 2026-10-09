@@ -946,11 +946,11 @@ default test doubles for the boundary. For tracing, tests should reuse
 `RecordedSpan` (with its attributes and completion state) for deterministic
 assertions.
 
-When one composition seam must pass all three ports to multiple adapters, use
-the frozen `ObservabilityRuntime` bundle from `episodic.observability_runtime`.
-The runtime composition root should create one bundle and pass that same
-instance to each adapter that shares its sinks. Feature APIs that use only one
-port should continue to accept that port directly.
+Composition roots should use the feature-specific runtime bundles at adapter
+boundaries: `OpenAICompatibleLLMRuntime` for the OpenAI-compatible LLM adapter
+and `UnitOfWorkRuntime` for canonical storage. These frozen values keep related
+collaborators together while retaining each feature's own defaults and
+dependencies.
 
 ## Database migrations
 
@@ -1481,8 +1481,8 @@ supplied runtime is returned unchanged, so an explicit bundle always wins. When
 time via `datetime.now(datetime.UTC)`, identifiers via `uuid.uuid4()`,
 `NoopMetrics`, and `PerfCounterClock`. The optional `metrics` and
 `monotonic_clock` keyword arguments override those two defaults individually,
-while the unit of work takes those ports from its shared `ObservabilityRuntime`
-and forwards them to the repositories.
+while the unit of work takes those ports from its `UnitOfWorkRuntime` and
+forwards them to the repositories.
 
 Tests inject deterministic providers instead of patching module state. The
 source-intake repository tests build a `SourceIntakeStorageRuntime` with a fixed

@@ -15,7 +15,8 @@ if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
 
     from episodic.api.dependencies import ApiDependencies
-    from episodic.observability_runtime import ObservabilityRuntime
+    from episodic.canonical.storage import UnitOfWorkRuntime
+    from episodic.llm.openai_adapter import OpenAICompatibleLLMRuntime
 
 
 class _RecordingMetrics:
@@ -148,18 +149,19 @@ async def test_create_app_from_env_shares_production_observability(
     assert dependencies.launcher.tracer is dependencies.tracer, (
         "the launcher must share the composition root's tracer"
     )
-    adapter_observability = typ.cast(
-        "ObservabilityRuntime", adapter_kwargs["observability"]
+    adapter_runtime = typ.cast("OpenAICompatibleLLMRuntime", adapter_kwargs["runtime"])
+    uow_runtime = typ.cast("UnitOfWorkRuntime", uow_kwargs["runtime"])
+    assert adapter_runtime.metrics is dependencies.launcher.metrics, (
+        "the LLM adapter must receive the launcher's metrics sink"
     )
-    uow_observability = typ.cast("ObservabilityRuntime", uow_kwargs["observability"])
-    assert adapter_observability is uow_observability, (
-        "LLM and storage adapters must share one observability bundle"
+    assert adapter_runtime.tracer is dependencies.tracer, (
+        "the LLM adapter must receive the composition root's tracer"
     )
-    assert adapter_observability.metrics is dependencies.metrics, (
-        "adapters must receive the composition root's metrics sink"
+    assert uow_runtime.metrics is dependencies.launcher.metrics, (
+        "the unit of work must receive the launcher's metrics sink"
     )
-    assert adapter_observability.tracer is dependencies.tracer, (
-        "adapters must receive the composition root's tracer"
+    assert uow_runtime.tracer is dependencies.tracer, (
+        "the unit of work must receive the composition root's tracer"
     )
 
     await dependencies.shutdown_hooks[0]()

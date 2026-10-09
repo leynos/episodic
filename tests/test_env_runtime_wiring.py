@@ -18,7 +18,7 @@ if typ.TYPE_CHECKING:
 
     from episodic.api.dependencies import ApiDependencies
     from episodic.llm import LLMRequest, LLMResponse
-    from episodic.observability_runtime import ObservabilityRuntime
+    from episodic.observability import MetricsPort, TracerPort
 
 
 def test_create_app_from_env_requires_database_url(
@@ -285,10 +285,11 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
     def _tracking_build(
         database_url: str,
         *,
-        observability: ObservabilityRuntime,
+        metrics: MetricsPort | None = None,
+        tracer: TracerPort | None = None,
     ) -> tuple[object, ...]:
         probe, uow, original_hook = original_build(
-            database_url, observability=observability
+            database_url, metrics=metrics, tracer=tracer
         )
 
         async def _tracked_hook() -> None:
