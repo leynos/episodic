@@ -191,10 +191,10 @@ def test_load_runtime_config_loads_provider_request_options(
     assert config.llm_service_tier == "flex", (
         f"expected the configured service tier, got {config.llm_service_tier!r}"
     )
-    assert config.llm_token_limit_param == "max_completion_tokens", (  # noqa: S105 - parameter name, not a secret.
+    assert config.llm_token_limit_param == "max_completion_tokens", (  # ruff: ignore[hardcoded-password-string] - parameter name, not a secret.
         f"expected the configured token parameter, got {config.llm_token_limit_param!r}"
     )
-    assert config.llm_timeout_seconds == 600.0, (
+    assert config.llm_timeout_seconds == pytest.approx(600.0), (
         f"expected the configured timeout, got {config.llm_timeout_seconds!r}"
     )
 

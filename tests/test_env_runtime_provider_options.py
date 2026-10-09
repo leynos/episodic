@@ -124,10 +124,10 @@ def test_create_app_from_env_propagates_provider_request_options(
     assert kwargs["service_tier"] == "flex", (
         f"expected service tier 'flex', got {kwargs['service_tier']!r}"
     )
-    assert kwargs["token_limit_param"] == "max_completion_tokens", (  # noqa: S105 - parameter name, not a secret.
+    assert kwargs["token_limit_param"] == "max_completion_tokens", (  # ruff: ignore[hardcoded-password-string] - parameter name, not a secret.
         f"expected max_completion_tokens, got {kwargs['token_limit_param']!r}"
     )
-    assert kwargs["timeout_seconds"] == 600.0, (
+    assert kwargs["timeout_seconds"] == pytest.approx(600.0), (
         f"expected a 600 second timeout, got {kwargs['timeout_seconds']!r}"
     )
 

@@ -227,12 +227,12 @@ class _ChatUsageDetailTotals:
 
     @property
     def input_detail_tokens(self) -> int:
-        """Return cached and audio input tokens."""
+        """Cached and audio input tokens."""
         return (self.cached_input or 0) + (self.audio_input or 0)
 
     @property
     def output_audio_tokens(self) -> int:
-        """Return audio output tokens."""
+        """Audio output token count."""
         return self.audio_output or 0
 
 
@@ -264,7 +264,7 @@ def _build_chat_usage_metrics(
     ------
     OpenAIResponseValidationError
         If nested token details exceed their parent token totals.
-    """  # noqa: DOC502  # _validate_chat_usage_detail_totals raises for this helper.
+    """  # ruff: ignore[docstring-extraneous-exception]  # _validate_chat_usage_detail_totals raises for this helper.
     prompt_tokens = _extract_token_count(usage_payload, "prompt_tokens")
     completion_tokens = _extract_token_count(usage_payload, "completion_tokens")
     cached_input = _extract_nested_token_count(
@@ -323,7 +323,7 @@ def _normalize_chat_provider_call_usage(
     ------
     OpenAIResponseValidationError
         If nested token details exceed their parent token totals.
-    """  # noqa: DOC502  # _build_chat_usage_metrics raises for the normalizer.
+    """  # ruff: ignore[docstring-extraneous-exception]  # _build_chat_usage_metrics raises for the normalizer.
     if usage_payload is None:
         return None
     metrics = _build_chat_usage_metrics(usage_payload)

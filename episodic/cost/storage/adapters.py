@@ -235,7 +235,7 @@ class SqlAlchemyCostLedgerStore:
             If ``snapshot.retrieved_at`` lacks timezone information, via
             ``parse_instant``'s ``"timestamp must include timezone
             information."`` error.
-        """  # noqa: DOC502  # parse_instant raises on the adapter's behalf.
+        """  # ruff: ignore[docstring-extraneous-exception]  # parse_instant raises on the adapter's behalf.
         statement = _snapshot_insert_statement(snapshot)
         await self._record_snapshot_insert(snapshot, statement)
 

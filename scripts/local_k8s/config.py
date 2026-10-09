@@ -112,7 +112,7 @@ class PreviewConfig:
     # Secrets or ExternalSecret resources.
     database_url: str = "postgresql+asyncpg://episodic:episodic@postgres:5432/episodic"
     # Local-preview bearer token for /v1 requests; not a production credential.
-    api_bearer_token: str = "local-dev-token"  # noqa: S105 - local-only token.
+    api_bearer_token: str = "local-dev-token"  # ruff: ignore[hardcoded-password-string] - local-only token.
     openai_base_url: str = dc.field(
         default_factory=lambda: os.environ.get(
             "OPENAI_BASE_URL", "https://api.openai.com/v1"

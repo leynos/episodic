@@ -110,7 +110,7 @@ class OpenAICompatibleLLMConfig:
     # Optional provider-specific request options; see OpenAIPayloadOptions.
     reasoning_effort: str | None = None
     service_tier: str | None = None
-    token_limit_param: str = "max_tokens"  # noqa: S105 - parameter name, not a secret.
+    token_limit_param: str = "max_tokens"  # ruff: ignore[hardcoded-password-string] - parameter name, not a secret.
 
     __post_init__ = _validate_llm_config
 

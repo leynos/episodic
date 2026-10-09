@@ -93,7 +93,7 @@ def test_secret_manifest_renders_database_url() -> None:
 
 def test_secret_manifest_renders_bearer_token() -> None:
     """Create the app Secret with the local authorization bearer token."""
-    config = PreviewConfig(api_bearer_token="alpha-token")  # noqa: S106 - local-only test token.
+    config = PreviewConfig(api_bearer_token="alpha-token")  # ruff: ignore[hardcoded-password-func-arg] - local-only test token.
 
     manifest = commands.secret_manifest(config)
 
@@ -130,7 +130,7 @@ def test_secret_manifest_renders_openai_pair_with_key() -> None:
 def test_secret_values_stay_out_of_command_arguments() -> None:
     """Secret values must never appear in printable command arguments."""
     config = PreviewConfig(
-        api_bearer_token="alpha-token",  # noqa: S106 - local-only test token.
+        api_bearer_token="alpha-token",  # ruff: ignore[hardcoded-password-func-arg] - local-only test token.
         openai_api_key="sk-local-test",
     )
 

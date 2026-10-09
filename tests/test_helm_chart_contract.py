@@ -16,7 +16,7 @@ LOCAL_VALUES_PATH = CHART_PATH / "values.local.yaml"
 # The boot-required runtime settings the local preview ConfigMap must carry.
 _EXPECTED_LOCAL_CONFIGMAP_DATA = {
     "EPISODIC_ENV": "local",
-    "SOURCE_INTAKE_OBJECT_STORE_ROOT": "/tmp/episodic-object-store",  # noqa: S108 - pod-local preview path.
+    "SOURCE_INTAKE_OBJECT_STORE_ROOT": "/tmp/episodic-object-store",  # ruff: ignore[hardcoded-temp-file] - pod-local preview path.
     "PRICING_SNAPSHOT_DIRECTORY": "/app/config/pricing-snapshots",
     "API_AUTHORIZATION_PRINCIPAL_ID": "local-preview",
     "DRAFT_MODEL": "gpt-5.6-sol",
@@ -361,7 +361,7 @@ def test_helm_local_deployment_hardens_the_container(
         typ.cast("object", _container(deployment)),
         "container",
     ).get("volumeMounts")
-    assert container_mounts == [{"name": "tmp", "mountPath": "/tmp"}], (  # noqa: S108 - pod-local emptyDir mount path.
+    assert container_mounts == [{"name": "tmp", "mountPath": "/tmp"}], (  # ruff: ignore[hardcoded-temp-file] - pod-local emptyDir mount path.
         f"the container must mount the tmp emptyDir at /tmp for the "
         f"source-intake object store; got {container_mounts}"
     )

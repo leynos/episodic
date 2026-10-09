@@ -50,7 +50,7 @@ def test_chat_payload_applies_provider_request_options() -> None:
     options = OpenAIPayloadOptions(
         reasoning_effort="low",
         service_tier="flex",
-        token_limit_param="max_completion_tokens",  # noqa: S106 - parameter name, not a secret.
+        token_limit_param="max_completion_tokens",  # ruff: ignore[hardcoded-password-func-arg] - parameter name, not a secret.
     )
 
     payload = _build_payload(
@@ -74,7 +74,7 @@ def test_chat_payload_applies_provider_request_options() -> None:
 def test_payload_options_reject_unknown_token_parameter() -> None:
     """Unknown token-limit parameter names fail fast at construction."""
     with pytest.raises(ValueError, match="token_limit_param"):
-        OpenAIPayloadOptions(token_limit_param="max_words")  # noqa: S106 - parameter name, not a secret.
+        OpenAIPayloadOptions(token_limit_param="max_words")  # ruff: ignore[hardcoded-password-func-arg] - parameter name, not a secret.
 
 
 def test_responses_payload_requests_json_object_response() -> None:

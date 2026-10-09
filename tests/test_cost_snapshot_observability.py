@@ -114,7 +114,7 @@ async def test_ensure_snapshot_emits_persisted_reused_and_collision(
     assert [entry[0] for entry in metrics.latencies] == [
         "pricing_snapshot.ensure.duration_ms"
     ] * 3, f"expected one latency observation per outcome, got {metrics.latencies!r}"
-    assert all(entry[1] == 500.0 for entry in metrics.latencies), (
+    assert all(value == pytest.approx(500.0) for _, value, _ in metrics.latencies), (
         f"expected deterministic latencies from the stepping clock, got "
         f"{metrics.latencies!r}"
     )

@@ -60,7 +60,7 @@ class OpenAIPayloadOptions:
 
     reasoning_effort: str | None = None
     service_tier: str | None = None
-    token_limit_param: str = "max_tokens"  # noqa: S105 - parameter name, not a secret.
+    token_limit_param: str = "max_tokens"  # ruff: ignore[hardcoded-password-string] - parameter name, not a secret.
 
     def __post_init__(self) -> None:
         """Reject unsupported token-limit parameter names."""

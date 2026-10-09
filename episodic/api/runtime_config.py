@@ -92,7 +92,7 @@ class RuntimeConfig:
     generation_max_response_bytes: int = _DEFAULT_GENERATION_MAX_RESPONSE_BYTES
     llm_reasoning_effort: str | None = None
     llm_service_tier: str | None = None
-    llm_token_limit_param: str = "max_tokens"  # noqa: S105 - parameter name, not a secret.
+    llm_token_limit_param: str = "max_tokens"  # ruff: ignore[hardcoded-password-string] - parameter name, not a secret.
     llm_timeout_seconds: float = _DEFAULT_LLM_TIMEOUT_SECONDS
 
 

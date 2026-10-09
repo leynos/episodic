@@ -248,7 +248,7 @@ def test_pricing_snapshot_rejects_naive_effective_from() -> None:
     with pytest.raises(ValueError, match="effective_from must be timezone-aware"):
         dc.replace(
             aware,
-            effective_from=dt.datetime(2026, 6, 1),  # noqa: DTZ001 - naive on purpose.
+            effective_from=dt.datetime(2026, 6, 1),  # ruff: ignore[call-datetime-without-tzinfo] - naive on purpose.
         )
 
 
