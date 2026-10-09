@@ -26,7 +26,7 @@ from tests.steps.vidaimock_harness import (
 if typ.TYPE_CHECKING:
     import asyncio
     import collections.abc as cabc
-    import subprocess  # noqa: S404 - types the controlled local test server child.
+    import subprocess
     from pathlib import Path
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

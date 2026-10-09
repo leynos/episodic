@@ -36,7 +36,7 @@ from tests.steps.vidaimock_harness_support import (
 )
 
 if typ.TYPE_CHECKING:
-    import subprocess  # noqa: S404 - types the controlled local test server child.
+    import subprocess
 
 
 @pytest.mark.parametrize(

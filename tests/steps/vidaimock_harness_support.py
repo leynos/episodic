@@ -10,7 +10,7 @@ than as a collection of programs-to-run.
 
 import contextlib
 import dataclasses as dc
-import subprocess  # noqa: S404 - starts a controlled local test child.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - starts a controlled local test child.
 import sys
 import typing as typ
 
@@ -121,7 +121,7 @@ def _stalled_server(tmp_path: Path) -> cabc.Iterator[VidaiMockServer]:
         The running child, on a port nothing is listening on.
     """
     child = _write_child(tmp_path, _NEVER_READY)
-    process = subprocess.Popen(  # noqa: S603 - fixed argv, trusted local child.
+    process = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, trusted local child.
         [sys.executable, child],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

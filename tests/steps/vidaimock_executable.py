@@ -31,7 +31,7 @@ def resolve_vidaimock_executable() -> str:
     AssertionError
         Never, in practice. Both calls above raise; this keeps every path an
         explicit return or raise.
-    """  # noqa: DOC502 - Both signals come from pytest.fail/pytest.skip below.
+    """  # ruff: ignore[docstring-extraneous-exception] - Both signals come from pytest.fail/pytest.skip below.
     path = shutil.which("vidaimock")
     if path is not None:
         return path

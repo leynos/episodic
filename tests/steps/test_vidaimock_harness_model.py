@@ -12,7 +12,7 @@ from hypothesis import strategies as st
 import tests.steps.vidaimock_harness as harness
 
 if typ.TYPE_CHECKING:
-    import subprocess  # noqa: S404 - the controlled process models the harness API.
+    import subprocess
 
 _OUTCOMES = ("bind", "exit", "timeout", "unexpected", "success")
 

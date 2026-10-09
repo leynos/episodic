@@ -44,17 +44,17 @@ import pytest
 import yaml
 
 if typ.TYPE_CHECKING:
-    import subprocess  # noqa: S404,F401 - types the pinned local test binary.
+    import subprocess  # ruff: ignore[unused-import] - types the pinned local test binary.
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from tests.steps.generation_orchestration_vidaimock import (  # noqa: E402
+from tests.steps.generation_orchestration_vidaimock import (  # ruff: ignore[module-import-not-at-top-of-file]
     write_provider_config,
     write_response_template,
 )
-from tests.steps.vidaimock_harness import (  # noqa: E402
+from tests.steps.vidaimock_harness import (  # ruff: ignore[module-import-not-at-top-of-file]
     VidaiMockLaunch,
     VidaiMockServer,
     VidaiMockStartupError,
@@ -84,17 +84,12 @@ class SmokeTestError(RuntimeError):
 
 
 def _as_mapping(value: object, description: str) -> dict[str, object]:
-    """Return *value* as a string-keyed mapping or fail with a diagnostic.
-
-    The narrow JSON shapes this script reads are reached through
-    `isinstance(..., dict)`, and a bare `dict` narrowed from `object` carries an
-    uninhabited key type that rejects every lookup. Naming the check once keeps
-    each call site honest about what it expects.
+    """Return *value* as a string-keyed mapping or raise a diagnostic.
 
     Returns
     -------
     dict[str, object]
-        The value, as a mapping whose keys are strings.
+        The validated mapping.
 
     Raises
     ------
@@ -114,16 +109,10 @@ def _decode_response(
     method: str,
     timeout: float = 10.0,
 ) -> dict[str, object]:
-    """Open *target* and decode its JSON response object.
+    """Open *target*, decode JSON, and name failures with *method* and *url*.
 
-    Both verbs answer with the same OpenAI-compatible JSON, so the decode and
-    the transport and status translation around it live here once. *target* is
-    whatever `urlopen` should open, which carries anything the verb needs such
-    as a POST body, and *url* is what the diagnostics name. They differ only
-    for a POST, where the request is built around the URL rather than being
-    the URL; `urlopen` accepts either as its first argument. The failure body
-    is quoted bounded by `_BODY_LIMIT`, because an error page is a diagnostic,
-    not a payload.
+    *target* may be a POST request; *url* keeps diagnostics stable. Bound the
+    error body by `_BODY_LIMIT` to prevent a remote response flooding output.
 
     Returns
     -------
@@ -133,12 +122,10 @@ def _decode_response(
     Raises
     ------
     SmokeTestError
-        If the request failed at the transport level, answered with an HTTP
-        error status, carried a body that is not JSON, or decoded to a value
-        that is not a JSON object.
+        On transport, status, JSON, or object-validation failure.
     """
     try:
-        with urllib.request.urlopen(target, timeout=timeout) as response:  # noqa: S310 - fixed loopback URL.
+        with urllib.request.urlopen(target, timeout=timeout) as response:  # ruff: ignore[suspicious-url-open-usage] - fixed loopback URL.
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:_BODY_LIMIT]
@@ -167,7 +154,7 @@ def _post_completion(
         "model": model,
         "messages": [{"role": "user", "content": "Report the plan."}],
     }).encode("utf-8")
-    request = urllib.request.Request(  # noqa: S310 - fixed loopback URL.
+    request = urllib.request.Request(  # ruff: ignore[suspicious-url-open-usage] - fixed loopback URL.
         url,
         data=body,
         headers={"Content-Type": "application/json"},
@@ -191,6 +178,38 @@ def _completion_text(payload: dict[str, object]) -> str:
     return content
 
 
+def _discover_provider_paths(providers: Path) -> list[Path]:
+    """Return sorted YAML provider paths from *providers*."""
+    try:
+        with os.scandir(providers) as entries:
+            paths = [
+                providers / entry.name
+                for entry in entries
+                if entry.name.endswith(".yaml")
+            ]
+        return sorted(paths)
+    except (OSError, UnicodeError) as exc:
+        msg = f"could not discover provider files in {providers}: {exc}"
+        raise SmokeTestError(msg) from exc
+
+
+def _read_provider_name(path: Path) -> str:
+    """Return the provider name declared in *path*."""
+    try:
+        raw_document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        msg = f"could not load provider file {path}: {exc}"
+        raise SmokeTestError(msg) from exc
+    if not isinstance(raw_document, dict):
+        msg = f"provider {path} must contain a mapping: {raw_document!r}"
+        raise SmokeTestError(msg)
+    document = typ.cast("dict[str, object]", raw_document)
+    if "name" not in document:
+        msg = f"provider {path} declares no name: {document!r}"
+        raise SmokeTestError(msg)
+    return str(document["name"])
+
+
 def _configured_provider_names(config_dir: Path) -> list[str]:
     """Return the provider names the fixture wrote into *config_dir*.
 
@@ -212,36 +231,13 @@ def _configured_provider_names(config_dir: Path) -> list[str]:
         retain their original exception as the cause.
     """
     providers = config_dir / "providers"
-    names: list[str] = []
-    try:
-        with os.scandir(providers) as entries:
-            paths = sorted(
-                providers / entry.name
-                for entry in entries
-                if entry.name.endswith(".yaml")
-            )
-    except (OSError, UnicodeError) as exc:
-        msg = f"could not discover provider files in {providers}: {exc}"
-        raise SmokeTestError(msg) from exc
-
-    for path in paths:
-        try:
-            raw_document = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, yaml.YAMLError) as exc:
-            msg = f"could not load provider file {path}: {exc}"
-            raise SmokeTestError(msg) from exc
-        if not isinstance(raw_document, dict):
-            msg = f"provider {path} must contain a mapping: {raw_document!r}"
-            raise SmokeTestError(msg)
-        document = typ.cast("dict[str, object]", raw_document)
-        if "name" not in document:
-            msg = f"provider {path} declares no name: {document!r}"
-            raise SmokeTestError(msg)
-        names.append(str(document["name"]))
+    names = sorted(
+        _read_provider_name(path) for path in _discover_provider_paths(providers)
+    )
     if not names:
         msg = f"the fixture wrote no providers into {providers}"
         raise SmokeTestError(msg)
-    return sorted(names)
+    return names
 
 
 def _model_ids(base_url: str) -> list[str]:

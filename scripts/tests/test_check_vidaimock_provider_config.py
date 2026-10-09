@@ -1,5 +1,7 @@
 """Provider discovery and configuration failures in the Vidai Mock smoke test."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import check_vidaimock_isolated as smoke
@@ -38,6 +40,55 @@ def test_discovery_failure_names_provider_directory_and_preserves_cause(
     )
 
 
+def test_scan_iteration_failure_names_provider_directory_and_preserves_cause(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An error while consuming scandir is translated and closes the iterator."""
+    provider_dir = _provider_directory(tmp_path)
+    cause = OSError("directory scan interrupted")
+
+    class _ProviderEntry:
+        name: str = "openai.yaml"
+
+    class _FailingScan:
+        closed = False
+        yielded_entry = False
+
+        def __enter__(self) -> _FailingScan:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            self.closed = True
+
+        def __iter__(self) -> _FailingScan:
+            return self
+
+        def __next__(self) -> _ProviderEntry:
+            if not self.yielded_entry:
+                self.yielded_entry = True
+                return _ProviderEntry()
+            raise cause
+
+    scanner = _FailingScan()
+
+    def fail_during_scan(_path: Path) -> _FailingScan:
+        return scanner
+
+    monkeypatch.setattr(smoke.os, "scandir", fail_during_scan)
+
+    with pytest.raises(smoke.SmokeTestError) as raised:
+        smoke._configured_provider_names(tmp_path)
+
+    assert str(provider_dir) in str(raised.value), (
+        "scan iteration failures should identify the providers directory"
+    )
+    assert raised.value.__cause__ is cause, (
+        "scan iteration failures should preserve the filesystem error"
+    )
+    assert scanner.closed, "the scandir iterator should close after iteration fails"
+
+
 def test_file_read_failure_names_file_and_preserves_cause(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -70,37 +121,39 @@ def test_file_read_failure_names_file_and_preserves_cause(
     )
 
 
-def test_invalid_utf8_names_file_and_preserves_decode_error(tmp_path: Path) -> None:
-    """Invalid UTF-8 is translated while preserving its decoding cause."""
+@pytest.mark.parametrize(
+    ("payload", "expected_cause"),
+    [
+        pytest.param(
+            b"name: \xff\n",
+            UnicodeDecodeError,
+            id="invalid-utf8",
+        ),
+        pytest.param(
+            b"name: [\n",
+            yaml.YAMLError,
+            id="malformed-yaml",
+        ),
+    ],
+)
+def test_invalid_provider_file_names_path_and_preserves_cause(
+    tmp_path: Path,
+    payload: bytes,
+    expected_cause: type[Exception],
+) -> None:
+    """Malformed provider bytes retain the path and precise cause type."""
     provider_dir = _provider_directory(tmp_path)
     provider_file = provider_dir / "openai.yaml"
-    provider_file.write_bytes(b"name: \xff\n")
+    provider_file.write_bytes(payload)
 
     with pytest.raises(smoke.SmokeTestError) as raised:
         smoke._configured_provider_names(tmp_path)
 
     assert str(provider_file) in str(raised.value), (
-        "decode failures should identify the provider file"
+        "provider file failures should identify the source file"
     )
-    assert isinstance(raised.value.__cause__, UnicodeDecodeError), (
-        "decode failures should preserve the Unicode error"
-    )
-
-
-def test_malformed_yaml_names_file_and_preserves_parse_error(tmp_path: Path) -> None:
-    """Malformed YAML is translated with the provider path and YAML cause."""
-    provider_dir = _provider_directory(tmp_path)
-    provider_file = provider_dir / "openai.yaml"
-    provider_file.write_text("name: [\n", encoding="utf-8")
-
-    with pytest.raises(smoke.SmokeTestError) as raised:
-        smoke._configured_provider_names(tmp_path)
-
-    assert str(provider_file) in str(raised.value), (
-        "YAML failures should identify the provider file"
-    )
-    assert isinstance(raised.value.__cause__, yaml.YAMLError), (
-        "YAML failures should preserve the parser error"
+    assert isinstance(raised.value.__cause__, expected_cause), (
+        f"provider file failures should preserve {expected_cause.__name__}"
     )
 
 

@@ -30,7 +30,7 @@ coverage.
 import contextlib
 import dataclasses as dc
 import socket
-import subprocess  # noqa: S404 - starts a fixed local test server binary
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - starts a fixed local test server binary
 import tempfile
 import time
 import typing as typ
@@ -153,7 +153,7 @@ class VidaiMockServer:
 
     @property
     def base_url(self) -> str:
-        """Return the base URL the child's OpenAI-compatible routes serve.
+        """The base URL the child's OpenAI-compatible routes serve.
 
         Returns
         -------
@@ -270,7 +270,7 @@ def _start_once(
     stderr_file: typ.TextIO,
 ) -> subprocess.Popen[str]:
     """Start one Vidai Mock child over the given port with isolation enabled."""
-    return subprocess.Popen(  # noqa: S603 - fixed trusted local binary.  # pylint: disable=consider-using-with
+    return subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed trusted local binary.  # pylint: disable=consider-using-with
         [
             launch.executable,
             "--host",
@@ -305,7 +305,7 @@ def _launch_server(launch: VidaiMockLaunch) -> VidaiMockServer:
     port = find_free_port()
     # A fresh file per attempt keeps one attempt's diagnostics from bleeding
     # into the next.
-    stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # noqa: SIM115 - closed by terminate_process_gracefully.
+    stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")  # ruff: ignore[open-file-with-context-handler] - closed by terminate_process_gracefully.
     try:
         process = _start_once(launch, port, stderr_file)
     except BaseException:

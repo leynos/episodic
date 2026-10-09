@@ -29,7 +29,7 @@ from tests.steps.vidaimock_harness import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import subprocess  # noqa: S404 - types the local Vidai Mock test server child.
+    import subprocess
 
     from episodic.qa.pedante import PedanteEvaluationResult
 

@@ -42,7 +42,7 @@ from tests.steps.vidaimock_harness import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import subprocess  # noqa: S404 - types the local Vidai Mock test server child.
+    import subprocess
 
     from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
