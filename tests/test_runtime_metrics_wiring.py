@@ -15,6 +15,7 @@ if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
 
     from episodic.api.dependencies import ApiDependencies
+    from episodic.observability_runtime import ObservabilityRuntime
 
 
 class _RecordingMetrics:
@@ -55,23 +56,29 @@ class _SteppingMonotonicClock:
         return next(self._timestamps)
 
 
-@pytest.mark.asyncio
-async def test_create_app_from_env_shares_observability_runtime(
+def _configure_runtime_environment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Composition-root adapters should share production observability ports."""
-    from episodic.api import runtime as runtime_module
-    from episodic.generation import InProcessGenerationRunLauncher
-    from episodic.llm.openai_adapter import OpenAICompatibleLLMAdapter
-    from episodic.observability import StructuredLogMetrics, StructuredLogTracer
-
+    """Set the environment required by the production runtime factory."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.test/episodic")
     monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path))
     monkeypatch.setenv("API_AUTHORIZATION_BEARER_TOKEN", "runtime-test-token")
     monkeypatch.setenv("API_AUTHORIZATION_PRINCIPAL_ID", "runtime-test-principal")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.test/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+
+def _compose_runtime_observability_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> tuple[ApiDependencies, dict[str, object], dict[str, object]]:
+    """Capture runtime adapter arguments while composing the production app."""
+    _configure_runtime_environment(monkeypatch, tmp_path)
+
+    from episodic.api import runtime as runtime_module
+    from episodic.llm.openai_adapter import OpenAICompatibleLLMAdapter
+
     captured_dependencies: ApiDependencies | None = None
 
     def capture_dependencies(dependencies: ApiDependencies) -> object:
@@ -101,38 +108,61 @@ async def test_create_app_from_env_shares_observability_runtime(
             "expected captured dependencies, got None"
         )
         captured_dependencies.uow_factory()
-        uow_observability = unit_of_work_constructor.call_args.kwargs["observability"]
+
+        adapter_call = adapter_factory.call_args
+        unit_of_work_call = unit_of_work_constructor.call_args
+        assert adapter_call is not None, "expected an adapter constructor call"
+        assert unit_of_work_call is not None, "expected a unit-of-work constructor call"
+        adapter_kwargs = typ.cast("dict[str, object]", adapter_call.kwargs)
+        unit_of_work_kwargs = typ.cast("dict[str, object]", unit_of_work_call.kwargs)
 
     assert captured_dependencies is not None, "expected captured dependencies, got None"
-    assert isinstance(captured_dependencies.launcher, InProcessGenerationRunLauncher), (
-        "expected an in-process launcher, got "
-        f"{type(captured_dependencies.launcher).__name__}"
+    return captured_dependencies, adapter_kwargs, unit_of_work_kwargs
+
+
+@pytest.mark.asyncio
+async def test_create_app_from_env_shares_production_observability(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Composition-root adapters should share production observability ports."""
+    from episodic.generation import InProcessGenerationRunLauncher
+    from episodic.observability import StructuredLogMetrics, StructuredLogTracer
+
+    dependencies, adapter_kwargs, uow_kwargs = (
+        _compose_runtime_observability_dependencies(monkeypatch, tmp_path)
+    )
+    assert isinstance(dependencies.launcher, InProcessGenerationRunLauncher), (
+        f"expected an in-process launcher, got {type(dependencies.launcher).__name__}"
     )
 
-    assert isinstance(captured_dependencies.metrics, StructuredLogMetrics), (
+    assert isinstance(dependencies.metrics, StructuredLogMetrics), (
         "the composition root must install structured-log metrics"
     )
-    assert isinstance(captured_dependencies.tracer, StructuredLogTracer), (
+    assert isinstance(dependencies.tracer, StructuredLogTracer), (
         "the composition root must install structured-log tracing"
     )
-    assert captured_dependencies.launcher.metrics is captured_dependencies.metrics, (
+    assert dependencies.launcher.metrics is dependencies.metrics, (
         "the launcher must share the composition root's metrics sink"
     )
-    assert captured_dependencies.launcher.tracer is captured_dependencies.tracer, (
+    assert dependencies.launcher.tracer is dependencies.tracer, (
         "the launcher must share the composition root's tracer"
     )
-    adapter_observability = adapter_factory.call_args.kwargs["observability"]
+    adapter_observability = typ.cast(
+        "ObservabilityRuntime", adapter_kwargs["observability"]
+    )
+    uow_observability = typ.cast("ObservabilityRuntime", uow_kwargs["observability"])
     assert adapter_observability is uow_observability, (
         "LLM and storage adapters must share one observability bundle"
     )
-    assert adapter_observability.metrics is captured_dependencies.metrics, (
+    assert adapter_observability.metrics is dependencies.metrics, (
         "adapters must receive the composition root's metrics sink"
     )
-    assert adapter_observability.tracer is captured_dependencies.tracer, (
+    assert adapter_observability.tracer is dependencies.tracer, (
         "adapters must receive the composition root's tracer"
     )
 
-    await captured_dependencies.shutdown_hooks[0]()
+    await dependencies.shutdown_hooks[0]()
 
 
 @pytest.mark.asyncio
