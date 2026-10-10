@@ -961,10 +961,42 @@ invocations ran under CPython 3.14 with `--jobs=2` and rated 10.00/10. Logs
 were captured under
 `/tmp/*-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-rerun-2.out`.
 
-These results cover the implementation and documentation state before this gate
-record was added. The docs-only amendment subsequently passed `make fmt`,
+At the time this validation record was written, the changes were uncommitted
+and unpublished. The docs-only amendment subsequently passed `make fmt`,
 `make check-fmt`, `make markdownlint`, and `make nixie` on diff hash
-`dddbe1a302d1d1e8a6af5f157da606ca9806ed3c4887901ec6404a2fe5524e40`. The working
-tree remains uncommitted and unpublished. Hosted checks on the repaired
-candidate, CodeRabbit confirmation and plan assessment, approval, and merge
-remain outstanding. No merge eligibility is claimed.
+`dddbe1a302d1d1e8a6af5f157da606ca9806ed3c4887901ec6404a2fe5524e40`.
+
+## Published repair candidate — 2026-10-10
+
+The repair was committed as
+[`faa11a6b9b632cac414ecd534040aa40a82e918a`](https://github.com/leynos/episodic/commit/faa11a6b9b632cac414ecd534040aa40a82e918a),
+whose parent is the previous published head
+`1bb8e2ee6fe871b1b8651bd8d8fe2ac4e165d622`. The PR targets `main` at
+`6aa6e93074abca1b4f458ca9bce32ad2fe956a58`; remote branch parity was verified
+after the push.
+
+CI run
+[38014771018, attempt 1](https://github.com/leynos/episodic/actions/runs/38014771018/attempts/1)
+tested the published repair commit. Its `lint-test` job passed all 32 steps in
+5m56s: 1,610 tests passed, 3 were skipped, 50 snapshots passed, and coverage
+was 90.60% against a 90.85% baseline, within the ±1.00 percentage-point
+ratchet. The full job log is retained at
+`/tmp/episodic-pr339-actions-AgdpCg/run-38014771018-attempt-1/job-114102500030.log`.
+The exact-head CodeScene result
+[7890904](https://codescene.io/projects/76628/delta/results/7890904) and Gecko
+Security check passed. The automerge, Kody, and Sourcery checks were skipped.
+
+CodeRabbit's outer status context says “Review paused”; it is not a review or
+approval. The latest submitted CodeRabbit review is still `CHANGES_REQUESTED`
+on the superseded head `1bb8e2ee6fe871b1b8651bd8d8fe2ac4e165d622`. Its
+walkthrough comment still reports the Testing (Overall) error and Developer
+Documentation warning from that head. A new review request, `699259f0`, is
+queued with the managed review service; it has not completed. The old inline
+launch-error thread is marked resolved by GitHub, but no disposition reply has
+been posted. The current review decision remains `CHANGES_REQUESTED`.
+
+The initial ExecPlan completeness/correctness assessment has not yet been
+requested, and no formal proof assessment applies: the lifecycle coverage is a
+Hypothesis model test, not a formal proof. Review confirmation, the plan
+assessment, an approval, and merge remain outstanding. No merge eligibility is
+claimed.
