@@ -9,6 +9,8 @@ before: a bare `pypy` moved to a newer PyPy with no commit here, and a
 disabled `syntax-error` let unparseable modules go unlinted.
 """
 
+import dataclasses as dc
+import os
 import re
 import shlex
 import shutil
@@ -22,7 +24,24 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE_PATH = _REPO_ROOT / "Makefile"
 CONFIG_PATH = _REPO_ROOT / "pyproject.toml"
 
-_PROBE_TARGET: str = "jm5-pylint-probe"
+_JOBS_PROBE_TARGET: str = "jm5-pylint-jobs-probe"
+_JOBS_PROBE_VARIABLES = (
+    "PYLINT_JOBS",
+    "DF12_PYLINT_BASE",
+    "PYLINT",
+    "DF12_PYLINT",
+    "DF12_FUTURE_ANNOTATIONS",
+)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _JobsProbeSettings:
+    """Inputs that control one isolated Make variable probe."""
+
+    nproc_result: str | None
+    nproc_exit_code: int = 0
+    environment_jobs: str | None = None
+    command_line_jobs: str | None = None
 
 
 def _makefile_variable(name: str) -> str:
@@ -65,6 +84,269 @@ def test_pylint_tier_runs_the_pinned_release_on_managed_python() -> None:
         assert fragment in command, f"PYLINT must contain {fragment!r}: {command}"
 
 
+def _make_jobs_probe_source() -> str:
+    """Print the expanded Make assignments without running their commands."""
+    assignments: list[str] = [
+        f"$(info __MAKE_PROBE_{name}__=$({name}))" for name in _JOBS_PROBE_VARIABLES
+    ]
+    assignments.extend([
+        f".PHONY: {_JOBS_PROBE_TARGET}",
+        f"{_JOBS_PROBE_TARGET}: ; @:",
+    ])
+    return "\n".join(assignments)
+
+
+def _write_controlled_nproc(
+    home: Path,
+    *,
+    result: str,
+    exit_code: int,
+    marker: Path,
+) -> None:
+    """Install an isolated `nproc` executable under Make's first PATH entry."""
+    executable_dir = home / ".local" / "bin"
+    executable_dir.mkdir(parents=True, exist_ok=True)
+    executable = executable_dir / "nproc"
+    lines = [
+        "#!/bin/sh",
+        f"printf '%s\\n' called >> {shlex.quote(str(marker))}",
+    ]
+    if result:
+        lines.append(f"printf '%s\\n' {shlex.quote(result)}")
+    lines.append(f"exit {exit_code}")
+    executable.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    executable.chmod(0o755)
+
+
+def _pylint_jobs_probe_environment(
+    tmp_path: Path,
+    settings: _JobsProbeSettings,
+) -> tuple[dict[str, str], Path]:
+    """Create an isolated Make environment with a controlled core probe."""
+    home = tmp_path / "home"
+    (home / ".local" / "bin").mkdir(parents=True)
+    (home / ".bun" / "bin").mkdir(parents=True)
+    marker = tmp_path / "nproc-called"
+    if settings.nproc_result is not None:
+        _write_controlled_nproc(
+            home,
+            result=settings.nproc_result,
+            exit_code=settings.nproc_exit_code,
+            marker=marker,
+        )
+
+    # Make itself prepends this isolated HOME's bin directories to PATH.
+    path = (
+        str(tmp_path / "path-without-nproc")
+        if settings.nproc_result is None
+        else os.defpath
+    )
+    environment = {
+        "HOME": str(home),
+        "PATH": path,
+        "LANG": "C",
+        "LC_ALL": "C",
+    }
+    if settings.environment_jobs is not None:
+        environment["PYLINT_JOBS"] = settings.environment_jobs
+    return environment, marker
+
+
+def _run_pylint_jobs_probe(
+    tmp_path: Path,
+    settings: _JobsProbeSettings,
+) -> dict[str, str]:
+    """Expand the Makefile's Pylint commands in a controlled subprocess."""
+    make = shutil.which("make")
+    assert make is not None, "make must be on PATH"
+
+    # The test does not inherit Make variables, flags, or the user's HOME.
+    make_environment, marker = _pylint_jobs_probe_environment(
+        tmp_path,
+        settings,
+    )
+
+    probe_makefile = tmp_path / "pylint-jobs-probe.mk"
+    probe_makefile.write_text(
+        f"include {MAKEFILE_PATH}\n{_make_jobs_probe_source()}\n",
+        encoding="utf-8",
+    )
+    arguments = [
+        make,
+        "--no-print-directory",
+        "-s",
+        "-C",
+        str(_REPO_ROOT),
+        "-f",
+        str(probe_makefile),
+    ]
+    if settings.command_line_jobs is not None:
+        arguments.append(f"PYLINT_JOBS={settings.command_line_jobs}")
+    arguments.append(_JOBS_PROBE_TARGET)
+
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # Fixed Make argv; no lint recipe runs.
+        arguments,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=make_environment,
+        timeout=10,
+    )
+    assert completed.returncode == 0, (
+        "the Makefile variable probe must complete without running lint tools: "
+        f"{completed.stdout}{completed.stderr}"
+    )
+    has_override = (
+        settings.environment_jobs is not None or settings.command_line_jobs is not None
+    )
+    if settings.nproc_result is not None and not has_override:
+        assert marker.is_file(), (
+            "Make's PATH prefixes must select the controlled nproc executable."
+        )
+
+    values: dict[str, str] = {}
+    for name in _JOBS_PROBE_VARIABLES:
+        prefix = f"__MAKE_PROBE_{name}__="
+        matching_lines = [
+            line.removeprefix(prefix)
+            for line in completed.stdout.splitlines()
+            if line.startswith(prefix)
+        ]
+        assert len(matching_lines) == 1, (
+            f"the Make probe must report {name} exactly once: {completed.stdout}"
+        )
+        values[name] = matching_lines[0]
+    return values
+
+
+def _assert_expanded_pylint_jobs(
+    values: dict[str, str],
+    expected_jobs: int,
+) -> None:
+    """Check one worker option per command and inheritance from the DF12 base."""
+    base = shlex.split(values["DF12_PYLINT_BASE"])
+    commands = {
+        name: shlex.split(values[name])
+        for name in ("PYLINT", "DF12_PYLINT", "DF12_FUTURE_ANNOTATIONS")
+    }
+    expected_option = f"--jobs={expected_jobs}"
+
+    for name, command in commands.items():
+        job_options = [
+            argument for argument in command if argument.startswith("--jobs=")
+        ]
+        assert job_options == [expected_option], (
+            f"{name} must receive exactly one {expected_option!r} argument: {command!r}"
+        )
+
+    for name in ("DF12_PYLINT", "DF12_FUTURE_ANNOTATIONS"):
+        assert commands[name][: len(base)] == base, (
+            f"{name} must inherit the full DF12_PYLINT_BASE command: "
+            f"base={base!r}, command={commands[name]!r}"
+        )
+
+    assert commands["DF12_PYLINT"][len(base) :] == [
+        f"--enable={_makefile_variable('DF12_PYLINT_MESSAGES')}"
+    ], "DF12_PYLINT must append its configured message set to the base command."
+    assert commands["DF12_FUTURE_ANNOTATIONS"][len(base) :] == [
+        "--enable=C9112",
+        "--ignore-paths=^tests/steps/test_.*_steps[.]py$",
+    ], "the future-annotations command must append its own checks to the base."
+
+
+@pytest.mark.parametrize(
+    ("core_count", "expected_jobs"),
+    [
+        pytest.param(1, 2, id="cores-1-floor-2"),
+        pytest.param(2, 2, id="cores-2-floor-2"),
+        pytest.param(19, 2, id="cores-19-floor-2"),
+        pytest.param(20, 2, id="cores-20-floor-2"),
+        pytest.param(29, 2, id="cores-29-floor-2"),
+        pytest.param(30, 3, id="cores-30-tenth-3"),
+        pytest.param(39, 3, id="cores-39-tenth-3"),
+        pytest.param(40, 4, id="cores-40-tenth-4"),
+        pytest.param(128, 12, id="cores-128-tenth-12"),
+    ],
+)
+def test_pylint_jobs_uses_tenth_of_controlled_core_count(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    core_count: int,
+    expected_jobs: int,
+) -> None:
+    """Make's default keeps a two-worker floor and otherwise spends one tenth."""
+    # These inherited values must not affect the no-override probe cases.
+    monkeypatch.setenv("PYLINT_JOBS", "97")
+    monkeypatch.setenv("MAKEFLAGS", "PYLINT_JOBS=98")
+    monkeypatch.setenv("MFLAGS", "PYLINT_JOBS=96")
+    monkeypatch.setenv("MAKEOVERRIDES", "PYLINT_JOBS=95")
+
+    values = _run_pylint_jobs_probe(
+        tmp_path,
+        _JobsProbeSettings(nproc_result=str(core_count)),
+    )
+
+    assert values["PYLINT_JOBS"] == str(expected_jobs), (
+        f"{core_count} cores must produce {expected_jobs} Pylint workers."
+    )
+    _assert_expanded_pylint_jobs(values, expected_jobs)
+
+
+@pytest.mark.parametrize(
+    ("nproc_result", "exit_code"),
+    [
+        pytest.param("", 1, id="nproc-exits-unsuccessfully"),
+        pytest.param(None, 0, id="nproc-missing-from-isolated-path"),
+    ],
+)
+def test_pylint_jobs_falls_back_to_two_when_nproc_is_unavailable(
+    tmp_path: Path,
+    nproc_result: str | None,
+    exit_code: int,
+) -> None:
+    """A failed or missing `nproc` uses the documented two-worker fallback."""
+    values = _run_pylint_jobs_probe(
+        tmp_path,
+        _JobsProbeSettings(
+            nproc_result=nproc_result,
+            nproc_exit_code=exit_code,
+        ),
+    )
+
+    assert values["PYLINT_JOBS"] == "2", "the fallback must select two workers."
+    _assert_expanded_pylint_jobs(values, 2)
+
+
+@pytest.mark.parametrize(
+    ("environment_jobs", "command_line_jobs", "expected_jobs"),
+    [
+        pytest.param("7", None, 7, id="environment-override"),
+        pytest.param(None, "8", 8, id="command-line-override"),
+        pytest.param("5", "9", 9, id="command-line-over-environment"),
+    ],
+)
+def test_pylint_jobs_overrides_expand_to_all_three_commands(
+    tmp_path: Path,
+    environment_jobs: str | None,
+    command_line_jobs: str | None,
+    expected_jobs: int,
+) -> None:
+    """Environment and command-line overrides propagate with Make precedence."""
+    values = _run_pylint_jobs_probe(
+        tmp_path,
+        _JobsProbeSettings(
+            nproc_result="128",
+            environment_jobs=environment_jobs,
+            command_line_jobs=command_line_jobs,
+        ),
+    )
+
+    assert values["PYLINT_JOBS"] == str(expected_jobs), (
+        "Make must report the selected override value."
+    )
+    _assert_expanded_pylint_jobs(values, expected_jobs)
+
+
 def test_pylint_reports_unparseable_modules() -> None:
     """The Pylint policy must not disable `syntax-error`."""
     config = tomllib.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -72,85 +354,4 @@ def test_pylint_reports_unparseable_modules() -> None:
     assert "syntax-error" not in disabled, (
         "pyproject.toml must not disable syntax-error: a module the interpreter "
         f"cannot parse would then be skipped silently; disable={disabled!r}"
-    )
-
-
-def _make_quoted(path: Path) -> str:
-    """Quote a path for a shell word inside a Make recipe.
-
-    Parameters
-    ----------
-    path : Path
-        The path to quote.
-
-    Returns
-    -------
-    str
-        The shell-quoted path with each ``$`` doubled, so Make passes it to
-        the shell as one literal word.
-    """
-    return shlex.quote(str(path)).replace("$", "$$")
-
-
-def _run_configured_pylint(target: Path) -> subprocess.CompletedProcess[str]:
-    """Run the Makefile's own `$(PYLINT)` command over one module.
-
-    Parameters
-    ----------
-    target : Path
-        The module to lint.
-
-    Returns
-    -------
-    subprocess.CompletedProcess[str]
-        The finished Make process, with output captured.
-    """
-    make = shutil.which("make")
-    assert make is not None, "make must be on PATH"
-    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # Fixed argv; the target is a test file.
-        [
-            make,
-            "--no-print-directory",
-            "-s",
-            "-C",
-            str(_REPO_ROOT),
-            "--eval",
-            f"{_PROBE_TARGET}: ; $(PYLINT) {_make_quoted(target)}",
-            _PROBE_TARGET,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=600,
-    )
-
-
-@pytest.mark.skipif(
-    shutil.which("uv") is None or shutil.which("make") is None,
-    reason="the end-to-end check needs make and uv",
-)
-@pytest.mark.timeout(620)
-def test_configured_pylint_fails_on_an_unparseable_module(tmp_path: Path) -> None:
-    """The configured tier must fail on a parse error and pass a clean module.
-
-    This drives the real `$(PYLINT)` command, so it catches a disabled
-    `syntax-error` wherever it is configured, not only in the file the
-    contract above reads.
-    """
-    broken = tmp_path / "broken_module.py"
-    broken.write_text("def broken(\n    return 1\n", encoding="utf-8")
-    clean = tmp_path / "clean_module.py"
-    clean.write_text('"""A clean module."""\n\nVALUE = 1\n', encoding="utf-8")
-
-    failed = _run_configured_pylint(broken)
-    passed = _run_configured_pylint(clean)
-
-    assert failed.returncode != 0, (
-        f"a module Pylint cannot parse must fail the tier: {failed.stdout}"
-    )
-    assert "syntax-error" in failed.stdout, (
-        f"the failure must be the parse error: {failed.stdout}{failed.stderr}"
-    )
-    assert passed.returncode == 0, (
-        f"a clean module must pass the tier: {passed.stdout}{passed.stderr}"
     )

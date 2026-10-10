@@ -3,12 +3,16 @@
 Branch: `use-cpython-for-pylint` PR:
 <https://github.com/leynos/episodic/pull/339>
 
-Current recorded code commit: `23c09aab9b6735f1efb8d88f93340ca80ca39704`. The
-branch was rebased from `b97e00477b7575ef0ba61ebb9af707763126ae44` onto
-`origin/main` at `6aa6e93074abca1b4f458ca9bce32ad2fe956a58`, preserving the
-branch-only range beginning at `f1bdacae79426f5453f52fc87caa29cd90aa1e2f`. The
-history below records earlier checkpoints; the latest verified disposition is
-in the 2026-10-09 section at the end.
+Latest verified disposition:
+[2026-10-10](#latest-verified-disposition-2026-10-10). At the inspected
+baseline, `faa11a6b9b632cac414ecd534040aa40a82e918a` was the latest
+implementation commit, and `d5fb1605278e1fcfeb4b2ffd887a94d46e28cdd5` was the
+PR head after a docs-only follow-up. The PR's base was
+`6aa6e93074abca1b4f458ca9bce32ad2fe956a58`. Earlier checkpoints and status
+records are retained as historical evidence below.
+
+Current workflow pin: VidaiMock `0.3.1`, with the verified digest recorded in
+the release decision below.
 
 ## Goal
 
@@ -16,11 +20,13 @@ Fix the release/CLI mismatch between the pinned VidaiMock release and the
 `--isolated` flag the test fixtures pass, consolidate the duplicated
 startup/readiness/cleanup logic, and add the missing regression coverage.
 
-## Problem statement
+## Historical problem statement: VidaiMock 0.1.3
 
-Both workflows pin VidaiMock `0.1.3`, but the BDD fixtures pass `--isolated`,
-which `0.1.3` rejects. The flag was added to the project in this branch without
-a corresponding pin bump, so CI would fail at the first behavioural scenario.
+At the start of this work, both workflows pinned VidaiMock `0.1.3`, but the BDD
+fixtures passed `--isolated`, which that release rejected. The flag was added
+without a corresponding pin bump, so CI would fail at the first behavioural
+scenario. This is the historical problem statement; the current workflows pin
+VidaiMock `0.3.1`.
 
 Observed, on the pinned `0.1.3` binary:
 
@@ -116,6 +122,10 @@ evidence only.
 
 ## Progress log
 
+Status entries in this log record completed historical checkpoints. Use the
+latest verified disposition at the end of this document for the current PR and
+review status.
+
 - [x] Rebased onto `origin/main` (`15d790e`), no conflicts; semantic audit
       clean (target-only paths byte-identical, no unexplained deletions, no
       new duplicated blocks).
@@ -147,7 +157,7 @@ evidence only.
       `coverage.xml` reporting **90.81%** line coverage over the
       `episodic,alembic` production scope.
 
-## CodeScene review round progress
+## CodeScene review round progress (historical checkpoints)
 
 - [x] Verified all findings against the current tree before editing; baseline
       `a59935f` recorded.
@@ -258,7 +268,7 @@ lower the count — one clause guarded by a compound condition, or a predicate
 helper — was declined because either makes the retryable and non-retryable
 paths harder to tell apart for a diagnostic that blocks nothing.
 
-## Defects found and fixed while clearing lint
+## Defects found and fixed while clearing lint (historical)
 
 - `RUF100` exposed a dead handler rather than a redundant suppression:
   `pytest.skip.Exception` and `pytest.fail.Exception` derive from
@@ -285,7 +295,7 @@ paths harder to tell apart for a diagnostic that blocks nothing.
   so the harness test now casts it to `cabc.Sequence[str]` behind a documented
   assertion.
 
-## Review round: CI green, then four verified defects fixed
+## Review round: CI green, then four verified defects fixed (historical)
 
 CI is green on `f8e9487` and on the successor `5fbf87b`, with all 23 steps
 executed and none skipped. The headline `Smoke-test vidaimock isolation` step
@@ -325,7 +335,7 @@ logged types for ordinary mistyping. The snapshot in
 `"max_attempts": 3` and `"timeout_seconds": 30.0` as numbers, so reading the
 existing contract first is what kept the fix from becoming a schema change.
 
-## Second rebase: onto main at `f1bdaca`, dropping the superseded Pylint commit
+## Second rebase: onto main at `f1bdaca`, dropping the superseded Pylint commit (historical)
 
 `main` advanced three commits, one of which — `ced3f90`, "Run Pylint on CPython
 3.14 and lint every module (#346)" — is a **successor landing of this branch's
@@ -415,7 +425,7 @@ pull request updated in place:
 Recovery refs for `OLD_HEAD`, `OLD_BASE`, and `TARGET` are retained, so the
 pre-rebase history stays recoverable independently of the remote.
 
-## CodeScene review round
+## CodeScene review round (historical)
 
 `cs delta origin/main --output-format json --pretty` named exactly three
 findings, and the review mapped them onto the first three work items. Every
@@ -589,7 +599,7 @@ Three further items from the same review are independent of CodeScene:
   Stale entries print a warning rather than failing the gate, which makes
   checking cheaper than guessing.
 
-## Current follow-up evidence — 2026-09-30
+## Follow-up evidence — 2026-09-30 (historical checkpoint)
 
 The review baseline supplied for this follow-up was
 `7439d269ece932b209cb3bc3755e60e3b88a3977`; at the start of the follow-up,
@@ -803,7 +813,7 @@ The five requested findings meet their stated criteria. Local gates and hosted
 CI pass at the verified code and test head. The external CodeScene failure
 remains open pending inspection and disposition of its latest report.
 
-## Rebase and provider-reader follow-up — 2026-10-09
+## Rebase and provider-reader follow-up — 2026-10-09 (historical checkpoint)
 
 The branch was rebased onto `origin/main` at
 `6aa6e93074abca1b4f458ca9bce32ad2fe956a58`. The pre-rebase head was
@@ -922,7 +932,7 @@ Revision note: recorded the force-with-lease publication, successful exact-head
 CI, current hosted CodeScene advisory, local complexity results, and the
 existing queued review without treating its status as completed evidence.
 
-## Review convergence — 2026-10-10
+## Review convergence — 2026-10-10 (historical repair checkpoint)
 
 At the start of this follow-up, PR #339 targeted `main` at
 `6aa6e93074abca1b4f458ca9bce32ad2fe956a58` and its published head was
@@ -966,7 +976,7 @@ and unpublished. The docs-only amendment subsequently passed `make fmt`,
 `make check-fmt`, `make markdownlint`, and `make nixie` on diff hash
 `dddbe1a302d1d1e8a6af5f157da606ca9806ed3c4887901ec6404a2fe5524e40`.
 
-## Published repair candidate — 2026-10-10
+## Published repair candidate — 2026-10-10 (historical validation checkpoint)
 
 The repair was committed as
 [`faa11a6b9b632cac414ecd534040aa40a82e918a`](https://github.com/leynos/episodic/commit/faa11a6b9b632cac414ecd534040aa40a82e918a),
@@ -1000,3 +1010,34 @@ requested, and no formal proof assessment applies: the lifecycle coverage is a
 Hypothesis model test, not a formal proof. Review confirmation, the plan
 assessment, an approval, and merge remain outstanding. No merge eligibility is
 claimed.
+
+## Latest verified disposition (2026-10-10)
+
+The inspected PR head was `d5fb1605278e1fcfeb4b2ffd887a94d46e28cdd5`; the
+latest implementation commit at that baseline was
+[`faa11a6b9b632cac414ecd534040aa40a82e918a`](https://github.com/leynos/episodic/commit/faa11a6b9b632cac414ecd534040aa82e918a).
+The intervening `d5fb160` commit changed only this plan. The PR targeted
+`main` at `6aa6e93074abca1b4f458ca9bce32ad2fe956a58`.
+
+The successful
+[CI run 38015518656](https://github.com/leynos/episodic/actions/runs/38015518656)
+tested the inspected PR head. It reported 1,610 passed, 3 skipped, and 31
+warnings. All three Pylint invocations ran on CPython 3.14 with `--jobs=2` and
+each reported 10.00/10. Coverage was 90.60% against a 90.85% baseline, within
+the configured ±1.00 percentage-point ratchet. The current CI workflows pin
+VidaiMock `0.3.1` with SHA-256
+`d228cb27be8835d0e6f538f1cde5c7fcc1675223b7f7c0cb05218df1954d72c5`.
+
+The exact-head
+[CodeScene result 7891020](https://codescene.io/projects/76628/delta/results/7891020)
+passed. This result and the successful CI do not establish CodeRabbit review
+completion or approval.
+
+At this checkpoint, GitHub reported `CHANGES_REQUESTED`. CodeRabbit review
+5478519036 was submitted against `d5fb160` and requested changes; its pre-merge
+report still showed one Testing (Overall) error and one Developer Documentation
+warning. CodeScene submitted an `APPROVED` review on `d5fb160`, but that did
+not change GitHub's aggregate `CHANGES_REQUESTED` decision. No human approval
+was present in the inspected review history. The CodeRabbit report's successful
+CI and CodeScene evidence must remain separate from its unresolved pre-merge
+findings and approval state.
