@@ -7,14 +7,20 @@ import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
-from episodic.canonical.storage.models_base import Base
 from episodic.cost.ports import LedgerScope
+from episodic.sqlalchemy_base import Base
 
 
 class PricingSnapshotRecord(Base):
     """Persisted immutable pricing snapshot."""
 
     __tablename__ = "pricing_snapshots"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "content_hash",
+            name="uq_pricing_snapshots_content_hash",
+        ),
+    )
 
     id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -37,7 +43,6 @@ class PricingSnapshotRecord(Base):
     content_hash: orm.Mapped[str] = orm.mapped_column(
         sa.Text,
         nullable=False,
-        unique=True,
     )
     retrieved_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),

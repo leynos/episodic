@@ -11,6 +11,7 @@ from episodic.api import create_app
 from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.generation import GenerationRunAdmissionError
+from episodic.observability import RecordingTracer
 from tests.fixtures.api import build_api_dependencies
 from tests.fixtures.generation_run_api import (
     HeaderPrincipalAuthorization,
@@ -22,6 +23,7 @@ from tests.fixtures.generation_run_api import (
 if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from syrupy.assertion import SnapshotAssertion
 
 
 async def _post_generation_run(
@@ -42,14 +44,17 @@ async def _post_generation_run(
 @pytest.mark.asyncio
 async def test_generation_run_admission_failure_marks_persisted_run_failed(
     session_factory: async_sessionmaker[AsyncSession],
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Capacity rejection records one terminal run before returning HTTP 503."""
+    tracer = RecordingTracer()
     launcher = RecordingLauncher()
     launcher.launch.side_effect = GenerationRunAdmissionError("capacity exhausted")
     dependencies = dc.replace(
         build_api_dependencies(session_factory),
         authorization=HeaderPrincipalAuthorization(),
         launcher=launcher,
+        tracer=tracer,
     )
     transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
     async with httpx.AsyncClient(
@@ -71,19 +76,30 @@ async def test_generation_run_admission_failure_marks_persisted_run_failed(
     assert len(runs) == 1, runs
     assert runs[0].status is GenerationRunStatus.FAILED, runs[0]
     assert runs[0].error_category == "launcher.overloaded", runs[0]
+    command_span = next(
+        span for span in tracer.spans if span.name == "generation_run.command"
+    )
+    assert command_span.attributes["run_id"] == str(runs[0].id), command_span
+    assert {
+        key: value for key, value in command_span.attributes.items() if key != "run_id"
+    } == snapshot, command_span
+    assert command_span.is_completed, command_span
 
 
 @pytest.mark.asyncio
 async def test_generation_run_scheduling_failure_marks_persisted_run_failed(
     session_factory: async_sessionmaker[AsyncSession],
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Unexpected launcher failures leave the durable run terminal."""
+    tracer = RecordingTracer()
     launcher = RecordingLauncher()
     launcher.launch.side_effect = RuntimeError("task allocation failed")
     dependencies = dc.replace(
         build_api_dependencies(session_factory),
         authorization=HeaderPrincipalAuthorization(),
         launcher=launcher,
+        tracer=tracer,
     )
     transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
     async with httpx.AsyncClient(
@@ -104,6 +120,14 @@ async def test_generation_run_scheduling_failure_marks_persisted_run_failed(
     assert len(runs) == 1, runs
     assert runs[0].status is GenerationRunStatus.FAILED, runs[0]
     assert runs[0].error_category == "launcher.scheduling", runs[0]
+    command_span = next(
+        span for span in tracer.spans if span.name == "generation_run.command"
+    )
+    assert command_span.attributes["run_id"] == str(runs[0].id), command_span
+    assert {
+        key: value for key, value in command_span.attributes.items() if key != "run_id"
+    } == snapshot, command_span
+    assert command_span.is_completed, command_span
 
 
 @pytest.mark.asyncio

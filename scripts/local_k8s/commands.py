@@ -2,8 +2,15 @@
 
 import dataclasses as dc
 import subprocess
+import sys
 import typing as typ
-import urllib.parse as urlparse
+
+from scripts.local_k8s.manifests import (
+    local_postgres_manifest as local_postgres_manifest,
+)
+from scripts.local_k8s.manifests import (
+    secret_manifest as secret_manifest,
+)
 
 if typ.TYPE_CHECKING:
     from scripts.local_k8s.config import PreviewConfig
@@ -44,13 +51,22 @@ class CommandRunner:
                 stdout="",
                 stderr="",
             )
-        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - commands are constructed internally.
-            args,
-            input=input_text,
-            check=check,
-            text=True,
-            capture_output=True,
-        )
+        try:
+            return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - commands are constructed internally.
+                args,
+                input=input_text,
+                check=check,
+                text=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            # Captured output would otherwise vanish into the traceback,
+            # leaving the operator with no diagnostic from the failed tool.
+            if exc.stdout:
+                print(exc.stdout, end="", file=sys.stderr)
+            if exc.stderr:
+                print(exc.stderr, end="", file=sys.stderr)
+            raise
 
 
 def k3d_cluster_create_command(config: PreviewConfig) -> list[str]:
@@ -249,108 +265,6 @@ def kubectl_namespace_command(config: PreviewConfig) -> list[str]:
 def kubectl_apply_command(config: PreviewConfig) -> list[str]:
     """Build a kubectl apply command for stdin manifests."""
     return [*_kubectl_cmd(config), "apply", "-f", "-"]
-
-
-def kubectl_secret_command(config: PreviewConfig) -> list[str]:
-    """Build the idempotent application Secret creation command."""
-    return [
-        *_kubectl_ns_cmd(config),
-        "create",
-        "secret",
-        "generic",
-        config.secret_name,
-        f"--from-literal=database-url={config.database_url}",
-        "--dry-run=client",
-        "-o",
-        "yaml",
-    ]
-
-
-def _yaml_string(value: str) -> str:
-    """Quote a simple scalar for the local manifest."""
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
-def local_postgres_manifest(config: PreviewConfig) -> str:
-    """Build the local-only Postgres dependency manifest."""
-    database_url = urlparse.urlsplit(config.database_url)
-    database_name = database_url.path.lstrip("/") or "episodic"
-    username = urlparse.unquote(database_url.username or "episodic")
-    credential = urlparse.unquote(database_url.password or "episodic")
-    service_name = database_url.hostname or "postgres"
-    port = database_url.port or 5432
-    # The local preview uses literal credentials so the dependency can be
-    # created with one stdin apply. Shared previews must use ExternalSecret.
-    return f"""\
-apiVersion: v1
-kind: Service
-metadata:
-  name: {service_name}
-  namespace: {config.namespace}
-  labels:
-    app.kubernetes.io/name: {service_name}
-    app.kubernetes.io/part-of: episodic-preview
-spec:
-  ports:
-    - name: postgres
-      port: {port}
-      targetPort: postgres
-  selector:
-    app.kubernetes.io/name: {service_name}
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: {service_name}
-  namespace: {config.namespace}
-  labels:
-    app.kubernetes.io/name: {service_name}
-    app.kubernetes.io/part-of: episodic-preview
-spec:
-  serviceName: {service_name}
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: {service_name}
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: {service_name}
-        app.kubernetes.io/part-of: episodic-preview
-    spec:
-      containers:
-        - name: postgres
-          image: postgres:16-alpine
-          ports:
-            - name: postgres
-              containerPort: 5432
-          env:
-            - name: POSTGRES_DB
-              value: {_yaml_string(database_name)}
-            - name: POSTGRES_USER
-              value: {_yaml_string(username)}
-            - name: POSTGRES_PASSWORD
-              value: {_yaml_string(credential)}
-            - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
-          readinessProbe:
-            exec:
-              command:
-                - pg_isready
-                - -U
-                - {_yaml_string(username)}
-                - -d
-                - {_yaml_string(database_name)}
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            timeoutSeconds: 3
-          volumeMounts:
-            - name: postgres-data
-              mountPath: /var/lib/postgresql/data
-      volumes:
-        - name: postgres-data
-          emptyDir: {{}}
-"""
 
 
 def helm_upgrade_command(config: PreviewConfig) -> list[str]:

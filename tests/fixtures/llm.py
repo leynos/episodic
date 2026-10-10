@@ -17,11 +17,18 @@ from episodic.llm import LLMProviderOperation, LLMRequest, LLMTokenBudget
 from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
+    OpenAICompatibleLLMRuntime,
 )
+from episodic.observability import NoopMetrics, NoopTracer, PerfCounterClock
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from episodic.observability import (
+        MetricsPort,
+        MonotonicClockPort,
+        TracerPort,
+    )
     from openai_test_types import (
         _OpenAIAdapterFactory,
         _OpenAIInvalidConfigBuilder,
@@ -168,6 +175,9 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
         retry_delay_seconds: float = 0.5,
         timeout_seconds: float = 30.0,
         chars_per_token: float = 4.0,
+        tracer: TracerPort | None = None,
+        metrics: MetricsPort | None = None,
+        clock: MonotonicClockPort | None = None,
     ) -> cabc.AsyncIterator[OpenAICompatibleLLMAdapter]:
         async with httpx.AsyncClient(
             transport=transport,
@@ -184,6 +194,11 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
                     chars_per_token=chars_per_token,
                 ),
                 client=client,
+                runtime=OpenAICompatibleLLMRuntime(
+                    metrics=NoopMetrics() if metrics is None else metrics,
+                    clock=PerfCounterClock() if clock is None else clock,
+                    tracer=NoopTracer() if tracer is None else tracer,
+                ),
             )
 
     return _build_adapter

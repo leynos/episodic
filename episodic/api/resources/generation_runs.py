@@ -50,7 +50,7 @@ if typ.TYPE_CHECKING:
 
     from episodic.api.types import UowFactory
     from episodic.generation.launcher import GenerationRunLauncher
-    from episodic.observability import TracerPort
+    from episodic.observability import SpanHandle, TracerPort
 
 __all__ = [
     "GenerationRunEventsResource",
@@ -59,6 +59,7 @@ __all__ = [
 ]
 
 _GENERATION_RUN_OPERATION = "generation_run.create"
+_DEFAULT_MAX_SOURCE_COUNT = 32
 
 type Clock = cabc.Callable[[], dt.datetime]
 type UuidFactory = cabc.Callable[[], uuid.UUID]
@@ -78,9 +79,12 @@ class GenerationRunsResource:
     """Create no-QA generation runs for authenticated ingestion-job owners.
 
     The resource materialises the caller-owned ready ingestion job, persists a
-    durable generation-run checkpoint, and schedules detached execution. The
-    authenticated principal becomes the durable run actor; request payloads
-    cannot select another actor.
+    durable generation-run checkpoint, and schedules detached execution.
+
+    Notes
+    -----
+    The authenticated principal becomes the durable run actor; request
+    payloads cannot select another actor.
     """
 
     # Pylint reports the finding the Ruff noqa below already accepts; the
@@ -128,12 +132,9 @@ class GenerationRunsResource:
 
         Notes
         -----
-        ``Idempotency-Key`` is required. Replaying the same key for the same
-        authenticated principal returns the original accepted response.
-        Malformed input, unknown or inaccessible jobs, invalid source
-        materialisation, unavailable launcher configuration, idempotency
-        conflicts, and bounded-admission rejection use canonical HTTP error
-        responses.
+        A successful request populates ``resp`` with HTTP 202, the serialized
+        run, its ``Location``, and ``Retry-After: 1``. ``Idempotency-Key`` is
+        required; replay for the same principal returns the original response.
         """
         source_bundle_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         payload = require_payload_dict(await req.get_media())
@@ -145,33 +146,16 @@ class GenerationRunsResource:
             raise _ingestion_job_not_found(source_bundle_id)
 
         async def work() -> IdempotentResponse:
-            run = await self._create_run(
-                source_bundle_id,
-                request,
-                actor=actor,
-                idempotency_key=idempotency_key,
+            run = await self._create_and_schedule_run(
+                self._create_run(
+                    source_bundle_id,
+                    request,
+                    actor=actor,
+                    idempotency_key=idempotency_key,
+                ),
+                launcher,
+                span,
             )
-            span.set_attribute("run_id", str(run.id))
-            try:
-                await launcher.launch(run.id)
-            except GenerationRunAdmissionError as exc:
-                span.set_attribute("outcome", "rejected")
-                span.set_attribute("failure_category", "launcher.overloaded")
-                await self._mark_launch_failed(
-                    run.id,
-                    error_message=str(exc),
-                    error_category="launcher.overloaded",
-                )
-                raise _generation_overloaded() from exc
-            except Exception as exc:
-                span.set_attribute("outcome", "failed")
-                span.set_attribute("failure_category", "launcher.scheduling")
-                await self._mark_launch_failed(
-                    run.id,
-                    error_message=str(exc),
-                    error_category="launcher.scheduling",
-                )
-                raise
             location = f"/v1/generation-runs/{run.id}"
             return IdempotentResponse(
                 falcon.HTTP_202,
@@ -195,6 +179,51 @@ class GenerationRunsResource:
             )
             span.set_attribute("outcome", "accepted")
         apply_response(resp, result)
+
+    async def _create_and_schedule_run(
+        self,
+        create_run: cabc.Awaitable[GenerationRun],
+        launcher: GenerationRunLauncher,
+        span: SpanHandle,
+    ) -> GenerationRun:
+        """Persist and schedule a run, recording terminal scheduling failures.
+
+        Creation failures propagate unchanged. Scheduling failures first mark
+        the persisted run terminal before propagating.
+
+        Returns
+        -------
+        GenerationRun
+            The persisted run after its launcher accepts scheduling.
+
+        Raises
+        ------
+        _generation_overloaded
+            If bounded launcher admission rejects the persisted run.
+        """
+        run = await create_run
+        span.set_attribute("run_id", str(run.id))
+        try:
+            await launcher.launch(run.id)
+        except GenerationRunAdmissionError as exc:
+            span.set_attribute("outcome", "rejected")
+            span.set_attribute("failure_category", "launcher.overloaded")
+            await self._mark_launch_failed(
+                run.id,
+                error_message=str(exc),
+                error_category="launcher.overloaded",
+            )
+            raise _generation_overloaded() from exc
+        except Exception as exc:
+            span.set_attribute("outcome", "failed")
+            span.set_attribute("failure_category", "launcher.scheduling")
+            await self._mark_launch_failed(
+                run.id,
+                error_message=str(exc),
+                error_category="launcher.scheduling",
+            )
+            raise
+        return run
 
     def _require_launcher(self) -> GenerationRunLauncher:
         if self._launcher is None:
@@ -227,7 +256,7 @@ class GenerationRunsResource:
                         clock=self._clock,
                         uuid_factory=self._uuid_factory,
                         max_source_count=(
-                            32
+                            _DEFAULT_MAX_SOURCE_COUNT
                             if self._max_source_count is None
                             else self._max_source_count
                         ),

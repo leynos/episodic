@@ -215,11 +215,10 @@ def up(
             input_text=namespace.stdout,
         )
 
-    secret = runner.run(commands.kubectl_secret_command(config))
     runner.run(
         commands.kubectl_apply_command(config),
         check=True,
-        input_text=secret.stdout,
+        input_text=commands.secret_manifest(config),
     )
     runner.run(
         commands.kubectl_apply_command(config),

@@ -1,0 +1,107 @@
+# serializer version: 1
+# name: test_offline_pricing_snapshot_migration_keeps_schema_validation[downgrade]
+  '''
+  BEGIN;
+  
+  -- Running downgrade 20261010_000013 -> 20260624_000012
+  
+  DO $$
+          DECLARE
+              constraint_record record;
+              matching_constraints integer := 0;
+              actual_name text;
+              is_valid boolean := true;
+          BEGIN
+              FOR constraint_record IN 
+      SELECT c.conname, c.contype, ARRAY(
+          SELECT a.attname::text FROM pg_attribute AS a
+          WHERE a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+          ORDER BY a.attnum
+      ) AS column_names
+      FROM pg_constraint AS c
+      WHERE c.conrelid = to_regclass('pricing_snapshots')
+        AND c.conname IN ('uq_pricing_snapshots_content_hash', 'pricing_snapshots_content_hash_key')
+  
+              LOOP
+                  matching_constraints := matching_constraints + 1;
+                  actual_name := constraint_record.conname;
+                  is_valid := is_valid
+                      AND constraint_record.contype = 'u'
+                      AND constraint_record.column_names = ARRAY['content_hash'];
+              END LOOP;
+              IF matching_constraints = 0 THEN
+                  RAISE EXCEPTION
+                      'Pricing snapshot content-hash unique constraint is missing';
+              ELSIF matching_constraints > 1 THEN
+                  RAISE EXCEPTION
+                      'Pricing snapshot content-hash constraints are ambiguous';
+              ELSIF NOT is_valid THEN
+                  RAISE EXCEPTION 'Pricing snapshot content-hash constraint is malformed';
+              END IF;
+              IF actual_name = 'uq_pricing_snapshots_content_hash' THEN
+                  EXECUTE 'ALTER TABLE pricing_snapshots RENAME CONSTRAINT '
+                      || quote_ident('uq_pricing_snapshots_content_hash') || ' TO ' || quote_ident('pricing_snapshots_content_hash_key');
+              END IF;
+          END;
+          $$;;
+  
+  UPDATE alembic_version SET version_num='20260624_000012' WHERE alembic_version.version_num = '20261010_000013';
+  
+  COMMIT;
+  
+  
+  '''
+# ---
+# name: test_offline_pricing_snapshot_migration_keeps_schema_validation[upgrade]
+  '''
+  BEGIN;
+  
+  -- Running upgrade 20260624_000012 -> 20261010_000013
+  
+  DO $$
+          DECLARE
+              constraint_record record;
+              matching_constraints integer := 0;
+              actual_name text;
+              is_valid boolean := true;
+          BEGIN
+              FOR constraint_record IN 
+      SELECT c.conname, c.contype, ARRAY(
+          SELECT a.attname::text FROM pg_attribute AS a
+          WHERE a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+          ORDER BY a.attnum
+      ) AS column_names
+      FROM pg_constraint AS c
+      WHERE c.conrelid = to_regclass('pricing_snapshots')
+        AND c.conname IN ('pricing_snapshots_content_hash_key', 'uq_pricing_snapshots_content_hash')
+  
+              LOOP
+                  matching_constraints := matching_constraints + 1;
+                  actual_name := constraint_record.conname;
+                  is_valid := is_valid
+                      AND constraint_record.contype = 'u'
+                      AND constraint_record.column_names = ARRAY['content_hash'];
+              END LOOP;
+              IF matching_constraints = 0 THEN
+                  RAISE EXCEPTION
+                      'Pricing snapshot content-hash unique constraint is missing';
+              ELSIF matching_constraints > 1 THEN
+                  RAISE EXCEPTION
+                      'Pricing snapshot content-hash constraints are ambiguous';
+              ELSIF NOT is_valid THEN
+                  RAISE EXCEPTION 'Pricing snapshot content-hash constraint is malformed';
+              END IF;
+              IF actual_name = 'pricing_snapshots_content_hash_key' THEN
+                  EXECUTE 'ALTER TABLE pricing_snapshots RENAME CONSTRAINT '
+                      || quote_ident('pricing_snapshots_content_hash_key') || ' TO ' || quote_ident('uq_pricing_snapshots_content_hash');
+              END IF;
+          END;
+          $$;;
+  
+  UPDATE alembic_version SET version_num='20261010_000013' WHERE alembic_version.version_num = '20260624_000012';
+  
+  COMMIT;
+  
+  
+  '''
+# ---

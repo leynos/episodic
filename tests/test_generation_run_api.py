@@ -58,6 +58,40 @@ def _assert_generation_event_page(response: httpx.Response) -> None:
     )
 
 
+def _assert_generation_route_spans(tracer: RecordingTracer, run_id: uuid.UUID) -> None:
+    """Assert creation, replay, polling, and event trace contracts."""
+    _assert_trace_span(
+        tracer,
+        "generation_run.command",
+        {
+            "operation": "generation_run.create",
+            "run_id": str(run_id),
+            "outcome": "accepted",
+        },
+    )
+    command_spans = [
+        span for span in tracer.spans if span.name == "generation_run.command"
+    ]
+    assert command_spans[1].attributes == {
+        "operation": "generation_run.create",
+        "outcome": "accepted",
+    }, command_spans
+    _assert_trace_span(
+        tracer,
+        "generation_run.read",
+        {"operation": "generation_run.read", "outcome": "success"},
+    )
+    _assert_trace_span(
+        tracer,
+        "generation_run.events.list",
+        {
+            "operation": "generation_run.events.list",
+            "pagination": "cursor",
+            "outcome": "success",
+        },
+    )
+
+
 class _ExpectedError(typ.NamedTuple):
     """Describe one stable REST error response."""
 
@@ -190,19 +224,8 @@ async def test_generation_run_create_replay_and_poll(
     _assert_generation_run_replay(first, replay, launcher)
     _assert_polled_generation_run(run_response, payload)
     _assert_generation_event_page(events_response)
-    _assert_trace_span(
-        typ.cast("RecordingTracer", dependencies.tracer),
-        "generation_run.read",
-        {"operation": "generation_run.read", "outcome": "success"},
-    )
-    _assert_trace_span(
-        typ.cast("RecordingTracer", dependencies.tracer),
-        "generation_run.events.list",
-        {
-            "operation": "generation_run.events.list",
-            "pagination": "cursor",
-            "outcome": "success",
-        },
+    _assert_generation_route_spans(
+        typ.cast("RecordingTracer", dependencies.tracer), run_id
     )
 
 

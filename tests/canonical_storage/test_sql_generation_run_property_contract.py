@@ -214,6 +214,10 @@ async def test_sql_idempotency_keys_are_scoped_to_principals(
 ) -> None:
     """The same key replays per principal while remaining independent across actors."""
     factory = session_factory
+    # The session factory outlives the Hypothesis examples, so persisted rows
+    # survive between examples; scope the key uniquely per example to keep
+    # them independent.
+    scoped_key = f"{key}-{uuid.uuid7()}"
     first_run = make_generation_run()
     replay_run = make_generation_run()
     other_principal_run = make_generation_run()
@@ -226,17 +230,17 @@ async def test_sql_idempotency_keys_are_scoped_to_principals(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         first = await uow.generation_runs.create_run(
             first_run,
-            idempotency_key=key,
+            idempotency_key=scoped_key,
             idempotency_principal_id="principal-a",
         )
         replay = await uow.generation_runs.create_run(
             replay_run,
-            idempotency_key=key,
+            idempotency_key=scoped_key,
             idempotency_principal_id="principal-a",
         )
         other = await uow.generation_runs.create_run(
             other_principal_run,
-            idempotency_key=key,
+            idempotency_key=scoped_key,
             idempotency_principal_id="principal-b",
         )
         await uow.commit()

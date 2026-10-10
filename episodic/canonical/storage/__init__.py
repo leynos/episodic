@@ -55,7 +55,7 @@ from .source_intake_repositories import (
     SqlAlchemyIngestionJobSourceRepository,
     SqlAlchemyUploadRepository,
 )
-from .uow import SqlAlchemyUnitOfWork
+from .uow import SqlAlchemyUnitOfWork, UnitOfWorkRuntime
 from .workflow_checkpoints import SqlAlchemyWorkflowCheckpointStore
 
 __all__ = (
@@ -95,6 +95,7 @@ __all__ = (
     "SqlAlchemyUploadRepository",
     "SqlAlchemyWorkflowCheckpointStore",
     "TeiHeaderRecord",
+    "UnitOfWorkRuntime",
     "UploadRecord",
     "WorkflowCheckpointRecord",
     "detect_schema_drift",

@@ -159,6 +159,41 @@ Normalized metrics:
 - Text-to-Speech pricing is reserved in schema names and enum values but is not
   exercised by the initial implementation.
 
+## Addendum (2026-10-10)
+
+The SQLAlchemy cost-ledger adapter persists pricing snapshots as immutable
+rows. It inserts by snapshot identifier with `ON CONFLICT DO NOTHING` and uses
+`RETURNING` to distinguish a newly persisted row from an existing row reused
+under that identifier. Reuse leaves the stored row unchanged. A content hash
+already associated with a different identifier raises
+`PricingSnapshotCollisionError`; the database identifies this condition with the
+`uq_pricing_snapshots_content_hash` unique constraint.
+
+`CostRecorder` persists a resolved snapshot before inserting a run-pricing pin
+or an unpinned provider-call ledger row, so their foreign keys refer to an
+existing snapshot. A provider call with an existing run pin relies on that
+pin's foreign key and does not persist the snapshot again.
+
+For file-backed snapshots, `content_hash` is the SHA-256 digest of the entire
+source YAML file, including its rates and metadata. The adapter stores the
+catalogue-provided `rates_minor_per_metric` mapping as JSONB and stores the
+provided content hash; it does not recalculate either value. A timezone-aware
+`effective_from` value is validated by `PricingSnapshot` and forwarded to the
+timezone-aware database column without string parsing; an absent value remains
+unset. `retrieved_at` is parsed as a timezone-aware instant before persistence.
+
+Revision `20261010_000013` applies the named content-hash constraint to
+already-deployed schemas. It renames PostgreSQL's historical
+`pricing_snapshots_content_hash_key` constraint to
+`uq_pricing_snapshots_content_hash`, preserving uniqueness and its backing
+index. Before issuing DDL, the online migration validates that exactly one
+candidate constraint exists and that it is a unique constraint over only
+`content_hash`; it raises `CommandError` if the constraint is missing,
+malformed, or ambiguous. An already-renamed alpha-preview constraint passes
+validation without another rename. The offline migration emits SQL with
+equivalent catalogue guards. Downgrade restores the historical name after the
+same validation.
+
 ## References
 
 Roadmap item `2.4.4` in `docs/roadmap.md`.[^1] ExecPlan:

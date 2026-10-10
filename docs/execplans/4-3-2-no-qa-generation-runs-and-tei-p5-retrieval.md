@@ -2124,3 +2124,52 @@ its public-boundary documentation and behaviour. Validation passed:
 `make check-fmt`, `make lint`, `make typecheck`, `make markdownlint`, and
 `make nixie`; focused extracted suites passed 42 tests; and `make test` passed
 1,214 tests with one skipped test and 49 snapshots.
+
+Alpha test outcome, 2026-08-23: manual alpha testing on the local podman/kind
+preview cluster drove the delivered slice end to end — source and show-spec
+uploads, ingestion-job attachment, a `draft_without_qa` generation run, and a
+TEI-P5 download over `Accept: application/tei+xml` — and reached
+`run.succeeded` with a coherent generated script (see
+[alpha-test-4-3-2-setup-notes.md](../alpha-test-4-3-2-setup-notes.md) for the
+full session log). Reaching that result required fixes beyond the documented
+core slice: the OpenAI adapter now requests constrained JSON output
+(`response_format`/`text.format`) so reasoning-model responses wrapped in
+markdown fences no longer fail the fail-fast JSON parser;
+`OpenAIPayloadOptions` adds configurable `max_completion_tokens` selection,
+reasoning effort, and service tier for reasoning models that reject
+`max_tokens`; the provider HTTP timeout is now configurable via
+`OPENAI_TIMEOUT_SECONDS` (the prior hard-coded 30 s timeout under-provisioned
+reasoning-model drafting); `CostLedgerPort.ensure_snapshot` persists a resolved
+pricing snapshot idempotently before it is pinned or referenced, so the first
+run against a fresh database no longer fails a foreign-key check on
+`run_pricing_pins`; usage metering omits zero-valued optional token metrics
+instead of reporting spurious cached/audio counters; and the Helm chart gained
+pass-through `volumes`/`volumeMounts` support (with the local preview's Secret
+moved to a stdin-applied manifest) so the source-intake object store has a
+writable mount under the chart's `readOnlyRootFilesystem` default. Review
+hardening for these fixes continues on PR #277.
+
+Review hardening, 2026-10-10: PR #277 adds a forward migration that validates
+the pricing-snapshot content-hash constraint before DDL, accepts the renamed
+alpha-preview constraint, and preserves its unique index and downgrade path.
+Sixteen migration cases verify the uniqueness boundary; separate cost-ledger
+coverage verifies collision translation. Interrupted provider calls now produce
+non-success telemetry, while rejected snapshot statement construction uses
+separate input-validation telemetry without recording persistence duration.
+Focused coverage also exercises provider payloads, usage normalization,
+defaults, unit-of-work wiring, invalid snapshot inputs, and shared runtime
+setup. Local manifest builders now live in `scripts/local_k8s/manifests.py` and
+are re-exported by `commands.py`; route lifecycle responsibilities were
+extracted, and the ADR, system design, preview design, developers' guide, and
+users' guide were synchronized.
+
+Validation on candidate `f7eaecc952d1bb238baca5127d9129c7e104b26b` passed:
+`make check-fmt`, every `make lint` stage, and `make typecheck` (no
+diagnostics); `make test` passed 1,615 tests with 3 skipped and 55 snapshots
+(30 known dependency warnings); `make markdownlint` checked 125 files with 0
+issues; `make nixie` validated all diagrams; and `make check-migrations`
+reported no drift. The focused suite passed 112 tests with 9 snapshots.
+CodeScene's full delta against `6aa6e930` reported no new or degraded findings.
+This records local candidate validation only: PR #277's hosted review and merge
+remained pending at the time of this entry. The original PR #141 completion and
+roadmap status are unchanged.

@@ -733,6 +733,11 @@ Helm conventions:
 - Keep chart values aligned with the Nile Valley example chart contract:
   `config`, `existingSecretName`, `allowMissingSecret`, `secretEnvFromKeys`,
   `externalSecret`, ingress, and HTTP probes.
+- `volumes` and `volumeMounts` are pass-through chart values (default `[]`)
+  applied verbatim to the pod template and container spec. Use them to make a
+  path writable under the chart's `readOnlyRootFilesystem` default, such as the
+  source-intake object store root; `values.local.yaml` mounts an `emptyDir` at
+  `/tmp` for that purpose.
 - Keep the Deployment pod-template `checksum/config` annotation aligned with
   `templates/configmap.yaml` so ConfigMap-backed environment changes roll pods.
 - Validate chart edits with `uv run pytest tests/test_helm_chart_contract.py`.
@@ -743,12 +748,19 @@ Helm conventions:
 Local preview conventions:
 
 - Makefile targets call `uv run --group dev scripts/local_k8s.py`.
-- `scripts/local_k8s/commands.py` should contain command construction only.
+- `scripts/local_k8s/commands.py` should contain command construction and
+  re-export the manifest builders from `manifests.py` for existing callers.
+- `scripts/local_k8s/manifests.py` should render local Kubernetes manifests
+  and validate their input values.
 - `scripts/local_k8s/validation.py` should contain host prerequisite checks.
 - `scripts/local_k8s/orchestration.py` should sequence helpers without hiding
   command failures.
 - `local-k8s-up` must apply the local-only Postgres dependency before invoking
   Helm with `--wait`, because `/health/ready` depends on database connectivity.
+- The preview's application Secret is built as a manifest with credentials in
+  `stringData` and applied with `kubectl apply -f -` on stdin, so secret values
+  never appear in command arguments the runner would otherwise print in dry-run
+  mode or echo to stderr on a failed command.
 - Existing clusters must be reused only when the requested ingress port matches
   the k3d load-balancer mapping.
 - Add focused tests in `tests/test_local_k8s_tooling.py` for new command
@@ -897,8 +909,8 @@ When adding new worker tasks:
 
 ## Observability port abstractions
 
-Two canonical observability ports live in `episodic/observability.py` and must
-be the default when adding new operational instrumentation:
+Three canonical observability ports live in `episodic/observability.py` and
+must be the default when adding new operational instrumentation:
 
 - `MetricsPort` is the canonical bounded-cardinality metrics interface. Its
   `labels` parameters are typed as `collections.abc.Mapping[str, str]` so
@@ -908,6 +920,18 @@ be the default when adding new operational instrumentation:
   operation time. Feature modules (for example `episodic.qa.chrono`) must reuse
   this port rather than declaring parallel hierarchies. The matching default
   adapter `PerfCounterClock` is exported from the same module.
+- `TracerPort` is the canonical tracing interface.
+  `start_span(name, attributes=…)` returns a `SpanHandle`, a context manager
+  that bounds an operation with `set_attribute(name, value)` calls recorded as
+  the span completes.
+
+`StructuredLogTracer` is the production tracer adapter; it logs the span name
+and completion outcome as structured log lines. It only records attributes
+whose name is in a fixed allow-list (`operation`, `outcome`, `failure_category`,
+`representation`, `pagination`) and silently drops any other attribute, so
+spans cannot leak request payloads, identifiers, or other sensitive operation
+metadata into logs. `NoopTracer` is the default no-op adapter used when no
+tracing backend is wired.
 
 `episodic/metrics_ports.py` retains the narrower `BoundedMetricsPort` and
 `BoundedValueMetricsPort` protocols, whose `labels` parameters are typed as
@@ -920,7 +944,16 @@ Adapters that satisfy `MetricsPort` also satisfy `BoundedMetricsPort` for
 callers that construct their label dictionaries as concrete `dict` instances.
 Tests should reuse `episodic.observability.NoopMetrics` and `PerfCounterClock`
 (or the feature-specific noops, such as the private `_NoopChronoMetrics`) as
-default test doubles for the boundary.
+default test doubles for the boundary. For tracing, tests should reuse
+`episodic.observability.RecordingTracer`, which records each started span as a
+`RecordedSpan` (with its attributes and completion state) for deterministic
+assertions.
+
+Composition roots should use the feature-specific runtime bundles at adapter
+boundaries: `OpenAICompatibleLLMRuntime` for the OpenAI-compatible LLM adapter
+and `UnitOfWorkRuntime` for canonical storage. These frozen values keep related
+collaborators together while retaining each feature's own defaults and
+dependencies.
 
 ## Database migrations
 
@@ -929,11 +962,17 @@ under `alembic/`, and migration scripts are stored in `alembic/versions/`.
 Schema changes must be expressed as migrations, and tests apply migrations
 before executing database-backed scenarios.
 
+Canonical and cost-accounting ORM models share `episodic.sqlalchemy_base.Base`.
+Keep that module limited to the common SQLAlchemy declarative base so each
+storage feature can import it without loading another feature's package. Domain
+enums and feature-specific model declarations remain with their owning storage
+modules. Alembic and schema tests use the combined `Base.metadata` registry.
+
 ### Creating a new migration
 
-After modifying Object-Relational Mapping (ORM) models in
-`episodic/canonical/storage/models.py`, generate a migration with Alembic's
-autogenerate feature:
+After modifying Object-Relational Mapping (ORM) models in either
+`episodic/canonical/storage/` or `episodic/cost/storage/`, generate a migration
+with Alembic's autogenerate feature:
 
 ```shell
 DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
@@ -985,7 +1024,7 @@ change local development defaults.
 
 ### Developer workflow
 
-1. Modify ORM models in `episodic/canonical/storage/models.py`.
+1. Modify ORM models in their owning canonical or cost storage module.
 2. Generate a migration: `alembic revision --autogenerate -m "description"`.
 3. Run `make check-migrations` to verify the models and migrations are in sync.
 4. Run `make test` to confirm existing tests still pass.
@@ -1445,8 +1484,8 @@ supplied runtime is returned unchanged, so an explicit bundle always wins. When
 time via `datetime.now(datetime.UTC)`, identifiers via `uuid.uuid4()`,
 `NoopMetrics`, and `PerfCounterClock`. The optional `metrics` and
 `monotonic_clock` keyword arguments override those two defaults individually,
-which is how the unit of work threads its configured observability ports
-through to the repositories.
+while the unit of work takes those ports from its `UnitOfWorkRuntime` and
+forwards them to the repositories.
 
 Tests inject deterministic providers instead of patching module state. The
 source-intake repository tests build a `SourceIntakeStorageRuntime` with a fixed
@@ -1984,13 +2023,29 @@ records, ordered terminal events, and status. A request-scoped unit of work
 must never be captured by a background task.
 
 When configured, `CostRecorder` records the provider call and final run roll-up
-in the persistence unit of work. It first pins the immutable provider pricing
-selected for the run, then records usage with a run-scoped idempotency key.
-`PRICING_SNAPSHOT_DIRECTORY` is optional: its default is
-`config/pricing-snapshots`; a configured relative path is resolved from the
-repository root, and startup rejects a path that is not an existing directory.
-The runtime constructs `FilePricingCatalogue` from the validated directory, so
-the same pricing source is used when costs are recorded.
+in the persistence unit of work. It first calls
+`CostLedgerPort.ensure_snapshot` to persist the resolved pricing snapshot
+idempotently, either before pinning it to the run or before recording an
+unpinned provider call; repeated calls with the same snapshot identifier reuse
+the stored row. This ordering ensures the snapshot exists before the run-pin or
+provider-call foreign key references it; a call with an existing pin relies on
+that pin's foreign key. Pricing snapshots are immutable and content-addressed,
+so a content-hash collision against another identifier raises
+`PricingSnapshotCollisionError` rather than silently overwriting the stored
+snapshot. `ensure_snapshot` carries the validated timezone-aware
+`effective_from` datetime from the resolved catalogue snapshot through to the
+persisted row without parsing it; when the catalogue entry has none, the stored
+value remains unset. This preserves the same effective-date precedence the
+catalogue used to resolve it. Invalid statement construction emits the
+`pricing_snapshot.input_validation` span and counter with
+`operation=ensure_snapshot`, `outcome=error`, and
+`failure_category=pricing_snapshot.input_invalid`; it records no persistence
+duration because execution has not started. `CostRecorder` then records usage
+with a run-scoped idempotency key. `PRICING_SNAPSHOT_DIRECTORY` is optional:
+its default is `config/pricing-snapshots`; a configured relative path is
+resolved from the repository root, and startup rejects a path that is not an
+existing directory. The runtime constructs `FilePricingCatalogue` from the
+validated directory, so the same pricing source is used when costs are recorded.
 
 Generation input is bounded before it reaches the draft provider. The optional
 `GENERATION_MAX_SOURCE_COUNT`, `GENERATION_MAX_SOURCE_BYTES`,
@@ -2214,7 +2269,8 @@ absent.
 `episodic.llm` now owns a richer outbound contract:
 
 - `LLMRequest` carries the prompt text, optional system prompt, target model,
-  provider operation (`chat_completions` or `responses`), and token budget.
+  provider operation (`chat_completions` or `responses`), token budget, and the
+  provider-neutral `json_response` flag.
 - `OpenAICompatibleLLMAdapter` implements `LLMPort` over explicit
   OpenAI-compatible HTTP calls, so OpenRouter-style chat completions and OpenAI
   Responses stay behind the same port.
@@ -2229,6 +2285,30 @@ absent.
   target model and prompt shape.
 - Persisted `guardrails` belong to canonical profile/template state and are
   composed before the adapter call, not inside the vendor transport layer.
+- `LLMRequest.json_response` requests a JSON object without surrounding prose
+  or markdown fences. It does not define a JSON Schema or validate the
+  application-level shape; callers validate that after receiving the response.
+  An adapter must honour the request or fail explicitly when it is unsupported.
+  The OpenAI-compatible adapter maps the flag onto the operation-specific
+  provider shape: `response_format={"type": "json_object"}` for chat
+  completions, and `text.format={"type": "json_object"}` for the Responses API.
+- `OpenAIPayloadOptions` carries provider-specific request options applied to
+  outbound payloads: `reasoning_effort` (read from `OPENAI_REASONING_EFFORT`),
+  `service_tier` (read from `OPENAI_SERVICE_TIER`), and `token_limit_param`
+  (read from `OPENAI_TOKEN_LIMIT_PARAM`, one of `max_tokens` or
+  `max_completion_tokens`, defaulting to `max_tokens`).
+  `OPENAI_TIMEOUT_SECONDS` sets the adapter's HTTP timeout and defaults to
+  `30.0`. `episodic.api.runtime_config` reads these settings and
+  `episodic.api.runtime` builds the adapter configuration; the adapter applies
+  the options to provider payloads and the timeout to HTTP requests.
+
+Each provider attempt emits the `llm.provider_request` span and counter plus the
+`llm.provider_request.duration_ms` observation. An unexpected exception is
+recorded as `outcome=error` with `failure_category=provider.unexpected_error`;
+cancellation is recorded as `outcome=cancelled` with
+`failure_category=provider.cancelled`. Telemetry labels remain bounded to the
+operation, outcome, and fixed failure category; request payloads and credential
+values are not recorded.
 
 ### OpenAI-compatible adapter package layout
 
@@ -2246,6 +2326,8 @@ module remains responsible for HTTP lifecycle and retry orchestration.
   endpoint path and JSON payload.
 - `response.py` classifies HTTP status codes, decodes JSON bodies, and
   normalizes OpenAI-compatible payloads through `openai_client` adapters.
+- `telemetry.py` classifies known provider transport, response, and cancellation
+  failures into bounded outcome and failure-category labels.
 - `utils.py` is a façade over four helper modules and re-exports their
   functions for existing callers: `utils_config.py` validates configuration,
   `utils_preflight.py` estimates preflight token counts and enforces the input
@@ -2254,6 +2336,16 @@ module remains responsible for HTTP lifecycle and retry orchestration.
 - `__init__.py` is a package namespace for these internal helpers; depend on
   the facade or the `LLMPort` contract rather than importing helper functions
   directly.
+
+`episodic.llm.openai_validation` normalizes raw provider usage into the
+canonical `ProviderCallUsage.usage_metrics` used for cost accounting. Cached
+and audio token counts are subsets of the prompt and completion totals, so they
+are made mutually exclusive with the parent metric: subset counts are
+subtracted from `input_tokens`/`output_tokens` and priced under their own rates
+(`cached_input_tokens`, `audio_input_tokens`, `audio_output_tokens`). Reasoning
+tokens remain inside `output_tokens` and are never priced as a separate metric.
+A zero-valued optional metric is omitted entirely, so a pricing snapshot never
+needs a rate for a modality the provider did not report.
 
 ## Multi-source ingestion
 
