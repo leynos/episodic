@@ -15,6 +15,7 @@ import re
 import shlex
 import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import]  # The end-to-end test drives Make.
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -96,6 +97,23 @@ def _make_jobs_probe_source() -> str:
     return "\n".join(assignments)
 
 
+def _parse_jobs_probe_output(stdout: str) -> dict[str, str]:
+    """Collect each expanded Make variable exactly once."""
+    values: dict[str, str] = {}
+    for name in _JOBS_PROBE_VARIABLES:
+        prefix = f"__MAKE_PROBE_{name}__="
+        matching_lines = [
+            line.removeprefix(prefix)
+            for line in stdout.splitlines()
+            if line.startswith(prefix)
+        ]
+        assert len(matching_lines) == 1, (
+            f"the Make probe must report {name} exactly once: {stdout}"
+        )
+        values[name] = matching_lines[0]
+    return values
+
+
 def _write_controlled_nproc(
     home: Path,
     *,
@@ -120,10 +138,10 @@ def _write_controlled_nproc(
 
 def _pylint_jobs_probe_environment(
     tmp_path: Path,
+    home: Path,
     settings: _JobsProbeSettings,
 ) -> tuple[dict[str, str], Path]:
     """Create an isolated Make environment with a controlled core probe."""
-    home = tmp_path / "home"
     (home / ".local" / "bin").mkdir(parents=True)
     (home / ".bun" / "bin").mkdir(parents=True)
     marker = tmp_path / "nproc-called"
@@ -161,62 +179,60 @@ def _run_pylint_jobs_probe(
     assert make is not None, "make must be on PATH"
 
     # The test does not inherit Make variables, flags, or the user's HOME.
-    make_environment, marker = _pylint_jobs_probe_environment(
-        tmp_path,
-        settings,
-    )
-
-    probe_makefile = tmp_path / "pylint-jobs-probe.mk"
-    probe_makefile.write_text(
-        f"include {MAKEFILE_PATH}\n{_make_jobs_probe_source()}\n",
-        encoding="utf-8",
-    )
-    arguments = [
-        make,
-        "--no-print-directory",
-        "-s",
-        "-C",
-        str(_REPO_ROOT),
-        "-f",
-        str(probe_makefile),
-    ]
-    if settings.command_line_jobs is not None:
-        arguments.append(f"PYLINT_JOBS={settings.command_line_jobs}")
-    arguments.append(_JOBS_PROBE_TARGET)
-
-    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # Fixed Make argv; no lint recipe runs.
-        arguments,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=make_environment,
-        timeout=10,
-    )
-    assert completed.returncode == 0, (
-        "the Makefile variable probe must complete without running lint tools: "
-        f"{completed.stdout}{completed.stderr}"
-    )
-    has_override = (
-        settings.environment_jobs is not None or settings.command_line_jobs is not None
-    )
-    if settings.nproc_result is not None and not has_override:
-        assert marker.is_file(), (
-            "Make's PATH prefixes must select the controlled nproc executable."
+    # pytest's temporary directory may be on a noexec mount in CI. Make runs
+    # `nproc` directly, so keep the controlled executable on the checkout's
+    # filesystem while all probe data remains under pytest's temporary path.
+    with tempfile.TemporaryDirectory(
+        prefix=".pylint-jobs-home-", dir=_REPO_ROOT
+    ) as home_name:
+        make_environment, marker = _pylint_jobs_probe_environment(
+            tmp_path,
+            Path(home_name),
+            settings,
         )
 
-    values: dict[str, str] = {}
-    for name in _JOBS_PROBE_VARIABLES:
-        prefix = f"__MAKE_PROBE_{name}__="
-        matching_lines = [
-            line.removeprefix(prefix)
-            for line in completed.stdout.splitlines()
-            if line.startswith(prefix)
+        probe_makefile = tmp_path / "pylint-jobs-probe.mk"
+        probe_makefile.write_text(
+            f"include {MAKEFILE_PATH}\n{_make_jobs_probe_source()}\n",
+            encoding="utf-8",
+        )
+        arguments = [
+            make,
+            "--no-print-directory",
+            "-s",
+            "-C",
+            str(_REPO_ROOT),
+            "-f",
+            str(probe_makefile),
         ]
-        assert len(matching_lines) == 1, (
-            f"the Make probe must report {name} exactly once: {completed.stdout}"
+        if settings.command_line_jobs is not None:
+            arguments.append(f"PYLINT_JOBS={settings.command_line_jobs}")
+        arguments.append(_JOBS_PROBE_TARGET)
+
+        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # Fixed Make argv; no lint recipe runs.
+            arguments,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=make_environment,
+            timeout=10,
         )
-        values[name] = matching_lines[0]
-    return values
+        assert completed.returncode == 0, (
+            "the Makefile variable probe must complete without running lint tools: "
+            f"{completed.stdout}{completed.stderr}"
+        )
+        has_override = (
+            settings.environment_jobs is not None
+            or settings.command_line_jobs is not None
+        )
+        if settings.nproc_result is not None and not has_override:
+            controlled_nproc = Path(make_environment["HOME"]) / ".local/bin/nproc"
+            assert marker.is_file(), (
+                "Make's PATH prefixes must select the controlled executable "
+                f"{controlled_nproc}; PATH={make_environment['PATH']!r}."
+            )
+
+        return _parse_jobs_probe_output(completed.stdout)
 
 
 def _assert_expanded_pylint_jobs(
