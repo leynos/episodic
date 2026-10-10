@@ -46,19 +46,7 @@ class _JobsProbeSettings:
 
 
 def _makefile_variable(name: str) -> str:
-    """Return the value assigned to a Makefile variable.
-
-    Parameters
-    ----------
-    name : str
-        The variable name, assigned with ``=`` or ``?=``.
-
-    Returns
-    -------
-    str
-        The assigned value with surrounding whitespace removed.
-    """
-    # Join backslash continuations so a multi-line assignment reads whole.
+    """Return a Makefile assignment, joining line continuations."""
     text = MAKEFILE_PATH.read_text(encoding="utf-8").replace("\\\n", " ")
     match = re.search(rf"^{re.escape(name)}\s*\??=\s*(.+)$", text, flags=re.MULTILINE)
     assert match is not None, f"{name} is not defined in the Makefile"
@@ -92,6 +80,7 @@ def _make_jobs_probe_source() -> str:
     ]
     assignments.extend([
         "$(info __MAKE_PROBE_EFFECTIVE_HOME__=$(HOME))",
+        "$(info __MAKE_PROBE_MAKE_PATH__=$(PATH))",
         "$(info __MAKE_PROBE_SHELL_PATH__=$(shell printf '%s' \"$$PATH\"))",
         "$(info __MAKE_PROBE_NPROC__=$(shell command -v nproc))",
     ])
@@ -104,19 +93,21 @@ def _make_jobs_probe_source() -> str:
 
 def _parse_jobs_probe_output(stdout: str) -> dict[str, str]:
     """Collect each expanded Make variable exactly once."""
-    values: dict[str, str] = {}
-    for name in _JOBS_PROBE_VARIABLES:
-        prefix = f"__MAKE_PROBE_{name}__="
-        matching_lines = [
-            line.removeprefix(prefix)
-            for line in stdout.splitlines()
-            if line.startswith(prefix)
-        ]
-        assert len(matching_lines) == 1, (
-            f"the Make probe must report {name} exactly once: {stdout}"
-        )
-        values[name] = matching_lines[0]
-    return values
+    return {name: _make_probe_value(stdout, name) for name in _JOBS_PROBE_VARIABLES}
+
+
+def _make_probe_value(stdout: str, name: str) -> str:
+    """Return one named value from Make's diagnostic output."""
+    prefix = f"__MAKE_PROBE_{name}__="
+    matching_lines = [
+        line.removeprefix(prefix)
+        for line in stdout.splitlines()
+        if line.startswith(prefix)
+    ]
+    assert len(matching_lines) == 1, (
+        f"the Make probe must report {name} exactly once: {stdout}"
+    )
+    return matching_lines[0]
 
 
 def _write_controlled_nproc(
@@ -158,13 +149,14 @@ def _pylint_jobs_probe_environment(
             marker=marker,
         )
 
-    # The controlled executable lives under this HOME, which Make prepends to
-    # PATH. Keep the base path limited to standard system tools so the probe
-    # also verifies that HOME's prefix wins over the system `nproc`.
+    # Make versions differ in which PATH a parse-time `$(shell ...)` sees.
+    # Put the controlled executable in the isolated process PATH as well as
+    # under HOME, where the Makefile prepends it, so both expansion paths use
+    # the same `nproc` without relying on the host's core count.
     path = (
         str(tmp_path / "path-without-nproc")
         if settings.nproc_result is None
-        else os.defpath
+        else os.pathsep.join((str(home / ".local" / "bin"), os.defpath))
     )
     environment = {
         "HOME": str(home),
@@ -175,6 +167,35 @@ def _pylint_jobs_probe_environment(
     if settings.environment_jobs is not None:
         environment["PYLINT_JOBS"] = settings.environment_jobs
     return environment, marker
+
+
+def _assert_controlled_nproc_selected(
+    stdout: str,
+    make_environment: dict[str, str],
+    marker: Path,
+) -> None:
+    """Check the Makefile prefixes and controlled core-probe selection."""
+    home = Path(make_environment["HOME"])
+    controlled_nproc = home / ".local" / "bin" / "nproc"
+    required_prefix = (
+        os.pathsep.join((str(home / ".local" / "bin"), str(home / ".bun" / "bin")))
+        + os.pathsep
+    )
+    make_path = _make_probe_value(stdout, "MAKE_PATH")
+    assert make_path.startswith(required_prefix), (
+        "the Makefile must retain its HOME PATH prefixes; "
+        f"expected prefix={required_prefix!r}, PATH={make_path!r}"
+    )
+
+    resolved_nproc = _make_probe_value(stdout, "NPROC")
+    assert resolved_nproc == str(controlled_nproc), (
+        "the isolated path must select the controlled executable; "
+        f"resolved={resolved_nproc!r}, stdout={stdout!r}"
+    )
+    assert marker.is_file(), (
+        "Make must execute the controlled nproc; "
+        f"path={controlled_nproc}, stdout={stdout!r}"
+    )
 
 
 def _run_pylint_jobs_probe(
@@ -228,27 +249,14 @@ def _run_pylint_jobs_probe(
             f"{completed.stdout}{completed.stderr}"
         )
         values = _parse_jobs_probe_output(completed.stdout)
-        has_override = (
-            settings.environment_jobs is not None
-            or settings.command_line_jobs is not None
-        )
-        if settings.nproc_result is not None and not has_override:
-            controlled_nproc = (
-                Path(make_environment["HOME"]) / ".local" / "bin" / "nproc"
-            )
-            resolved_nproc = next(
-                line.removeprefix("__MAKE_PROBE_NPROC__=")
-                for line in completed.stdout.splitlines()
-                if line.startswith("__MAKE_PROBE_NPROC__=")
-            )
-            assert resolved_nproc == str(controlled_nproc), (
-                "Make's PATH prefixes must select the controlled executable; "
-                f"resolved={resolved_nproc!r}, stdout={completed.stdout!r}"
-            )
-            assert marker.is_file(), (
-                "Make must execute the controlled nproc; "
-                f"path={controlled_nproc}, jobs={values['PYLINT_JOBS']!r}, "
-                f"stderr={completed.stderr!r}"
+        if settings.nproc_result is not None and all(
+            override is None
+            for override in (settings.environment_jobs, settings.command_line_jobs)
+        ):
+            _assert_controlled_nproc_selected(
+                completed.stdout,
+                make_environment,
+                marker,
             )
 
         return values
