@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import io
 import typing as typ
 
@@ -16,20 +17,30 @@ _BASE_URL = "http://127.0.0.1:4321/v1"
 _FIXTURE_CONTENT = '{"plan_version": 1}'
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _CompletionOverrides:
+    """Optional completion values used to exercise the fixture oracle."""
+
+    content: str = _FIXTURE_CONTENT
+    model: str = smoke.PROVIDER_MODEL
+    prompt_tokens: object = smoke.PROVIDER_PROMPT_TOKENS
+    choices: list[object] | None = None
+    usage: object | None = None
+
+
 def _completion_payload(
-    *,
-    content: str = _FIXTURE_CONTENT,
-    model: str = smoke.PROVIDER_MODEL,
-    prompt_tokens: object = smoke.PROVIDER_PROMPT_TOKENS,
-    choices: list[object] | None = None,
-    usage: object | None = None,
+    overrides: _CompletionOverrides | None = None,
 ) -> dict[str, object]:
     """Build the completion shape returned by the fixture's template."""
+    if overrides is None:
+        overrides = _CompletionOverrides()
+    choices = overrides.choices
     if choices is None:
-        choices = [{"message": {"content": content}}]
+        choices = [{"message": {"content": overrides.content}}]
+    usage = overrides.usage
     if usage is None:
-        usage = {"prompt_tokens": prompt_tokens}
-    return {"model": model, "choices": choices, "usage": usage}
+        usage = {"prompt_tokens": overrides.prompt_tokens}
+    return {"model": overrides.model, "choices": choices, "usage": usage}
 
 
 def test_check_provider_round_trip_accepts_fixture_completion(
@@ -55,32 +66,34 @@ def test_check_provider_round_trip_accepts_fixture_completion(
     ("payload", "diagnostic"),
     [
         pytest.param(
-            _completion_payload(content="rendered output without the marker"),
+            _completion_payload(
+                _CompletionOverrides(content="rendered output without the marker")
+            ),
             "does not carry 'plan_version'",
             id="missing-fixture-marker",
         ),
         pytest.param(
-            _completion_payload(model="unexpected-model"),
+            _completion_payload(_CompletionOverrides(model="unexpected-model")),
             "instead of 'gpt-4.1'",
             id="wrong-echoed-model",
         ),
         pytest.param(
-            _completion_payload(prompt_tokens=0),
+            _completion_payload(_CompletionOverrides(prompt_tokens=0)),
             "planner branch did not render",
             id="wrong-prompt-token-count",
         ),
         pytest.param(
-            _completion_payload(choices=[]),
+            _completion_payload(_CompletionOverrides(choices=[])),
             "completion carried no choices",
             id="missing-choices",
         ),
         pytest.param(
-            _completion_payload(choices=[{"message": []}]),
+            _completion_payload(_CompletionOverrides(choices=[{"message": []}])),
             "completion choice",
             id="invalid-message-shape",
         ),
         pytest.param(
-            _completion_payload(usage=[]),
+            _completion_payload(_CompletionOverrides(usage=[])),
             "usage must be a JSON object",
             id="invalid-usage-shape",
         ),
