@@ -381,7 +381,7 @@ def main() -> int:
             print(f"isolation: only {configured!r} advertised")
             _check_provider_round_trip(server.base_url)
             print(f"completion: provider {PROVIDER_NAME!r} rendered its template")
-        except VidaiMockStartupError as exc:
+        except (VidaiMockStartupError, OSError) as exc:
             print(f"FAIL: {exc}", file=sys.stderr)
             return 1
         finally:

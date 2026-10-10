@@ -395,6 +395,31 @@ def test_verify_startup_returns_the_resolved_executable(
     )
 
 
+def test_main_reports_server_launch_os_error_as_smoke_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A child-process launch error uses the smoke test's controlled output."""
+    monkeypatch.setattr(
+        smoke,
+        "_verify_startup",
+        lambda: "/opt/vidaimock/vidaimock",
+    )
+
+    def fail_to_launch(launch: smoke.VidaiMockLaunch) -> smoke.VidaiMockServer:
+        del launch
+        msg = "vidaimock is not executable"
+        raise PermissionError(msg)
+
+    monkeypatch.setattr(smoke, "start_vidaimock", fail_to_launch)
+
+    assert smoke.main() == 1, "a failed child launch must return a failure status."
+    captured = capsys.readouterr()
+    assert "FAIL: vidaimock is not executable" in captured.err, (
+        "launch failures must use the smoke test's controlled diagnostic."
+    )
+
+
 @pytest.mark.parametrize(
     "outcome",
     [

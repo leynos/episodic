@@ -156,6 +156,12 @@ def _assert_successful_start(
         f"expected {expected_attempts} attempts before success, "
         f"got {len(doubles.processes)}."
     )
+    assert all(process.reaped for process in doubles.processes[:-1]), (
+        "each failed retry before success must reap its child."
+    )
+    assert all(capture.closed for capture in doubles.captures[:-1]), (
+        "each failed retry before success must close its stderr capture."
+    )
     process = doubles.processes[-1]
     capture = doubles.captures[-1]
     assert process.reaped is False, "successful startup must leave the child running."

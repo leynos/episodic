@@ -32,7 +32,10 @@ exit code 2
 
 ## Verified findings
 
-### The `0.2.11` candidate
+### Historical candidate: `0.2.11` (superseded)
+
+This section records the original release investigation. `0.2.11` is no longer
+the workflow pin; the current release decision is recorded below.
 
 - Published Linux x64 archive SHA-256 confirmed by download:
   `888d40195438491534a7a669776e06977367da62beb57feac8fa1a1f08faa93b`.
@@ -86,23 +89,22 @@ retry in a way that hides a config that never loads.
 
 ## Upstream release choice
 
-`0.3.1` is the newest published release and matches the locally installed
-binary. `0.3.0` changed `start_server()` to return `Err` on bind failure rather
-than calling `process::exit(1)`, and its changelog records that the CLI output
-and exit code are verified byte-identical against `v0.2.11`.
-
-The task names `v0.2.11` as the candidate and supplies its verified digest. The
-digest for `v0.3.1` is **not** supplied, and the task requires the archive be
-verified, so `v0.2.11` is adopted as the pin: a supplied, independently
-confirmed digest outranks a newer release whose digest would have to be
-self-derived. Recorded as a deliberate decision, not an oversight.
+At the initial checkpoint, `0.2.11` was selected because its archive digest was
+supplied and independently confirmed. That decision was superseded when the
+branch was rebased onto `main`, which supplied the newer `0.3.1` workflow pin.
+The current `ci.yml` and `coverage-main.yml` both pin VidaiMock `0.3.1` with
+SHA-256 `d228cb27be8835d0e6f538f1cde5c7fcc1675223b7f7c0cb05218df1954d72c5`. The
+archive digest was checked against the downloaded archive, and the pinned smoke
+test passed against that release. `0.2.11` results below remain historical
+evidence only.
 
 ## Work plan
 
 1. Consolidate the duplicated VidaiMock harness into
    `tests/steps/vidaimock_harness.py`, keyed by the scenario label the four
    step modules already use in their messages.
-2. Bump both workflow pins to `0.2.11` with the verified digest.
+2. Pin both workflows to a verified VidaiMock release with isolated-mode
+   support; the current pin is `0.3.1` with its verified digest.
 3. Add regression tests: immediate child exit, readiness timeout, diagnostic
    propagation.
 4. Add a CI smoke test using the installed binary with `--config-dir` and
@@ -124,13 +126,14 @@ self-derived. Recorded as a deliberate decision, not an oversight.
       `no_qa_generation_slice_support.py` now route through it, each with its
       own scenario label. The superseded
       `test_generation_orchestration_vidaimock.py` was removed.
-- [x] Pin bump: both workflows pin `0.2.11` with the verified digest.
+- [x] Historical pin bump: both workflows initially pinned `0.2.11`; the
+      rebase later adopted `0.3.1` with the verified workflow digest.
 - [x] Regression tests: `tests/steps/test_vidaimock_harness.py`, 9 passing
       (immediate exit, readiness timeout, diagnostic propagation, retry
       policy, bounded capture, reaping, and the local-skip/CI-fail contract).
 - [x] CI smoke test: `scripts/check_vidaimock_isolated.py`, wired into
-      `ci.yml`; passes on `0.3.1` and on the pinned `0.2.11`, and fails with
-      the binary's own diagnostic on `0.1.3`.
+      `ci.yml`; passed on the original `0.2.11` candidate and the current
+      `0.3.1` pin, and failed with the binary's diagnostic on `0.1.3`.
 - [x] Documentation: new "The Vidai Mock pin", "Behavioural inference
       harness", and "Vidai Mock smoke test" sections in
       `docs/developers-guide.md`.
@@ -875,7 +878,7 @@ the current source, recorded focused and full local validation plus measured
 complexity, and separated pending publication checks from historical hosted
 results.
 
-## Published candidate evidence — 2026-10-09
+## Published candidate evidence — 2026-10-09 (historical checkpoint)
 
 The source commit and plan reconciliation commit were pushed to PR #339 with
 `--force-with-lease` against the observed remote feature head
@@ -918,3 +921,50 @@ candidate. The review outcome on the current head is therefore pending.
 Revision note: recorded the force-with-lease publication, successful exact-head
 CI, current hosted CodeScene advisory, local complexity results, and the
 existing queued review without treating its status as completed evidence.
+
+## Review convergence — 2026-10-10
+
+At the start of this follow-up, PR #339 targeted `main` at
+`6aa6e93074abca1b4f458ca9bce32ad2fe956a58` and its published head was
+`1bb8e2ee6fe871b1b8651bd8d8fe2ac4e165d622`. The PR was open and ready, hosted
+CI run
+[37923655581](https://github.com/leynos/episodic/actions/runs/37923655581) and
+Gecko Security passed, but the CodeScene check failed and GitHub's review
+decision remained `CHANGES_REQUESTED`.
+
+The latest CodeRabbit pre-merge report was in
+[issue comment 5760687503](https://github.com/leynos/episodic/pull/339#issuecomment-5760687503).
+It retained a Testing (Overall) error because successful retry cases did not
+assert cleanup of earlier failed children, and a Developer Documentation
+warning because the top-level decision still described `0.2.11` as the current
+pin and did not name the latest reviewed head. CodeRabbit's current-head review
+also reported that `main()` let a child-launch `OSError` escape. The current
+CodeScene finding was Code Duplication in the three numeric lower-bound
+validators at
+[result 7880758](https://codescene.io/projects/76628/delta/results/7880758).
+
+The working-tree repairs now share the finite numeric lower-bound predicate,
+translate launch `OSError` through the existing `FAIL:` diagnostic, assert
+cleanup of each failed child and capture before a successful retry, and mark the
+`0.2.11` decision as historical with the verified `0.3.1` digest as the
+current pin. The focused configuration, smoke-test, and lifecycle-model suite
+passed 74 tests on CPython 3.14.7. CodeScene CLI 1.0.52 reports
+`utils_config.py` at 10.00 and marks the duplicate finding fixed in the
+uncommitted delta.
+
+The five-file repair candidate at working-diff SHA-256
+`5971144b55b6a2791ce145c24edd2793777b44db7a69f7f87058996d47b771f7` passed
+`make check-fmt`, `make lint`, `make typecheck`, `make test`,
+`make markdownlint`, and `make nixie` sequentially. The full test suite ran on
+CPython 3.14.7: 1,610 passed, 3 skipped, and 50 snapshots. All three Pylint
+invocations ran under CPython 3.14 with `--jobs=2` and rated 10.00/10. Logs
+were captured under
+`/tmp/*-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-rerun-2.out`.
+
+These results cover the implementation and documentation state before this gate
+record was added. The docs-only amendment subsequently passed `make fmt`,
+`make check-fmt`, `make markdownlint`, and `make nixie` on diff hash
+`dddbe1a302d1d1e8a6af5f157da606ca9806ed3c4887901ec6404a2fe5524e40`. The working
+tree remains uncommitted and unpublished. Hosted checks on the repaired
+candidate, CodeRabbit confirmation and plan assessment, approval, and merge
+remain outstanding. No merge eligibility is claimed.

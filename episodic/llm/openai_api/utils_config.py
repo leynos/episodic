@@ -83,30 +83,31 @@ def _json_safe(value: object) -> object:
     return value
 
 
-def _is_non_negative_number(value: object) -> bool:
-    """Return whether value is a finite non-negative number."""
+def _meets_finite_numeric_floor(
+    value: object,
+    floor: float,
+    *,
+    inclusive: bool,
+) -> bool:
+    """Check a finite numeric value against an inclusive or strict floor."""
     match value:
         case bool():
             return False
-        case int() as number:
-            return math.isfinite(number) and number >= 0
-        case float() as number:
-            return math.isfinite(number) and number >= 0
+        case (int() | float()) as number:
+            meets_floor = number >= floor if inclusive else number > floor
+            return math.isfinite(number) and meets_floor
         case _:
             return False
+
+
+def _is_non_negative_number(value: object) -> bool:
+    """Return whether value is a finite non-negative number."""
+    return _meets_finite_numeric_floor(value, 0, inclusive=True)
 
 
 def _is_positive_number(value: object) -> bool:
     """Return whether value is a finite positive number."""
-    match value:
-        case bool():
-            return False
-        case int() as number:
-            return math.isfinite(number) and number > 0
-        case float() as number:
-            return math.isfinite(number) and number > 0
-        case _:
-            return False
+    return _meets_finite_numeric_floor(value, 0, inclusive=False)
 
 
 def _is_non_empty_string(value: object) -> bool:
@@ -120,15 +121,11 @@ def _is_non_empty_string(value: object) -> bool:
 
 def _is_valid_chars_per_token(value: object) -> bool:
     """Return True when *value* can produce stable token-count estimates."""
-    match value:
-        case bool():
-            return False
-        case int() as number:
-            return math.isfinite(number) and number >= _MIN_CHARS_PER_TOKEN
-        case float() as number:
-            return math.isfinite(number) and number >= _MIN_CHARS_PER_TOKEN
-        case _:
-            return False
+    return _meets_finite_numeric_floor(
+        value,
+        _MIN_CHARS_PER_TOKEN,
+        inclusive=True,
+    )
 
 
 def _llm_config_checks(
