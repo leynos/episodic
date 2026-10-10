@@ -8,6 +8,10 @@ from .domain_enums import (
     ReferenceDocumentKind,
     ReferenceDocumentLifecycleState,
 )
+from .domain_validation import (
+    _require_positive_integer,
+    _validate_non_empty_text,
+)
 
 if typ.TYPE_CHECKING:
     import datetime as dt
@@ -31,9 +35,7 @@ class ReferenceDocument:
 
     def __post_init__(self) -> None:
         """Validate optimistic-lock invariants."""
-        if not isinstance(self.lock_version, int) or self.lock_version < 1:
-            msg = "lock_version must be a positive integer."
-            raise ValueError(msg)
+        _require_positive_integer(self.lock_version, "lock_version")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -50,9 +52,7 @@ class ReferenceDocumentRevision:
 
     def __post_init__(self) -> None:
         """Validate content-hash invariants."""
-        if not self.content_hash.strip():
-            msg = "content_hash must be a non-empty string."
-            raise ValueError(msg)
+        _validate_non_empty_text(self.content_hash, "content_hash")
 
 
 @dc.dataclass(frozen=True, slots=True)

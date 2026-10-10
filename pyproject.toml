@@ -905,6 +905,10 @@ reason = "Generation-tool model modules import the same episodic.llm budget and 
 members = ["episodic/api/resources/generation_runs.py", "episodic/api/resources/source_intake.py"]
 reason = "Both idempotent API resources import the same source_idempotency helpers; the shared block is an import list, not logic."
 
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/guest_bios_tei.py", "episodic/generation/show_notes_enrichment.py"]
+reason = "Per-tool TEI enrichment modules: an identical import surface over the shared tei_payload helpers, each binding its own domain models and div_type at the point of use; merging them would couple two independent enrichment features."
+
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"

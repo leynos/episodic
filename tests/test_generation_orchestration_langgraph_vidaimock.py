@@ -2,7 +2,6 @@
 
 import contextlib
 import dataclasses as dc
-import subprocess  # ruff: ignore[suspicious-subprocess-import] - required to manage the local Vidai Mock process
 import typing as typ
 
 import pytest
@@ -21,14 +20,17 @@ from episodic.orchestration import (
     build_generation_orchestration_graph,
 )
 from tests.steps.generation_orchestration_vidaimock import (
-    find_free_port,
-    start_vidaimock_process,
     write_provider_config,
     write_response_template,
+)
+from tests.steps.vidaimock_harness import (
+    start_vidaimock_process,
+    terminate_process_gracefully,
 )
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import subprocess
     from pathlib import Path
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
@@ -40,17 +42,12 @@ class _VidaiContext:
 
     process: subprocess.Popen[str] | None = None
     base_url: str = ""
+    stderr_file: typ.TextIO | None = None
 
     def stop(self) -> None:
         """Terminate the local Vidai Mock process if it was started."""
-        if self.process is None:
-            return
-        self.process.terminate()
-        try:
-            self.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait(timeout=5)
+        if self.process is not None:
+            terminate_process_gracefully(self.process, self.stderr_file)
 
 
 @dc.dataclass(slots=True)
@@ -79,7 +76,7 @@ def vidaimock_context(tmp_path: Path) -> cabc.Iterator[_VidaiContext]:
     context = _VidaiContext()
     with contextlib.ExitStack() as stack:
         stack.callback(context.stop)
-        start_vidaimock_process(context, tmp_path, port=find_free_port())
+        start_vidaimock_process(context, tmp_path)
         yield context
 
 
