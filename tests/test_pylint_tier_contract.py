@@ -91,6 +91,11 @@ def _make_jobs_probe_source() -> str:
         f"$(info __MAKE_PROBE_{name}__=$({name}))" for name in _JOBS_PROBE_VARIABLES
     ]
     assignments.extend([
+        "$(info __MAKE_PROBE_EFFECTIVE_HOME__=$(HOME))",
+        "$(info __MAKE_PROBE_SHELL_PATH__=$(shell printf '%s' \"$$PATH\"))",
+        "$(info __MAKE_PROBE_NPROC__=$(shell command -v nproc))",
+    ])
+    assignments.extend([
         f".PHONY: {_JOBS_PROBE_TARGET}",
         f"{_JOBS_PROBE_TARGET}: ; @:",
     ])
@@ -153,7 +158,9 @@ def _pylint_jobs_probe_environment(
             marker=marker,
         )
 
-    # Make itself prepends this isolated HOME's bin directories to PATH.
+    # The controlled executable lives under this HOME, which Make prepends to
+    # PATH. Keep the base path limited to standard system tools so the probe
+    # also verifies that HOME's prefix wins over the system `nproc`.
     path = (
         str(tmp_path / "path-without-nproc")
         if settings.nproc_result is None
@@ -179,11 +186,10 @@ def _run_pylint_jobs_probe(
     assert make is not None, "make must be on PATH"
 
     # The test does not inherit Make variables, flags, or the user's HOME.
-    # pytest's temporary directory may be on a noexec mount in CI. Make runs
-    # `nproc` directly, so keep the controlled executable on the checkout's
-    # filesystem while all probe data remains under pytest's temporary path.
+    # Keep the controlled executable under an isolated HOME on the user's
+    # filesystem; pytest's temporary directory may be mounted noexec in CI.
     with tempfile.TemporaryDirectory(
-        prefix=".pylint-jobs-home-", dir=_REPO_ROOT
+        prefix=".pylint-jobs-home-", dir=Path.home()
     ) as home_name:
         make_environment, marker = _pylint_jobs_probe_environment(
             tmp_path,
@@ -221,18 +227,31 @@ def _run_pylint_jobs_probe(
             "the Makefile variable probe must complete without running lint tools: "
             f"{completed.stdout}{completed.stderr}"
         )
+        values = _parse_jobs_probe_output(completed.stdout)
         has_override = (
             settings.environment_jobs is not None
             or settings.command_line_jobs is not None
         )
         if settings.nproc_result is not None and not has_override:
-            controlled_nproc = Path(make_environment["HOME"]) / ".local/bin/nproc"
+            controlled_nproc = (
+                Path(make_environment["HOME"]) / ".local" / "bin" / "nproc"
+            )
+            resolved_nproc = next(
+                line.removeprefix("__MAKE_PROBE_NPROC__=")
+                for line in completed.stdout.splitlines()
+                if line.startswith("__MAKE_PROBE_NPROC__=")
+            )
+            assert resolved_nproc == str(controlled_nproc), (
+                "Make's PATH prefixes must select the controlled executable; "
+                f"resolved={resolved_nproc!r}, stdout={completed.stdout!r}"
+            )
             assert marker.is_file(), (
-                "Make's PATH prefixes must select the controlled executable "
-                f"{controlled_nproc}; PATH={make_environment['PATH']!r}."
+                "Make must execute the controlled nproc; "
+                f"path={controlled_nproc}, jobs={values['PYLINT_JOBS']!r}, "
+                f"stderr={completed.stderr!r}"
             )
 
-        return _parse_jobs_probe_output(completed.stdout)
+        return values
 
 
 def _assert_expanded_pylint_jobs(
