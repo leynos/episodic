@@ -4,12 +4,16 @@ Branch: `use-cpython-for-pylint` PR:
 <https://github.com/leynos/episodic/pull/339>
 
 Latest verified disposition:
-[2026-10-10](#latest-verified-disposition-2026-10-10). At the inspected
-baseline, `faa11a6b9b632cac414ecd534040aa40a82e918a` was the latest
-implementation commit, and `d5fb1605278e1fcfeb4b2ffd887a94d46e28cdd5` was the
-PR head after a docs-only follow-up. The PR's base was
-`6aa6e93074abca1b4f458ca9bce32ad2fe956a58`. Earlier checkpoints and status
-records are retained as historical evidence below.
+[2026-10-10](#latest-verified-disposition-2026-10-10). The latest
+behaviour-changing implementation commit on the rebased branch is
+[`780ddfbf8b4222e8cf2a25405ecd6af75e7e83a2`](https://github.com/leynos/episodic/commit/780ddfbf8b4222e8cf2a25405ecd6af75e7e83a2);
+the `PYLINT_JOBS` production assignment was introduced in
+[`90ad0ed5e3ef2c4a75d1e22502bc11281de36cce`](https://github.com/leynos/episodic/commit/90ad0ed5e3ef2c4a75d1e22502bc11281de36cce).
+The current PR head before this documentation follow-up was
+`d0eb836f903dfde30fc8ca42e032ec561e4f97c2`, and its base was
+`e43240306dec55437547c8f43cf0c6a5ed040fd2`. The resulting SHA for this
+documentation follow-up is intentionally not stated here. Earlier checkpoints
+and status records are retained as historical evidence below.
 
 Current workflow pin: VidaiMock `0.3.1`, with the verified digest recorded in
 the release decision below.
@@ -246,9 +250,10 @@ review status.
       results for a subsequently rebased head.
 - [x] Published the rebased candidate and inspected its exact-head CI and
       CodeScene results; see the 2026-10-09 publication evidence below.
-- [ ] The existing managed CodeRabbit request remains queued. Verify its
-      inspected commit and outcome if it posts; the automatic status check and
-      older completed invocation do not establish fresh review coverage.
+- [x] Historical status: the managed CodeRabbit request was queued at this
+      checkpoint and later produced review 5478519036 against `d5fb160`, which
+      requested changes. That review and its status do not describe the current
+      PR head; see the latest disposition below.
 
 ### CodeScene delta at `bf2acc8` (historical)
 
@@ -1011,7 +1016,7 @@ Hypothesis model test, not a formal proof. Review confirmation, the plan
 assessment, an approval, and merge remain outstanding. No merge eligibility is
 claimed.
 
-## Latest verified disposition (2026-10-10)
+## Inspected baseline disposition — 2026-10-10 (historical checkpoint)
 
 The inspected PR head was `d5fb1605278e1fcfeb4b2ffd887a94d46e28cdd5`; the
 latest implementation commit at that baseline was
@@ -1041,3 +1046,52 @@ not change GitHub's aggregate `CHANGES_REQUESTED` decision. No human approval
 was present in the inspected review history. The CodeRabbit report's successful
 CI and CodeScene evidence must remain separate from its unresolved pre-merge
 findings and approval state.
+
+## Latest verified disposition (2026-10-10)
+
+This checkpoint records validation of PR head
+`d0eb836f903dfde30fc8ca42e032ec561e4f97c2` against base
+`e43240306dec55437547c8f43cf0c6a5ed040fd2`, before this documentation
+follow-up. The latest behaviour-changing implementation commit is
+[`780ddfbf8b4222e8cf2a25405ecd6af75e7e83a2`](https://github.com/leynos/episodic/commit/780ddfbf8b4222e8cf2a25405ecd6af75e7e83a2);
+`faa11a6b9b632cac414ecd534040aa40a82e918a` belongs to the prior pre-rebase
+history and is not an ancestor of this branch. The production `PYLINT_JOBS`
+assignment was introduced in
+[`90ad0ed5e3ef2c4a75d1e22502bc11281de36cce`](https://github.com/leynos/episodic/commit/90ad0ed5e3ef2c4a75d1e22502bc11281de36cce).
+The current workflows pin VidaiMock `0.3.1` with the verified digest recorded
+above. The original VidaiMock `0.1.3` mismatch remains explicitly documented as
+a historical problem statement.
+
+The focused contract suite, run as
+`uv run pytest -vv tests/test_pylint_tier_contract.py`, passed all 17 tests
+with 1 warning. The worker-selection cases were `cores-1-floor-2`,
+`cores-2-floor-2`, `cores-19-floor-2`, `cores-20-floor-2`, `cores-29-floor-2`,
+`cores-30-tenth-3`, `cores-39-tenth-3`, `cores-40-tenth-4`, and
+`cores-128-tenth-12`. Fallback cases were `nproc-exits-unsuccessfully` and
+`nproc-missing-from-isolated-path`; override cases were `environment-override`,
+`command-line-override`, and `command-line-over-environment`. Existing
+interpreter, release, and syntax-error contracts also passed.
+
+All local gates passed on this candidate: `make check-fmt`, `make lint`,
+`make typecheck`, `make test`, `make markdownlint`, and `make nixie`. The full
+test gate first encountered a PGlite fixture timeout. The affected test passed
+in a standalone run, and the unchanged full-suite rerun passed with 1,722
+tests, 3 skipped, and 30 warnings. The timeout and successful reruns are both
+recorded; the first failure is not discarded.
+
+Hosted CI run
+[38058879899](https://github.com/leynos/episodic/actions/runs/38058879899),
+attempt 1, completed successfully on this candidate. The formatting, Markdown,
+lint, duplication, spelling, typecheck, VidaiMock smoke, coverage-generation,
+and cleanup steps passed. CodeScene result
+[7894857](https://codescene.io/projects/76628/delta/results/7894857) passed,
+and Gecko passed.
+
+Review and approval remain separate from those checks. The CodeRabbit check
+reported “Review paused”; review 5478519036 remains a change request against
+the superseded `d5fb160` head. No human approval was present in the inspected
+review history, and GitHub reported the PR merge state as `BLOCKED`. The
+successful local gates, hosted CI, CodeScene result, and Gecko result do not
+establish a completed current-head CodeRabbit review, approval, or merge
+eligibility. The resulting SHA for this documentation follow-up is
+intentionally not stated here.
