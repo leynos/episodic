@@ -111,9 +111,9 @@ class LLMRequest:
     system_prompt: str | None = None
     provider_operation: LLMProviderOperation | str | None = None
     token_budget: LLMTokenBudget | None = None
-    # Request a provider-enforced JSON object response. Callers that parse
-    # the response as JSON should set this so providers cannot wrap the
-    # payload in markdown fences or prose.
+    # Request a JSON object without surrounding prose or markdown fences.
+    # This does not define or validate a schema; callers validate the result's
+    # shape separately. Adapters must honor the request or fail if unsupported.
     json_response: bool = False
 
 

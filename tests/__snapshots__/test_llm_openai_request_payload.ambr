@@ -1,0 +1,17 @@
+# serializer version: 1
+# name: test_responses_payload_applies_all_provider_request_options
+  dict({
+    'input': 'Draft an intro.',
+    'max_output_tokens': 2000,
+    'model': 'gpt-5.6-sol',
+    'reasoning': dict({
+      'effort': 'low',
+    }),
+    'service_tier': 'flex',
+    'text': dict({
+      'format': dict({
+        'type': 'json_object',
+      }),
+    }),
+  })
+# ---

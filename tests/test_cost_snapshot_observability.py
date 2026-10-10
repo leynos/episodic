@@ -3,8 +3,10 @@
 import dataclasses as dc
 import itertools
 import typing as typ
+from unittest import mock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from episodic.cost import PricingSnapshotCollisionError, PricingSnapshotId
 from episodic.cost.storage import SqlAlchemyCostLedgerStore
@@ -14,7 +16,10 @@ from tests.fixtures.cost import pricing_snapshot
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from sqlalchemy.sql.dml import Insert
+
+    from episodic.cost import PricingSnapshot
 
     type SessionFactory = async_sessionmaker[AsyncSession]
 else:  # pragma: no cover - runtime alias for evaluated test annotations.
@@ -73,6 +78,84 @@ def _assert_bounded(metrics: _RecordingMetrics, snapshot_id: str) -> None:
         assert "hash" not in rendered.replace("pricing_snapshot", ""), (
             f"content hashes must not leak into labels: {labels!r}"
         )
+
+
+@pytest.mark.asyncio
+async def test_invalid_snapshot_timestamp_emits_validation_telemetry() -> None:
+    """Rejected input emits bounded validation signals before persistence starts."""
+    session = mock.create_autospec(AsyncSession, instance=True)
+    clock = mock.Mock(spec=_SteppingClock)
+    tracer = RecordingTracer()
+    metrics = _RecordingMetrics()
+    snapshot = dc.replace(
+        pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f98"),
+        retrieved_at="2026-06-04T09:00:00",
+    )
+    store = SqlAlchemyCostLedgerStore(
+        session, metrics=metrics, tracer=tracer, clock=clock
+    )
+
+    with pytest.raises(ValueError, match="timestamp must include timezone information"):
+        await store.ensure_snapshot(snapshot)
+
+    session.execute.assert_not_called()
+    clock.monotonic_seconds.assert_not_called()
+    labels = {
+        "operation": "ensure_snapshot",
+        "outcome": "error",
+        "failure_category": "pricing_snapshot.input_invalid",
+    }
+    assert metrics.counters == [("pricing_snapshot.input_validation", labels)], (
+        "invalid input must emit only the bounded validation counter"
+    )
+    assert not metrics.latencies, "rejected input must not emit persistence latency"
+    assert len(tracer.spans) == 1, "rejected input must emit only one validation span"
+    span = tracer.spans[0]
+    assert span.name == "pricing_snapshot.input_validation", (
+        "rejected input must have a separate validation span"
+    )
+    assert span.is_completed, "the validation span must complete"
+    assert span.attributes == labels, "validation attributes must use fixed values"
+    _assert_bounded(metrics, str(snapshot.pricing_snapshot_id))
+
+
+@pytest.mark.asyncio
+async def test_ensure_snapshot_constructs_statement_before_persistence_timing(
+    session_factory: SessionFactory,
+) -> None:
+    """Persistence timing excludes statement construction and stays at 500 ms."""
+    from episodic.cost.storage import adapters as adapters_module
+
+    metrics = _RecordingMetrics()
+    clock = mock.Mock(wraps=_SteppingClock())
+    snapshot = pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f98")
+    original_builder = adapters_module._snapshot_insert_statement
+
+    def build_before_timing(value: PricingSnapshot) -> Insert:
+        """Assert the measurement boundary before constructing the insert."""
+        clock.monotonic_seconds.assert_not_called()
+        return original_builder(value)
+
+    async with session_factory() as session:
+        store = SqlAlchemyCostLedgerStore(session, metrics=metrics, clock=clock)
+        with mock.patch.object(
+            adapters_module,
+            "_snapshot_insert_statement",
+            side_effect=build_before_timing,
+        ) as builder:
+            await store.ensure_snapshot(snapshot)
+
+    builder.assert_called_once_with(snapshot)
+    assert clock.monotonic_seconds.call_count == 2, (
+        "only persistence start and completion may read the clock"
+    )
+    assert metrics.latencies == [
+        (
+            "pricing_snapshot.ensure.duration_ms",
+            pytest.approx(500.0),
+            {"operation": "ensure_snapshot", "outcome": "persisted"},
+        )
+    ], "statement construction must not expand persistence duration"
 
 
 @pytest.mark.asyncio

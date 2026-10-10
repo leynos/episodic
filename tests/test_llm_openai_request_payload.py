@@ -1,5 +1,7 @@
 """Unit tests for OpenAI-compatible request payload construction."""
 
+import typing as typ
+
 import pytest
 
 from episodic.llm.openai_api.request import OpenAIPayloadOptions, _build_payload
@@ -8,6 +10,9 @@ from episodic.llm.ports import (
     LLMRequest,
     LLMTokenBudget,
 )
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 
 def test_chat_payload_omits_response_format_by_default() -> None:
@@ -89,4 +94,32 @@ def test_responses_payload_requests_json_object_response() -> None:
 
     assert payload["text"] == {"format": {"type": "json_object"}}, (
         "responses payloads must request a JSON object response when asked"
+    )
+
+
+def test_responses_payload_applies_all_provider_request_options(
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Responses options use the endpoint's nested effort and output cap."""
+    completion_limit_parameter = "max_completion_tokens"
+    request = LLMRequest(
+        model="gpt-5.6-sol",
+        prompt="Draft an intro.",
+        json_response=True,
+        token_budget=LLMTokenBudget(
+            max_input_tokens=1000,
+            max_output_tokens=2000,
+            max_total_tokens=3000,
+        ),
+    )
+    options = OpenAIPayloadOptions(
+        reasoning_effort="low",
+        service_tier="flex",
+        token_limit_param=completion_limit_parameter,
+    )
+
+    payload = _build_payload(request, LLMProviderOperation.RESPONSES, options=options)
+
+    assert payload == snapshot, (
+        "Responses options must match the complete endpoint-specific payload snapshot"
     )

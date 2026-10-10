@@ -19,6 +19,30 @@ if typ.TYPE_CHECKING:
     )
 
 
+def _responses_usage_payload(cached_tokens: int) -> dict[str, object]:
+    """Build Responses usage with a configurable cached input count."""
+    return {
+        "id": "resp_usage",
+        "model": "gpt-4.1-mini",
+        "output": [
+            {
+                "type": "message",
+                "content": [
+                    {"type": "output_text", "text": "Structured response output."}
+                ],
+            }
+        ],
+        "status": "completed",
+        "usage": {
+            "input_tokens": 15,
+            "output_tokens": 12,
+            "total_tokens": 27,
+            "input_tokens_details": {"cached_tokens": cached_tokens},
+            "output_tokens_details": {"reasoning_tokens": 6},
+        },
+    }
+
+
 @pytest.mark.asyncio
 async def test_chat_completion_provider_call_usage_includes_cached_tokens(
     openai_adapter_factory: _OpenAIAdapterFactory,
@@ -87,29 +111,7 @@ async def test_responses_provider_call_usage_includes_reasoning_tokens(
 
     def handler(request: httpx.Request) -> httpx.Response:
         del request
-        return openai_json_response({
-            "id": "resp_usage",
-            "model": "gpt-4.1-mini",
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": "Structured response output.",
-                        }
-                    ],
-                }
-            ],
-            "status": "completed",
-            "usage": {
-                "input_tokens": 15,
-                "output_tokens": 12,
-                "total_tokens": 27,
-                "input_tokens_details": {"cached_tokens": 4},
-                "output_tokens_details": {"reasoning_tokens": 6},
-            },
-        })
+        return openai_json_response(_responses_usage_payload(cached_tokens=4))
 
     async with openai_adapter_factory(
         transport=httpx.MockTransport(handler),
@@ -123,6 +125,54 @@ async def test_responses_provider_call_usage_includes_reasoning_tokens(
     assert response.provider_call_usage.usage_metrics == snapshot, (
         "Responses usage metrics must match the recorded snapshot"
     )
+
+
+@pytest.mark.asyncio
+async def test_responses_usage_omits_zero_cached_tokens(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
+) -> None:
+    """Zero cached input tokens must not become a priced Responses metric."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return openai_json_response(_responses_usage_payload(cached_tokens=0))
+
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler),
+        provider_operation="responses",
+    ) as adapter:
+        response = await adapter.generate(openai_request_builder(operation="responses"))
+
+    assert response.provider_call_usage is not None, "expected provider usage metadata"
+    assert response.provider_call_usage.usage_metrics == {
+        "input_tokens": 15,
+        "output_tokens": 12,
+    }, "Responses usage must omit zero cached tokens and retain canonical token totals"
+
+
+@pytest.mark.asyncio
+async def test_responses_usage_rejects_cached_tokens_exceeding_input(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
+) -> None:
+    """Oversubscribed Responses cached input fails at the adapter boundary."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return openai_json_response(_responses_usage_payload(cached_tokens=16))
+
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler),
+        provider_operation="responses",
+    ) as adapter:
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="invalid OpenAI-compatible response payload",
+        ):
+            await adapter.generate(openai_request_builder(operation="responses"))
 
 
 @pytest.mark.asyncio

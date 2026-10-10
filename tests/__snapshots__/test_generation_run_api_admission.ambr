@@ -1,0 +1,15 @@
+# serializer version: 1
+# name: test_generation_run_admission_failure_marks_persisted_run_failed
+  dict({
+    'failure_category': 'launcher.overloaded',
+    'operation': 'generation_run.create',
+    'outcome': 'rejected',
+  })
+# ---
+# name: test_generation_run_scheduling_failure_marks_persisted_run_failed
+  dict({
+    'failure_category': 'launcher.scheduling',
+    'operation': 'generation_run.create',
+    'outcome': 'failed',
+  })
+# ---

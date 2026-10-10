@@ -12,6 +12,7 @@ retries, normalizes the provider payload into `LLMResponse`, and enforces the
 configured token budget before returning to application code.
 """
 
+import asyncio
 import dataclasses as dc
 import typing as typ
 
@@ -35,6 +36,7 @@ from episodic.llm.openai_api.response import (
     _decode_json_response,
     _normalize_payload,
 )
+from episodic.llm.openai_api.telemetry import _provider_failure_outcome
 from episodic.llm.openai_api.utils import (
     _log_error_event,
     _require_concrete_usage_counts,
@@ -330,10 +332,6 @@ class OpenAICompatibleLLMAdapter(LLMPort):
     ) -> dict[str, object]:
         """Send one instrumented provider request and decode its payload.
 
-        Each attempt emits one span, one bounded outcome counter, and one
-        latency observation. Labels stay bounded: no attempt identifiers,
-        payloads, or credentials are recorded.
-
         Returns
         -------
         dict[str, object]
@@ -341,18 +339,18 @@ class OpenAICompatibleLLMAdapter(LLMPort):
 
         Raises
         ------
-        httpx.TimeoutException
-            If the provider request exceeds the configured timeout.
+        asyncio.CancelledError
+            If the caller cancels the provider request.
         httpx.TransportError
-            If the HTTP transport fails before a response arrives.
+            If HTTP transport fails, including ``httpx.TimeoutException``.
         LLMTransientProviderError
             If the provider returns a retryable HTTP status.
         LLMProviderResponseError
             If the provider returns a non-retryable or malformed response.
         """
         started = self._clock.monotonic_seconds()
-        outcome = "success"
-        failure_category: str | None = None
+        outcome = "error"
+        failure_category: str | None = "provider.unexpected_error"
         with self._tracer.start_span(
             "llm.provider_request",
             attributes={"operation": operation_value},
@@ -368,16 +366,18 @@ class OpenAICompatibleLLMAdapter(LLMPort):
                     timeout=self._timeout_seconds,
                 )
                 _check_http_status(response)
-                return _decode_json_response(response)
-            except httpx.TimeoutException:
-                outcome, failure_category = "timeout", "provider.timeout"
+                decoded_response = _decode_json_response(response)
+            except (
+                asyncio.CancelledError,
+                httpx.TransportError,
+                LLMTransientProviderError,
+                LLMProviderResponseError,
+            ) as error:
+                outcome, failure_category = _provider_failure_outcome(error)
                 raise
-            except httpx.TransportError, LLMTransientProviderError:
-                outcome, failure_category = "retry", "provider.transient"
-                raise
-            except LLMProviderResponseError:
-                outcome, failure_category = "error", "provider.response_invalid"
-                raise
+            else:
+                outcome, failure_category = "success", None
+                return decoded_response
             finally:
                 span.set_attribute("outcome", outcome)
                 labels = {"operation": operation_value, "outcome": outcome}

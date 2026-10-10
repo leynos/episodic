@@ -453,6 +453,9 @@ authenticate with:
 Authorization: Bearer local-dev-token
 ```
 
+The generated Secret is applied from standard input, keeping credential values
+out of the `kubectl` command arguments.
+
 When `OPENAI_API_KEY` is set in the operator's environment, `make local-k8s-up`
 also writes the paired `openai-base-url`/`openai-api-key` keys into the same
 Secret so preview-generated drafts can reach a real provider.

@@ -2148,3 +2148,28 @@ pass-through `volumes`/`volumeMounts` support (with the local preview's Secret
 moved to a stdin-applied manifest) so the source-intake object store has a
 writable mount under the chart's `readOnlyRootFilesystem` default. Review
 hardening for these fixes continues on PR #277.
+
+Review hardening, 2026-10-10: PR #277 adds a forward migration that validates
+the pricing-snapshot content-hash constraint before DDL, accepts the renamed
+alpha-preview constraint, and preserves its unique index and downgrade path.
+Sixteen migration cases verify the uniqueness boundary; separate cost-ledger
+coverage verifies collision translation. Interrupted provider calls now produce
+non-success telemetry, while rejected snapshot statement construction uses
+separate input-validation telemetry without recording persistence duration.
+Focused coverage also exercises provider payloads, usage normalization,
+defaults, unit-of-work wiring, invalid snapshot inputs, and shared runtime
+setup. Local manifest builders now live in `scripts/local_k8s/manifests.py` and
+are re-exported by `commands.py`; route lifecycle responsibilities were
+extracted, and the ADR, system design, preview design, developers' guide, and
+users' guide were synchronized.
+
+Validation on candidate `f7eaecc952d1bb238baca5127d9129c7e104b26b` passed:
+`make check-fmt`, every `make lint` stage, and `make typecheck` (no
+diagnostics); `make test` passed 1,615 tests with 3 skipped and 55 snapshots
+(30 known dependency warnings); `make markdownlint` checked 125 files with 0
+issues; `make nixie` validated all diagrams; and `make check-migrations`
+reported no drift. The focused suite passed 112 tests with 9 snapshots.
+CodeScene's full delta against `6aa6e930` reported no new or degraded findings.
+This records local candidate validation only: PR #277's hosted review and merge
+remained pending at the time of this entry. The original PR #141 completion and
+roadmap status are unchanged.

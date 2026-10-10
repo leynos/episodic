@@ -8,6 +8,7 @@ from episodic.api.runtime import RuntimeConfigurationError, _load_runtime_config
 from episodic.generation import GenerationSourceLimits
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     from pathlib import Path
 
 
@@ -24,6 +25,16 @@ def _base_environment(
         "API_AUTHORIZATION_BEARER_TOKEN": "test-token",
         "API_AUTHORIZATION_PRINCIPAL_ID": "test-principal",
     }
+
+
+def _assert_runtime_config_rejected(
+    tmp_path: Path,
+    setting_overrides: cabc.Mapping[str, str],
+    expected_error_match: str,
+) -> None:
+    """Assert that runtime configuration rejects the supplied settings."""
+    with pytest.raises(RuntimeConfigurationError, match=expected_error_match):
+        _load_runtime_config({**_base_environment(tmp_path), **setting_overrides})
 
 
 def test_load_runtime_config_uses_configured_pricing_directory(
@@ -82,6 +93,21 @@ def test_load_runtime_config_applies_declared_defaults(
         f"expected no provider base URL by default, got {config.llm_base_url!r}"
     )
     assert config.llm_api_key is None, "expected no provider API key by default"
+    assert config.llm_reasoning_effort is None, (
+        f"expected no reasoning effort by default, got {config.llm_reasoning_effort!r}"
+    )
+    assert config.llm_service_tier is None, (
+        f"expected no service tier by default, got {config.llm_service_tier!r}"
+    )
+    expected_limit_parameter = "max_tokens"
+    assert config.llm_token_limit_param == expected_limit_parameter, (
+        f"expected the default token limit parameter {expected_limit_parameter!r}, got "
+        f"{config.llm_token_limit_param!r}"
+    )
+    assert config.llm_timeout_seconds == pytest.approx(30.0), (
+        f"expected the default provider timeout of 30 seconds, got "
+        f"{config.llm_timeout_seconds!r}"
+    )
     defaults = GenerationSourceLimits()
     assert config.generation_source_limits == defaults, (
         f"expected declared source-limit defaults {defaults!r}, got "
@@ -101,14 +127,11 @@ def test_load_runtime_config_rejects_unpaired_openai_base_url(
     tmp_path: "Path",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
 ) -> None:
     """A provider base URL without an API key must fail configuration."""
-    with pytest.raises(
-        RuntimeConfigurationError,
-        match="OPENAI_BASE_URL and OPENAI_API_KEY must be configured together",
-    ):
-        _load_runtime_config({
-            **_base_environment(tmp_path),
-            "OPENAI_BASE_URL": "https://api.openai.example/v1",
-        })
+    _assert_runtime_config_rejected(
+        tmp_path,
+        {"OPENAI_BASE_URL": "https://api.openai.example/v1"},
+        "OPENAI_BASE_URL and OPENAI_API_KEY must be configured together",
+    )
 
 
 @pytest.mark.parametrize(
@@ -127,14 +150,11 @@ def test_load_runtime_config_rejects_invalid_generation_limit(
     value: str,
 ) -> None:
     """Generation limits must be positive integer runtime settings."""
-    with pytest.raises(
-        RuntimeConfigurationError,
-        match=f"{setting} must be a positive integer",
-    ):
-        _load_runtime_config({
-            **_base_environment(tmp_path),
-            setting: value,
-        })
+    _assert_runtime_config_rejected(
+        tmp_path,
+        {setting: value},
+        f"{setting} must be a positive integer",
+    )
 
 
 def test_load_runtime_config_rejects_missing_pricing_directory(
@@ -203,14 +223,11 @@ def test_load_runtime_config_rejects_unknown_token_limit_param(
     tmp_path: "Path",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
 ) -> None:
     """Unknown token-limit parameter names fail configuration."""
-    with pytest.raises(
-        RuntimeConfigurationError,
-        match="OPENAI_TOKEN_LIMIT_PARAM must be max_tokens or",
-    ):
-        _load_runtime_config({
-            **_base_environment(tmp_path),
-            "OPENAI_TOKEN_LIMIT_PARAM": "max_words",
-        })
+    _assert_runtime_config_rejected(
+        tmp_path,
+        {"OPENAI_TOKEN_LIMIT_PARAM": "max_words"},
+        "OPENAI_TOKEN_LIMIT_PARAM must be max_tokens or",
+    )
 
 
 @pytest.mark.parametrize("value", ["0", "-3", "abc", "inf", "nan"])
@@ -219,11 +236,8 @@ def test_load_runtime_config_rejects_invalid_timeout(
     value: str,
 ) -> None:
     """The provider timeout must be a positive, finite number of seconds."""
-    with pytest.raises(
-        RuntimeConfigurationError,
-        match="OPENAI_TIMEOUT_SECONDS must be a positive number",
-    ):
-        _load_runtime_config({
-            **_base_environment(tmp_path),
-            "OPENAI_TIMEOUT_SECONDS": value,
-        })
+    _assert_runtime_config_rejected(
+        tmp_path,
+        {"OPENAI_TIMEOUT_SECONDS": value},
+        "OPENAI_TIMEOUT_SECONDS must be a positive number",
+    )

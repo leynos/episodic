@@ -92,7 +92,11 @@ two steps: `episodic/api/app.py` remains the pure route factory, whilst
 `episodic/api/runtime.py` is the runtime composition root that reads
 environment configuration, constructs the SQLAlchemy-backed unit-of-work
 factory, and injects infrastructural readiness probes through a typed
-dependency object.
+dependency object. It creates the production `StructuredLogMetrics` and
+`StructuredLogTracer` sinks once, then supplies those same collaborators to
+`UnitOfWorkRuntime`, `OpenAICompatibleLLMRuntime`, and the generation launcher.
+The frozen runtime bundles keep adapter collaborators grouped at their
+composition boundary.
 
 The worker data plane now follows the same pattern.
 `episodic/worker/topology.py` defines the canonical RabbitMQ exchange, queue,
@@ -820,6 +824,18 @@ adapter implementations.
   provider-agnostic data transfer objects (DTOs) before the orchestration layer
   consumes them.
 
+`LLMRequest.json_response` requests a JSON object with no surrounding prose or
+markdown fences. It does not carry a JSON Schema or validate the object's
+application-level shape; the caller performs that validation after receiving
+the response. An adapter must honour the format request or report that it is
+unsupported. The OpenAI-compatible adapter keeps vendor syntax at its boundary:
+it maps the flag to `response_format={"type": "json_object"}` for chat
+completions and `text.format={"type": "json_object"}` for the Responses API.
+`episodic.api.runtime_config` reads the `OPENAI_*` settings and
+`episodic.api.runtime` builds the adapter configuration; the adapter applies
+reasoning effort, service tier, token-limit parameter, and HTTP timeout to
+provider requests.
+
 In the current worker scaffold, representative Celery tasks use injected
 callable seams instead of importing concrete adapters directly. Future task
 implementations should preserve this pattern by resolving storage, LLM, and
@@ -1486,7 +1502,10 @@ snapshot pinning strategy, and deterministic pricing rules for this design.
   Large Language Model (LLM) cost for a run. The initial implementation leaves
   Text-to-Speech (TTS) tracking reserved for a later slice. Snapshots are
   pinned through `run_pricing_pins` and referenced from cost ledger entries so
-  historical pricing stays reproducible.
+  historical pricing stays reproducible. `CostRecorder` persists a snapshot
+  before creating its run pin or recording an unpinned provider call, so those
+  foreign keys reference an existing row; a call with an existing pin relies on
+  the pin's foreign key.
 - `PricingEngine` computes the cost of an individual call deterministically
   from provider, model, operation, usage metrics, billing period,
   `pricing_snapshot_id`, and organization identifier.
@@ -2008,7 +2027,16 @@ automatically when the context manager exits with an unhandled exception.
 Repositories translate between frozen domain dataclasses and SQLAlchemy ORM
 records via dedicated mapper functions in
 `episodic/canonical/storage/mappers.py`, keeping the domain layer free of
-persistence imports.
+persistence imports. Canonical and cost-accounting ORM records share the
+declarative base in `episodic.sqlalchemy_base.Base`; feature-owned model
+modules register their tables in its metadata for Alembic and schema checks.
+
+`UnitOfWorkRuntime` groups the optional metrics sink, monotonic clock, tracer,
+and generation-run storage runtime forwarded to adapters created by the unit of
+work. `OpenAICompatibleLLMRuntime` groups the provider adapter's tracing,
+metrics, and clock collaborators. The API composition root supplies the same
+production metrics and tracer instances through both bundles, keeping storage
+and provider-call observations on the shared sinks.
 
 `SourceDocumentRepository` in current code is intentionally ingestion-scoped.
 Its contract exposes `add(document)` and `list_for_job(job_id)`, and

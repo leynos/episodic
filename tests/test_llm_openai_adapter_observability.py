@@ -1,5 +1,6 @@
 """Observability coverage for the OpenAI-compatible provider adapter."""
 
+import asyncio
 import itertools
 import typing as typ
 
@@ -56,6 +57,69 @@ class _SteppingClock:
     def monotonic_seconds(self) -> float:
         """Return the next configured timestamp."""
         return next(self._values)
+
+
+@pytest.mark.parametrize(
+    ("failure_type", "expected_labels"),
+    [
+        (RuntimeError, ("error", "provider.unexpected_error")),
+        (asyncio.CancelledError, ("cancelled", "provider.cancelled")),
+    ],
+    ids=["unclassified-exception", "cancellation"],
+)
+@pytest.mark.asyncio
+async def test_interrupted_request_never_emits_success(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_request_builder: _OpenAIRequestBuilder,
+    failure_type: type[BaseException],
+    expected_labels: tuple[str, str],
+) -> None:
+    """Propagate the exact failure while recording a bounded failed attempt."""
+    tracer = RecordingTracer()
+    metrics = _RecordingMetrics()
+    failure = failure_type("sentinel provider interruption")
+    outcome, category = expected_labels
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        del request
+        attempts += 1
+        raise failure
+
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler),
+        tracer=tracer,
+        metrics=metrics,
+        clock=_SteppingClock(),
+    ) as adapter:
+        with pytest.raises(
+            failure_type, match="sentinel provider interruption"
+        ) as caught:
+            await adapter.generate(openai_request_builder())
+
+    assert caught.value is failure, "the original failure must propagate unchanged"
+    assert attempts == 1, "unclassified failures and cancellations must not retry"
+    assert len(tracer.spans) == 1, "the interrupted attempt must emit one span"
+    span = tracer.spans[0]
+    assert span.name == "llm.provider_request", "preserve the provider span name"
+    assert span.is_completed, "the interrupted attempt span must complete"
+    labels = {
+        "operation": "chat_completions",
+        "outcome": outcome,
+        "failure_category": category,
+    }
+    assert span.attributes == labels, "span attributes must remain bounded"
+    assert metrics.counters == [("llm.provider_request", labels)], (
+        "failed attempts must record their fixed category without success"
+    )
+    assert metrics.latencies == [
+        (
+            "llm.provider_request.duration_ms",
+            500.0,
+            {"operation": "chat_completions", "outcome": outcome},
+        )
+    ], "failed attempts must record deterministic latency without success"
 
 
 def _success_payload() -> dict[str, object]:

@@ -24,13 +24,9 @@ def _create_pricing_snapshots() -> None:
         sa.Column("billing_period_key", sa.Text(), nullable=False),
         sa.Column("rates_minor_per_metric", postgresql.JSONB(), nullable=False),
         sa.Column("source_metadata", postgresql.JSONB(), nullable=False),
-        sa.Column("content_hash", sa.Text(), nullable=False),
+        sa.Column("content_hash", sa.Text(), nullable=False, unique=True),
         sa.Column("retrieved_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("effective_from", sa.DateTime(timezone=True), nullable=True),
-        sa.UniqueConstraint(
-            "content_hash",
-            name="uq_pricing_snapshots_content_hash",
-        ),
     )
 
 

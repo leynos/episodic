@@ -748,7 +748,10 @@ Helm conventions:
 Local preview conventions:
 
 - Makefile targets call `uv run --group dev scripts/local_k8s.py`.
-- `scripts/local_k8s/commands.py` should contain command construction only.
+- `scripts/local_k8s/commands.py` should contain command construction and
+  re-export the manifest builders from `manifests.py` for existing callers.
+- `scripts/local_k8s/manifests.py` should render local Kubernetes manifests
+  and validate their input values.
 - `scripts/local_k8s/validation.py` should contain host prerequisite checks.
 - `scripts/local_k8s/orchestration.py` should sequence helpers without hiding
   command failures.
@@ -2024,19 +2027,25 @@ in the persistence unit of work. It first calls
 `CostLedgerPort.ensure_snapshot` to persist the resolved pricing snapshot
 idempotently, either before pinning it to the run or before recording an
 unpinned provider call; repeated calls with the same snapshot identifier reuse
-the stored row. Pricing snapshots are immutable and content-addressed, so a
-content-hash collision against another identifier raises
+the stored row. This ordering ensures the snapshot exists before the run-pin or
+provider-call foreign key references it; a call with an existing pin relies on
+that pin's foreign key. Pricing snapshots are immutable and content-addressed,
+so a content-hash collision against another identifier raises
 `PricingSnapshotCollisionError` rather than silently overwriting the stored
-snapshot. `ensure_snapshot` carries `effective_from` from the resolved
-catalogue snapshot through to the persisted row (parsed as a timezone-aware
-instant, or left unset when the catalogue entry has none), so the stored
-snapshot preserves the same effective-date precedence the catalogue used to
-resolve it. `CostRecorder` then records usage with a run-scoped idempotency key.
-`PRICING_SNAPSHOT_DIRECTORY` is optional: its default is
-`config/pricing-snapshots`; a configured relative path is resolved from the
-repository root, and startup rejects a path that is not an existing directory.
-The runtime constructs `FilePricingCatalogue` from the validated directory, so
-the same pricing source is used when costs are recorded.
+snapshot. `ensure_snapshot` carries the validated timezone-aware
+`effective_from` datetime from the resolved catalogue snapshot through to the
+persisted row without parsing it; when the catalogue entry has none, the stored
+value remains unset. This preserves the same effective-date precedence the
+catalogue used to resolve it. Invalid statement construction emits the
+`pricing_snapshot.input_validation` span and counter with
+`operation=ensure_snapshot`, `outcome=error`, and
+`failure_category=pricing_snapshot.input_invalid`; it records no persistence
+duration because execution has not started. `CostRecorder` then records usage
+with a run-scoped idempotency key. `PRICING_SNAPSHOT_DIRECTORY` is optional:
+its default is `config/pricing-snapshots`; a configured relative path is
+resolved from the repository root, and startup rejects a path that is not an
+existing directory. The runtime constructs `FilePricingCatalogue` from the
+validated directory, so the same pricing source is used when costs are recorded.
 
 Generation input is bounded before it reaches the draft provider. The optional
 `GENERATION_MAX_SOURCE_COUNT`, `GENERATION_MAX_SOURCE_BYTES`,
@@ -2276,19 +2285,30 @@ absent.
   target model and prompt shape.
 - Persisted `guardrails` belong to canonical profile/template state and are
   composed before the adapter call, not inside the vendor transport layer.
-- `LLMRequest.json_response` asks the provider to enforce a JSON object
-  response so it cannot wrap the payload in markdown fences or prose. The
-  adapter maps the flag onto the operation-specific provider shape:
-  `response_format={"type": "json_object"}` for chat completions, and
-  `text.format={"type": "json_object"}` for the Responses API.
+- `LLMRequest.json_response` requests a JSON object without surrounding prose
+  or markdown fences. It does not define a JSON Schema or validate the
+  application-level shape; callers validate that after receiving the response.
+  An adapter must honour the request or fail explicitly when it is unsupported.
+  The OpenAI-compatible adapter maps the flag onto the operation-specific
+  provider shape: `response_format={"type": "json_object"}` for chat
+  completions, and `text.format={"type": "json_object"}` for the Responses API.
 - `OpenAIPayloadOptions` carries provider-specific request options applied to
   outbound payloads: `reasoning_effort` (read from `OPENAI_REASONING_EFFORT`),
   `service_tier` (read from `OPENAI_SERVICE_TIER`), and `token_limit_param`
   (read from `OPENAI_TOKEN_LIMIT_PARAM`, one of `max_tokens` or
   `max_completion_tokens`, defaulting to `max_tokens`).
   `OPENAI_TIMEOUT_SECONDS` sets the adapter's HTTP timeout and defaults to
-  `30.0`. All four are wired from runtime settings in
-  `episodic.api.runtime_config`.
+  `30.0`. `episodic.api.runtime_config` reads these settings and
+  `episodic.api.runtime` builds the adapter configuration; the adapter applies
+  the options to provider payloads and the timeout to HTTP requests.
+
+Each provider attempt emits the `llm.provider_request` span and counter plus the
+`llm.provider_request.duration_ms` observation. An unexpected exception is
+recorded as `outcome=error` with `failure_category=provider.unexpected_error`;
+cancellation is recorded as `outcome=cancelled` with
+`failure_category=provider.cancelled`. Telemetry labels remain bounded to the
+operation, outcome, and fixed failure category; request payloads and credential
+values are not recorded.
 
 ### OpenAI-compatible adapter package layout
 
@@ -2306,6 +2326,8 @@ module remains responsible for HTTP lifecycle and retry orchestration.
   endpoint path and JSON payload.
 - `response.py` classifies HTTP status codes, decodes JSON bodies, and
   normalizes OpenAI-compatible payloads through `openai_client` adapters.
+- `telemetry.py` classifies known provider transport, response, and cancellation
+  failures into bounded outcome and failure-category labels.
 - `utils.py` is a façade over four helper modules and re-exports their
   functions for existing callers: `utils_config.py` validates configuration,
   `utils_preflight.py` estimates preflight token counts and enforces the input

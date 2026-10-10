@@ -65,6 +65,15 @@ Values follow the Nile Valley example chart conventions:
 `secretEnvFromKeys` uses object entries. This preserves explicit
 `optional: false` values even when `allowMissingSecret` is `true`.
 
+The chart accepts `volumes` and `volumeMounts` values and passes them through
+to the pod and container specifications. Since the application container keeps
+`readOnlyRootFilesystem` enabled, deployments must mount writable storage at
+any path that needs writes. The local values mount an `emptyDir` at `/tmp` for
+the source-intake object store at `/tmp/episodic-object-store`. That storage
+belongs to the application pod; replacing the pod removes the uploaded blobs
+while their Postgres metadata remains, so the source documents need to be
+uploaded again before they are used by another generation run.
+
 ## Local preview
 
 The local preview command surface is:
@@ -87,6 +96,12 @@ StatefulSet, installs the chart with `charts/episodic/values.local.yaml`, and
 waits for Helm readiness. The default provider is Docker plus `k3d`; rootless
 Podman hosts can use
 `make local-k8s-up LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind`.
+
+The application Secret manifest is generated with its credentials in
+`stringData` and applied through `kubectl apply -f -` on standard input. The
+runner therefore keeps credential values out of command arguments, which it may
+print in dry-run mode or expose in a failed-command diagnostic. The optional
+OpenAI base URL and API key are included together.
 
 When a configured `k3d` cluster already exists, `local-k8s-up` inspects the
 cluster's host port mappings and fails clearly if the existing ingress port

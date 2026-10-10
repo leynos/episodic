@@ -183,8 +183,7 @@ class SqlAlchemyCostLedgerStore:
         tracer : TracerPort | None, optional
             Span sink for storage operations. Defaults to ``NoopTracer``.
         clock : MonotonicClockPort | None, optional
-            Clock used for latency measurement. Defaults to
-            ``PerfCounterClock``.
+            Latency measurement clock. Defaults to ``PerfCounterClock``.
         """
         self._session = session
         self._metrics: observability.MetricsPort = (
@@ -215,28 +214,35 @@ class SqlAlchemyCostLedgerStore:
         )
 
     async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Persist an immutable pricing snapshot; reuse an existing row.
+        """Persist immutable snapshot values; reuse an existing ``id`` unchanged.
 
-        Persists the snapshot identifier, provider name, model, operation,
-        source kind, currency, billing period, rates, source metadata,
-        content hash, and retrieved-at timestamp. If a row with the same
-        ``id`` already exists, the insert is a no-op via
-        ``ON CONFLICT DO NOTHING``, leaving the stored row unchanged.
+        Uses ``ON CONFLICT DO NOTHING`` to preserve all stored values.
 
         Raises
         ------
         PricingSnapshotCollisionError
-            If ``snapshot.content_hash`` is already stored under a
-            different snapshot identifier.
+            If ``snapshot.content_hash`` is stored under a different identifier.
         sqlalchemy.exc.IntegrityError
-            If the insert violates a constraint other than the identifier
-            or content-hash uniqueness.
+            If a constraint other than identifier or content-hash uniqueness fails.
         ValueError
-            If ``snapshot.retrieved_at`` lacks timezone information, via
-            ``parse_instant``'s ``"timestamp must include timezone
-            information."`` error.
+            If ``snapshot.retrieved_at`` lacks a timezone; ``parse_instant`` raises
+            ``"timestamp must include timezone information."``.
         """  # ruff: ignore[docstring-extraneous-exception]  # parse_instant raises on the adapter's behalf.
-        statement = _snapshot_insert_statement(snapshot)
+        try:
+            statement = _snapshot_insert_statement(snapshot)
+        except ValueError:
+            labels = {
+                "operation": "ensure_snapshot",
+                "outcome": "error",
+                "failure_category": "pricing_snapshot.input_invalid",
+            }
+            with self._tracer.start_span(
+                "pricing_snapshot.input_validation", attributes=labels
+            ):
+                self._metrics.increment_counter(
+                    "pricing_snapshot.input_validation", labels=labels
+                )
+                raise
         await self._record_snapshot_insert(snapshot, statement)
 
     async def _record_snapshot_insert(
@@ -276,8 +282,8 @@ class SqlAlchemyCostLedgerStore:
         try:
             result = await self._session.execute(statement)
         except IntegrityError as exc:
-            # The id conflict target does not cover the unique content hash;
-            # a duplicate hash under another ID is a catalogue defect.
+            # The id conflict target excludes unique content hashes: a duplicate
+            # hash under another ID is a catalogue defect.
             if not _is_pricing_snapshot_hash_collision(exc):
                 raise
             msg = (
