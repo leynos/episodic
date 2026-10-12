@@ -14,7 +14,7 @@ import os
 import re
 import shlex
 import shutil
-import subprocess  # ruff: ignore[suspicious-subprocess-import]  # The end-to-end test drives Make.
+import subprocess  # ruff: ignore[suspicious-subprocess-import]  # The jobs probe expands Make variables.
 import tempfile
 import tomllib
 from pathlib import Path

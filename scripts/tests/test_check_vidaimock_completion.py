@@ -145,25 +145,35 @@ def test_main_cleans_up_server_after_successful_smoke_checks(
     monkeypatch.setattr(smoke, "_configured_provider_names", configured_provider_names)
 
     def start_server(launch: smoke.VidaiMockLaunch) -> smoke.VidaiMockServer:
-        assert launch.executable == "/opt/vidaimock"
+        assert launch.executable == "/opt/vidaimock", (
+            "the launcher must receive the executable resolved by the smoke test."
+        )
         events.append("start")
         return server
 
     def check_isolation(base_url: str, configured: list[str]) -> None:
-        assert base_url == server.base_url
-        assert configured == [smoke.PROVIDER_NAME]
+        assert base_url == server.base_url, (
+            "isolation must target the started server's base URL."
+        )
+        assert configured == [smoke.PROVIDER_NAME], (
+            "isolation must receive the configured provider list."
+        )
         events.append("isolation")
 
     def check_completion(base_url: str) -> None:
-        assert base_url == server.base_url
+        assert base_url == server.base_url, (
+            "completion must target the started server's base URL."
+        )
         events.append("completion")
 
     def clean_up(
         cleanup_process: subprocess.Popen[str],
         cleanup_stderr: io.StringIO | None,
     ) -> None:
-        assert cleanup_process is process
-        assert cleanup_stderr is stderr_file
+        assert cleanup_process is process, "cleanup must receive the launched process."
+        assert cleanup_stderr is stderr_file, (
+            "cleanup must receive the launched server's stderr capture."
+        )
         events.append("cleanup")
 
     monkeypatch.setattr(smoke, "start_vidaimock", start_server)
