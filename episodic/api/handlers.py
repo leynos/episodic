@@ -304,10 +304,7 @@ async def handle_create_entity[EntityT](  # ruff: ignore[too-many-arguments]  # 
     falcon.HTTPNotFound
         If a referenced entity required for creation does not exist.
     """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
-    for field_name in required_fields:
-        if field_name not in payload:
-            msg = f"Missing required field: {field_name}"
-            raise validation_error(msg, field=field_name, constraint="required")
+    _require_payload_fields(payload, required_fields)
 
     service_kwargs = kwargs_builder(payload)
     try:

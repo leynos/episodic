@@ -1,0 +1,1097 @@
+# VidaiMock release/CLI mismatch: upgrade the pin and consolidate startup logic
+
+Branch: `use-cpython-for-pylint` PR:
+<https://github.com/leynos/episodic/pull/339>
+
+Latest verified disposition:
+[2026-10-10](#latest-verified-disposition-2026-10-10). The latest
+behaviour-changing implementation commit on the rebased branch is
+[`780ddfbf8b4222e8cf2a25405ecd6af75e7e83a2`](https://github.com/leynos/episodic/commit/780ddfbf8b4222e8cf2a25405ecd6af75e7e83a2);
+the `PYLINT_JOBS` production assignment was introduced in
+[`90ad0ed5e3ef2c4a75d1e22502bc11281de36cce`](https://github.com/leynos/episodic/commit/90ad0ed5e3ef2c4a75d1e22502bc11281de36cce).
+The current PR head before this documentation follow-up was
+`d0eb836f903dfde30fc8ca42e032ec561e4f97c2`, and its base was
+`e43240306dec55437547c8f43cf0c6a5ed040fd2`. The resulting SHA for this
+documentation follow-up is intentionally not stated here. Earlier checkpoints
+and status records are retained as historical evidence below.
+
+Current workflow pin: VidaiMock `0.3.1`, with the verified digest recorded in
+the release decision below.
+
+## Goal
+
+Fix the release/CLI mismatch between the pinned VidaiMock release and the
+`--isolated` flag the test fixtures pass, consolidate the duplicated
+startup/readiness/cleanup logic, and add the missing regression coverage.
+
+## Historical problem statement: VidaiMock 0.1.3
+
+At the start of this work, both workflows pinned VidaiMock `0.1.3`, but the BDD
+fixtures passed `--isolated`, which that release rejected. The flag was added
+without a corresponding pin bump, so CI would fail at the first behavioural
+scenario. This is the historical problem statement; the current workflows pin
+VidaiMock `0.3.1`.
+
+Observed, on the pinned `0.1.3` binary:
+
+```text
+$ vidaimock --isolated
+error: unexpected argument '--isolated' found
+exit code 2
+```
+
+## Verified findings
+
+### Historical candidate: `0.2.11` (superseded)
+
+This section records the original release investigation. `0.2.11` is no longer
+the workflow pin; the current release decision is recorded below.
+
+- Published Linux x64 archive SHA-256 confirmed by download:
+  `888d40195438491534a7a669776e06977367da62beb57feac8fa1a1f08faa93b`.
+- `vidaimock --version` reports `0.2.11`.
+- `--help` lists `--isolated`, described as "Ignore the binary's embedded
+  provider configs and templates. Only `--config-dir` is loaded".
+- `CHANGELOG.md` records `--isolated` as **Added in 0.2.8**, so `0.2.11`
+  clears the floor with the whole 0.2.x series behind it.
+- Compatibility confirmed end-to-end: a provider config and Jinja template
+  written exactly as the fixtures write them were served correctly under
+  `--isolated`, returning the double-encoded assistant content the tests assert
+  on.
+
+### Isolation is observable
+
+Started twice over the same `--config-dir` declaring `chapter_markers` and
+`guest_bios`:
+
+- `--isolated` → `/v1/models` returns exactly the two declared providers.
+- without `--isolated` → `/v1/models` also returns the embedded
+  `gemini_count_tokens`, `gemini_embed`, `openai`, `anthropic`, … providers.
+
+This is what "retain isolated-mode behaviour" protects, and it is asserted
+directly rather than inferred from the argv.
+
+### Failure signatures (v0.2.11), used to separate retryable from fatal
+
+| Condition             | Exit | stderr                                                                                   |
+| --------------------- | ---- | ---------------------------------------------------------------------------------------- |
+| Unrecognized argument | 2    | `error: unexpected argument '--not-a-flag' found`                                        |
+| Port already bound    | 1    | `ERROR: Failed to bind to address 127.0.0.1:46002: Address already in use (os error 98)` |
+
+Both exit before serving. The bind failure is the only retryable one.
+
+### A missing or malformed `--config-dir` does **not** fail startup
+
+Against `0.2.11`, both a nonexistent `--config-dir` and a directory holding
+malformed YAML start successfully:
+
+```text
+$ vidaimock --config-dir /nonexistent --isolated
+🚀 VidaiMock is running at http://127.0.0.1:46004
+```
+
+So "do not suppress the underlying configuration error" cannot mean "surface a
+startup exit code for a bad config" — there is no such exit. Under `--isolated`
+the configuration error surfaces as an unroutable request (a 404 naming the
+missing provider, which the changelog notes carries a mode-aware hint). The
+harness must therefore not narrow stderr to exit-code-only detail, and must not
+retry in a way that hides a config that never loads.
+
+## Upstream release choice
+
+At the initial checkpoint, `0.2.11` was selected because its archive digest was
+supplied and independently confirmed. That decision was superseded when the
+branch was rebased onto `main`, which supplied the newer `0.3.1` workflow pin.
+The current `ci.yml` and `coverage-main.yml` both pin VidaiMock `0.3.1` with
+SHA-256 `d228cb27be8835d0e6f538f1cde5c7fcc1675223b7f7c0cb05218df1954d72c5`. The
+archive digest was checked against the downloaded archive, and the pinned smoke
+test passed against that release. `0.2.11` results below remain historical
+evidence only.
+
+## Work plan
+
+1. Consolidate the duplicated VidaiMock harness into
+   `tests/steps/vidaimock_harness.py`, keyed by the scenario label the four
+   step modules already use in their messages.
+2. Pin both workflows to a verified VidaiMock release with isolated-mode
+   support; the current pin is `0.3.1` with its verified digest.
+3. Add regression tests: immediate child exit, readiness timeout, diagnostic
+   propagation.
+4. Add a CI smoke test using the installed binary with `--config-dir` and
+   `--isolated`.
+5. Update `docs/developers-guide.md` for the pin, the harness, and the smoke
+   test.
+6. Run `make check-fmt`, `make lint`, `make typecheck`, `make test`, plus
+   Markdown gates.
+
+## Progress log
+
+Status entries in this log record completed historical checkpoints. Use the
+latest verified disposition at the end of this document for the current PR and
+review status.
+
+- [x] Rebased onto `origin/main` (`15d790e`), no conflicts; semantic audit
+      clean (target-only paths byte-identical, no unexplained deletions, no
+      new duplicated blocks).
+- [x] Verified `0.2.11` archive digest, flag support, and provider/template
+      compatibility; characterized failure signatures.
+- [x] Harness consolidation: `tests/steps/vidaimock_harness.py` is the single
+      owner of startup, readiness, and cleanup; the five step modules and
+      `no_qa_generation_slice_support.py` now route through it, each with its
+      own scenario label. The superseded
+      `test_generation_orchestration_vidaimock.py` was removed.
+- [x] Historical pin bump: both workflows initially pinned `0.2.11`; the
+      rebase later adopted `0.3.1` with the verified workflow digest.
+- [x] Regression tests: `tests/steps/test_vidaimock_harness.py`, 9 passing
+      (immediate exit, readiness timeout, diagnostic propagation, retry
+      policy, bounded capture, reaping, and the local-skip/CI-fail contract).
+- [x] CI smoke test: `scripts/check_vidaimock_isolated.py`, wired into
+      `ci.yml`; passed on the original `0.2.11` candidate and the current
+      `0.3.1` pin, and failed with the binary's diagnostic on `0.1.3`.
+- [x] Documentation: new "The Vidai Mock pin", "Behavioural inference
+      harness", and "Vidai Mock smoke test" sections in
+      `docs/developers-guide.md`.
+- [x] Full gate run: all six gates green on the frozen tree — `check-fmt`,
+      `lint` (Pylint 10.00/10 on all three passes), `typecheck`, `test` (1273
+      passed, 1 skipped), `markdownlint`, and `spelling`. `make nixie` also
+      green (all diagrams validated), run separately because the change touches
+      Markdown. Logs under `/tmp/$GATE-use-cpython-for-pylint.out`.
+- [x] PR coverage command reproduced locally against a faithful copy of the
+      shared action's environment: 1273 passed, 1 skipped, exit 0, with
+      `coverage.xml` reporting **90.81%** line coverage over the
+      `episodic,alembic` production scope.
+
+## CodeScene review round progress (historical checkpoints)
+
+- [x] Verified all findings against the current tree before editing; baseline
+      `a59935f` recorded.
+- [x] Duplication in `test_vidaimock_harness.py`: merged the two
+      executable-missing tests into one parametrized test; `cs check` 9.38 →
+      10.00, duplication cleared. CodeScene still warns `Complex Method
+      (cc = 9)` at `vidaimock_harness.py:328`.
+- [x] `_launch_server` extraction with the leaked-child fix; two new tests, each
+      shown to fail when its guard is removed.
+- [x] Three lint errors in the in-flight harness work fixed by their owning
+      agent: `F401` unused import, `FBT001` boolean positional (parametrized on
+      the environment value instead), `DOC502` `Raises: BaseException`.
+- [x] `utils_config.py` test half: 8 new cases (4 `bool`, 2 `-inf`, 2
+      boundary) plus an acceptance test; mutation-verified decisive; source
+      file untouched.
+- [x] `guest_bios_tei.py`: five locals replaced by the three shared helpers;
+      one new error-path test added and mutation-verified; module 104 → 69
+      lines.
+- [x] `launcher_persistence.py`: rename applied at both sites.
+- [x] `handlers.py`: required-field loop replaced by the existing helper.
+- [x] `docs/execplans/use-cpython-for-pylint.md`: stale developer-documentation
+      finding dispositioned with git evidence.
+- [x] `scripts/check_vidaimock_isolated.py` complexity reduction:
+      `_decode_response` holds the shared JSON/transport core, `_check_isolation`
+      compares the sorted lists directly and now *rejects* a duplicated
+      advertised ID, and `_verify_startup` returns the resolved path so `main`
+      resolves the executable once. `cs check` 9.38 → **10.00**, mean radon 3.70
+      → 2.67, `_check_isolation` 7 → 2. 19 new tests, including one that fails
+      when the comparison is regressed to a set.
+- [x] Deduplication fallout handled: making `guest_bios_tei.py` import the
+      shared helpers made its import block byte-identical to
+      `show_notes_enrichment.py`'s, which the duplication gate caught. Recorded
+      as a reasoned exception via `make duplication-allow`, following the
+      existing `_guest_bios_executor.py ~ _show_notes_executor.py` precedent
+      rather than extracting a helper purely to cross the threshold.
+- [x] `check-fmt` caught the table added by this very plan: `mdtablefix --wrap`
+      re-aligns every column, so a handwritten table is a formatting defect
+      even when it renders correctly. The change is whitespace-only and
+      invisible to a `git diff` read, which is why the post-turn hook found it
+      and review did not. Realigned with the Makefile's own `mdtablefix
+      --in-place` flags and confirmed with `mdtablefix --check` (exit 0) and
+      `ruff format --check` (601 already formatted). Lesson: a plan that
+      records the hash of its own tree is self-defeating, since every edit
+      changes the value it claims; record the *verification* instead.
+- [x] `lint` then caught two `C0302 too-many-lines` violations (423 and 473
+      lines against a ceiling of 400) that the new tests and the `_launch_server`
+      helper had pushed both harness modules over. The ceiling is stated policy,
+      `pyproject.toml` calls it "the project file-size ceiling enforced during
+      review", and no file in the repository suppresses it, so the remedy was to
+      split along real seams rather than disable the rule:
+      `resolve_vidaimock_executable` moved to `tests/steps/vidaimock_executable.py`
+      (it was the harness's only use of `os`, `shutil`, and `pytest`, so the
+      harness no longer imports `pytest` at all) and the stand-in child builders
+      moved to `tests/steps/vidaimock_harness_support.py`, following the
+      `*_support.py` convention already used across `tests/steps/`. The harness
+      re-exports `resolve_vidaimock_executable` so existing callers are
+      unaffected. Result: 390 / 44 / 138 / 365 lines, pylint 10.00/10 with no
+      C0302, and all 11 harness tests plus 19 script tests still pass.
+- [x] Recorded the trap that the lint failure exposed: an earlier `scrutineer`
+      run had reported `lint` as PASS while its own log showed the same two
+      C0302 errors and `Error 16`. Reading the cited log rather than the summary
+      is what settled it, so a gate report is only ever as good as the log
+      behind it.
+- [x] Code validation for the current follow-up: formatting, the full lint
+      recipe, and typecheck passed after adding `PYLINT_JOBS`; the full test
+      suite passed on the clean final rerun. One earlier rerun timed out under
+      shared-machine load; the named test passed in isolation and the full suite
+      passed afterwards.
+- [x] Pinned VidaiMock 0.2.11 smoke test and PR coverage test run completed on
+      the current code candidate.
+- [x] The initial Python, provider-reader, and lifecycle changes are committed
+      locally as
+      `69775efedab0f56f9d6583c7b333beea5b696d7c`.
+- [x] The Pylint worker-count update and the two additional positive-infinity
+      cases passed their code gates, full tests, smoke, and coverage checks in
+      commit `9f6f639b214f04186294b591d07531dd5e114612`.
+- [x] Final documentation checks passed after this plan reconciliation:
+      `make check-fmt`, `make markdownlint` using the locally installed
+      `typos-config-builder` v0.1.1, and `make nixie`. The default uv fetch for
+      that pinned builder remains intermittently unavailable through Lody.
+- [x] Push the local commits and verify remote branch parity. PR #339's
+      description now has current validation results and the Lody session link
+      as its terminal `## References` section.
+- [x] Earlier hosted workflow and review invocations are recorded with their
+      exact historical heads and outcomes below. They do not establish current
+      results for a subsequently rebased head.
+- [x] Published the rebased candidate and inspected its exact-head CI and
+      CodeScene results; see the 2026-10-09 publication evidence below.
+- [x] Historical status: the managed CodeRabbit request was queued at this
+      checkpoint and later produced review 5478519036 against `d5fb160`, which
+      requested changes. That review and its status do not describe the current
+      PR head; see the latest disposition below.
+
+### CodeScene delta at `bf2acc8` (historical)
+
+`cs delta origin/main --output-format json --pretty` now names **one** finding,
+down from three. Both cleared findings are absent from the delta and both files
+score 10.00:
+
+| Finding                                                 | Baseline | Final                      |
+| ------------------------------------------------------- | -------- | -------------------------- |
+| Duplication, `test_vidaimock_harness.py`                | 9.38     | **10.00**, cleared         |
+| Overall Code Complexity, `check_vidaimock_isolated.py`  | 9.38     | **10.00**, cleared         |
+| Complex Method, `vidaimock_harness.py::start_vidaimock` | 9.68     | 9.68, **cc = 9 unchanged** |
+
+The surviving warning is reported as a miss. It is a deliberate trade: the two
+`except` clauses encode two different policies, and the alternative that would
+lower the count — one clause guarded by a compound condition, or a predicate
+helper — was declined because either makes the retryable and non-retryable
+paths harder to tell apart for a diagnostic that blocks nothing.
+
+## Defects found and fixed while clearing lint (historical)
+
+- `RUF100` exposed a dead handler rather than a redundant suppression:
+  `pytest.skip.Exception` and `pytest.fail.Exception` derive from
+  `BaseException`, not `Exception`, so the smoke script's `except Exception`
+  never caught them and a missing binary produced a traceback. Now caught by
+  name, with the reason attached.
+- `tests/steps/test_no_qa_generation_slice_support.py`'s `_Process` stand-in
+  predated the consolidated teardown and lacked `poll()`, which the harness
+  checks before terminating so an exited child is not waited on twice. The
+  stand-in now models that interface.
+- The smoke script derived configured provider names from the fixture YAML's
+  *filename*; the server advertises the declared `name:` field. It now reads
+  the declared name.
+- `make typecheck` found five `ty 0.0.32` diagnostics that `make lint` could
+  not. A bare `dict` narrowed from `object` by `isinstance` carries an
+  uninhabited key type, so every lookup on it is rejected as expecting `Never`.
+  `ty` scans untracked files, which is why the two new files were caught here
+  and not before the lint gate. The repeated `isinstance` and `raise` blocks at
+  five sites were replaced by one named helper,
+  `_as_mapping(value, description) -> dict[str, object]`, which states the
+  expectation once and narrows with the `typ.cast` idiom the repository already
+  uses in `tests/test_helm_chart_contract.py`. Separately,
+  `subprocess.Popen.args` is typed as a union admitting `bytes` and `PathLike`,
+  so the harness test now casts it to `cabc.Sequence[str]` behind a documented
+  assertion.
+
+## Review round: CI green, then four verified defects fixed (historical)
+
+CI is green on `f8e9487` and on the successor `5fbf87b`, with all 23 steps
+executed and none skipped. The headline `Smoke-test vidaimock isolation` step
+ran for the first time and passed on both, so the claim that the isolation
+harness works in CI now rests on real CI evidence rather than on a step that
+was skipped behind an earlier failure.
+
+CodeRabbit returned `CHANGES_REQUESTED` against `b44ebb9` with eleven comments.
+Four findings were reproduced before being fixed, each then verified against
+its own failure mode (`ef122dc`):
+
+- `ReferenceDocument.lock_version` accepted `True`, because
+  `isinstance(..., int)` admits booleans while the shared
+  `require_positive_integer` deliberately excludes them. The module's two
+  optimistic-lock counters disagreed; both now share the helper.
+- `ReferenceDocumentRevision` raised `AttributeError` rather than `TypeError`
+  for a non-string `content_hash`, calling `.strip()` before checking the type.
+  Now routed through `validate_non_empty_text`; a blank string still raises
+  `ValueError`.
+- `validate_llm_config` could mask its documented `ValueError`: a rejected
+  numeric field was logged raw, and the logger's `json.dumps` raised
+  `TypeError` first for a value such as `timeout_seconds=object()`. A new
+  `_json_safe` passes JSON-encodable values through unchanged and falls back to
+  `repr` only for the rest.
+- `start_vidaimock` leaked the standard-error capture when `Popen` raised
+  before a child existed, such as a non-executable binary.
+
+At that review checkpoint, replacing the `isinstance` predicates with `match`
+cases was declined. The later request against PR head `7439d26` superseded that
+disposition; the current follow-up changes all five predicates to structural
+`match` cases, with `bool` matched before numeric types.
+
+The `_json_safe` fix is worth a note on method. The first attempt wrapped all
+three fields in `repr` unconditionally, which would have silently changed the
+logged types for ordinary mistyping. The snapshot in
+`tests/__snapshots__/test_llm_openai_adapter_config.ambr` pins
+`"max_attempts": 3` and `"timeout_seconds": 30.0` as numbers, so reading the
+existing contract first is what kept the fix from becoming a schema change.
+
+## Second rebase: onto main at `f1bdaca`, dropping the superseded Pylint commit (historical)
+
+`main` advanced three commits, one of which — `ced3f90`, "Run Pylint on CPython
+3.14 and lint every module (#346)" — is a **successor landing of this branch's
+first commit**. It carries the same purpose (Pylint on CPython 3.14, with the
+module splits that purpose forced) decomposed into 55 files at a finer
+granularity, and its `Makefile` already sets `PYLINT_PYTHON ?= 3.14` with a
+*more* precise pin (`pylint==4.0.9`, `--managed-python`) and no PyPy shim.
+
+Replaying `e7e1f04` would therefore have reinstated an older decomposition
+beside the newer one. It was excluded from the replay: `--onto f1bdaca e7e1f04`
+replays only the five later commits. The instruction to "keep only the elements
+of this PR that improve upon what is now present on main" is what this serves.
+
+Three further reconciliation decisions:
+
+- `5fbf87b` (the `typos.toml` regeneration) became empty: its output is
+  byte-identical to `main`'s `typos.toml`, verified before skipping rather than
+  assumed. Main absorbed the same 13 generated lines independently.
+- `e7e1f04` also renamed each scenario's provider fixture to `openai.yaml`.
+  That rename is **not load-bearing**: `scripts/check_vidaimock_isolated.py`'s
+  own docstring records that a provider's `name` field, not its filename, is
+  what `/v1/models` advertises, and a direct probe confirmed it — two fixtures
+  differing only in filename both reported the declared `draft` provider. Each
+  scenario also gets its own `--config-dir`, so no two providers share a
+  directory and no collision was possible. Git's auto-merge kept main's
+  descriptive names, and those were retained.
+- `ef122dc`'s four fixes were retargeted rather than dropped. Main has no
+  `domain_records.py` or `config_validation.py`, but it has the *defects* in
+  its differently-named equivalents: `isinstance(self.lock_version, int)` still
+  admits `True` in `domain_reference_documents.py`, `self.content_hash.strip()`
+  still raises `AttributeError` before the type check, and `utils_config.py`
+  still logs the three numeric fields raw. All three fixes were re-applied to
+  main's files against main's own underscore-prefixed helper names, and each
+  was verified against its exact failure mode. Main's `_json_safe` call site is
+  sound because main's snapshot pins the same numeric log types
+  (`"max_attempts": 3`, `"timeout_seconds": 30.0`) that pass-through preserves.
+
+The four conflicts were all one shape: main retains the duplicated per-module
+startup helpers, and the branch deletes them in favour of the shared harness.
+Resolution took the branch side. This is provable rather than a judgement call:
+`git diff OLD_BASE origin/main` is **empty** for all five files, so the target
+side carried no change of its own and nothing main-side could be lost.
+
+Audited afterwards: `range-diff` clean, `TARGET` an ancestor with no merges in
+range, `git diff --check` clean, all 124 target-only paths byte-identical, and
+the one deletion (`test_generation_orchestration_vidaimock.py`) is a file main
+never touched whose two contracts are re-covered by the new harness's nine
+tests. The 13 `e7e1f04`-only modules stay absent.
+
+One element of `e7e1f04` was deliberately **not** carried forward. It derived a
+Pylint worker count from `nproc` (`PYLINT_JOBS`, a tenth of the cores with a
+floor of two) and ran the pass with `-j`. Main runs Pylint single-threaded
+against a pinned `pylint==4.0.9`, and the worker heuristic is a statement about
+this machine's topology rather than about the VidaiMock defect this branch
+exists to fix. Reinstating it would widen the change beyond its purpose, so it
+is recorded here as a decision rather than left as an unexplained omission.
+That decision was superseded by the requested follow-up: `PYLINT_JOBS` was
+restored in the Makefile, applied to the built-in and both df12 Pylint passes,
+and documented. The current disposition and validation evidence are recorded in
+the follow-up section below.
+
+The two special-case reconciliations are worth naming as a pattern. Where main
+has already landed a *renamed* equivalent of a file this branch modified, the
+right move is not to skip the commit but to retarget its change onto main's
+file. Dropping `ef122dc` would have quietly reverted three real fixes, because
+"the file is gone" and "the defect is gone" are different claims — and the
+second can only be established by reading main's replacement.
+
+### Publication at `bf2acc8` (historical)
+
+The rebased series is `9f51222`, `bf5e1be`, `4c3b54b`, `1a97009`, `5fee061`,
+`bf2acc8`.
+
+All six gates are green on `bf2acc8`: `check-fmt` (exit 0, 122 Markdown files
+unchanged), `lint` (exit 0, 67s, Pylint 10.00/10 on all three invocations),
+`typecheck` (exit 0, `ty 0.0.32`), `test` (exit 0, 174s, 1507 passed, 1
+skipped), `markdownlint` (exit 0, 7s, 123 files, 0 errors), and `nixie` (exit
+0). `typos.toml` converged and was not rewritten.
+
+The force-push was bound with `--force-with-lease` to the previously recorded
+remote head `fdf4f31`, re-read by `git ls-remote` immediately beforehand rather
+than refreshed blindly. The remote branch moved `fdf4f31` → `bf2acc8`, and the
+pull request updated in place:
+
+<https://github.com/leynos/episodic/pull/339>
+
+Recovery refs for `OLD_HEAD`, `OLD_BASE`, and `TARGET` are retained, so the
+pre-rebase history stays recoverable independently of the remote.
+
+## CodeScene review round (historical)
+
+`cs delta origin/main --output-format json --pretty` named exactly three
+findings, and the review mapped them onto the first three work items. Every
+finding was verified against the current tree before any edit.
+
+**Code Duplication in `tests/steps/test_vidaimock_harness.py` — cleared.** The
+two executable-missing tests differed only in the `CI` environment variable and
+the exception type; the `match=` text and the call were byte-identical. They
+are now one parametrized test over the environment value (`"1"` / `None`) with
+distinct descriptive case IDs. Measured before and after with `cs check`: 9.38
+→ 10.00, both duplication warnings gone. Decisive, not merely green: pointing
+`resolve_vidaimock_executable`'s CI branch at `skip` turns the CI case into a
+`SKIPPED` outcome rather than a pass, so the two cases remain discriminating.
+
+**Complex Method in `tests/steps/vidaimock_harness.py` — not cleared.** The
+extraction did happen: `_launch_server(launch) -> VidaiMockServer` now owns the
+single-attempt acquisition (fresh port, fresh capture, `_start_once`, close the
+capture and re-raise if no child was created) and returns the child, port,
+label, and capture together. It does not decide whether to retry. `cs check`
+confirms the finding is merely **relocated**, `292` → `328`, still `cc = 9`,
+and the file's score is unchanged at 9.68. This is reported as a miss rather
+than claimed as cleared: the extraction did not lower the count, because the
+function still carries two handlers for two genuinely different policies — a
+bind race that is retried with the attempt limit, and an unforeseen readiness
+failure that must reap the child and re-raise unchanged. Collapsing those into
+one clause guarded by a compound condition would satisfy the metric by making
+the two policies harder to tell apart, which is the wrong trade for a
+diagnostic-only gate.
+
+The extraction did fix a real defect: only `VidaiMockStartupError` was caught
+around `wait_for_port`, so any other exception leaked the child. Both that path
+and the close-the-capture-on-`Popen`-failure path had zero coverage; both now
+have a test that fails when its guard is removed.
+
+**Current CodeScene delta on `69775ef` — open.** The refreshed
+`cs delta origin/main --output-format json --pretty` reports
+`_configured_provider_names` at cyclomatic complexity 13 (threshold 9) and a
+module mean of 4.45 (threshold 4). It also reports the known `start_vidaimock`
+complexity of 9 at its threshold. The provider-reader change keeps the
+requested error boundary explicit; no production control flow was rewritten
+solely to lower a score. These CodeScene findings remain separate
+maintainability work and are not counted as resolved by the five review fixes.
+
+Two findings from that review were initially dispositioned without a code
+change. The `isinstance` disposition below was superseded by the current PR
+follow-up:
+
+- Replacing the five `isinstance` predicates in
+  `episodic/llm/openai_api/utils_config.py` with `match` cases. At the earlier
+  checkpoint, CodeScene reported no finding for that file and the suggestion
+  was declined as unnecessary for single type predicates. The current request
+  adopted it: all five validators now use structural matching, reject booleans
+  before numeric cases, preserve finite checks and numeric bounds, and return
+  `False` for unsupported types. Public configuration tests retain the boolean,
+  non-finite, invalid-type, whitespace, and boundary cases.
+- The developer-documentation finding. It describes
+  `GenerationRunsResourceConfig`, a handler request DTO, and a
+  generation-resource/error module split. Verified against git rather than
+  accepted: `GenerationRunsResourceConfig` has **zero** matches anywhere in the
+  tree, and `episodic/api/handlers.py` is **not** in this PR's diff. The text
+  describes the decomposition of `e7e1f04`, the commit this branch deliberately
+  dropped during the second rebase because `main`'s `ced3f90` landed a
+  finer-grained decomposition of the same purpose. The finding is stale, not
+  actionable, and re-documenting modules that do not exist would be worse than
+  leaving it.
+
+Three further items from the same review are independent of CodeScene:
+
+- `_record_success_events_and_costs` → `_record_success_transition` in
+  `episodic/generation/launcher_persistence.py`. Verified first that the old
+  name had exactly two occurrences, both in its own module, and that the new
+  name was unclaimed. `LauncherHost` does not declare the method, so no
+  protocol surface changed. Unrelated `_record_success` methods elsewhere
+  cannot collide.
+- The five local TEI helpers in `episodic/generation/guest_bios_tei.py` were
+  replaced by `body_blocks_payload`, `build_text_inline`, and `is_div_payload`
+  from `episodic/generation/tei_payload.py`, with `"guest-bios"` passed to the
+  predicate. The count matters: the task named three helpers, but the module
+  held five, because `_require_payload_object` and `_require_payload_list` were
+  used only by the local `_body_blocks_payload` and became dead once it was
+  replaced. All seven call sites were in the one module. The `ValueError`
+  messages are byte-identical, since `_format_type_error_message` builds the
+  same `"TEI payload field {field} must be a {type}."` text; this was
+  established by reading the shared helper, not inferred. The module went from
+  104 to 69 lines.
+- The required-field loop in `handle_create_entity` was replaced by
+  `_require_payload_fields(payload, required_fields)`, matching the call
+  `handle_update_entity` already made.
+
+## Lessons
+
+- Editing a document while a gate is running invalidates that gate for the
+  candidate being judged. The first gate run after the typecheck fixes failed on
+  `docs/execplans/use-cpython-for-pylint.md` alone, because the plan was
+  written after the previous format pass. The gate runner correctly ruled out a
+  mid-write race by mtime and checking the file hash twice, which is how the
+  failure was attributed to the planner rather than to a flaky tool. Freeze the
+  tree, then gate it.
+- `mdtablefix` reflows prose but will not repair malformed Markdown: a nested
+  inline code span, such as a quoted diagnostic inside one, survives a format
+  pass and still reads as broken in a rendered page. Write those as plain text.
+  Run `grep` for an odd number of backticks on a line before trusting a
+  formatting pass to have produced valid Markdown.
+- The rebase boundary was clean and uncontested because the branch was a single
+  commit; `0740f26` was already an ancestor of `origin/main`.
+- Both sides edited `docs/developers-guide.md` (branch: Pylint/CPython;
+  target: coverage). Git's `zdiff3` merge kept both, in different regions; the
+  audit confirmed no target-only path drifted.
+- `stderr=subprocess.PIPE` would have blocked a noisy child on a full 64 KiB
+  buffer and lost its diagnostics at exit; a `tempfile.TemporaryFile` avoids
+  both. The bounded capture is applied when reading, not when writing, so the
+  child is never restricted.
+- A linter's "unused suppression" finding is worth reading before deleting the
+  suppression: here it was the only signal that a handler was unreachable.
+- The lint and typecheck gates have different file scopes in practice: `ty`
+  checks untracked files that the Pylint passes also see, but the two report
+  disjoint classes of defect. A green `make lint` is not evidence that
+  `make typecheck` will pass, so both must run before a commit is claimed gated.
+- The fix for the narrowed-`dict` diagnostic was worth confirming on a scratch
+  file first. A three-case probe (`object` narrowed by `isinstance`, a typed
+  `dict[str, object]`, and the `isinstance` + `cast` idiom) showed the first
+  fails and both alternatives pass, which identified the mechanism before any
+  repository file was edited. The same probe confirmed the `Popen.args` cast
+  clears its four diagnostics.
+- Reproducing the PR coverage step needs the *action's* environment, not just
+  its command line. The composite action creates `.venv-coverage` inside the
+  repository and syncs into it via `UV_PROJECT_ENVIRONMENT`; a hand-built venv
+  elsewhere lacks the test dependencies and fails at collection. The
+  `granian`-driven BDD scenario also skips unless `.venv-coverage/bin` is on
+  `PATH`, so a bare invocation silently converts a real test into a skip.
+- The coverage run failed twice under host contention: once with a single
+  `pytest-timeout`, then with 297 errors at load average 18.6 on a 6-core
+  machine. Both suspect suites passed in ~8s in isolation, and the identical
+  command passed 1273/1273 once load fell to ~5. A timeout that changes shape
+  between runs and vanishes in isolation is contention, not a regression — but
+  it must be shown, not assumed.
+- The `typos.toml` regeneration is a *latent* state, not a permanent property of
+  the `spelling` gate. It rewrites the tracked file only while the committed
+  bytes differ from the generated ones; once they agree the gate reproduces
+  them and the tree converges clean. Gate runs after the rebase left
+  `git status --porcelain` entirely empty. This is also why a
+  `typos.toml`-regeneration commit can rebase to empty — `main` had absorbed
+  the same generated lines — which is worth confirming by hash before skipping
+  it as redundant.
+- A refactor that satisfies a complexity metric is not the same as a refactor
+  that improves the code. Extracting `_launch_server` was worth doing on its
+  own merits — it fixed a leaked child and gave the single-attempt acquisition
+  a name — but it did not reduce `start_vidaimock`'s count, because what
+  remains is two exception handlers for two different policies. The honest
+  report is that the finding did not clear, which the metric states plainly.
+  Claiming otherwise would have required reading the count as "the function
+  moved", which is not what it measures.
+- A test that only asserts rejection is half a test. The rejection table in
+  `test_llm_openai_adapter_config.py` would have passed unchanged if the
+  validators had rejected every value, so the boundary work added an acceptance
+  test alongside it. Mutation is what settled the question: 8 cases failed when
+  their guards were removed, and the boundary cases failed when the comparison
+  was tightened. Note also that a single-line guard and its multi-line
+  equivalent need different mutation patterns — the first attempt at removing
+  the `bool` guards matched only three of the four and would have understated
+  the coverage.
+- `ty` scans untracked files, which is how a new test file's diagnostics
+  surface in `make typecheck` before `make lint` would report them. Scoping a
+  `ty` run to the files being changed is worth doing before handing the tree to
+  the gate runner, because it reports classes of defect that `ruff` does not.
+- The duplication gate's allow entries key on symbol locations, so a
+  deduplication can orphan one — but it does not follow that it did. The entry
+  naming `tei_payload.py::require_payload_object` and `::require_payload_list`
+  survives this change precisely because the shared `body_blocks_payload` still
+  calls both; they were only orphaned from the *guest-bios* module's copy.
+  Stale entries print a warning rather than failing the gate, which makes
+  checking cheaper than guessing.
+
+## Follow-up evidence — 2026-09-30 (historical checkpoint)
+
+The review baseline supplied for this follow-up was
+`7439d269ece932b209cb3bc3755e60e3b88a3977`; at the start of the follow-up,
+GitHub reported that as the head of pull request 339. The source at that
+baseline was checked before editing: the five requested validators still used
+`isinstance`. The implementation commits are
+`69775efedab0f56f9d6583c7b333beea5b696d7c`
+(`Address outstanding PR review findings`) and
+`9f6f639b214f04186294b591d07531dd5e114612`
+(`Bound Pylint workers and test finite values`); both are pushed on the branch
+tracking `origin/use-cpython-for-pylint`. Later published head and review
+evidence is recorded below.
+
+1. **Direct domain-model regressions — addressed in code.**
+   `tests/test_reference_document_models.py` now constructs the dataclasses
+   with invalid `lock_version` and `content_hash` inputs, checks the requested
+   exact exceptions and messages, accepts positive versions and a non-empty
+   hash, and constructs the default version without passing that field. Focused
+   tests passed.
+2. **OpenAI rejection logging — addressed in code.**
+   The public configuration tests exercise `object()` for each rejected numeric
+   field and a circular list that makes `json.dumps` raise `ValueError`. They
+   parse the real log JSON and assert event, field, and `repr` fallback.
+   Existing JSON-type snapshots and numeric boundaries remain in place. Focused
+   tests passed.
+3. **VidaiMock provider reader — addressed in code.**
+   `os.scandir` exposes provider-directory discovery errors; provider reads
+   translate filesystem, UTF-8, and YAML failures to `SmokeTestError` with the
+   relevant path and original cause. Sorted `*.yaml` selection is retained.
+   Tests cover discovery/read failures, malformed and non-mapping YAML, missing
+   names, empty directories, and sorted names. The orchestration fixture writes
+   `openai.yaml` and declares `orchestration`.
+4. **VidaiMock lifecycle model — addressed in code.**
+   The bounded Hypothesis test drives the actual retry and cleanup logic with
+   process and capture doubles, covers explicit terminal and retry examples,
+   and checks cleanup, retry limits, diagnostics, and unexpected exception
+   identity. Existing real-child tests remain. The focused selection passed 110
+   tests; the latest full suite passed 1,578 tests with 1 skipped and 50
+   snapshots.
+5. **Plan and final validation — CI passed; CodeScene remains open.**
+   The latest code and test changes are published and verified at the PR head
+   recorded below. Local formatting, lint, typecheck, and full-test gates
+   passed, as did hosted CI and coverage. CodeScene remains a separate failed
+   external check; its current result and remaining review evidence are
+   recorded below.
+
+Local evidence for commits `69775ef` and `9f6f639`:
+
+- `make check-fmt` passed; 605 Python files were already formatted and the
+  Markdown table check passed
+  (`/tmp/check-fmt-76ca8268-d606-4699-97a2-0a33c4262211-docs-final6.out`).
+- `PYLINT_JOBS` now defaults to one tenth of `nproc`, with a floor of two, and
+  is passed to the built-in and both df12 Pylint invocations. On this runner
+  `make -n lint` showed `--jobs=2` on all three commands, each using Python
+  3.14. `mbake validate Makefile` passed.
+- `make check-fmt`, `make lint`, and `make typecheck` passed on the updated
+  Makefile. The final lint log confirms all three Pylint passes used `--jobs=2`
+  and scored 10.00/10; Hecate, Ruff, `ambrleaks`, Skylos, and the duplication
+  gate also passed
+  (`/tmp/lint-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-final4.out`).
+- `make test` passed once after the two additional positive-infinity cases:
+  1,576 passed, 1 skipped, and 50 snapshots passed
+  (`/tmp/test-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-final3.out`).
+  A subsequent run after the Makefile change exited 2 after 389 seconds, with
+  1,575 passed, 1 skipped, and one 180-second timeout while setting up
+  `test_create_app_from_env_wires_database_readiness_probe[plain_postgresql_url]`
+  (`/tmp/test-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-final4.out`).
+  At the time, other repository tests were active and the host load average
+  exceeded 27; this is consistent with contention but does not establish the
+  timeout's cause. The failing case then passed alone in 5.52 seconds, and the
+  final `make test` rerun passed: 1,576 passed, 1 skipped, and 50 snapshots
+  (`/tmp/test-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-timeout-fix.out`).
+- The latest default `make markdownlint` attempt stopped during its pinned
+  builder fetch
+  (`/tmp/markdownlint-76ca8268-d606-4699-97a2-0a33c4262211-docs-final2.out`).
+  The repository target then passed using the already-installed
+  `typos-config-builder` v0.1.1 executable, whose direct URL records commit
+  `b2bc36bee84fbe9b958ab64bd4581377ddd60c72`; all 123 Markdown files had zero
+  lint errors
+  (`/tmp/markdownlint-76ca8268-d606-4699-97a2-0a33c4262211-docs-final6.out`).
+  Targeted spelling checks for the changed guides also passed. The local
+  Markdown executable independently reported zero errors on 123 files
+  (`/tmp/markdownlint-cli2-76ca8268-d606-4699-97a2-0a33c4262211-local-fallback.out`).
+- `make nixie` passed after the current plan update; all diagrams validated
+  (`/tmp/nixie-76ca8268-d606-4699-97a2-0a33c4262211-docs-final6.out`).
+- The pinned smoke test passed using VidaiMock 0.2.11 with the CI SHA-256
+  `888d40195438491534a7a669776e06977367da62beb57feac8fa1a1f08faa93b`
+  (`/tmp/vidaimock-smoke-final-76ca8268-d606-4699-97a2-0a33c4262211.out`).
+- The workflow-matched coverage invocation on the current test tree passed
+  1,575 tests with 2 skips and 50 snapshots. Slipcover reported 90.57% line
+  coverage for `episodic,alembic` (17,009 of 18,780 lines)
+  (`/tmp/pr-coverage-run-final-pylint-jobs-76ca8268-d606-4699-97a2-0a33c4262211.out`).
+  The skips were the optional Granian and Docker smoke tests. No local PR
+  baseline cache was available, so the ratchet comparison is not claimed as
+  verified.
+
+After the two CodeRabbit fixes and the additional NaN cases for retry delay and
+timeout, the focused tests passed 84/84 on CPython 3.14.4. `make lint`,
+`make typecheck`, and `make test` passed sequentially; the full suite reported
+1,578 passed, 1 skipped, and 50 snapshots. On the first final pass,
+`make check-fmt` found the execution-plan table needed `make fmt`; after
+formatting, `make check-fmt`, the pinned-builder markdownlint target, and
+`make nixie` all passed. The lint run used 24 reported cores, resolved
+`PYLINT_JOBS` to 2, and used `--jobs=2` in all three Pylint invocations.
+Markdownlint used the already installed pinned builder because its default uv
+fetch intermittently fails through Lody. Logs are
+`/tmp/focused-tests-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-latest-review-fixes.out`,
+`/tmp/lint-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-latest-review-fixes.out`,
+`/tmp/typecheck-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-latest-review-fixes.out`,
+`/tmp/test-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-latest-review-fixes.out`,
+`/tmp/check-fmt-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-postfmt.out`,
+`/tmp/markdownlint-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-postfmt.out`,
+and
+`/tmp/nixie-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-postfmt.out`.
+
+The final pinned VidaiMock 0.2.11 smoke test passed; the fixture advertised only
+`orchestration` and rendered its template
+(`/tmp/vidaimock-smoke-final-openai-match-76ca8268-d606-4699-97a2-0a33c4262211.out`).
+The workflow-matched Slipcover command passed 1,578 tests with one skip and 50
+snapshots. It reported 90.57% line coverage (17,009/18,780) and 75.05% branch
+coverage (1,573/2,096) for `episodic,alembic`. The XML report was inspected and
+removed. The local PR ratchet baseline was unavailable
+(`/tmp/pr-coverage-final-openai-match-76ca8268-d606-4699-97a2-0a33c4262211.out`).
+
+Earlier hosted evidence on baseline commit `7439d269` is retained for history:
+CI run
+[36418797888](https://github.com/leynos/episodic/actions/runs/36418797888)
+passed, and the initial CodeRabbit review reported five findings before its
+automatic review paused after three errors and two warnings. Later, CI on
+`289d87de66e89cc4f16007ace2bdd5f528315a25` remained queued in run
+[36778508476](https://github.com/leynos/episodic/actions/runs/36778508476), and
+the CodeRabbit app check said `Review paused`. The separate
+`coderabbit review --agent` invocation exited 130 during `preparing_sandbox`
+and returned no findings
+(`/tmp/coderabbit-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint.out`).
+These older results did not establish whether the five findings were fixed;
+later exact-head CI and review evidence follows.
+
+An intermediate review on `cefaa3fae2a64590e358a2c8d8be59423f03e299` reported
+two low-severity findings: descriptive messages for bare assertions in
+`scripts/tests/test_check_vidaimock_provider_config.py`, and a note that the
+earlier PYLINT_JOBS decision had been superseded. Both were fixed in the next
+follow-up. CI run
+[36779494179](https://github.com/leynos/episodic/actions/runs/36779494179) for
+that same head remained queued through two bounded watch attempts. Its
+`lint-test` job was
+[110105696690](https://github.com/leynos/episodic/actions/runs/36779494179/job/110105696690).
+Those historical CodeRabbit and watch logs are in
+`/tmp/coderabbit-episodic-use-cpython-for-pylint-cefaa3.out` and
+`/tmp/episodic-pr339-final-actions-lci8s2E2/`.
+
+The latest code-bearing commit examined for hosted checks is
+`9644fd715a40e6328d720c0efaccb1d482d72a07` (`Complete PR review follow-up`). At
+that evidence point, the local branch, `origin/use-cpython-for-pylint`, and
+pull request 339 all reported this same SHA. The PR body was refreshed with the
+latest validation and retains the terminal `## References` link to the Lody
+session.
+
+The exact-head CI run
+[36783997490](https://github.com/leynos/episodic/actions/runs/36783997490)
+passed on `9644fd7`; its `lint-test` job
+[110120894934](https://github.com/leynos/episodic/actions/runs/36783997490/job/110120894934)
+completed all 28 steps successfully, including formatting, Markdown lint,
+lint, typecheck, VidaiMock smoke, and coverage. The fresh
+`coderabbit review --agent` invocation also completed on that SHA with zero
+findings across 30 reviewed files. Its output is
+`/tmp/coderabbit-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-9644fd7.out`.
+This completed invocation is evidence for `9644fd7`; it does not establish a
+review result for a later commit or close earlier review threads by itself.
+
+The latest code and test follow-up is commit
+`2f2b9d3a58e010e250bffd27c23cadf45050713d` on `origin/use-cpython-for-pylint`
+and pull request 339. It adds explicit `False` cases for all numeric
+configuration fields and pins acceptance of the smallest positive timeout. On
+this commit, the OpenAI configuration suite passed 53 tests and one snapshot on
+CPython 3.14.4. `make check-fmt`, `make lint`, `make typecheck`, and
+`make test` passed sequentially; the full test target reported 1,583 passed,
+one skipped, and 50 snapshots. The logs are
+`/tmp/focused-llm-config-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-managed.out`,
+`/tmp/check-fmt-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-after-config-tests.out`,
+`/tmp/lint-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-after-config-tests.out`,
+`/tmp/typecheck-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-after-config-tests.out`,
+and
+`/tmp/test-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-2f2b9d.out`.
+The lint log confirms CPython 3.14 and `--jobs=2` in all three Pylint
+invocations.
+
+Hosted CI run
+[36788025929](https://github.com/leynos/episodic/actions/runs/36788025929)
+passed on the exact PR head `2f2b9d3`; job
+[110134011134](https://github.com/leynos/episodic/actions/runs/36788025929/job/110134011134)
+completed all steps, including coverage. The synthetic merge used CPython
+3.14.7 and `--jobs=2`; its full test run reported 1,586 passed, three skipped,
+and 50 snapshots, with 90.57% line coverage. The complete job log is in
+`/tmp/actions-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-2f2b9d-uywSjF/run-36788025929-attempt-1/job-110134011134.log`.
+
+No `coderabbit review --agent` invocation was made on `2f2b9d3`. The latest
+completed invocation remains the zero-finding review on `09aee8f`; the current
+CodeRabbit PR check says `Review paused`, so that invocation is not treated as
+confirmation that all current findings are resolved. The five requested
+findings were separately verified against their live PR threads as resolved or
+outdated. CodeScene still reports `fail`, now at
+[delta result 7761818](https://codescene.io/projects/76628/delta/results/7761818).
+The detailed report for this latest result was not retrieved. The prior
+CodeScene result listed complexity and duplication findings, including
+`start_vidaimock`; these remain separate follow-up work. No suppression was
+added and production control flow was not rewritten solely to lower a
+complexity score.
+
+The five requested findings meet their stated criteria. Local gates and hosted
+CI pass at the verified code and test head. The external CodeScene failure
+remains open pending inspection and disposition of its latest report.
+
+## Rebase and provider-reader follow-up — 2026-10-09 (historical checkpoint)
+
+The branch was rebased onto `origin/main` at
+`6aa6e93074abca1b4f458ca9bce32ad2fe956a58`. The pre-rebase head was
+`b97e00477b7575ef0ba61ebb9af707763126ae44`; the replayed branch-only range
+began at `f1bdacae79426f5453f52fc87caa29cd90aa1e2f`. Conflicts were resolved
+after examining both sides: the merge retained main's newer VidaiMock `0.3.1`
+pin and smoke workflow, kept the branch's shared harness and refactors,
+retained main's `_require_payload_fields` and import/docstring improvements,
+and skipped the final regenerated `typos.toml` commit because its output
+matched the target. The semantic range comparison matched all 24 non-empty
+branch commits, and `git diff --check` passed against the target.
+
+The provider reader now delegates filesystem discovery to
+`_discover_provider_paths` and document reading/validation to
+`_read_provider_name`. The discovery helper consumes and closes the `scandir`
+iterator inside the `OSError`/`UnicodeError` boundary, selects only case-
+sensitive `.yaml` names, and preserves sorted processing and the directory
+diagnostic with the original exception chained. The reader helper preserves
+UTF-8 parsing, the `OSError`/`UnicodeError`/`yaml.YAMLError` translation,
+mapping and required-name checks, file diagnostics, exception causes, and
+`str(document["name"])` conversion. `_configured_provider_names` still owns
+empty-directory rejection and sorted output; it preserves declared names and
+duplicates. No new name validation was introduced.
+
+The provider configuration and smoke-script test modules passed together: 29
+tests passed. The parameterized invalid-file test was also run verbosely; both
+`invalid-utf8` and `malformed-yaml` cases appeared and passed. The scan
+iteration failure test verified translation, cause identity, diagnostic path,
+and iterator closure. The script was smoke-tested using the workflow-pinned
+VidaiMock `0.3.1` archive; its SHA-256 matched the workflow value and the
+orchestration provider/template exchange passed. Logs:
+`/tmp/pytest-use-cpython-for-pylint-provider-reader-final.out`,
+`/tmp/pytest-use-cpython-for-pylint-provider-reader-parameter-cases-final.out`,
+and `/tmp/vidaimock-smoke-use-cpython-for-pylint-rebased.out`.
+
+CodeScene's local `cs check` scored `scripts/check_vidaimock_isolated.py` 10.00
+with no warnings; local `cs review` returned an empty review. CodeGraph's
+complexity measurement reported `_configured_provider_names` at cyclomatic
+complexity 3, with 13 module functions averaging 3.23 and a maximum of 6. The
+local measurements show the method below the historical complexity threshold;
+no helper was added solely to lower the module mean. The hosted CodeScene delta
+was not rerun for this rebased head, so no current hosted finding clearance is
+claimed.
+
+All six repository gates passed sequentially on the final source tree before
+its code commit `23c09aab9b6735f1efb8d88f93340ca80ca39704`: `make check-fmt`,
+`make lint`, `make typecheck`, `make test` (1,609 passed, 3 skipped, 50
+snapshots), `make markdownlint`, and `make nixie`. Lint used CPython 3.14 and
+`--jobs=2` for all three Pylint passes. Logs are recorded in the preceding gate
+section. The shared-action PR coverage invocation was reproduced with Slipcover
+on CPython 3.14.4 using the workflow's serial `episodic,alembic` scope: 1,608
+passed, 4 skipped, and 50 snapshots. The Cobertura report was inspected: 17,172
+of 18,953 lines (90.60%) and 75.04% branch coverage. Logs are
+`/tmp/pr-coverage-sync-use-cpython-for-pylint.out`,
+`/tmp/pr-coverage-tools-use-cpython-for-pylint.out`, and
+`/tmp/pr-coverage-use-cpython-for-pylint.out`; the XML report is
+`/tmp/pr-coverage-use-cpython-for-pylint.xml`. No local ratchet baseline was
+available. The hosted CI coverage step compared against a 90.85% baseline with
+a ±1.00 percentage-point tolerance and passed.
+
+The provider-reader code and tests are committed locally in
+`23c09aab9b6735f1efb8d88f93340ca80ca39704`
+(`Split VidaiMock provider configuration checks`). At the time this section was
+written, the remote PR still pointed to the pre-rebase head. Publication and
+exact-head hosted CI and review checks therefore remain outstanding; the older
+hosted runs above are not evidence for this rebased commit. The current
+contract requires those results to be recorded against their observed commit,
+and any unavailable or paused review remains an explicit limitation.
+
+Revision note: reconciled rebase conflicts and provider-reader findings with
+the current source, recorded focused and full local validation plus measured
+complexity, and separated pending publication checks from historical hosted
+results.
+
+## Published candidate evidence — 2026-10-09 (historical checkpoint)
+
+The source commit and plan reconciliation commit were pushed to PR #339 with
+`--force-with-lease` against the observed remote feature head
+`b97e00477b7575ef0ba61ebb9af707763126ae44`. At publication, local `HEAD`,
+`origin/use-cpython-for-pylint`, and the pull request head are
+`b5fa74988aa96aec9ec3909162c4384b87e10bdb`; PR #339 remains open and targets
+`main`, whose observed SHA is `6aa6e93074abca1b4f458ca9bce32ad2fe956a58`.
+
+Hosted CI run
+[37922457194](https://github.com/leynos/episodic/actions/runs/37922457194)
+completed successfully on `b5fa74988aa96aec9ec3909162c4384b87e10bdb`. Its
+`lint-test` job and all 32 steps passed formatting, Markdown lint, lint,
+duplication tests, spelling, typecheck, VidaiMock availability and smoke
+checks, and coverage. Hosted coverage was 90.60% against a 90.85% previous
+baseline; the ±1.00 percentage-point ratchet passed. The local
+action-equivalent run and inspected Cobertura report are recorded above.
+
+Hosted CodeScene result
+[7880590](https://codescene.io/projects/76628/delta/results/7880590) completed
+with five quality gates passed and one advisory Code Duplication failure. Its
+finding is in `episodic/llm/openai_api/utils_config.py`, where it reports
+similar structure in `_is_non_negative_number`, `_is_positive_number`, and
+`_is_valid_chars_per_token`. The previously reported duplication in
+`scripts/tests/test_check_vidaimock_provider_config.py` is absent from this
+current report. Local `cs check` scored both changed files 10.00 and local
+`cs review` returned no findings; the local test-file `cs delta` emitted no
+finding. These local results do not replace the hosted report. The numeric
+validator advisory remains open as a separate finding; no suppression was
+added. CodeGraph measured `_configured_provider_names` at complexity 3 and the
+13-function module mean at 3.23 (maximum 6), so no current complex-method
+finding is reported for that method.
+
+The CodeRabbit status context is `SUCCESS`, but no CodeRabbit review entry was
+submitted on this head. The managed queue already contains review request
+`3be21dc8` for `leynos/episodic#339`; it remains pending, so no duplicate was
+enqueued. The latest completed `coderabbit review --agent` invocation is still
+the zero-finding review on `09aee8f`, which is not evidence for this rebased
+candidate. The review outcome on the current head is therefore pending.
+
+Revision note: recorded the force-with-lease publication, successful exact-head
+CI, current hosted CodeScene advisory, local complexity results, and the
+existing queued review without treating its status as completed evidence.
+
+## Review convergence — 2026-10-10 (historical repair checkpoint)
+
+At the start of this follow-up, PR #339 targeted `main` at
+`6aa6e93074abca1b4f458ca9bce32ad2fe956a58` and its published head was
+`1bb8e2ee6fe871b1b8651bd8d8fe2ac4e165d622`. The PR was open and ready, hosted
+CI run
+[37923655581](https://github.com/leynos/episodic/actions/runs/37923655581) and
+Gecko Security passed, but the CodeScene check failed and GitHub's review
+decision remained `CHANGES_REQUESTED`.
+
+The latest CodeRabbit pre-merge report was in
+[issue comment 5760687503](https://github.com/leynos/episodic/pull/339#issuecomment-5760687503).
+It retained a Testing (Overall) error because successful retry cases did not
+assert cleanup of earlier failed children, and a Developer Documentation
+warning because the top-level decision still described `0.2.11` as the current
+pin and did not name the latest reviewed head. CodeRabbit's current-head review
+also reported that `main()` let a child-launch `OSError` escape. The current
+CodeScene finding was Code Duplication in the three numeric lower-bound
+validators at
+[result 7880758](https://codescene.io/projects/76628/delta/results/7880758).
+
+The working-tree repairs now share the finite numeric lower-bound predicate,
+translate launch `OSError` through the existing `FAIL:` diagnostic, assert
+cleanup of each failed child and capture before a successful retry, and mark the
+`0.2.11` decision as historical with the verified `0.3.1` digest as the
+current pin. The focused configuration, smoke-test, and lifecycle-model suite
+passed 74 tests on CPython 3.14.7. CodeScene CLI 1.0.52 reports
+`utils_config.py` at 10.00 and marks the duplicate finding fixed in the
+uncommitted delta.
+
+The five-file repair candidate at working-diff SHA-256
+`5971144b55b6a2791ce145c24edd2793777b44db7a69f7f87058996d47b771f7` passed
+`make check-fmt`, `make lint`, `make typecheck`, `make test`,
+`make markdownlint`, and `make nixie` sequentially. The full test suite ran on
+CPython 3.14.7: 1,610 passed, 3 skipped, and 50 snapshots. All three Pylint
+invocations ran under CPython 3.14 with `--jobs=2` and rated 10.00/10. Logs
+were captured under
+`/tmp/*-76ca8268-d606-4699-97a2-0a33c4262211-use-cpython-for-pylint-rerun-2.out`.
+
+At the time this validation record was written, the changes were uncommitted
+and unpublished. The docs-only amendment subsequently passed `make fmt`,
+`make check-fmt`, `make markdownlint`, and `make nixie` on diff hash
+`dddbe1a302d1d1e8a6af5f157da606ca9806ed3c4887901ec6404a2fe5524e40`.
+
+## Published repair candidate — 2026-10-10 (historical validation checkpoint)
+
+The repair was committed as
+[`faa11a6b9b632cac414ecd534040aa40a82e918a`](https://github.com/leynos/episodic/commit/faa11a6b9b632cac414ecd534040aa40a82e918a),
+whose parent is the previous published head
+`1bb8e2ee6fe871b1b8651bd8d8fe2ac4e165d622`. The PR targets `main` at
+`6aa6e93074abca1b4f458ca9bce32ad2fe956a58`; remote branch parity was verified
+after the push.
+
+CI run
+[38014771018, attempt 1](https://github.com/leynos/episodic/actions/runs/38014771018/attempts/1)
+tested the published repair commit. Its `lint-test` job passed all 32 steps in
+5m56s: 1,610 tests passed, 3 were skipped, 50 snapshots passed, and coverage
+was 90.60% against a 90.85% baseline, within the ±1.00 percentage-point
+ratchet. The full job log is retained at
+`/tmp/episodic-pr339-actions-AgdpCg/run-38014771018-attempt-1/job-114102500030.log`.
+The exact-head CodeScene result
+[7890904](https://codescene.io/projects/76628/delta/results/7890904) and Gecko
+Security check passed. The automerge, Kody, and Sourcery checks were skipped.
+
+CodeRabbit's outer status context says “Review paused”; it is not a review or
+approval. The latest submitted CodeRabbit review is still `CHANGES_REQUESTED`
+on the superseded head `1bb8e2ee6fe871b1b8651bd8d8fe2ac4e165d622`. Its
+walkthrough comment still reports the Testing (Overall) error and Developer
+Documentation warning from that head. A new review request, `699259f0`, is
+queued with the managed review service; it has not completed. The old inline
+launch-error thread is marked resolved by GitHub, but no disposition reply has
+been posted. The current review decision remains `CHANGES_REQUESTED`.
+
+The initial ExecPlan completeness/correctness assessment has not yet been
+requested, and no formal proof assessment applies: the lifecycle coverage is a
+Hypothesis model test, not a formal proof. Review confirmation, the plan
+assessment, an approval, and merge remain outstanding. No merge eligibility is
+claimed.
+
+## Inspected baseline disposition — 2026-10-10 (historical checkpoint)
+
+The inspected PR head was `d5fb1605278e1fcfeb4b2ffd887a94d46e28cdd5`; the
+latest implementation commit at that baseline was
+[`faa11a6b9b632cac414ecd534040aa40a82e918a`](https://github.com/leynos/episodic/commit/faa11a6b9b632cac414ecd534040aa82e918a).
+The intervening `d5fb160` commit changed only this plan. The PR targeted
+`main` at `6aa6e93074abca1b4f458ca9bce32ad2fe956a58`.
+
+The successful
+[CI run 38015518656](https://github.com/leynos/episodic/actions/runs/38015518656)
+tested the inspected PR head. It reported 1,610 passed, 3 skipped, and 31
+warnings. All three Pylint invocations ran on CPython 3.14 with `--jobs=2` and
+each reported 10.00/10. Coverage was 90.60% against a 90.85% baseline, within
+the configured ±1.00 percentage-point ratchet. The current CI workflows pin
+VidaiMock `0.3.1` with SHA-256
+`d228cb27be8835d0e6f538f1cde5c7fcc1675223b7f7c0cb05218df1954d72c5`.
+
+The exact-head
+[CodeScene result 7891020](https://codescene.io/projects/76628/delta/results/7891020)
+passed. This result and the successful CI do not establish CodeRabbit review
+completion or approval.
+
+At this checkpoint, GitHub reported `CHANGES_REQUESTED`. CodeRabbit review
+5478519036 was submitted against `d5fb160` and requested changes; its pre-merge
+report still showed one Testing (Overall) error and one Developer Documentation
+warning. CodeScene submitted an `APPROVED` review on `d5fb160`, but that did
+not change GitHub's aggregate `CHANGES_REQUESTED` decision. No human approval
+was present in the inspected review history. The CodeRabbit report's successful
+CI and CodeScene evidence must remain separate from its unresolved pre-merge
+findings and approval state.
+
+## Latest verified disposition (2026-10-10)
+
+This checkpoint records validation of PR head
+`d0eb836f903dfde30fc8ca42e032ec561e4f97c2` against base
+`e43240306dec55437547c8f43cf0c6a5ed040fd2`, before this documentation
+follow-up. The latest behaviour-changing implementation commit is
+[`780ddfbf8b4222e8cf2a25405ecd6af75e7e83a2`](https://github.com/leynos/episodic/commit/780ddfbf8b4222e8cf2a25405ecd6af75e7e83a2);
+`faa11a6b9b632cac414ecd534040aa40a82e918a` belongs to the prior pre-rebase
+history and is not an ancestor of this branch. The production `PYLINT_JOBS`
+assignment was introduced in
+[`90ad0ed5e3ef2c4a75d1e22502bc11281de36cce`](https://github.com/leynos/episodic/commit/90ad0ed5e3ef2c4a75d1e22502bc11281de36cce).
+The current workflows pin VidaiMock `0.3.1` with the verified digest recorded
+above. The original VidaiMock `0.1.3` mismatch remains explicitly documented as
+a historical problem statement.
+
+The focused contract suite, run as
+`uv run pytest -vv tests/test_pylint_tier_contract.py`, passed all 17 tests
+with 1 warning. The worker-selection cases were `cores-1-floor-2`,
+`cores-2-floor-2`, `cores-19-floor-2`, `cores-20-floor-2`, `cores-29-floor-2`,
+`cores-30-tenth-3`, `cores-39-tenth-3`, `cores-40-tenth-4`, and
+`cores-128-tenth-12`. Fallback cases were `nproc-exits-unsuccessfully` and
+`nproc-missing-from-isolated-path`; override cases were `environment-override`,
+`command-line-override`, and `command-line-over-environment`. Existing
+interpreter, release, and syntax-error contracts also passed.
+
+All local gates passed on this candidate: `make check-fmt`, `make lint`,
+`make typecheck`, `make test`, `make markdownlint`, and `make nixie`. The full
+test gate first encountered a PGlite fixture timeout. The affected test passed
+in a standalone run, and the unchanged full-suite rerun passed with 1,722
+tests, 3 skipped, and 30 warnings. The timeout and successful reruns are both
+recorded; the first failure is not discarded.
+
+Hosted CI run
+[38058879899](https://github.com/leynos/episodic/actions/runs/38058879899),
+attempt 1, completed successfully on this candidate. The formatting, Markdown,
+lint, duplication, spelling, typecheck, VidaiMock smoke, coverage-generation,
+and cleanup steps passed. CodeScene result
+[7894857](https://codescene.io/projects/76628/delta/results/7894857) passed,
+and Gecko passed.
+
+Review and approval remain separate from those checks. The CodeRabbit check
+reported “Review paused”; review 5478519036 remains a change request against
+the superseded `d5fb160` head. No human approval was present in the inspected
+review history, and GitHub reported the PR merge state as `BLOCKED`. The
+successful local gates, hosted CI, CodeScene result, and Gecko result do not
+establish a completed current-head CodeRabbit review, approval, or merge
+eligibility. The resulting SHA for this documentation follow-up is
+intentionally not stated here.

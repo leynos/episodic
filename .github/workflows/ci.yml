@@ -110,6 +110,8 @@ jobs:
           for tool in mbake ty ruff; do uv tool install "${tool}"; done
 
       - name: Install VidaiMock
+        # The behavioural fixtures require `--isolated`, added in 0.2.8.
+        # Keep this pin aligned with coverage-main.yml.
         env:
           VIDAIMOCK_VERSION: "0.3.1"
           VIDAIMOCK_SHA256: "d228cb27be8835d0e6f538f1cde5c7fcc1675223b7f7c0cb05218df1954d72c5"
@@ -172,6 +174,16 @@ jobs:
             echo "ERROR: vidaimock binary not found in PATH"
             exit 1
           fi
+
+      # Smoke-test the binary the suites above will use against this
+      # repository's own fixture provider. It runs the installed binary with
+      # `--config-dir` and `--isolated`, and asserts that only the configured
+      # provider is served. A pin that loses `--isolated` fails here in one
+      # place instead of failing every live-server scenario in the coverage
+      # run below. The script drives a server and asserts on it; it is not a
+      # suite runner, so it belongs outside the coverage step.
+      - name: Smoke-test vidaimock isolation
+        run: uv run --group dev python scripts/check_vidaimock_isolated.py
 
       # This job runs the suite only as the pull-request coverage step below.
       # On a push to main, coverage-main.yml runs the same suite under coverage
