@@ -232,12 +232,13 @@ Stop and escalate when any of these is reached.
   nothing. Impact: the console-script table is currently dead. `EP-M5` replaces
   it with the real `episodic` entry point.
 - Observation: the LangGraph structured-planning graph
-  (`episodic/orchestration/langgraph.py`, nodes `plan`, `execute`, `finish`)
-  and the no-QA generation-run launcher (`episodic/generation/launcher.py`) are
-  two parallel subsystems that do not call each other, and neither invokes the
-  QA evaluator graphs in `episodic/qa/`. Evidence:
-  `InProcessGenerationRunLauncher` contains no import of
-  `episodic.orchestration`; no node named `qa`/`evaluate` exists in
+  (built in `episodic/orchestration/_graph_builder.py` behind the
+  `episodic/orchestration/langgraph.py` façade; nodes `plan`, `execute`,
+  `finish`) and the no-QA generation-run launcher
+  (`episodic/generation/launcher.py`) are two parallel subsystems that do not
+  call each other, and neither invokes the QA evaluator graphs in
+  `episodic/qa/`. Evidence: `InProcessGenerationRunLauncher` contains no import
+  of `episodic.orchestration`; no node named `qa`/`evaluate` exists in
   `episodic/orchestration/_graph_state.py` or `langgraph.py`. Impact: confirms
   that recording must be an explicitly invoked application service in this
   roadmap item, not a graph-node side effect.
@@ -484,9 +485,11 @@ Canonical persistence lives in `episodic/canonical/`:
   `episodic/canonical/unit_of_work_protocols.py`.
 - Alembic migrations are handwritten under `alembic/versions/`, named
   `YYYYMMDD_NNNNNN_<slug>.py` with `revision` equal to the filename prefix. The
-  current head is `20260624_000012` (`add_ingestion_job_owner.py`). Order is
-  defined by `down_revision`, not by the date in the filename — two existing
-  revisions share the suffix `000009` and run backwards by date.
+  current head is `20261010_000013` (`name_pricing_snapshot_constraint.py`). Run
+  `uv run alembic heads` before writing the new revision, because another
+  branch may land a migration first. Order is defined by `down_revision`, not
+  by the date in the filename — two existing revisions share the suffix
+  `000009` and run backwards by date.
 - `episodic/canonical/generation_persistence.py` holds both conventions:
   `persist_draft_script` deliberately neither commits nor rolls back because
   its caller owns the transaction, while its sibling
@@ -528,9 +531,10 @@ Three facts about the gates are easy to discover the hard way:
   (`SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py`) with
   `[tool.skylos.gate] strict = true`. A symbol called only from `tests/` counts
   as dead.
-- `make typecheck` runs the pinned `ty` (0.0.78 at the last rebase) only.
-  `pyright` is an unused development dependency, so do not rely on
-  `pyright`-specific behaviour.
+- `make typecheck` runs only `ty`, through `uv tool run ty==0.0.32` as pinned
+  in the `Makefile` — not the newer `ty` development dependency that
+  `uv run ty` resolves. `pyright` is an unused development dependency, so do
+  not rely on `pyright`-specific behaviour.
 
 ### Skills and documents to load before starting
 
@@ -1205,8 +1209,9 @@ fenced blocks.
     `__aenter__` and document it in the class docstring's `Attributes`.
   - `episodic/canonical/unit_of_work_protocols.py` — declare
     `qa_artefacts: QaArtefactRepository`.
-  - `alembic/versions/20260823_000013_add_qa_artefact_tables.py` — handwritten
-    migration with `down_revision = "20260624_000012"`.
+  - `alembic/versions/20261015_000014_add_qa_artefact_tables.py` — handwritten
+    migration with `down_revision = "20261010_000013"`. Re-date the filename
+    and `revision` to the day it is written, and re-check `alembic heads`.
 - Acceptance evidence: `uv run pytest tests/canonical_storage -q` passes and
   `make check-migrations` exits 0. `EV-M2-storage`.
 - Conformance check: the ORM models must match the migration, or
@@ -1937,7 +1942,7 @@ a string so `syrupy` can snapshot them without a process boundary; only
 
 Plan the splits before writing. Estimates are calibrated against the modules
 each one mirrors: `episodic/canonical/storage/generation_runs.py` is 358 lines,
-`generation_run_models.py` 155, `generation_persistence.py` 349,
+`generation_run_models.py` 155, `generation_persistence.py` 352,
 `alembic/versions/20260624_000010_add_generation_run_tables.py` 194.
 
 | Module                                                       | Estimate      | Split if it grows                                                                                                            |
@@ -1948,7 +1953,7 @@ each one mirrors: `episodic/canonical/storage/generation_runs.py` is 358 lines,
 | `episodic/canonical/storage/qa_artefact_mappers.py`          | 90–130        | none expected                                                                                                                |
 | `episodic/canonical/storage/qa_artefact_storage_runtime.py`  | 50–60         | none expected                                                                                                                |
 | `episodic/canonical/storage/qa_artefacts.py`                 | 350–450       | split reads into `qa_artefact_queries.py` (get, list, `_evaluation_filters`, count), leaving the savepoint write path behind |
-| `alembic/versions/20260823_000013_add_qa_artefact_tables.py` | 180–230       | none expected                                                                                                                |
+| `alembic/versions/20261015_000014_add_qa_artefact_tables.py` | 180–230       | none expected                                                                                                                |
 | `episodic/canonical/qa_artefact_recording.py`                | 250–320       | split per evaluator once Bromide or Anthem land                                                                              |
 | `episodic/canonical/qa_artefact_service.py`                  | 150–200       | none expected                                                                                                                |
 | `episodic/api/resources/qa_artefacts.py`                     | 200–280       | see below                                                                                                                    |
@@ -2309,3 +2314,22 @@ is consistent with `EP-M0`'s first-matching-group guard, so `EP-M0` needs no
 change. Note too that `main` now runs a `nose` code-duplication gate and the
 `typos-config-builder` spelling gate inside `make lint` and
 `make markdownlint`; both apply to the files this plan creates.
+
+Revision 5, 2026-10-15. No design change. Rebased onto `main` at `baa4d21a`.
+`main` landed migration `20261010_000013_name_pricing_snapshot_constraint.py`,
+which took the revision number this plan had reserved, so the QA artefact
+migration becomes `000014` with `down_revision = "20261010_000013"`. The
+planning graph's nodes moved to `episodic/orchestration/_graph_builder.py`.
+`main` also added four Hecate groups for orchestration code
+(`orchestration_checkpoint`, `orchestration_nodes`, `orchestration`, and
+`orchestration_tasks`). They list leaf modules before the broad
+`episodic.orchestration` prefix, so the shadowing guard `EP-M0` adds still
+passes against the current configuration, and none of the `episodic.qa`,
+`episodic.observability`, or `episodic.cli` modules has been grouped, so
+`EP-M0`'s group edits stand unchanged. Importing `episodic.qa.pedante.types`
+still loads `langgraph` and `httpx`, so `EP-M0`'s barrel change is still
+required.
+
+Revision 4's claim that `ty` is pinned at 0.0.78 was wrong: 0.0.78 is the
+development dependency, but `make typecheck` runs the `Makefile`'s own
+`ty==0.0.32` pin, and the gate facts now say so.
