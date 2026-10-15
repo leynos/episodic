@@ -2133,6 +2133,22 @@ Error contract:
 - `409 Conflict` for optimistic-lock mismatches and duplicate revision/binding
   writes that violate persistence constraints.
 
+### API logging
+
+Only unmapped domain exceptions that the API error mappers convert to HTTP 500
+are logged. The mappers use `episodic.logging.log_error` at `ERROR` with
+`exc_info=True`. The profile-template mapper includes the exception type, code,
+and entity ID; the reference mapper includes its context and exception type;
+the source-intake mapper includes only the exception type. These diagnostics do
+not include credential material. Mapped 400, 404, and 409 outcomes are expected
+results and are not logged by the mappers. REST resource modules add no
+per-handler logs.
+
+Request-level logging and correlation are a separate boundary. Roadmap item
+4.1.3 plans to add request correlation across HTTP, tasks, and outbound
+provider calls; until that work is implemented, shared request identifiers for
+denial, error, and resource logs are not guaranteed.
+
 ADR 009 and `docs/episodic-tui-api-design.md` remain the source of truth for
 tokens, idempotency keys, retry headers, and full role-based access control.
 

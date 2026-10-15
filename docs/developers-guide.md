@@ -1401,6 +1401,20 @@ Implementation notes:
   errors through `episodic/api/errors.py`, so callers receive the shared REST
   error envelope instead of Falcon's default `{title, description}` body.
 
+### API error and request logging
+
+The API error mappers log only unmapped domain exceptions that become HTTP 500
+responses. They use the `episodic.logging` port at `ERROR` with
+`exc_info=True`. The profile-template mapper records the exception type, code,
+and entity ID; the reference mapper records its context and exception type; and
+the source-intake mapper records only the exception type. None logs credential
+material. Expected mapped 400, 404, and 409 outcomes are not logged by the
+mappers, and resource modules add no per-handler logs. Request-level logging
+and correlation remain planned in roadmap item 4.1.3 and are not yet
+guaranteed. See the
+[API logging](episodic-podcast-generation-system-design.md#api-logging) section
+of the system design for the request-correlation boundary.
+
 ### Internal service-module decomposition
 
 Canonical service modules that exceeded the 400-line limit have been split into
