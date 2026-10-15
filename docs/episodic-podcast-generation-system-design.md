@@ -2140,7 +2140,10 @@ are logged. The mappers use `episodic.logging.log_error` at `ERROR` with
 `exc_info=True`. The profile-template mapper includes the exception type, code,
 and entity ID; the reference mapper includes its context and exception type;
 the source-intake mapper includes only the exception type. These diagnostics do
-not include credential material. Mapped 400, 404, and 409 outcomes are expected
+not include credential material: traceback frames are retained through a
+redacted exception value, while the original exception message and chained
+causes are omitted. Unmapped HTTP 500 envelopes use a generic message instead
+of returning exception text. Mapped 400, 404, and 409 outcomes are expected
 results and are not logged by the mappers. REST resource modules add no
 per-handler logs.
 

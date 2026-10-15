@@ -14,6 +14,7 @@ import uuid
 
 import falcon
 import pytest
+from falcon import testing as falcon_testing
 
 from episodic.api import errors as api_errors
 from episodic.api.handlers import handle_get_entity
@@ -27,6 +28,8 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 _TEST_LOGGER_NAME = "test.episodic.api.errors"
+_TEST_CREDENTIAL = "test-only-secret-marker"
+_TEST_CAUSE_CREDENTIAL = "test-only-cause-secret-marker"
 
 
 @dc.dataclass(slots=True)
@@ -64,34 +67,58 @@ class _UnexpectedSourceIntakeError(SourceIntakeError):
     """Represent a source-intake error without a dedicated HTTP mapping."""
 
 
-class _HasEnvelopeCode(typ.Protocol):
+class _HasEnvelopeMetadata(typ.Protocol):
     """Describe the dynamic envelope metadata added to Falcon errors."""
 
     envelope_code: str
+    envelope_details: dict[str, object]
 
 
 def _envelope_code(error: falcon.HTTPError) -> str:
     """Return the dynamic error-envelope code attached by ``http_error``."""
-    return typ.cast("_HasEnvelopeCode", error).envelope_code
+    return typ.cast("_HasEnvelopeMetadata", error).envelope_code
+
+
+def _envelope_details(error: falcon.HTTPError) -> dict[str, object]:
+    """Return the dynamic error-envelope details attached by ``http_error``."""
+    return typ.cast("_HasEnvelopeMetadata", error).envelope_details
+
+
+def _raise_with_credential_cause(exc: Exception) -> typ.NoReturn:
+    """Raise a mapper exception with a credential-like chained cause."""
+    raise exc from RuntimeError(_TEST_CAUSE_CREDENTIAL)
 
 
 def _assert_traceback_was_logged(
     caplog: pytest.LogCaptureFixture,
     exc: Exception,
 ) -> None:
-    """Verify the emitted Python log record contains the active exception."""
+    """Verify traceback frames are retained without exception text or chains."""
     records = [record for record in caplog.records if record.name == _TEST_LOGGER_NAME]
     assert len(records) == 1, "each unmapped error must emit one log record"
     record = records[0]
     assert record.exc_info is not None, "error log must include exception information"
-    assert record.exc_info[1] is exc, "error log must capture the mapped exception"
-    assert record.exc_info[2] is not None, "error log must include a traceback"
     formatted_traceback = "".join(traceback.format_exception(*record.exc_info))
-    assert type(exc).__name__ in formatted_traceback, (
-        "logged traceback must identify the exception type"
+    logged_content = record.getMessage() + formatted_traceback
+    assert _TEST_CREDENTIAL not in logged_content, (
+        "logs must not include credential-like exception text"
     )
-    assert str(exc) in formatted_traceback, (
-        "logged traceback must include the exception message"
+    assert _TEST_CAUSE_CREDENTIAL not in logged_content, (
+        "logs must not include credential-like chained exception text"
+    )
+    logged_exception = record.exc_info[1]
+    assert logged_exception is not None, "error log must include an exception value"
+    assert logged_exception is not exc, "logs must not retain the source exception"
+    assert logged_exception.__cause__ is None, "logs must omit chained causes"
+    assert logged_exception.__context__ is None, (
+        "logs must omit implicit exception chains"
+    )
+    assert record.exc_info[2] is not None, "error log must include a traceback"
+    assert type(exc).__name__ in record.getMessage(), (
+        "the safe log message must identify the source exception type"
+    )
+    assert "Original exception message redacted." in formatted_traceback, (
+        "the traceback must identify that exception text was redacted"
     )
 
 
@@ -139,7 +166,7 @@ def spy_logger(monkeypatch: pytest.MonkeyPatch) -> _SpyLogger:
         pytest.param(
             _UnmappedMapperCase(
                 _UnexpectedProfileTemplateError(
-                    "Unexpected profile/template failure.",
+                    "Unexpected profile/template failure: " + _TEST_CREDENTIAL,
                     code="internal_error",
                     entity_id="template-7",
                 ),
@@ -156,7 +183,9 @@ def spy_logger(monkeypatch: pytest.MonkeyPatch) -> _SpyLogger:
         ),
         pytest.param(
             _UnmappedMapperCase(
-                _UnexpectedReferenceDocumentError("Unexpected reference failure."),
+                _UnexpectedReferenceDocumentError(
+                    "Unexpected reference failure: " + _TEST_CREDENTIAL
+                ),
                 lambda exc: api_errors.map_reference_error(
                     typ.cast("ReferenceDocumentError", exc),
                     context="reference-document",
@@ -170,7 +199,9 @@ def spy_logger(monkeypatch: pytest.MonkeyPatch) -> _SpyLogger:
         ),
         pytest.param(
             _UnmappedMapperCase(
-                _UnexpectedSourceIntakeError("Unexpected source-intake failure."),
+                _UnexpectedSourceIntakeError(
+                    "Unexpected source-intake failure: " + _TEST_CREDENTIAL
+                ),
                 lambda exc: api_errors.map_source_intake_error(
                     typ.cast("SourceIntakeError", exc)
                 ),
@@ -188,7 +219,7 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     """Each unmapped mapper preserves its envelope and logs the traceback."""
 
     def raise_case_exception() -> None:
-        raise case.exception
+        _raise_with_credential_cause(case.exception)
 
     with caplog.at_level(logging.ERROR, logger=_TEST_LOGGER_NAME):
         try:
@@ -216,6 +247,40 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     _assert_traceback_was_logged(caplog, case.exception)
 
 
+def test_unmapped_profile_error_response_redacts_exception_text(
+    spy_logger: _SpyLogger,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unmapped profile error must not expose its message to clients."""
+    exc = _UnexpectedProfileTemplateError(
+        "Unexpected profile/template failure: " + _TEST_CREDENTIAL,
+        code="internal_error",
+    )
+
+    with caplog.at_level(logging.ERROR, logger=_TEST_LOGGER_NAME):
+        try:
+            raise exc
+        except ProfileTemplateError as raised:
+            mapped_error = api_errors.map_profile_template_error(raised)
+
+    response = falcon.Response()
+    api_errors.serialize_http_error(
+        falcon_testing.create_req(),
+        response,
+        mapped_error,
+    )
+
+    assert response.media == {
+        "code": "internal_error",
+        "message": "Unexpected profile/template error.",
+        "details": {},
+    }, "unmapped profile errors must use a generic client response"
+    assert _TEST_CREDENTIAL not in str(response.media), (
+        "serialized responses must not expose credential-like exception text"
+    )
+    assert len(spy_logger.calls) == 1, "unmapped errors must log once"
+
+
 def test_shared_profile_handler_maps_unmapped_service_error(
     spy_logger: _SpyLogger,
     caplog: pytest.LogCaptureFixture,
@@ -223,9 +288,8 @@ def test_shared_profile_handler_maps_unmapped_service_error(
     """Unmapped service errors reach the shared mapper with a traceback."""
     entity_id = uuid.uuid4()
     exc = _UnexpectedProfileTemplateError(
-        "Unexpected profile/template service failure.",
+        "Unexpected profile/template service failure: " + _TEST_CREDENTIAL,
         code="internal_error",
-        entity_id=str(entity_id),
     )
 
     async def fail_service(
@@ -256,6 +320,9 @@ def test_shared_profile_handler_maps_unmapped_service_error(
 
     assert _envelope_code(mapped_error.value) == "internal_error", (
         "unmapped profile service errors must use the internal-error envelope"
+    )
+    assert _envelope_details(mapped_error.value) == {"entity_id": str(entity_id)}, (
+        "the shared handler must preserve its resolved entity ID in the envelope"
     )
     assert spy_logger.calls == [
         (
