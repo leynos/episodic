@@ -21,9 +21,9 @@ import typing as typ
 import falcon
 
 from episodic.canonical.profile_templates import (
-    EntityNotFoundError,
     RevisionConflictError,
 )
+from episodic.canonical.profile_templates.types import ProfileTemplateError
 
 from .errors import map_profile_template_error, validation_error
 from .helpers import parse_uuid
@@ -77,6 +77,8 @@ async def handle_get_entity[EntityT](  # ruff: ignore[too-many-arguments, too-ma
         If ``entity_id`` is not a valid UUID.
     falcon.HTTPNotFound
         If the requested entity does not exist.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     try:
@@ -85,9 +87,9 @@ async def handle_get_entity[EntityT](  # ruff: ignore[too-many-arguments, too-ma
                 uow,
                 entity_id=parsed_entity_id,
             )
-    except EntityNotFoundError as exc:
-        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)
-        raise not_found from exc
+    except ProfileTemplateError as exc:
+        mapped_error = map_profile_template_error(exc, entity_id=parsed_entity_id)
+        raise mapped_error from exc
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 
@@ -132,6 +134,8 @@ async def handle_get_history[EntityT](
         If the parent entity identifier is not a valid UUID.
     falcon.HTTPNotFound
         If the requested parent entity does not exist.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
     try:
@@ -141,9 +145,9 @@ async def handle_get_history[EntityT](
                 parent_id=parsed_entity_id,
                 page=request.page,
             )
-    except EntityNotFoundError as exc:
-        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)
-        raise not_found from exc
+    except ProfileTemplateError as exc:
+        mapped_error = map_profile_template_error(exc, entity_id=parsed_entity_id)
+        raise mapped_error from exc
     return (
         {
             "items": [request.serializer_fn(item) for item in items],
@@ -166,7 +170,7 @@ def _require_payload_fields(
 
 
 def _raise_mapped_update_error(
-    exc: EntityNotFoundError | RevisionConflictError,
+    exc: ProfileTemplateError,
     *,
     entity_id: uuid.UUID,
     expected_revision: int | None,
@@ -184,6 +188,8 @@ def _raise_mapped_update_error(
         If the target entity does not exist.
     falcon.HTTPConflict
         If the expected revision does not match the persisted revision.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # The mapper returns these concrete Falcon exceptions.
     raise map_profile_template_error(
         exc,
@@ -247,6 +253,8 @@ async def handle_update_entity[EntityT](  # ruff: ignore[too-many-arguments, too
         If the target entity does not exist.
     falcon.HTTPConflict
         If the expected revision does not match the persisted revision.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     _require_payload_fields(payload, required_fields)
@@ -254,7 +262,7 @@ async def handle_update_entity[EntityT](  # ruff: ignore[too-many-arguments, too
     try:
         async with uow_factory() as uow:
             entity, revision = await service_fn(uow, request=update_request)
-    except (EntityNotFoundError, RevisionConflictError) as exc:
+    except ProfileTemplateError as exc:
         _raise_mapped_update_error(
             exc,
             entity_id=parsed_entity_id,
@@ -303,6 +311,8 @@ async def handle_create_entity[EntityT](  # ruff: ignore[too-many-arguments]  # 
         If a required field is missing or the create payload is invalid.
     falcon.HTTPNotFound
         If a referenced entity required for creation does not exist.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     _require_payload_fields(payload, required_fields)
 
@@ -310,8 +320,8 @@ async def handle_create_entity[EntityT](  # ruff: ignore[too-many-arguments]  # 
     try:
         async with uow_factory() as uow:
             entity, revision = await service_fn(uow, **service_kwargs)
-    except (EntityNotFoundError, LookupError) as exc:
-        if isinstance(exc, EntityNotFoundError):
-            raise map_profile_template_error(exc) from exc
+    except ProfileTemplateError as exc:
+        raise map_profile_template_error(exc) from exc
+    except LookupError as exc:
         raise falcon.HTTPNotFound(description=str(exc)) from exc
     return serializer_fn(entity, revision), falcon.HTTP_201
