@@ -1,13 +1,12 @@
-"""Error-envelope helpers for Falcon resource adapters.
+"""Map domain exceptions to stable Falcon error envelopes.
 
-This module provides the stable JSON error envelope used by the canonical REST
-API: ``{"code": "...", "message": "...", "details": {...}}``. Resource
-adapters use these helpers to map domain exceptions to Falcon HTTP errors and
-attach envelope metadata before Falcon serialises the response.
+The canonical REST API envelope is
+``{"code": "...", "message": "...", "details": {...}}``.
 
-Only unmapped exceptions that become HTTP ``500`` responses are logged here.
-Mapped ``400``, ``404``, and ``409`` outcomes are expected results and are
-deferred to request-level logging.
+Only unmapped exceptions becoming HTTP ``500`` responses are logged. Expected
+mapped ``400``, ``404``, and ``409`` outcomes are deferred to request-level
+logging. Tracebacks retain stack frames but replace the exception value and
+omit chained causes to avoid exposing credentials in exception messages.
 
 """
 
@@ -15,6 +14,7 @@ import collections.abc as cabc
 import dataclasses as dc
 import http
 import typing as typ
+from functools import partial
 
 import falcon
 
@@ -39,6 +39,8 @@ from episodic.canonical.source_intake_service import (
     UploadSizeMismatchError,
 )
 from episodic.logging import get_logger, log_error
+
+from ._error_logging import _log_unmapped_error
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.profile_templates.types import ProfileTemplateError
@@ -221,6 +223,7 @@ def map_profile_template_error(
     if expected_revision is not None:
         details["expected_revision"] = expected_revision
 
+    resolved_entity_id = details.get("entity_id")
     match exc:
         case EntityNotFoundError():
             return http_error(
@@ -235,16 +238,18 @@ def map_profile_template_error(
                 details=details,
             )
         case _:
-            log_error(
-                logger,
+            _log_unmapped_error(
+                partial(log_error, logger),
+                exc,
                 "Unmapped profile/template error: type=%s code=%s entity_id=%s",
                 type(exc).__name__,
                 exc.code,
-                exc.entity_id,
-                exc_info=True,
+                resolved_entity_id,
             )
             return http_error(
-                falcon.HTTPInternalServerError(description=str(exc)),
+                falcon.HTTPInternalServerError(
+                    description="Unexpected profile/template error."
+                ),
                 code=exc.code,
                 details=details,
             )
@@ -299,12 +304,12 @@ def map_reference_error(
                 code="conflict",
             )
     msg = f"Unexpected {context} error."
-    log_error(
-        logger,
+    _log_unmapped_error(
+        partial(log_error, logger),
+        exc,
         "Unmapped reference error: context=%s type=%s",
         context,
         type(exc).__name__,
-        exc_info=True,
     )
     return http_error(
         falcon.HTTPInternalServerError(description=msg),
@@ -318,11 +323,11 @@ def map_source_intake_error(exc: SourceIntakeError) -> falcon.HTTPError:
     for error_type, factory, code in mapping:
         if isinstance(exc, error_type):
             return http_error(factory(description=str(exc)), code=code)
-    log_error(
-        logger,
+    _log_unmapped_error(
+        partial(log_error, logger),
+        exc,
         "Unmapped source-intake error: type=%s",
         type(exc).__name__,
-        exc_info=True,
     )
     return http_error(
         falcon.HTTPInternalServerError(description="Unexpected source-intake error."),
@@ -379,8 +384,6 @@ def _status_code(exc: falcon.HTTPError) -> int:
         return exc.status
     try:
         return int(exc.status.split(" ", maxsplit=1)[0])
-    # Keep the tuple explicit for compatibility with Python versions before 3.14.
-    # Ruff targets Python 3.14 and formats this clause without parentheses.
     except (IndexError, ValueError):  # fmt: skip
         return 500
 
