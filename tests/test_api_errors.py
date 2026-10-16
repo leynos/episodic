@@ -31,6 +31,7 @@ if typ.TYPE_CHECKING:
 _TEST_LOGGER_NAME = "test.episodic.api.errors"
 _TEST_CREDENTIAL = "test-only-secret-marker"
 _TEST_CAUSE_CREDENTIAL = "test-only-cause-secret-marker"
+_TEST_ENTITY_ID = "00000000-0000-0000-0000-000000000007"
 type _ExcInfo = (
     bool
     | tuple[type[BaseException], BaseException, types.TracebackType | None]
@@ -203,16 +204,16 @@ def spy_logger(monkeypatch: pytest.MonkeyPatch) -> _SpyLogger:
             _UnmappedMapperCase(
                 _UnexpectedProfileTemplateError(
                     "Unexpected profile/template failure: " + _TEST_CREDENTIAL,
-                    code="internal_error",
-                    entity_id="template-7",
+                    entity_id=_TEST_ENTITY_ID,
                 ),
                 lambda exc: api_errors.map_profile_template_error(
                     typ.cast("ProfileTemplateError", exc)
                 ),
                 (
                     "Unmapped profile/template error: "
-                    "type=_UnexpectedProfileTemplateError code=internal_error "
-                    "entity_id=template-7"
+                    "type=_UnexpectedProfileTemplateError "
+                    "code=profile_template_error "
+                    f"entity_id={_TEST_ENTITY_ID}"
                 ),
             ),
             id="profile-template",
@@ -273,10 +274,6 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     assert _envelope_code(result) == "internal_error", (
         "unmapped domain errors must use the internal-error envelope"
     )
-    if isinstance(case.exception, ProfileTemplateError):
-        assert _envelope_code(result) == case.exception.code, (
-            "profile/template error envelopes must preserve the exception code"
-        )
     _assert_spy_logger_call(spy_logger, case.exception, case.expected_message)
     _assert_detached_exception_info_logged(caplog, case.exception)
 

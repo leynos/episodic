@@ -2140,13 +2140,14 @@ are logged. The mappers use `episodic.logging.log_error` at `ERROR` with
 detached `exc_info` containing a synthetic redacted exception and no live
 traceback. Sanitized source-frame metadata records the filename, function, and
 line without retaining frames or locals. The profile-template mapper includes
-the exception type, code, and entity ID; the reference mapper includes its
-context and exception type; the source-intake mapper includes only the
-exception type. These diagnostics omit the original exception message and
-chained causes because they may contain credentials. Unmapped HTTP 500
-envelopes use a generic message instead of returning exception text. Mapped
-400, 404, and 409 outcomes are expected results and are not logged by the
-mappers. REST resource modules add no per-handler logs.
+the exception type, known error code, and UUID entity ID; unrecognized code or
+identifier values are redacted. The reference mapper includes its context and
+exception type; the source-intake mapper includes only the exception type.
+These diagnostics omit the original exception message and chained causes
+because they may contain credentials. Unmapped HTTP 500 envelopes use a generic
+message instead of returning exception text. Mapped 400, 404, and 409 outcomes
+are expected results and are not logged by the mappers. REST resource modules
+add no per-handler logs.
 
 Request-level logging and correlation are a separate boundary. Roadmap item
 4.1.3 plans to add request correlation across HTTP, tasks, and outbound
