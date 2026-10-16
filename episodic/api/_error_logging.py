@@ -1,10 +1,20 @@
-"""Credential-safe logging helpers for HTTP error mappers."""
+"""Build credential-safe diagnostics for unmapped HTTP error logging.
 
-import itertools
+Mappers use ``_log_unmapped_error`` with the logging port and safe, percent-style
+fields. Its emitted ``exc_info`` is detached: it contains neither the original
+exception nor its traceback frames, locals, source lines, or source message.
+Source locations are limited to 20 frame labels. Profile metadata permits only
+known codes and normalized canonical UUID entity IDs; other values are redacted.
+
+For example, a mapper can pass ``exc.__traceback__`` and the exception type to
+``_log_unmapped_error``; the helper emits only the redacted diagnostic.
+"""
+
 import pathlib as pl
 import traceback
 import typing as typ
 import uuid
+from collections import deque
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -37,23 +47,25 @@ def _safe_profile_template_log_metadata(
     )
     if entity_id is None:
         safe_entity_id = "None"
-    elif type(entity_id) is uuid.UUID:
-        safe_entity_id = str(entity_id)
-    elif type(entity_id) is str:
+    else:
+        safe_entity_id = _safe_profile_template_entity_id(entity_id) or "<redacted>"
+    return (safe_code, safe_entity_id)
+
+
+def _safe_profile_template_entity_id(entity_id: object | None) -> str | None:
+    """Return a canonical UUID string, omitting untrusted identifiers."""
+    if entity_id is None:
+        return None
+    if type(entity_id) is uuid.UUID:
+        return str(entity_id)
+    if type(entity_id) is str:
         try:
             parsed_entity_id = uuid.UUID(entity_id)
         except ValueError:
-            safe_entity_id = "<redacted>"
-        else:
-            canonical_entity_id = str(parsed_entity_id)
-            safe_entity_id = (
-                canonical_entity_id
-                if entity_id.lower() == canonical_entity_id
-                else "<redacted>"
-            )
-    else:
-        safe_entity_id = "<redacted>"
-    return (safe_code, safe_entity_id)
+            return None
+        canonical_entity_id = str(parsed_entity_id)
+        return canonical_entity_id if entity_id.lower() == canonical_entity_id else None
+    return None
 
 
 def _log_unmapped_profile_template_error(
@@ -83,22 +95,25 @@ def _safe_source_frame_metadata(
     if source_traceback is None:
         return "unavailable"
 
+    source_frames = deque(
+        traceback.walk_tb(source_traceback),
+        maxlen=_MAX_LOGGED_SOURCE_FRAMES + 1,
+    )
+    omitted_frames = len(source_frames) > _MAX_LOGGED_SOURCE_FRAMES
+    if omitted_frames:
+        source_frames.popleft()
+
     frame_summaries = traceback.StackSummary.extract(
-        itertools.islice(
-            traceback.walk_tb(source_traceback),
-            _MAX_LOGGED_SOURCE_FRAMES + 1,
-        ),
+        source_frames,
         lookup_lines=False,
         capture_locals=False,
     )
-    omitted_frames = len(frame_summaries) > _MAX_LOGGED_SOURCE_FRAMES
-    visible_frames = frame_summaries[:_MAX_LOGGED_SOURCE_FRAMES]
     frame_labels = [
         f"{pl.PurePath(frame.filename).name}:{frame.name}:{frame.lineno}"
-        for frame in visible_frames
+        for frame in frame_summaries
     ]
     if omitted_frames:
-        frame_labels.append("...")
+        frame_labels.insert(0, "...")
     return " <- ".join(frame_labels)
 
 
