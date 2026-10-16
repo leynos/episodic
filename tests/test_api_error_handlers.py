@@ -28,6 +28,20 @@ class _UnexpectedProfileTemplateError(ProfileTemplateError):
     """Represent a profile/template error with no dedicated HTTP mapping."""
 
 
+class _HandlerCase(typ.NamedTuple):
+    """Pair a handler path with its source exception for propagation checks."""
+
+    name: str
+    source_exception: _UnexpectedProfileTemplateError
+
+
+class _HasEnvelopeMetadata(typ.Protocol):
+    """Describe the error-envelope metadata attached to Falcon errors."""
+
+    envelope_code: str
+    envelope_details: dict[str, object]
+
+
 def _serialize_entity(_entity: object, _revision: int) -> dict[str, object]:
     """Return a stable value if an error handler unexpectedly succeeds."""
     return {}
@@ -39,11 +53,11 @@ def _serialize_history_entry(_entry: object) -> dict[str, object]:
 
 
 async def _run_handler(
-    handler_name: str,
+    case: _HandlerCase,
     empty_uow_factory: EmptyUnitOfWorkFactory,
 ) -> None:
     """Invoke one shared handler with a service that raises ``exc``."""
-    exc = _UnexpectedProfileTemplateError("Service failure.", entity_id=str(_ENTITY_ID))
+    exc = case.source_exception
 
     async def fail_service(
         _uow: object,
@@ -60,7 +74,7 @@ async def _run_handler(
         await asyncio.sleep(0)
         raise exc
 
-    match handler_name:
+    match case.name:
         case "get-entity":
             await handle_get_entity(
                 empty_uow_factory,
@@ -101,7 +115,7 @@ async def _run_handler(
                 serializer_fn=_serialize_entity,
             )
         case _:
-            pytest.fail(f"Unexpected handler name: {handler_name}")
+            pytest.fail(f"Unexpected handler name: {case.name}")
 
 
 @pytest.mark.parametrize(
@@ -114,11 +128,24 @@ def test_shared_handlers_log_unmapped_profile_errors(
     empty_uow_factory: EmptyUnitOfWorkFactory,
 ) -> None:
     """Every shared profile handler routes its unmapped errors to the mapper."""
+    source_exception = _UnexpectedProfileTemplateError(
+        "Service failure.",
+        entity_id=str(_ENTITY_ID),
+    )
     with pytest.raises(falcon.HTTPInternalServerError) as raised_error:
-        asyncio.run(_run_handler(handler_name, empty_uow_factory))
+        asyncio.run(
+            _run_handler(
+                _HandlerCase(handler_name, source_exception),
+                empty_uow_factory,
+            )
+        )
 
-    assert typ.cast("typ.Any", raised_error.value).envelope_code == "internal_error", (
+    envelope = typ.cast("_HasEnvelopeMetadata", raised_error.value)
+    assert envelope.envelope_code == "internal_error", (
         "unmapped profile errors must use the internal-error envelope"
+    )
+    assert envelope.envelope_details == {}, (
+        "unmapped profile errors must not expose exception-derived details"
     )
     assert len(spy_logger.calls) == 1, "each handler error must be logged once"
     level, message, exc_info = spy_logger.calls[0]
@@ -127,3 +154,14 @@ def test_shared_handlers_log_unmapped_profile_errors(
         "logs must identify the exception type"
     )
     assert isinstance(exc_info, tuple), "logs must carry detached exception info"
+    logged_exception = typ.cast("BaseException", exc_info[1])
+    assert logged_exception is not source_exception, (
+        "the log must not retain the source service exception"
+    )
+    assert logged_exception.__cause__ is None, (
+        "the log must omit chained exception causes"
+    )
+    assert logged_exception.__context__ is None, (
+        "the log must omit implicit exception contexts"
+    )
+    assert exc_info[2] is None, "the log must not retain source traceback frames"

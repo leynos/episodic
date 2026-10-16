@@ -9,6 +9,7 @@ from falcon import testing as falcon_testing
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from episodic.api import _error_logging
 from episodic.api import errors as api_errors
 from episodic.canonical.profile_templates.types import ProfileTemplateError
 
@@ -31,6 +32,26 @@ class _HasEnvelopeCode(typ.Protocol):
     """Describe the error metadata attached by the API mapper."""
 
     envelope_code: str
+
+
+def test_unmapped_error_without_traceback_logs_unavailable_source_frames() -> None:
+    """Missing source traceback metadata stays explicit and detached."""
+    emit_error = mock.Mock()
+
+    _error_logging._log_unmapped_error(
+        emit_error,
+        None,
+        "Unmapped error: type=%s",
+        "UnexpectedAPIError",
+    )
+
+    emit_error.assert_called_once()
+    assert "Source frames: unavailable" in str(
+        emit_error.call_args.kwargs["exc_info"][1]
+    ), "missing source tracebacks must be represented as unavailable"
+    assert emit_error.call_args.kwargs["exc_info"][2] is None, (
+        "detached exception info must never retain traceback frames"
+    )
 
 
 def test_profile_template_error_redacts_credential_metadata(
