@@ -1,14 +1,9 @@
 """Map domain exceptions to stable Falcon error envelopes.
 
-The canonical REST API envelope is
-``{"code": "...", "message": "...", "details": {...}}``.
-
-Only unmapped exceptions becoming HTTP ``500`` responses are logged. Expected
-mapped ``400``, ``404``, and ``409`` outcomes are deferred to request-level
-logging. Log records contain a synthetic redacted exception and sanitized
-source-frame metadata, never the source traceback frames or their locals.
-Profile/template logs include only known error codes and UUID identifiers.
-
+Only unmapped HTTP ``500`` responses log; expected mapped ``400``, ``404``, and
+``409`` outcomes defer to request-level logging. Records use synthetic redacted
+exceptions and sanitized source metadata; profile/template records include
+only known codes and UUID identifiers.
 """
 
 import collections.abc as cabc
@@ -41,7 +36,11 @@ from episodic.canonical.source_intake_service import (
 )
 from episodic.logging import get_logger, log_error
 
-from ._error_logging import _log_unmapped_error, _log_unmapped_profile_template_error
+from ._error_logging import (
+    _log_unmapped_error,
+    _log_unmapped_profile_template_error,
+    _safe_profile_template_entity_id,
+)
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.profile_templates.types import ProfileTemplateError
@@ -214,17 +213,19 @@ def map_profile_template_error(
     >>> try:
     ...     raise EntityNotFoundError("Profile not found.")
     ... except EntityNotFoundError as exc:
-    ...     raise map_profile_template_error(exc, entity_id="profile-1") from exc
+    ...     raise map_profile_template_error(
+    ...         exc,
+    ...         entity_id="00000000-0000-0000-0000-000000000007",
+    ...     ) from exc
     """
+    resolved_entity_id = exc.entity_id if exc.entity_id is not None else entity_id
+    safe_entity_id = _safe_profile_template_entity_id(resolved_entity_id)
     details: dict[str, object] = {}
-    if exc.entity_id is not None:
-        details["entity_id"] = exc.entity_id
-    elif entity_id is not None:
-        details["entity_id"] = str(entity_id)
+    if safe_entity_id is not None:
+        details["entity_id"] = safe_entity_id
     if expected_revision is not None:
         details["expected_revision"] = expected_revision
 
-    resolved_entity_id = details.get("entity_id")
     match exc:
         case EntityNotFoundError():
             return http_error(
@@ -249,7 +250,7 @@ def map_profile_template_error(
                     description="Unexpected profile/template error."
                 ),
                 code="internal_error",
-                details=details,
+                details={},
             )
 
 

@@ -35,6 +35,7 @@ pytest_plugins: list[str] = [
     "tests.fixtures.database",
     "tests.fixtures.llm",
     "tests.fixtures.api",
+    "tests.fixtures.api_errors",
     "tests.fixtures.ingestion",
     "tests.fixtures.binding",
 ]

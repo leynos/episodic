@@ -347,6 +347,13 @@ Every API error uses the same envelope:
 }
 ```
 
+An unmapped server-side domain error returns HTTP 500 with the `internal_error`
+code and a generic message. The response does not expose the exception text; a
+redacted error diagnostic is written to the server log. Mapped validation,
+not-found, and conflict errors retain their normal 400, 404, and 409 responses.
+Clients should handle the HTTP status and error code rather than relying on
+internal exception details.
+
 List endpoints that expose filters validate them before dispatching to the
 service layer. For example:
 
