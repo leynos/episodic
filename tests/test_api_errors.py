@@ -9,7 +9,6 @@ import asyncio
 import dataclasses as dc
 import logging
 import traceback
-import types
 import typing as typ
 import uuid
 
@@ -22,46 +21,16 @@ from episodic.api.handlers import handle_get_entity
 from episodic.canonical.profile_templates.types import ProfileTemplateError
 from episodic.canonical.reference_documents.types import ReferenceDocumentError
 from episodic.canonical.source_intake_errors import SourceIntakeError
+from tests.fixtures.api_errors import API_ERROR_TEST_LOGGER_NAME as _TEST_LOGGER_NAME
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+    from tests.fixtures.api_errors import EmptyUnitOfWorkFactory, SpyLogger
 
-_TEST_LOGGER_NAME = "test.episodic.api.errors"
 _TEST_CREDENTIAL = "test-only-secret-marker"
 _TEST_CAUSE_CREDENTIAL = "test-only-cause-secret-marker"
 _TEST_ENTITY_ID = "00000000-0000-0000-0000-000000000007"
-type _ExcInfo = (
-    bool
-    | tuple[type[BaseException], BaseException, types.TracebackType | None]
-    | tuple[None, None, None]
-    | BaseException
-    | None
-)
-
-
-@dc.dataclass(slots=True)
-class _SpyLogger:
-    """Capture error records emitted through the logging port."""
-
-    calls: list[tuple[str, str, _ExcInfo]] = dc.field(default_factory=list)
-
-    def error(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: _ExcInfo = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Record an error log call."""
-        self.calls.append(("ERROR", message, exc_info))
-        logging.getLogger(_TEST_LOGGER_NAME).error(
-            message,
-            exc_info=exc_info,
-            stack_info=stack_info,
-        )
 
 
 class _UnexpectedProfileTemplateError(ProfileTemplateError):
@@ -137,7 +106,7 @@ def _assert_detached_exception_info_logged(
 
 
 def _assert_spy_logger_call(
-    spy_logger: _SpyLogger,
+    spy_logger: SpyLogger,
     source_exception: Exception,
     expected_message: str,
 ) -> None:
@@ -166,35 +135,6 @@ class _UnmappedMapperCase:
     exception: Exception
     mapper: cabc.Callable[[Exception], falcon.HTTPError]
     expected_message: str
-
-
-class _EmptyUnitOfWork:
-    """Provide a minimal unit-of-work context for handler tests."""
-
-    async def __aenter__(self) -> CanonicalUnitOfWork:
-        """Enter the test context."""
-        return typ.cast("CanonicalUnitOfWork", self)
-
-    async def __aexit__(
-        self,
-        _exc_type: object,
-        _exc: object,
-        _traceback: object,
-    ) -> None:
-        """Exit the test context without handling service exceptions."""
-
-
-def _empty_uow_factory() -> CanonicalUnitOfWork:
-    """Create the minimal context used by the shared-handler regression."""
-    return typ.cast("CanonicalUnitOfWork", _EmptyUnitOfWork())
-
-
-@pytest.fixture
-def spy_logger(monkeypatch: pytest.MonkeyPatch) -> _SpyLogger:
-    """Patch the API-error logger with an isolated call-recording spy."""
-    spy = _SpyLogger()
-    monkeypatch.setattr(api_errors, "logger", spy)
-    return spy
 
 
 @pytest.mark.parametrize(
@@ -250,7 +190,7 @@ def spy_logger(monkeypatch: pytest.MonkeyPatch) -> _SpyLogger:
 )
 def test_unmapped_error_mappers_log_and_return_internal_error(
     case: _UnmappedMapperCase,
-    spy_logger: _SpyLogger,
+    spy_logger: SpyLogger,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Each unmapped mapper preserves its envelope and logs detached error info."""
@@ -279,7 +219,7 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
 
 
 def test_unmapped_profile_error_response_redacts_exception_text(
-    spy_logger: _SpyLogger,
+    spy_logger: SpyLogger,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """An unmapped profile error must not expose its message to clients."""
@@ -313,7 +253,8 @@ def test_unmapped_profile_error_response_redacts_exception_text(
 
 
 def test_shared_profile_handler_maps_unmapped_service_error(
-    spy_logger: _SpyLogger,
+    spy_logger: SpyLogger,
+    empty_uow_factory: EmptyUnitOfWorkFactory,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Unmapped service errors reach the shared mapper with detached error info."""
@@ -341,7 +282,7 @@ def test_shared_profile_handler_maps_unmapped_service_error(
     ):
         asyncio.run(
             handle_get_entity(
-                _empty_uow_factory,
+                empty_uow_factory,
                 str(entity_id),
                 "profile_id",
                 fail_service,
@@ -352,8 +293,8 @@ def test_shared_profile_handler_maps_unmapped_service_error(
     assert _envelope_code(mapped_error.value) == "internal_error", (
         "unmapped profile service errors must use the internal-error envelope"
     )
-    assert _envelope_details(mapped_error.value) == {"entity_id": str(entity_id)}, (
-        "the shared handler must preserve its resolved entity ID in the envelope"
+    assert _envelope_details(mapped_error.value) == {}, (
+        "unmapped profile errors must not expose entity metadata in the envelope"
     )
     _assert_spy_logger_call(
         spy_logger,
