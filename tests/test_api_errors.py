@@ -26,6 +26,8 @@ from tests.fixtures.api_errors import API_ERROR_TEST_LOGGER_NAME as _TEST_LOGGER
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from syrupy.assertion import SnapshotAssertion
+
     from tests.fixtures.api_errors import EmptyUnitOfWorkFactory, SpyLogger
 
 _TEST_CREDENTIAL = "test-only-secret-marker"
@@ -137,6 +139,45 @@ class _UnmappedMapperCase:
     expected_message: str
 
 
+def _stable_mapper_snapshot(
+    case: _UnmappedMapperCase,
+    result: falcon.HTTPError,
+    log_call: tuple[str, str, object],
+) -> dict[str, object]:
+    """Project mapper output onto stable, redacted snapshot fields."""
+    level, message, exc_info = log_call
+    assert isinstance(exc_info, tuple), "mapper diagnostics must include exc_info"
+    logged_exception = typ.cast("BaseException", exc_info[1])
+    stable_message = message.replace(
+        type(case.exception).__name__,
+        "<exception type>",
+    ).replace(_TEST_ENTITY_ID, "<uuid>")
+    return {
+        "status": result.status,
+        "envelope": {
+            "code": _envelope_code(result),
+            "message": result.description,
+            "details": _envelope_details(result),
+        },
+        "log": {
+            "level": level,
+            "message": stable_message,
+            "exception": {
+                "type": "<detached exception>",
+                "message": "Original exception message redacted. "
+                "Source frames: <source frames>",
+                "cause": "<omitted>"
+                if logged_exception.__cause__ is None
+                else "<redacted>",
+                "context": "<omitted>"
+                if logged_exception.__context__ is None
+                else "<redacted>",
+                "traceback": "<omitted>" if exc_info[2] is None else "<redacted>",
+            },
+        },
+    }
+
+
 @pytest.mark.parametrize(
     "case",
     [
@@ -192,6 +233,7 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     case: _UnmappedMapperCase,
     spy_logger: SpyLogger,
     caplog: pytest.LogCaptureFixture,
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Each unmapped mapper preserves its envelope and logs detached error info."""
 
@@ -216,11 +258,20 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     )
     _assert_spy_logger_call(spy_logger, case.exception, case.expected_message)
     _assert_detached_exception_info_logged(caplog, case.exception)
+    assert (
+        _stable_mapper_snapshot(
+            case,
+            result,
+            spy_logger.calls[0],
+        )
+        == snapshot
+    ), "stable unmapped-mapper diagnostics must match the snapshot"
 
 
 def test_unmapped_profile_error_response_redacts_exception_text(
     spy_logger: SpyLogger,
     caplog: pytest.LogCaptureFixture,
+    snapshot: SnapshotAssertion,
 ) -> None:
     """An unmapped profile error must not expose its message to clients."""
     exc = _UnexpectedProfileTemplateError(
@@ -250,6 +301,13 @@ def test_unmapped_profile_error_response_redacts_exception_text(
         "serialized responses must not expose credential-like exception text"
     )
     assert len(spy_logger.calls) == 1, "unmapped errors must log once"
+    stable_response = {
+        "status": mapped_error.status,
+        "envelope": response.media,
+    }
+    assert stable_response == snapshot, (
+        "the generic profile error response must match the stable snapshot"
+    )
 
 
 def test_shared_profile_handler_maps_unmapped_service_error(
