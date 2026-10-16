@@ -2,14 +2,14 @@
 
 The examples isolate each mapper's unexpected-exception branch, confirming that
 it preserves the internal-error envelope and emits one error record with
-traceback information through the logging port.
+detached exception information through the logging port.
 """
 
 import asyncio
 import dataclasses as dc
 import logging
 import traceback
-import types as pytypes
+import types
 import typing as typ
 import uuid
 
@@ -31,27 +31,34 @@ if typ.TYPE_CHECKING:
 _TEST_LOGGER_NAME = "test.episodic.api.errors"
 _TEST_CREDENTIAL = "test-only-secret-marker"
 _TEST_CAUSE_CREDENTIAL = "test-only-cause-secret-marker"
+type _ExcInfo = (
+    bool
+    | tuple[type[BaseException], BaseException, types.TracebackType | None]
+    | tuple[None, None, None]
+    | BaseException
+    | None
+)
 
 
 @dc.dataclass(slots=True)
 class _SpyLogger:
     """Capture error records emitted through the logging port."""
 
-    calls: list[tuple[str, str, object | None]] = dc.field(default_factory=list)
+    calls: list[tuple[str, str, _ExcInfo]] = dc.field(default_factory=list)
 
     def error(
         self,
         message: str,
         /,
         *,
-        exc_info: object | None = None,
+        exc_info: _ExcInfo = None,
         stack_info: bool = False,
     ) -> None:
         """Record an error log call."""
         self.calls.append(("ERROR", message, exc_info))
         logging.getLogger(_TEST_LOGGER_NAME).error(
             message,
-            exc_info=exc_info is True,
+            exc_info=exc_info,
             stack_info=stack_info,
         )
 
@@ -90,11 +97,11 @@ def _raise_with_credential_cause(exc: Exception) -> typ.NoReturn:
     raise exc from RuntimeError(_TEST_CAUSE_CREDENTIAL)
 
 
-def _assert_traceback_was_logged(
+def _assert_detached_exception_info_logged(
     caplog: pytest.LogCaptureFixture,
     exc: Exception,
 ) -> None:
-    """Verify traceback info is redacted and detached from source frames."""
+    """Verify detached exception info cannot retain source frames or secrets."""
     records = [record for record in caplog.records if record.name == _TEST_LOGGER_NAME]
     assert len(records) == 1, "each unmapped error must emit one log record"
     record = records[0]
@@ -114,33 +121,40 @@ def _assert_traceback_was_logged(
     assert logged_exception.__context__ is None, (
         "logs must omit implicit exception chains"
     )
-    assert record.exc_info[2] is not None, "error log must include a traceback"
-    logged_frames: list[pytypes.FrameType] = []
-    logged_traceback = record.exc_info[2]
-    while logged_traceback is not None:
-        logged_frames.append(logged_traceback.tb_frame)
-        logged_traceback = logged_traceback.tb_next
-    source_frame_ids: set[int] = set()
-    source_traceback = exc.__traceback__
-    while source_traceback is not None:
-        source_frame_ids.add(id(source_traceback.tb_frame))
-        source_traceback = source_traceback.tb_next
-    assert {id(frame) for frame in logged_frames}.isdisjoint(source_frame_ids), (
-        "log records must not retain source traceback frames or their locals"
+    assert record.exc_info[2] is None, (
+        "log records must not retain a traceback that can expose caller locals"
     )
-    assert all(
-        value is not exc and not isinstance(value, pytypes.TracebackType)
-        for frame in logged_frames
-        for value in frame.f_locals.values()
-    ), "log traceback locals must not retain source exceptions or tracebacks"
     assert type(exc).__name__ in record.getMessage(), (
         "the safe log message must identify the source exception type"
     )
     assert "Original exception message redacted." in formatted_traceback, (
-        "the traceback must identify that exception text was redacted"
+        "detached exception information must identify redacted exception text"
     )
     assert "Source frames:" in formatted_traceback, (
-        "the safe traceback must preserve extracted source-frame metadata"
+        "detached exception information must preserve safe source-frame metadata"
+    )
+
+
+def _assert_spy_logger_call(
+    spy_logger: _SpyLogger,
+    source_exception: Exception,
+    expected_message: str,
+) -> None:
+    """Verify one error log carries a detached, redacted exception tuple."""
+    assert len(spy_logger.calls) == 1, "each unmapped error must log once"
+    level, message, exc_info = spy_logger.calls[0]
+    assert (level, message) == ("ERROR", expected_message), (
+        "the mapper must log one ERROR with its safe metadata"
+    )
+    assert isinstance(exc_info, tuple), (
+        "the logging port must receive detached exception information"
+    )
+    assert len(exc_info) == 3, "detached exception information must be a triple"
+    assert exc_info[1] is not source_exception, (
+        "the logging port must not receive the source exception"
+    )
+    assert exc_info[2] is None, (
+        "the logging port must not receive live traceback frames"
     )
 
 
@@ -238,7 +252,7 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     spy_logger: _SpyLogger,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Each unmapped mapper preserves its envelope and logs the traceback."""
+    """Each unmapped mapper preserves its envelope and logs detached error info."""
 
     def raise_case_exception() -> None:
         _raise_with_credential_cause(case.exception)
@@ -263,10 +277,8 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
         assert _envelope_code(result) == case.exception.code, (
             "profile/template error envelopes must preserve the exception code"
         )
-    assert spy_logger.calls == [("ERROR", case.expected_message, True)], (
-        "each mapper must emit one traceback-enabled diagnostic"
-    )
-    _assert_traceback_was_logged(caplog, case.exception)
+    _assert_spy_logger_call(spy_logger, case.exception, case.expected_message)
+    _assert_detached_exception_info_logged(caplog, case.exception)
 
 
 def test_unmapped_profile_error_response_redacts_exception_text(
@@ -307,7 +319,7 @@ def test_shared_profile_handler_maps_unmapped_service_error(
     spy_logger: _SpyLogger,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Unmapped service errors reach the shared mapper with a traceback."""
+    """Unmapped service errors reach the shared mapper with detached error info."""
     entity_id = uuid.uuid4()
     exc = _UnexpectedProfileTemplateError(
         "Unexpected profile/template service failure: " + _TEST_CREDENTIAL,
@@ -346,15 +358,13 @@ def test_shared_profile_handler_maps_unmapped_service_error(
     assert _envelope_details(mapped_error.value) == {"entity_id": str(entity_id)}, (
         "the shared handler must preserve its resolved entity ID in the envelope"
     )
-    assert spy_logger.calls == [
+    _assert_spy_logger_call(
+        spy_logger,
+        exc,
         (
-            "ERROR",
-            (
-                "Unmapped profile/template error: "
-                "type=_UnexpectedProfileTemplateError code=internal_error "
-                f"entity_id={entity_id}"
-            ),
-            True,
-        )
-    ], "the shared handler must emit one traceback-enabled fallback log"
-    _assert_traceback_was_logged(caplog, exc)
+            "Unmapped profile/template error: "
+            "type=_UnexpectedProfileTemplateError code=internal_error "
+            f"entity_id={entity_id}"
+        ),
+    )
+    _assert_detached_exception_info_logged(caplog, exc)
