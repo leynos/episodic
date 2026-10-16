@@ -3,6 +3,9 @@
 This package exposes route adapter classes that translate Falcon request/
 response handling into calls to canonical profile/template services.
 
+Resource modules deliberately add no per-handler logs. Request-level logging
+and correlation belong to the roadmap item 4.1.3 correlation middleware.
+
 Utilities provided
 ------------------
 - Shared read base classes: ``_GetResourceBase``, ``_GetHistoryResourceBase``

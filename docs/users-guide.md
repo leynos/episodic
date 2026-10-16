@@ -347,6 +347,13 @@ Every API error uses the same envelope:
 }
 ```
 
+An unmapped server-side domain error returns HTTP 500 with the `internal_error`
+code, a generic message, and an empty `details` object. The response does not
+expose the exception text; a redacted error diagnostic is written to the server
+log. Mapped validation, not-found, and conflict errors retain their normal 400,
+404, and 409 responses. Clients should handle the HTTP status and stable error
+code rather than relying on exception-derived response fields.
+
 List endpoints that expose filters validate them before dispatching to the
 service layer. For example:
 
@@ -406,6 +413,10 @@ above, send the bearer header on every `/v1` request, and adopt the generation
 source limits and event cursor contract described in this guide. Generation-run
 pollers must also handle the terminal lifecycle contract: terminal responses
 have `current_node: null` and a populated `ended_at`.
+
+Unmapped server-side domain failures return HTTP 500 with the stable
+`internal_error` code, a generic message, and empty `details`. Clients must not
+rely on exception-derived response codes, messages, or details.
 
 Structured events can be emitted with `episodic.logging.log_event`, which
 encodes event fields as JSON; existing logging calls remain available. See
