@@ -198,8 +198,8 @@ def map_profile_template_error(
     exc : ProfileTemplateError
         Domain error raised by profile/template services.
     entity_id : object | None
-        Optional entity identifier to include in envelope details when the
-        exception does not already carry one.
+        Optional entity identifier to use when the exception does not carry a
+        safe identifier.
     expected_revision : int | None
         Optional optimistic-lock revision expected by the caller.
 
@@ -218,14 +218,15 @@ def map_profile_template_error(
     ...         entity_id="00000000-0000-0000-0000-000000000007",
     ...     ) from exc
     """
-    resolved_entity_id = exc.entity_id if exc.entity_id is not None else entity_id
-    safe_entity_id = _safe_profile_template_entity_id(resolved_entity_id)
+    safe_entity_id = _safe_profile_template_entity_id(exc.entity_id)
+    if safe_entity_id is None:
+        safe_entity_id = _safe_profile_template_entity_id(entity_id)
+    log_entity_id = safe_entity_id if safe_entity_id is not None else exc.entity_id
     details: dict[str, object] = {}
     if safe_entity_id is not None:
         details["entity_id"] = safe_entity_id
     if expected_revision is not None:
         details["expected_revision"] = expected_revision
-
     match exc:
         case EntityNotFoundError():
             return http_error(
@@ -243,7 +244,7 @@ def map_profile_template_error(
             _log_unmapped_profile_template_error(
                 partial(log_error, logger),
                 exc,
-                resolved_entity_id,
+                log_entity_id,
             )
             return http_error(
                 falcon.HTTPInternalServerError(
