@@ -217,3 +217,18 @@ def test_mapped_profile_errors_omit_untrusted_entity_ids(
     assert typ.cast("typ.Any", result).envelope_details == {}, (
         "mapped error details must omit non-UUID entity identifiers"
     )
+
+
+def test_mapped_profile_error_uses_safe_caller_entity_id() -> None:
+    """A safe caller ID survives when the exception ID is untrusted."""
+    caller_entity_id = "00000000-0000-0000-0000-000000000009"
+    exception = EntityNotFoundError("Profile not found.", entity_id="untrusted-id")
+
+    result = api_errors.map_profile_template_error(
+        exception,
+        entity_id=caller_entity_id,
+    )
+
+    assert typ.cast("typ.Any", result).envelope_details == {
+        "entity_id": caller_entity_id,
+    }, "mapped errors must fall back to the safe caller entity ID"

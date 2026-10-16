@@ -40,10 +40,10 @@ def _serialize_history_entry(_entry: object) -> dict[str, object]:
 
 async def _run_handler(
     handler_name: str,
-    exc: ProfileTemplateError,
     empty_uow_factory: EmptyUnitOfWorkFactory,
 ) -> None:
     """Invoke one shared handler with a service that raises ``exc``."""
+    exc = _UnexpectedProfileTemplateError("Service failure.", entity_id=str(_ENTITY_ID))
 
     async def fail_service(
         _uow: object,
@@ -54,11 +54,9 @@ async def _run_handler(
 
     async def fail_history_service(
         _uow: object,
-        *,
-        parent_id: uuid.UUID,
-        page: Pagination,
+        **_kwargs: object,
     ) -> tuple[list[object], int]:
-        del parent_id, page
+        del _kwargs
         await asyncio.sleep(0)
         raise exc
 
@@ -116,10 +114,8 @@ def test_shared_handlers_log_unmapped_profile_errors(
     empty_uow_factory: EmptyUnitOfWorkFactory,
 ) -> None:
     """Every shared profile handler routes its unmapped errors to the mapper."""
-    exc = _UnexpectedProfileTemplateError("Service failure.", entity_id=str(_ENTITY_ID))
-
     with pytest.raises(falcon.HTTPInternalServerError) as raised_error:
-        asyncio.run(_run_handler(handler_name, exc, empty_uow_factory))
+        asyncio.run(_run_handler(handler_name, empty_uow_factory))
 
     assert typ.cast("typ.Any", raised_error.value).envelope_code == "internal_error", (
         "unmapped profile errors must use the internal-error envelope"
@@ -127,5 +123,7 @@ def test_shared_handlers_log_unmapped_profile_errors(
     assert len(spy_logger.calls) == 1, "each handler error must be logged once"
     level, message, exc_info = spy_logger.calls[0]
     assert level == "ERROR", "unmapped profile errors must log at ERROR"
-    assert type(exc).__name__ in message, "logs must identify the exception type"
+    assert "_UnexpectedProfileTemplateError" in message, (
+        "logs must identify the exception type"
+    )
     assert isinstance(exc_info, tuple), "logs must carry detached exception info"
