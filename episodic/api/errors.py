@@ -7,6 +7,7 @@ Only unmapped exceptions becoming HTTP ``500`` responses are logged. Expected
 mapped ``400``, ``404``, and ``409`` outcomes are deferred to request-level
 logging. Log records contain a synthetic redacted exception and sanitized
 source-frame metadata, never the source traceback frames or their locals.
+Profile/template logs include only known error codes and UUID identifiers.
 
 """
 
@@ -40,7 +41,7 @@ from episodic.canonical.source_intake_service import (
 )
 from episodic.logging import get_logger, log_error
 
-from ._error_logging import _log_unmapped_error
+from ._error_logging import _log_unmapped_error, _log_unmapped_profile_template_error
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.profile_templates.types import ProfileTemplateError
@@ -238,19 +239,16 @@ def map_profile_template_error(
                 details=details,
             )
         case _:
-            _log_unmapped_error(
+            _log_unmapped_profile_template_error(
                 partial(log_error, logger),
-                exc.__traceback__,
-                "Unmapped profile/template error: type=%s code=%s entity_id=%s",
-                type(exc).__name__,
-                exc.code,
+                exc,
                 resolved_entity_id,
             )
             return http_error(
                 falcon.HTTPInternalServerError(
                     description="Unexpected profile/template error."
                 ),
-                code=exc.code,
+                code="internal_error",
                 details=details,
             )
 
