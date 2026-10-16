@@ -5,8 +5,8 @@ The canonical REST API envelope is
 
 Only unmapped exceptions becoming HTTP ``500`` responses are logged. Expected
 mapped ``400``, ``404``, and ``409`` outcomes are deferred to request-level
-logging. Tracebacks retain stack frames but replace the exception value and
-omit chained causes to avoid exposing credentials in exception messages.
+logging. Log records contain a synthetic redacted exception and sanitized
+source-frame metadata, never the source traceback frames or their locals.
 
 """
 
@@ -240,7 +240,7 @@ def map_profile_template_error(
         case _:
             _log_unmapped_error(
                 partial(log_error, logger),
-                exc,
+                exc.__traceback__,
                 "Unmapped profile/template error: type=%s code=%s entity_id=%s",
                 type(exc).__name__,
                 exc.code,
@@ -306,7 +306,7 @@ def map_reference_error(
     msg = f"Unexpected {context} error."
     _log_unmapped_error(
         partial(log_error, logger),
-        exc,
+        exc.__traceback__,
         "Unmapped reference error: context=%s type=%s",
         context,
         type(exc).__name__,
@@ -325,7 +325,7 @@ def map_source_intake_error(exc: SourceIntakeError) -> falcon.HTTPError:
             return http_error(factory(description=str(exc)), code=code)
     _log_unmapped_error(
         partial(log_error, logger),
-        exc,
+        exc.__traceback__,
         "Unmapped source-intake error: type=%s",
         type(exc).__name__,
     )

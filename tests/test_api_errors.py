@@ -9,6 +9,7 @@ import asyncio
 import dataclasses as dc
 import logging
 import traceback
+import types as pytypes
 import typing as typ
 import uuid
 
@@ -93,7 +94,7 @@ def _assert_traceback_was_logged(
     caplog: pytest.LogCaptureFixture,
     exc: Exception,
 ) -> None:
-    """Verify traceback frames are retained without exception text or chains."""
+    """Verify traceback info is redacted and detached from source frames."""
     records = [record for record in caplog.records if record.name == _TEST_LOGGER_NAME]
     assert len(records) == 1, "each unmapped error must emit one log record"
     record = records[0]
@@ -114,11 +115,32 @@ def _assert_traceback_was_logged(
         "logs must omit implicit exception chains"
     )
     assert record.exc_info[2] is not None, "error log must include a traceback"
+    logged_frames: list[pytypes.FrameType] = []
+    logged_traceback = record.exc_info[2]
+    while logged_traceback is not None:
+        logged_frames.append(logged_traceback.tb_frame)
+        logged_traceback = logged_traceback.tb_next
+    source_frame_ids: set[int] = set()
+    source_traceback = exc.__traceback__
+    while source_traceback is not None:
+        source_frame_ids.add(id(source_traceback.tb_frame))
+        source_traceback = source_traceback.tb_next
+    assert {id(frame) for frame in logged_frames}.isdisjoint(source_frame_ids), (
+        "log records must not retain source traceback frames or their locals"
+    )
+    assert all(
+        value is not exc and not isinstance(value, pytypes.TracebackType)
+        for frame in logged_frames
+        for value in frame.f_locals.values()
+    ), "log traceback locals must not retain source exceptions or tracebacks"
     assert type(exc).__name__ in record.getMessage(), (
         "the safe log message must identify the source exception type"
     )
     assert "Original exception message redacted." in formatted_traceback, (
         "the traceback must identify that exception text was redacted"
+    )
+    assert "Source frames:" in formatted_traceback, (
+        "the safe traceback must preserve extracted source-frame metadata"
     )
 
 
