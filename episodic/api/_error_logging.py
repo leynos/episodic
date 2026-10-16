@@ -37,20 +37,11 @@ def _log_unmapped_error(
     template: str,
     *args: object,
 ) -> None:
-    """Log safe source locations with isolated redacted exception information.
-
-    Keep ``emit_error`` inside this exception handler: ``exc_info=True`` reads
-    the synthetic redacted exception through ``sys.exc_info()``. Source frames
-    are reduced to filename, function, and line metadata before emission.
-    """
+    """Log detached exception information and safe source locations."""
     frame_metadata = _safe_source_frame_metadata(source_traceback)
     del source_traceback
     redacted = _RedactedMapperError(
         f"Original exception message redacted. Source frames: {frame_metadata}"
     )
-    try:
-        raise redacted from None
-    except _RedactedMapperError as safe_exc:
-        safe_exc.__cause__ = None
-        safe_exc.__context__ = None
-        emit_error(template, *args, exc_info=True)
+    safe_exception_info = (type(redacted), redacted, None)
+    emit_error(template, *args, exc_info=safe_exception_info)
