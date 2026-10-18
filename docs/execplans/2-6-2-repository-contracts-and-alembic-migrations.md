@@ -96,16 +96,26 @@ Repository documentation:
   ADR-007. Do not let that document steer this slice towards Redis.
 - `docs/developers-guide.md`, sections "Database migrations", "Database
   testing with py-pglite", "Canonical content persistence", "Generation-run
-  domain ports", and "Manual recovery of expired generation-run leases".
+  domain ports", "Manual recovery of expired generation-run leases",
+  "Code-duplication gate", and "Module size and façade modules".
 - `docs/adr/adr-015-generation-run-port-split.md` — why the port is split, and
   why the user-facing `Checkpoint` differs from `WorkflowCheckpoint`.
-- `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` (arriving
-  with pull request PR 278) — the governing record for versioning, concurrency
-  shapes, immutability, and deletion policy. Read it before writing the
-  adapter; it decides D-10 and the foreign-key policy.
-- `docs/alpha-test-4-3-2-setup-notes.md` (arriving with pull request PR 277) —
-  the end-to-end alpha run of the 4.3.2 slice, including where repository
-  documentation was wrong.
+- `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` — the
+  governing record for versioning, concurrency shapes, immutability, and
+  deletion policy. Read it before writing the adapter; it decides D-10 and the
+  foreign-key policy.
+- `docs/adr/adr-019-episode-tei-revision-history.md` — the template for an
+  append-only history table. Read it to see what D-11 deliberately does *not*
+  build for review checkpoints.
+- `docs/adr/adr-021-adopt-nose-duplication-gate.md` — the blocking duplication
+  gate in `make lint`. It scans `episodic/`, so a SQL checkpoint store that
+  mirrors the in-memory mixin is in scope; see the duplication constraint.
+- `docs/adr/adr-022-orchestration-architecture-enforcement.md` — note that its
+  `CheckpointPort` is the *orchestration* port for `WorkflowCheckpoint`, not
+  `GenerationCheckpointPort`. Another instance of the Risk 1 confusion.
+- `docs/alpha-test-4-3-2-setup-notes.md` — the end-to-end alpha run of the
+  4.3.2 slice, including where repository documentation was wrong. It says
+  nothing about checkpoints or leases.
 - `docs/adr/adr-007-durable-generation-checkpoints.md` — the *orchestration*
   checkpoint. Read it to avoid conflating the two. Note its title is "Durable
   generation checkpoints", which is why this plan does **not** use "generation
@@ -135,69 +145,77 @@ Existing code and tests this plan extends rather than duplicates:
 - `tests/canonical_storage/test_sql_generation_run_property_contract.py` —
   already discharges the paging and cross-run isolation properties.
 
-## Pending pull requests this plan depends on
+## Changes on `main` since the first draft
 
-Two open pull requests touch this plan's surface. Both should land **before**
-implementation starts; if either is abandoned, the noted items must be
-revisited.
+The plan was first drafted against commit `5af0638`. Everything below has since
+landed on `main`; it is recorded so the reasoning in later sections can be
+traced to the tree it was checked against. The plan was last reconciled against
+`main` at commit `468923ed` on 2026-10-18.
 
-**PR 278 — "Record the versioning strategy and adopt episode TEI revision
-history (2.8)"** (`versioning-adr-episode-tei-history`, documentation only).
-
-- It takes **ADR-018 and ADR-019**, so this plan's new ADR is **ADR-020**.
-- Its `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` becomes
-  the **governing record for versioning, concurrency shapes, immutability, and
-  deletion policy**. It is now an upstream item in `Conformance basis`, and
-  three decisions here changed to conform: D-10 (compare-and-set rather than
-  row locking), the `ON DELETE RESTRICT` foreign key in Table 1, and D-11 (why
-  a review checkpoint is not a versioned aggregate).
-- It adds **roadmap step 2.8** (episode TEI revision history), so follow-ups
-  from this plan must not claim that number.
-- It edits `docs/contents.md`, `docs/roadmap.md`,
-  `docs/episodic-podcast-generation-system-design.md`, and
-  `docs/episodic-tui-api-design.md` — all four of which EP-M5 also edits.
-
-**PR 277 — "Harden the no-QA generation slice from local alpha testing
-(4.3.2)"** (`4-3-2-...-alpha-feedback`, code and documentation).
-
-- It edits `episodic/canonical/storage/uow.py`,
-  `episodic/canonical/generation_run_ports.py`,
-  `tests/canonical_storage/test_generation_runs.py`, and
-  `tests/canonical_storage/test_sql_generation_run_property_contract.py` —
-  **the four files this plan changes most**. Expect conflicts; rebase first.
-- It moves `uow.py`'s imports **out of** `if typ.TYPE_CHECKING:` with
-  `# noqa: TC00x` markers, because `mock.create_autospec` evaluates method
-  annotations at runtime. Any import this plan adds there must follow that
-  convention or it reintroduces the `NameError` PR 277 fixes.
-- It adds a `Raises / RunNotFound` section to `count_events` in
-  `generation_run_ports.py` — the precedent Stage C step 7 generalizes, and
-  evidence that the port file is where contracts are expected to live.
-- It establishes that **persisted rows survive between Hypothesis examples**,
-  and scopes an idempotency key per example with `uuid.uuid7()` accordingly.
-  See the runtime entry in `Tolerances`.
-- It changes `make skylos-allow` to take `SKYLOS_CLI` and
-  `$(call cli_value,NAME)`, and pins the Skylos interpreter to Python 3.14.
-- Its `make test` baseline is **1237 passed, 3 skipped**, against 1227 on
-  `main`. Re-measure after rebasing rather than trusting either figure.
+- **PR 278 (roadmap 2.8)** landed ADR-018, the governing record for
+  versioning, concurrency shapes, immutability, and deletion policy, and
+  ADR-019, episode TEI revision history. Three decisions here conform to
+  ADR-018: D-10 (compare-and-set rather than row locking), the
+  `ON DELETE RESTRICT` foreign key in Table 1, and D-11 (why a review
+  checkpoint is not a versioned aggregate). It also added roadmap step 2.8, so
+  follow-ups from this plan must not claim that number.
+- **PR 277 (4.3.2 alpha hardening)** moved `uow.py`'s imports out of
+  `if typ.TYPE_CHECKING:` because `mock.create_autospec` evaluates method
+  annotations at runtime; added a `Raises / RunNotFound` section to
+  `count_events`, the precedent Stage C step 7 generalizes; and established
+  that **persisted rows survive between Hypothesis examples**, scoping an
+  idempotency key per example with `uuid.uuid7()` accordingly.
+- **The domain module was split** (PR 276). `episodic/canonical/domain.py` is
+  now a 93-line re-exporting façade. `Checkpoint` and `CheckpointResponse` live
+  in `episodic/canonical/domain_generation.py`; `CheckpointStatus` and
+  `CheckpointAction` live in `episodic/canonical/domain_enums.py`. Import
+  through the façade as existing storage code does.
+- **A blocking nose duplication gate** (ADR-021, superseding ADR-020's PyChase)
+  runs at the end of `make lint` over `episodic/` and `openai_test_types.py`.
+  Tests are outside its roots.
+- **Pylint now runs on CPython 3.14 over `tests/` as well** (PRs 339 and 346),
+  so new test modules are linted. Suppressions take the form
+  `# pylint: disable-next=too-many-arguments  # <reason>`.
+- **Ruff 0.16.8** replaced `# noqa: TC00x` with named, reasoned suppressions.
+  `uow.py` now reads, for example,
+  `# ruff: ignore[typing-only-first-party-import] - autospec resolves annotations`.
+- **Migration `20261010_000013_name_pricing_snapshot_constraint`** is the new
+  head, so this plan's revisions are `000014` and `000015`, not `000013` and
+  `000014`.
+- **ADR-020 to ADR-023 are taken** (duplication gates, orchestration
+  architecture enforcement, the shared CV-005 contract library). This plan's
+  ADR is **ADR-024**.
+- **`make skylos-allow` takes `SYMBOL=` and `REASON=`**, and
+  `make duplication-allow` takes `FIRST=`, optional `SECOND=`, and `REASON=`.
+- **`make markdownlint` now includes the en-GB-oxendict spelling gate**;
+  `typos.toml` is generated and must never be hand-edited.
+- **The test suite has grown from 1227 to 1725 tests.** See `Tolerances`.
 
 ## Constraints
 
 Hard invariants. Violating one requires escalation, not a workaround.
 
-- **Do not change the 2.6.1 domain surface.** `episodic/canonical/domain.py`
-  (the `GenerationRun`, `GenerationEvent`, `Checkpoint`, `CheckpointResponse`
-  entities and the `GenerationRunStatus`, `CheckpointStatus`,
-  `CheckpointAction` enums) is frozen for this slice.
+- **Do not change the 2.6.1 domain surface.** The `GenerationRun`,
+  `GenerationEvent`, `Checkpoint`, and `CheckpointResponse` entities in
+  `episodic/canonical/domain_generation.py`, the `GenerationRunStatus`,
+  `CheckpointStatus`, and `CheckpointAction` enums in
+  `episodic/canonical/domain_enums.py`, and their re-exports from the
+  `episodic/canonical/domain.py` façade are frozen for this slice.
 - **Do not weaken the existing port protocols.** Methods may be *added* to
   `episodic/canonical/generation_run_ports.py` — roadmap 2.6.2 explicitly
   covers "define repository interfaces" — but no existing signature may change.
 - **Hexagonal dependency rule.** New storage modules may import domain types,
   ports, and domain errors. Domain and ports must not import storage.
-  `make check-architecture` (Hecate) enforces this and must pass.
+  `make check-architecture` (Hecate) must pass — but note that it does **not**
+  currently enforce this rule for the two modules this slice edits most.
+  `episodic.canonical.generation_run_ports` and
+  `episodic.canonical.generation_run_errors` match no `[tool.hecate.groups]`
+  prefix, and Hecate skips any import edge whose importer or target is
+  ungrouped. See D-12.
 - **No schema drift.** `make check-migrations` must report no difference
   between `Base.metadata` and the migration history.
 - **Single migration head.** New revisions chain off the current head
-  `20260624_000012` (`add_ingestion_job_owner`). Confirm with
+  `20261010_000013` (`name_pricing_snapshot_constraint`). Confirm with
   `uv run alembic heads`; the `down_revision` chain, not the filename date, is
   authoritative, and existing filenames are *not* in strict date order.
 - **Never modify an applied revision.** Once a revision file has been merged,
@@ -217,9 +235,21 @@ Hard invariants. Violating one requires escalation, not a workaround.
   `episodic/canonical/storage/models_base.py` with
   `values_callable=lambda enum_cls: [item.value for item in enum_cls]`.
 - **File size.** No code file exceeds 400 lines.
-  `episodic/canonical/storage/generation_runs.py` is 367 lines and
-  `episodic/canonical/adapters/generation_runs.py` is 399, so neither can
-  absorb new methods.
+  `episodic/canonical/storage/generation_runs.py` is 358 lines and
+  `episodic/canonical/adapters/generation_runs.py` is 390, so neither can
+  absorb new methods. Moving code between modules means updating any Skylos
+  entry point or duplication exception that names the old module.
+- **Duplication gate.** `make lint` ends with the blocking nose gate
+  (ADR-021). The SQL checkpoint store will share signatures, docstrings, and
+  argument guards with `InMemoryGenerationCheckpointMixin`. Prefer extracting a
+  shared helper over suppressing a finding. Where the parallel is the port
+  itself, record one reasoned exception with `make duplication-allow`,
+  mirroring the existing `storage/generation_runs.py` /
+  `adapters/generation_runs.py` entry rather than broadening it.
+- **Suppression style.** Use Ruff's named form,
+  `# ruff: ignore[<rule-name>] - <reason>`, as `uow.py` does, and
+  `# pylint: disable-next=<rule>  # <reason>`. `# noqa` codes are no longer
+  house style. Pylint lints `tests/` too.
 - **Repositories do not own the transaction.** Adapters `flush()`; only
   `SqlAlchemyUnitOfWork.commit()` commits.
 - **A unit of work that has appended an event must not span an inference
@@ -240,7 +270,8 @@ Stop and escalate rather than improvising when any of these is reached.
   than a typical slice: the milestone breakdown below enumerates 28–31 files,
   and a tolerance below that would fire by construction.
 - **Interface:** any change to an *existing* signature in
-  `episodic/canonical/domain.py` or
+  `episodic/canonical/domain_generation.py`,
+  `episodic/canonical/domain_enums.py`, or
   `episodic/canonical/generation_run_ports.py`.
 - **Dependencies:** any new entry in `pyproject.toml` dependency groups. This
   slice needs none.
@@ -248,19 +279,22 @@ Stop and escalate rather than improvising when any of these is reached.
   if any already-merged revision file would need editing.
 - **Iterations:** if a single failing gate is not green after 4 fix attempts.
 - **Runtime:** if per-test `migrated_engine` setup exceeds 0.5 s, or if total
-  `make test` wall-clock exceeds 165 s. The measured baseline at commit
-  `5af0638` is **130.58 s for 1227 passed, 3 skipped** with
-  `PYTEST_XDIST_WORKERS=1`; PR 277 reports **1237 passed, 3 skipped**, so
-  re-measure after rebasing, and per-test `migrated_engine` setup is
-  **0.20–0.38 s** after the one-off session-scoped py-pglite start (~3.8 s).
-  Note that Hypothesis examples do **not** re-run migrations — the fixture is
-  function-scoped and shared across every example, which is precisely why
+  `make test` wall-clock grows by more than 15% over the Stage A baseline. The
+  previous absolute ceiling of 165 s is withdrawn: it was set against **130.58
+  s for 1227 passed, 3 skipped** at `5af0638`, and the suite has since grown to
+  **1725 passed, 1 skipped**, measured at **334.48 s** of pytest time on
+  2026-10-15 on a contended shared host. Neither figure is a usable baseline
+  for this slice; Stage A re-measures on an otherwise idle run. Per-test
+  `migrated_engine` setup was **0.20–0.38 s** after the one-off session-scoped
+  py-pglite start (~3.8 s); re-confirm that too. Note that Hypothesis examples
+  do **not** re-run migrations — the fixture is function-scoped and shared
+  across every example, which is precisely why
   `suppress_health_check=[HealthCheck.function_scoped_fixture]` is required.
-  The corollary, established by pull request PR 277, is that **persisted rows
-  survive between examples**: the session factory outlives them. Every
-  database-backed property test must scope its own data per example —
-  `make_generation_run()` already does so via UUIDv7, but any shared
-  idempotency key, actor, or fixture row must be suffixed per example.
+  The corollary, established by PR 277, is that **persisted rows survive
+  between examples**: the session factory outlives them. Every database-backed
+  property test must scope its own data per example — `make_generation_run()`
+  already does so via UUIDv7, but any shared idempotency key, actor, or fixture
+  row must be suffixed per example.
 - **Concurrency evidence:** if any test intended to demonstrate lock contention
   hangs to the 180 s `pytest-timeout`, stop. See AXIOM-3 and Risk 2 — under
   py-pglite this is the expected outcome, not a bug to debug.
@@ -331,17 +365,17 @@ Stop and escalate rather than improvising when any of these is reached.
   makes reversibility a standing criterion, and there is **no
   `ALTER TYPE ... ADD VALUE` precedent anywhere in `alembic/versions/`**.
   Mitigation: keep native enums (D-5) and put the downgrade recipe verbatim in
-  ADR-018 so the next author does not invent it under pressure.
+  ADR-024 so the next author does not invent it under pressure.
 
-- **Risk 8: this plan is implemented before PR 277 and PR 278 land, and diverges
-  from both.** Severity: medium. Likelihood: medium. Evidence: PR 277 edits the
-  four files this plan changes most, and PR 278 takes ADR-018/019 and sets the
-  concurrency and deletion policy this plan now conforms to. Implementing first
-  means conflicts in `uow.py`, `generation_run_ports.py`, and two test modules,
-  plus an ADR number clash. Mitigation: the `Pending pull requests` section
-  states the dependency; Stage A confirms both have merged before any code is
-  written; if either is abandoned, revisit D-10, D-11, the foreign-key policy,
-  and the ADR number.
+- **Risk 8: the architecture gate passes while a port imports an adapter.**
+  Severity: medium. Likelihood: low today, rising as the port file grows.
+  Evidence: `episodic.canonical.generation_run_ports` and
+  `episodic.canonical.generation_run_errors` are in no Hecate group, and
+  `hecate.checker` returns early when either side of an import edge is
+  ungrouped. `make check-architecture` would stay green if Stage C step 7's
+  docstring work, or a later edit, imported `episodic.canonical.storage` from
+  the port module. Mitigation: D-12 adds both modules to `domain_ports` in
+  EP-M2, with a negative control proving the gate then fires.
 
 - **Risk 9: the shared contract suite certifies a shared blind spot as
   correct.** Severity: medium. Likelihood: medium. Evidence: neither adapter
@@ -359,17 +393,17 @@ Stop and escalate rather than improvising when any of these is reached.
 - [ ] EP-M3: shared checkpoint contract scenarios across both adapters, plus
       durability and sequencing evidence.
 - [ ] EP-M4: lease-reclamation primitive (gated; see Tolerances and Risk 3).
-- [ ] EP-M5: documentation, ADR-018, and roadmap reconciliation.
+- [ ] EP-M5: documentation, ADR-024, and roadmap reconciliation.
 
 Record a timestamp against each item as it completes, in the form
-`- [x] (2026-08-23 14:05Z) EP-M1 ...`.
+`- [x] (2026-10-20 14:05Z) EP-M1 ...`.
 
 ## Surprises & discoveries
 
 - **Observation: roadmap 2.6.2 is materially pre-built.** Durable persistence
   for `GenerationRun` and `GenerationEvent`, the `20260624_000010` migration,
   and sequencing property tests all already exist. Evidence:
-  `episodic/canonical/storage/generation_runs.py` (367 lines),
+  `episodic/canonical/storage/generation_runs.py` (now 358 lines),
   `generation_run_models.py`,
   `alembic/versions/20260624_000010_add_generation_run_tables.py`,
   `tests/canonical_storage/test_sql_generation_run_property_contract.py`. All
@@ -428,6 +462,22 @@ Record a timestamp against each item as it completes, in the form
   Deleting it touches a frozen module, so it is recorded as a follow-up rather
   than actioned here.
 
+- **Observation: the architecture gate does not see the generation-run port
+  modules.** Evidence: `[tool.hecate.groups]` lists `episodic.canonical.domain`,
+  `domain_generation`, `ports`, and `unit_of_work_protocols` under
+  `domain_ports`, but neither `generation_run_ports` nor
+  `generation_run_errors`. Hecate's `first_matching_group` uses dotted-segment
+  prefixes, so `episodic.canonical.domain` does not cover them, and
+  `checker.py` skips any edge with an ungrouped endpoint. Impact: the hexagonal
+  constraint was unenforced for exactly the files this slice edits. See D-12
+  and Risk 8. (2026-10-18)
+
+- **Observation: the migration number and ADR number this plan reserved were
+  taken while it sat in review.** `20261010_000013` (pricing snapshot
+  constraint) and ADR-020 to ADR-023 landed on `main`. Impact: revisions are now
+  `000014` and `000015`, and the ADR is ADR-024. Any further delay will repeat
+  this; Stage A re-checks both. (2026-10-18)
+
 - **Observation: widening `CanonicalUnitOfWork.generation_runs` is lower risk
   than the previous draft rated it.** Exactly one class declares the attribute:
   `SqlAlchemyUnitOfWork`, an explicit protocol subclass, so `make typecheck`
@@ -435,7 +485,9 @@ Record a timestamp against each item as it completes, in the form
   is a structural stub reached through `typ.cast` and none declares
   `generation_runs`. The one additional implementer to update is
   `NoopGenerationRunPort` in
-  `tests/test_generation_run_port_contract_support.py`.
+  `tests/test_generation_run_port_contract_support.py`, which already stubs all
+  five checkpoint methods; only `list_checkpoints` (and, under EP-M4,
+  `fail_expired_leases`) must be added. Re-confirmed 2026-10-18.
 
 Append further observations here as work proceeds.
 
@@ -563,7 +615,7 @@ Append further observations here as work proceeds.
 
 - **D-5. Native PostgreSQL enums for checkpoint status and action.**
   Rationale: consistency with every other enum in this schema. The cost is
-  documented accurately in Risk 7 and the downgrade recipe goes in ADR-018.
+  documented accurately in Risk 7 and the downgrade recipe goes in ADR-024.
   Date/Author: 2026-08-23, planning agent.
 
 - **D-6. Include the lease-reclamation *primitive* on the composite port;
@@ -594,7 +646,7 @@ Append further observations here as work proceeds.
   "human review checkpoints". The domain entity stays `Checkpoint` and the port
   stays `GenerationCheckpointPort` because `domain.py` and the ports are frozen
   here; renaming them to `ReviewCheckpoint` and `ReviewCheckpointPort` is a
-  recorded follow-up. Document the mapping explicitly in ADR-018 so the
+  recorded follow-up. Document the mapping explicitly in ADR-024 so the
   asymmetry reads as deliberate. Date/Author: 2026-08-23, planning agent.
 
 - **D-8. Name the timestamp column `resolved_at`, not `responded_at`.**
@@ -618,17 +670,17 @@ Append further observations here as work proceeds.
   in memory and raise `IntegrityError` in SQL — collapsing the
   interchangeability claim on an input the test factories could easily
   generate. Tightening the domain instead is forbidden by `Constraints`. So:
-  add the forward implication as a CHECK, and record in ADR-018 that the
+  add the forward implication as a CHECK, and record in ADR-024 that the
   converse is deliberately not enforced, with a follow-up to tighten the domain
   validator and add the reverse constraint together. Date/Author: 2026-08-23,
   planning agent.
 
 - **D-10. Use compare-and-set for checkpoint transitions, not row locking.**
-  Rationale: pull request PR 278's ADR-018 records the project's versioning and
-  concurrency strategy and names two shapes, warning that "applying the wrong
-  one produces either lost updates or spurious conflicts". For "concurrent
-  writers racing on one mutable row" — which is exactly a checkpoint transition
-  — the named house shape is **compare-and-set with a typed domain error**, not
+  Rationale: ADR-018 records the project's versioning and concurrency strategy
+  and names two shapes, warning that "applying the wrong one produces either
+  lost updates or spurious conflicts". For "concurrent writers racing on one
+  mutable row" — which is exactly a checkpoint transition — the named house
+  shape is **compare-and-set with a typed domain error**, not
   `SELECT ... FOR UPDATE`. The precedent is
   `SqlAlchemyEpisodeRepository.update`: a conditional
   `UPDATE ... WHERE id = :id AND <expected state>`, a `rowcount` check, and a
@@ -669,6 +721,19 @@ Append further observations here as work proceeds.
   deletion half of ADR-018's policy **does** apply — see the foreign key.
   Date/Author: 2026-08-23, planning agent.
 
+- **D-12. Bring the generation-run port modules under the architecture
+  gate.** Rationale: Risk 8. Add `episodic.canonical.generation_run_ports` and
+  `episodic.canonical.generation_run_errors` to the `domain_ports` group in
+  `[tool.hecate.groups]`, in the EP-M2 commit, since that is the commit that
+  widens the port. Place them beside the other `episodic.canonical` entries;
+  `domain_ports` is the first group whose prefixes could match, so ordering
+  cannot misroute them (Hecate's first-match group ordering is described in the
+  developers' guide and in ADR-022). Non-vacuity: temporarily add
+  `import episodic.canonical.storage` to `generation_run_ports.py`, confirm
+  `make check-architecture` fails with `ARCH001`, then remove it. If adding the
+  modules exposes an existing violation, stop and escalate rather than adding a
+  Hecate ignore. Date/Author: 2026-10-18, planning agent.
+
 Append further decisions here, including any decision to escalate.
 
 ## Outcomes & retrospective
@@ -690,7 +755,8 @@ declares, and adapters that implement them.
 
 **Where things live.**
 
-- `episodic/canonical/domain.py` — frozen dataclasses for the domain entities.
+- `episodic/canonical/domain.py` — a re-exporting façade. The generation-run
+  entities live in `domain_generation.py` and their enums in `domain_enums.py`.
   `Checkpoint` carries the transitions `respond()`, `time_out()`, and
   `cancel()`; each calls `_raise_if_terminal()` and returns a *new* frozen
   instance via `dataclasses.replace`. All three raise
@@ -701,7 +767,7 @@ declares, and adapters that implement them.
   `GenerationRunPort` is the composite of all three sub-protocols.
 - `episodic/canonical/generation_run_errors.py` — `GenerationRunError` and its
   subclasses.
-- `episodic/canonical/adapters/generation_runs.py` (399 lines) —
+- `episodic/canonical/adapters/generation_runs.py` (390 lines) —
   `InMemoryGenerationRunStore`, the reference adapter, which gains checkpoint
   behaviour from `InMemoryGenerationCheckpointMixin` in
   `episodic/canonical/adapters/generation_checkpoints.py`.
@@ -709,7 +775,7 @@ declares, and adapters that implement them.
   shared native-enum declarations.
 - `episodic/canonical/storage/generation_run_models.py` —
   `GenerationRunRecord` and `GenerationEventRecord`.
-- `episodic/canonical/storage/generation_runs.py` (367 lines) —
+- `episodic/canonical/storage/generation_runs.py` (358 lines) —
   `SqlAlchemyGenerationRunStore`, implementing `GenerationRunRepository` and
   `GenerationEventLog` only.
 - `episodic/canonical/storage/generation_run_mappers.py` — pure record/domain
@@ -719,7 +785,9 @@ declares, and adapters that implement them.
 - `episodic/canonical/unit_of_work_protocols.py` — `CanonicalUnitOfWork`,
   currently declaring `generation_runs: GenerationRunEventStore`.
 - `alembic/versions/` — migrations named `YYYYMMDD_NNNNNN_description.py`,
-  chained linearly by `down_revision`. Current head: `20260624_000012`.
+  chained linearly by `down_revision`. Current head: `20261010_000013`.
+  Filename dates are not in chain order (`20260601_000009` follows
+  `20260610_000009`), so trust `down_revision`, not `ls`.
 - `tests/` — top-level `test_*.py` are unit tests; `tests/canonical_storage/`
   holds PostgreSQL-backed integration tests; `tests/features/*.feature` with
   `tests/steps/test_*_steps.py` hold behavioural tests.
@@ -762,7 +830,7 @@ composite `GenerationRunPort` except a no-op stub used for type-checking.
 There is no formal Terms of Reference artefact; the roadmap and design
 documents serve that role. Upstream items traced by this plan:
 
-- `ROADMAP-2.6.2` — `docs/roadmap.md`, lines 319–321: "Implement repository
+- `ROADMAP-2.6.2` — `docs/roadmap.md`, lines 323–325: "Implement repository
   contracts and Alembic migrations. Define repository interfaces for
   generation-run aggregates. Add integration tests validating event ordering."
 - `DESIGN-ORCH-CKPT` — `docs/episodic-podcast-generation-system-design.md`,
@@ -776,15 +844,14 @@ documents serve that role. Upstream items traced by this plan:
   gap-sensitive text is the backpressure heuristic at lines 629–633.
 - `ADR-015` — the port split and the `Checkpoint` / `WorkflowCheckpoint`
   separation.
-- `ADR-018` — `docs/adr/adr-018-explicit-versioning-and-history-strategy.md`,
-  arriving with pull request PR 278: the governing record for versioning,
-  concurrency shapes, immutability, and deletion policy. Three clauses bind
-  this slice. "Applying the wrong [concurrency shape] produces either lost
-  updates or spurious conflicts" — see D-10. "Deletion policy protects the
-  audit trail", with `ON DELETE RESTRICT` for references to the immutable
-  records that explain durable state — see the foreign key in Table 1. "New
-  versioned aggregates must follow this pattern" — see D-11 for why a review
-  checkpoint is not one.
+- `ADR-018` — `docs/adr/adr-018-explicit-versioning-and-history-strategy.md`:
+  the governing record for versioning, concurrency shapes, immutability, and
+  deletion policy. Three clauses bind this slice. "Applying the wrong
+  [concurrency shape] produces either lost updates or spurious conflicts" — see
+  D-10. "Deletion policy protects the audit trail", with `ON DELETE RESTRICT`
+  for references to the immutable records that explain durable state — see the
+  foreign key in Table 1. "New versioned aggregates must follow this pattern" —
+  see D-11 for why a review checkpoint is not one.
 - `EP-4.3.2-DEFER` — "Out of scope and left to later tasks: human-review
   checkpoint persistence (2.6.2) … and an automated stuck-run recovery worker
   (2.6.2)."
@@ -795,20 +862,22 @@ Trace links from upstream item, through milestone, to acceptance evidence:
 ROADMAP-2.6.2    -> EP-M1 -> make check-migrations reports no drift
 ROADMAP-2.6.2    -> EP-M3 -> tests/canonical_storage/test_generation_runs.py
 API-GENRUN-SEQ   -> EP-M3 -> test_sql_generation_run_property_contract.py
-DESIGN-ORCH-CKPT -> EP-M1 -> alembic/versions/20260823_000013_add_review_checkpoints.py
+DESIGN-ORCH-CKPT -> EP-M1 -> alembic/versions/YYYYMMDD_000014_add_review_checkpoints.py
 DESIGN-ORCH-CKPT -> EP-M2 -> episodic/canonical/storage/review_checkpoints.py
 API-GENRUN-CKPT  -> EP-M2 -> uow.generation_runs satisfies GenerationRunPort
 API-GENRUN-CKPT  -> EP-M3 -> tests/features/generation_run_lifecycle.feature
-ADR-015          -> EP-M5 -> docs/adr/adr-020-review-checkpoint-persistence.md
+ADR-015          -> EP-M5 -> docs/adr/adr-024-review-checkpoint-persistence.md
 ADR-018          -> EP-M2 -> compare-and-set transitions; ON DELETE RESTRICT
+ADR-014          -> EP-M2 -> generation_run_ports in Hecate domain_ports (D-12)
 EP-4.3.2-DEFER   -> EP-M4 -> tests/canonical_storage/test_generation_run_lease_reclamation.py
 ```
 
 When an artefact is renamed or folded into an existing module, update this
 table in the same commit; a stale trace table is worse than none.
 
-A new ADR is warranted. Pull request PR 278 introduces ADR-018 and ADR-019, so
-the next free number is **020**. Separately, three files already share 015
+A new ADR is warranted. ADR-018 to ADR-023 now exist, so the next free number
+is **024**; re-check at EP-M5, because two numbers this plan reserved were
+taken while it was in review. Separately, three files already share 015
 (`adr-015-cost-accounting-ports-and-pricing-engine.md`,
 `adr-015-upload-and-idempotency-ports.md`,
 `adr-015-generation-run-port-split.md`), and **two of them are absent from
@@ -1119,8 +1188,27 @@ covers checkpoint approve and respond-twice in memory. Confirm the head:
 uv run alembic heads
 ```
 
-Expected: a single head, `20260624_000012 (head)`. More than one head means
-stop and escalate.
+Expected: a single head, `20261010_000013 (head)`. More than one head means
+stop and escalate; a *different* single head means another revision landed, so
+renumber this plan's revisions and update the trace table before writing code.
+Likewise confirm the next free ADR number with `ls docs/adr/`.
+
+Re-measure the runtime baseline the `Tolerances` entry depends on, alone on the
+host:
+
+```bash
+make test 2>&1 | tee /tmp/baseline-episodic-$(git branch --show-current).out
+```
+
+Record the pass, skip, and wall-clock figures in `Artefacts and notes`.
+
+Confirm the Hecate blind spot D-12 addresses is still present:
+
+```bash
+rg -n "generation_run_ports|generation_run_errors" pyproject.toml
+```
+
+Expected: no match inside `[tool.hecate.groups]`.
 
 ### Stage B — red tests
 
@@ -1200,9 +1288,12 @@ violation.
    `ReviewCheckpointRecord` per the table in `Interfaces and dependencies`.
    Re-export from `models.py` and `storage/__init__.py`.
 3. **Migration.** Add
-   `alembic/versions/20260823_000013_add_review_checkpoints.py`, chained off
-   `20260624_000012`. Follow `20260624_000010_add_generation_run_tables.py`
-   exactly: module docstring, a private `_enum(name, *values)` helper returning
+   `alembic/versions/YYYYMMDD_000014_add_review_checkpoints.py`, dated on the
+   day it is written and chained off `20261010_000013`. Follow
+   `20260624_000010_add_generation_run_tables.py` exactly — not the current
+   head, `20261010_000013`, which is an offline-aware constraint rename with a
+   catalogue precondition check and a different shape entirely: module
+   docstring, a private `_enum(name, *values)` helper returning
    `postgresql.ENUM(*values, name=name, create_type=False)`, and
    `_create_enums` / `_drop_enums` / `_create_*_table` / `_drop_*_table`
    helpers composed by `upgrade()` and `downgrade()`. Create enums before the
@@ -1279,11 +1370,15 @@ violation.
    `generation_runs: GenerationRunPort`, instantiate the composite in
    `SqlAlchemyUnitOfWork.__aenter__`, and update `NoopGenerationRunPort`. Run
    `make typecheck` and fix every implementer it names in the same commit.
-   Import discipline: pull request PR 277 moved `uow.py`'s imports **out of**
-   `if typ.TYPE_CHECKING:` with `# noqa: TC00x` markers, because
-   `mock.create_autospec` evaluates method annotations at runtime and deferred
-   imports raise `NameError`. Any import added here must follow that
-   convention, or the latent bug PR 277 fixed comes straight back.
+   Import discipline: PR 277 moved `uow.py`'s imports **out of**
+   `if typ.TYPE_CHECKING:`, because `mock.create_autospec` evaluates method
+   annotations at runtime and deferred imports raise `NameError`. They now
+   carry named Ruff suppressions, for example
+   `# ruff: ignore[typing-only-first-party-import] - autospec resolves annotations`.
+   Any import added here must follow that convention, or the latent bug PR 277
+   fixed comes straight back. Also update the `generation_runs` entry in the
+   `SqlAlchemyUnitOfWork` class docstring's `Attributes` section, which
+   currently names `SqlAlchemyGenerationRunStore`.
 9. **Commit safety.** In `SqlAlchemyUnitOfWork.__aexit__`, when `exc is None`
    and the session has pending state
    (`session.new or session.dirty or session.deleted`), emit a `warning` before
@@ -1292,12 +1387,24 @@ violation.
 10. **Skylos.** Pre-write the `[[tool.skylos.dead_code.entrypoints]]` entries;
     the gate scans `alembic episodic openai_test_types.py` and tests do not
     count as callers. Two certain hits: the migration's `_drop_enums` and
-    `_drop_*_table` helpers (precedent: the `20260624_000010` entries already
-    in `pyproject.toml`), and `SqlAlchemyReviewCheckpointStore`, which has no
-    production caller until 2.6.3 (precedent: the `InMemoryGenerationRunStore`
-    class entrypoint). Give each a reason naming the verified future caller;
-    for the checkpoint store the honest reason is "no runtime caller until
-    roadmap 2.6.3".
+    `_drop_*_table` helpers, added to the existing `type = "function"` entry
+    that lists the `20260624_000010` downgrade helpers; and
+    `SqlAlchemyReviewCheckpointStore`, which has no production caller until
+    2.6.3. For the store, add a **new** `type = "class"` entry rather than
+    joining the one that lists `InMemoryGenerationRunStore`, whose reason
+    ("instantiated by application composition and local-development
+    consumers") would be false here. The honest reason is "no runtime caller
+    until roadmap 2.6.3". Match any method entry as `type = "method"`.
+11. **Architecture gate.** Apply D-12: add the two port modules to
+    `domain_ports`, run the negative control it describes, and record the
+    transcript.
+12. **Duplication gate.** Run `make lint` and read the nose report before
+    reaching for an exception. Extract shared guards (for example the
+    checkpoint-transition argument checks) into a helper both adapters call
+    where that is simpler. Only a genuine port-shaped parallel between
+    `episodic/canonical/storage/review_checkpoints.py` and
+    `episodic/canonical/adapters/generation_checkpoints.py` earns a
+    `make duplication-allow FIRST=... SECOND=... REASON=...` entry.
 
 ### Stage D — lease reclamation (EP-M4, gated)
 
@@ -1336,10 +1443,10 @@ async def fail_expired_leases(
    `_manually_fail_expired_run` in `test_generation_run_claims.py` as calls to
    the new method. This is an acceptance criterion, not a nicety: without it
    the slice ships a fourth copy of the same transaction.
-4. Add the revision `20260823_000014_add_expired_lease_index.py` for the
+4. Add the revision `YYYYMMDD_000015_add_expired_lease_index.py` for the
    partial index `ix_generation_runs_expired_lease` on `(lease_expires_at)` with
    `postgresql_where=sa.text("status = 'running'")`, mirrored exactly in the
-   ORM `__table_args__`. **Its own revision** — never edit `000013`, which
+   ORM `__table_args__`. **Its own revision** — never edit `000014`, which
    EP-M1 already applied (Risk 6). Follow
    `episodic/canonical/storage/reference_models.py` and
    `alembic/versions/20260228_000004_add_reference_document_model.py`, the
@@ -1369,28 +1476,26 @@ async def fail_expired_leases(
    would describe a capability with no entry point, and an operator who
    believes checkpoints are live will not look for the missing scheduler.
    Revisit in 2.6.3.
-3. Add `docs/adr/adr-020-review-checkpoint-persistence.md` — **020**, because
-   pull request PR 278 takes 018 and 019 — following the shape of
-   `adr-015-generation-run-port-split.md` (Status, Context, Decision,
-   Consequences with Positive/Negative/Neutral, References) rather than the
-   style guide's literal template — every ADR from 010 to 017 does the same, so
-   this is house practice, not a deviation. Cover **D-2 and D-3** as decisions;
-   D-4, D-5, D-7, D-8, and D-9 belong in one Consequences paragraph each, since
-   "use JSONB like everywhere else" is a convention application, not a
-   decision. Include: the `ALTER TYPE` downgrade recipe from Risk 7; the
-   `Checkpoint` / `review_checkpoints` naming asymmetry from D-7; the D-9
-   half-constraint and why; that a returned entity is provisional until its
-   unit of work commits; and that the aggregate's deletion policy is `RESTRICT`
-   under ADR-018's audit-trail policy, and D-11's reasoning that a review
-   checkpoint is not a versioned aggregate and so needs no history table. Add to
-   `docs/contents.md` **after** ADR-019's entry, and reference from the design
-   document. Rebase on PR 278 first: it edits `docs/contents.md`,
-   `docs/roadmap.md`, the design document, and the TUI API document, all of
-   which this milestone also edits.
-4. Correct `docs/episodic-tui-api-design.md`: it states event logs are
-   "partitioned by `generation_run_id` for efficient range queries". They are
-   not, and should not be — `generation_run_id` is a UUID, so that means hash
-   partitioning, which buys nothing when every query is already
+3. Add `docs/adr/adr-024-review-checkpoint-persistence.md` — **024**, the next
+   free number at the last reconciliation; re-check with `ls docs/adr/` —
+   following the shape of `adr-015-generation-run-port-split.md` (Status,
+   Context, Decision, Consequences with Positive/Negative/Neutral, References)
+   rather than the style guide's literal template. Every ADR from 010 onwards
+   does the same, so this is house practice, not a deviation. Cover **D-2 and
+   D-3** as decisions; D-4, D-5, D-7, D-8, and D-9 belong in one Consequences
+   paragraph each, since "use JSONB like everywhere else" is a convention
+   application, not a decision. Include: the `ALTER TYPE` downgrade recipe from
+   Risk 7; the `Checkpoint` / `review_checkpoints` naming asymmetry from D-7;
+   the D-9 half-constraint and why; that a returned entity is provisional until
+   its unit of work commits; that the aggregate's deletion policy is `RESTRICT`
+   under ADR-018's audit-trail policy; and D-11's reasoning that a review
+   checkpoint is not a versioned aggregate and so needs no ADR-019-style
+   history table. Add it to `docs/contents.md` after the ADR-023 entry, and
+   reference it from the design document.
+4. Correct `docs/episodic-tui-api-design.md`: at line 1025 it states event
+   logs are "partitioned by `generation_run_id` for efficient range queries".
+   They are not, and should not be — `generation_run_id` is a UUID, so that
+   means hash partitioning, which buys nothing when every query is already
    `WHERE generation_run_id = ?` served in O(log N) by the composite index. The
    only partitioning that would pay is range on `created_at`, and its payoff is
    cheap retention drops. Leaving an unimplementable performance claim in an
@@ -1433,11 +1538,13 @@ offending span rather than reverting the format.
   signature changed; every file under 400 lines; no new dependency; **ADR-018
   conformance** — transitions use the compare-and-set shape with a typed domain
   error (D-10), the foreign key is `RESTRICT` under the audit-trail policy, and
-  D-11 records why no history table is required.
+  D-11 records why no history table is required; the two port modules are in
+  Hecate's `domain_ports` group with the D-12 negative control recorded; and
+  any duplication exception is reasoned and no broader than one file pair.
 - Recovery: **code may be reverted freely; the migration may not.** Reverting
   this commit leaves the table in place, unused and harmless, and rows written
-  before the revert survive and are picked up on re-apply. Downgrading
-  `20260823_000013` after any checkpoint has been written **destroys reviewer
+  before the revert survive and are picked up on re-apply. Downgrading revision
+  `000014` after any checkpoint has been written **destroys reviewer
   decisions**; take a dump of `review_checkpoints` first.
 - Remaining gaps: no production caller until 2.6.3; lease reclamation;
   documentation.
@@ -1473,13 +1580,13 @@ offending span rather than reverting the format.
   is in its **own** revision and mirrors the ORM exactly; no worker, scheduler,
   or beat entry added.
 - Recovery: revert the port method, both implementations, and revision
-  `000014`. EP-M3 remains a valid plateau.
+  `000015`. EP-M3 remains a valid plateau.
 - Remaining gaps: nothing schedules the reclamation, and nothing detects a
   stuck run. Both stated explicitly in the developers' guide.
 
 ### EP-M5 — documentation and reconciliation
 
-- Outcome: developers' guide, ADR-018, `docs/contents.md`, the design-document
+- Outcome: developers' guide, ADR-024, `docs/contents.md`, the design-document
   cross-reference, and the corrected partitioning claim are current. The users'
   guide is deliberately unchanged.
 - Acceptance evidence: `make markdownlint` and `make nixie` pass.
@@ -1500,7 +1607,7 @@ uv run alembic heads
 Expected:
 
 ```plaintext
-20260624_000012 (head)
+20261010_000013 (head)
 ```
 
 The focused red test after Stage B step 3:
@@ -1588,7 +1695,7 @@ Quality criteria — what "done" means:
 - Each milestone is a separate commit, so `git revert` returns the tree to the
   previous plateau.
 - **One destructive step exists**, contrary to the previous draft's blanket
-  claim: `alembic downgrade` past `20260823_000013` drops `review_checkpoints`
+  claim: `alembic downgrade` past revision `000014` drops `review_checkpoints`
   and every reviewer decision in it. Before EP-M2 this is harmless because the
   table is empty; after it, take a dump first. Nothing else in this plan
   touches production data or an external service.
@@ -1600,9 +1707,12 @@ Record here as work proceeds:
 - the red transcript from Stage B step 3;
 - the negative-control transcript for INV-SEQ-1 (cross-run predicate removed);
 - the two `pg_type` transcripts for INV-MIG-2, one per enum;
-- the `make test` baseline and final wall-clock. The baseline at commit
-  `5af0638` is **130.58 s, 1227 passed, 3 skipped**, with per-test
-  `migrated_engine` setup of 0.20–0.38 s after a ~3.8 s session-scoped start.
+- the D-12 negative-control transcript (`ARCH001` on a port importing storage);
+- the `make test` baseline and final wall-clock. Historical figures, neither of
+  them the Stage A baseline: **130.58 s, 1227 passed, 3 skipped** at `5af0638`,
+  and **334.48 s of pytest time, 1725 passed, 1 skipped** on 2026-10-15 under
+  host contention. Per-test `migrated_engine` setup was 0.20–0.38 s after a
+  ~3.8 s session-scoped start.
 
 ## Interfaces and dependencies
 
@@ -1752,6 +1862,26 @@ Metrics to emit through the existing `MetricsPort`, following
 Table 2: Metrics emitted by the review-checkpoint store.
 
 ## Revision note
+
+2026-10-18 (fourth revision) — Rebased onto `main` at `468923ed` and reconciled
+against the tree, which had moved 77 commits since `5af0638`. The previously
+pending PR 277 and PR 278 have both merged, so the `Pending pull requests`
+section becomes `Changes on main since the first draft` and Risk 8 (about
+implementing ahead of them) is retired. Two reservations this plan held were
+taken in the meantime: migration `000013` (now the pricing-snapshot constraint
+rename) and ADR-020 (now one of four new ADRs). The revisions become `000014`
+and `000015`, with the date prefix left to the day they are written, and the
+ADR becomes **ADR-024**. The domain module split means the frozen surface now
+lives in `domain_generation.py` and `domain_enums.py` behind the `domain.py`
+façade. New constraints cover the nose duplication gate, named Ruff and Pylint
+suppressions, and Pylint's new reach into `tests/`. The absolute 165 s runtime
+ceiling is withdrawn in favour of a relative one against a fresh Stage A
+baseline, because the suite has grown from 1227 to 1725 tests. One new finding:
+**Hecate does not classify `generation_run_ports` or `generation_run_errors`**,
+so the hexagonal constraint this plan relied on was unenforced for its own
+files. The new Risk 8 and D-12 put both modules into `domain_ports` in EP-M2,
+with a negative control. The Skylos guidance is corrected so the checkpoint
+store does not inherit a false entrypoint reason.
 
 2026-08-23 (third revision) — Reconciled against two open pull requests. PR 278
 takes ADR-018 and ADR-019, so this plan's ADR becomes **020**; more
