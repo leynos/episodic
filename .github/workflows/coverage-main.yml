@@ -90,7 +90,7 @@ jobs:
           "$HOME/.local/bin/vidaimock" --version
 
       - name: Generate coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@81374b6f183e59f0570ad36217ded90d3240fda6
         with:
           language: python
           format: cobertura
@@ -128,7 +128,7 @@ jobs:
         # coverage for an automerge, which is the case the dispatch exists
         # to cover.
         if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@81374b6f183e59f0570ad36217ded90d3240fda6
         with:
           format: cobertura
           mode: upload

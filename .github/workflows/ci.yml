@@ -139,7 +139,7 @@ jobs:
       - name: Install mdtablefix
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@7d751eded578e48dacf43ab173d5820e6437c474
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@81374b6f183e59f0570ad36217ded90d3240fda6
         with:
           version: "0.6.1"
 
@@ -196,7 +196,7 @@ jobs:
       # default-branch cache baseline. They do not contact CodeScene.
       - name: Generate coverage
         if: github.event_name == 'pull_request'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@81374b6f183e59f0570ad36217ded90d3240fda6
         with:
           language: python
           format: cobertura
