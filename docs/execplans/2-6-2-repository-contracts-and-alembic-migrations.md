@@ -386,7 +386,9 @@ Stop and escalate rather than improvising when any of these is reached.
 
 ## Progress
 
-- [ ] EP-M0 Stage A: orientation, production **and test** sweep (no changes).
+- [x] (2026-10-20 20:32Z) EP-M0 Stage A: orientation, production **and test**
+      sweep (no changes). Baseline measured; all expectations re-confirmed
+      against the tree; no deviation found.
 - [ ] EP-M1: `review_checkpoints` table, ORM model, reversible migration.
 - [ ] EP-M2: `SqlAlchemyReviewCheckpointStore`, composite port adapter,
       unit-of-work wiring, commit-safety warning.
@@ -1713,6 +1715,100 @@ Record here as work proceeds:
   and **334.48 s of pytest time, 1725 passed, 1 skipped** on 2026-10-15 under
   host contention. Per-test `migrated_engine` setup was 0.20–0.38 s after a
   ~3.8 s session-scoped start.
+
+### Stage A baseline, measured 2026-10-20 20:24Z
+
+Command, per the `Tolerances` entry:
+
+```bash
+make test 2>&1 | tee /tmp/baseline-episodic-2-6-2-repository-contracts-and-alembic-migrations.md.out
+```
+
+Raw result:
+
+```plaintext
+1 failed, 1723 passed, 1 skipped, 30 warnings, 1 error in 748.53s (0:12:28)
+```
+
+**748.53 s is pytest's own figure.** Measured wall clock, including the `build`,
+`crosshair`, and `test-workflow-contracts` prerequisites, was **758 s**. The
+`Tolerances` growth check reads wall clock, so 758 s is the referent.
+
+Two qualifications, both required to read that number honestly.
+
+**The host was not idle.** `nproc` reports **24**, and load average sat between
+27 and 67 throughout the run: this session holds the only candidate worktree,
+but other repositories (cuprum, dev-env-rocky) were building and testing
+concurrently and were correctly left alone. `Tolerances` specifies an
+otherwise-idle re-measure; this is therefore a *contended* baseline, and it is
+the figure this plan compares against because it is the only one taken on this
+revision. The scrutineer independently recorded the start load as 67.19 and the
+end load as 27.45.
+
+**Both non-passes are harness timeouts, not defects.** Neither is on a path
+this plan touches:
+
+```plaintext
+FAILED tests/steps/test_http_service_scaffold_steps.py::test_granian_serves_health_endpoints
+  - Failed: Timeout (>180.0s) from pytest-timeout.
+ERROR tests/test_env_runtime_wiring.py::test_create_app_from_env_wires_database_readiness_probe[async_dialect_url]
+  - Failed: Timeout (>180.0s) from pytest-timeout.
+```
+
+Wrapped to the 120-column code-block budget; the text is otherwise verbatim.
+
+Re-run in isolation against the same tree, both pass in **12.55 s, 3 passed**.
+They are load artefacts of the 180 s `pytest-timeout`, which is the same
+shared-host contention failure mode recorded in the `Tolerances` runtime entry.
+**Not verified:** the full `make test` was not re-run a second time, so this
+inference rests on the isolated re-run and on neither target being touched by
+this plan, not on a repeated green suite run. Baseline status for the purposes
+of this plan is **1723 passed, 1 skipped, 0 failures attributable to this
+slice**.
+
+Contention-adjusted wall-clock, stated so the 15% growth check has a usable
+referent: the two timeouts contribute 360 s of pure waiting and would otherwise
+cost ~12.55 s, so the run represents roughly **410 s** of real work. Both
+figures are recorded; the comparison at EP-M5 will be made against a
+like-for-like re-measurement under comparable load, not against a figure this
+plan has quietly adjusted in its own favour.
+
+One admission observation worth carrying forward: `build-limits-status` was
+healthy (exit 0, `capacity 4, held 4`) at both ends of the run, with ~305
+waiting requests held entirely by Rust crates in other agents' worktrees and
+none from this repository. No gate here compiles Rust, so compile admission
+never gated this baseline — but a Python-only gate run is not evidence that
+admission is idle.
+
+Per-test `migrated_engine` setup, from `--durations=0` on
+`tests/canonical_storage/test_generation_runs.py` (10 passed, 6.78 s total):
+**0.22–0.44 s** per function after a **3.39 s** session-scoped py-pglite start.
+Both are inside the `Tolerances` figures (0.5 s per test; ~3.8 s session
+start), so no escalation.
+
+Stage A sweep results, all re-confirmed against this revision rather than
+carried forward from the plan:
+
+- `uv run alembic heads` reports the single head `20261010_000013`, as
+  expected; the revision counter is authoritative and `000014`/`000015` remain
+  free.
+- `ls docs/adr/` ends at `adr-023`, so **ADR-024 is free**.
+- The Hecate blind spot D-12 addresses is still present:
+  `rg -n "generation_run_ports|generation_run_errors" pyproject.toml` matches
+  neither module inside `[tool.hecate.groups]`.
+- No SQL checkpoint adapter exists; `SqlAlchemyWorkflowCheckpointStore` is the
+  different orchestration concept; the composite `GenerationRunPort` is
+  implemented only by `InMemoryGenerationRunStore`.
+- `tests/canonical_storage/test_generation_runs.py` is already the SQL contract
+  suite (368 lines, against a 400-line `max-module-lines` ceiling), and
+  `tests/features/generation_run_lifecycle.feature` already covers checkpoint
+  approve and respond-twice in memory — both as the plan states.
+
+One constraint discovered during the sweep and not stated in the plan: the
+400-line ceiling leaves **32 lines** of headroom in
+`tests/canonical_storage/test_generation_runs.py`, which is the file Stage B
+step 3 adds the SQL parameterization to. The scenario module therefore has to
+carry the assertions, and the SQL parameterization has to be a thin driver.
 
 ## Interfaces and dependencies
 
