@@ -9,6 +9,9 @@ Transitions are applied by compare-and-set rather than ``SELECT ... FOR UPDATE``
 (D-10, ADR-018). The predicate ``status = 'created'`` is the concurrency
 control, and its outcome is observable sequentially — which a row lock is not,
 under a harness that serializes every transaction globally.
+
+Core ``UPDATE``s leave the session holding a stale copy of the row, which ORM
+reads answer from; a behavioural read must pass ``populate_existing``.
 """
 
 import typing as typ
@@ -334,13 +337,7 @@ class SqlAlchemyReviewCheckpointStore:
         return updated
 
     async def _refresh_resolved(self, record: ReviewCheckpointRecord) -> None:
-        """Synchronize the identity-mapped record with the row just written.
-
-        A core ``UPDATE`` bypasses the ORM's unit of work, so the session's copy
-        of the row is stale until something reconciles it. The record is
-        refreshed rather than mutated so that the stored row, not the local
-        entity, remains authoritative.
-        """
+        """Reconcile the session's copy with the row just written."""
         await self._session.refresh(record)
 
     async def _count_open(self, run_id: uuid.UUID) -> float:
@@ -367,6 +364,8 @@ class SqlAlchemyReviewCheckpointStore:
 
         The re-read is the point of the compare-and-set shape: `rowcount == 0`
         alone cannot say whether the row vanished or was already resolved.
+        ``populate_existing`` makes it a re-read rather than an identity map hit
+        reporting a status the row never held.
 
         Raises
         ------
@@ -375,7 +374,11 @@ class SqlAlchemyReviewCheckpointStore:
         CheckpointAlreadyTerminal
             If another writer resolved it first.
         """
-        current = await self._session.get(ReviewCheckpointRecord, checkpoint_id)
+        current = await self._session.get(
+            ReviewCheckpointRecord,
+            checkpoint_id,
+            populate_existing=True,
+        )
         if current is None:
             _log_event(
                 "warning",

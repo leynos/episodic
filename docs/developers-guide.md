@@ -2311,9 +2311,9 @@ returning fewer than `limit` has reached the end. The call appends each
 instant, `now`, to the event's `occurred_at`, `ended_at`, and `updated_at`. A
 non-positive `limit` raises `ValueError`. Both adapters expose the method: the
 SQL adapter reclaims, while the in-memory adapter necessarily returns `()`
-because `GenerationRun` carries no lease field -- its emptiness is a
-divergence, not a contract, so a shared suite must not treat agreement between
-the two as evidence.
+because `GenerationRun` carries no lease field — its emptiness is a divergence,
+not a contract, so a shared suite must not treat agreement between the two as
+evidence.
 
 Nothing schedules this method yet. No reaper, worker, or cron entry invokes it,
 so during this slice it runs only when an operator or test calls it, and a
