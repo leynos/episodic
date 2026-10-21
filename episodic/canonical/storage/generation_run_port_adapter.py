@@ -148,6 +148,15 @@ class SqlAlchemyGenerationRunPortAdapter:
         """Count events for a run after an optional sequence cursor."""
         return await self._runs.count_events(run_id, after_seq=after_seq)
 
+    async def fail_expired_leases(
+        self,
+        *,
+        now: dt.datetime,
+        limit: int = 100,
+    ) -> tuple[GenerationRun, ...]:
+        """Fail runs whose execution lease expired at or before ``now``."""
+        return await self._runs.fail_expired_leases(now=now, limit=limit)
+
     async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
         """Persist a checkpoint."""
         return await self._checkpoints.create_checkpoint(checkpoint)

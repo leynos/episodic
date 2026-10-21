@@ -155,6 +155,28 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         """
         raise RunNotFound(run_id)
 
+    async def fail_expired_leases(
+        self,
+        *,
+        now: dt.datetime,
+        limit: int = 100,
+    ) -> tuple[GenerationRun, ...]:
+        """Reclaim no runs because this implementation stores none.
+
+        Parameters
+        ----------
+        now
+            Instant the expiry predicate would use, ignored here.
+        limit
+            Maximum batch size accepted by the port contract and ignored here.
+
+        Returns
+        -------
+        tuple of GenerationRun
+            Always an empty tuple because this implementation stores no runs.
+        """
+        return ()
+
     async def append_event(
         self,
         run_id: uuid.UUID,
