@@ -899,10 +899,6 @@ members = ["episodic/api/resources/series_profiles.py::_get_serializer_fn", "epi
 reason = "Template Method hooks returning the profile serializer; each override exists to bind one concrete callable for its handler."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/generation/tei_payload.py::require_payload_object", "episodic/generation/tei_payload.py::require_payload_list"]
-reason = "Typed facades over require_mapping and require_sequence; the residue is the return type and the docstring each facade documents."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/logging.py::log_info", "episodic/logging.py::log_warning", "episodic/logging.py::log_error"]
 reason = "Level-specific wrappers over _log_at kept explicit so call sites name the level; the shared body is one delegating call plus its documented signature."
 
