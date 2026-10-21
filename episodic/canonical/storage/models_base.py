@@ -4,6 +4,8 @@ import sqlalchemy as sa
 
 from episodic.canonical.domain import (
     ApprovalState,
+    CheckpointAction,
+    CheckpointStatus,
     EpisodeStatus,
     GenerationRunStatus,
     IngestionStatus,
@@ -87,5 +89,15 @@ QUALITY_MODE = sa.Enum(
 QA_STATUS = sa.Enum(
     QaStatus,
     name="qa_status",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+REVIEW_CHECKPOINT_STATUS = sa.Enum(
+    CheckpointStatus,
+    name="review_checkpoint_status",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+REVIEW_CHECKPOINT_ACTION = sa.Enum(
+    CheckpointAction,
+    name="review_checkpoint_action",
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )

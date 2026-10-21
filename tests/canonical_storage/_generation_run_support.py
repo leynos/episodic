@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from episodic.canonical.domain import (
     ApprovalState,
     CanonicalEpisode,
+    Checkpoint,
+    CheckpointStatus,
     EpisodeStatus,
     GenerationRun,
     GenerationRunStatus,
@@ -28,6 +30,9 @@ if typ.TYPE_CHECKING:
 
 
 NOW = dt.datetime(2026, 6, 24, 8, 30, tzinfo=dt.UTC)
+
+#: Deliberately not alphabetical, so a set or sort round trip becomes visible.
+CHECKPOINT_OPTIONS = ("edit", "approve", "request_changes")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -175,3 +180,42 @@ async def claim_run_in_independent_uow(
         )
         await uow.commit()
         return claimed
+
+
+@dc.dataclass(frozen=True, slots=True)
+class CommittedCheckpoint:
+    """A run and checkpoint already committed to PostgreSQL."""
+
+    run_id: uuid.UUID
+    checkpoint_id: uuid.UUID
+
+
+def make_checkpoint(run_id: uuid.UUID) -> Checkpoint:
+    """Build a ``created`` checkpoint on a run, with ordered options."""
+    return Checkpoint(
+        id=uuid.uuid7(),
+        generation_run_id=run_id,
+        node="review",
+        prompt="Approve the draft?",
+        # Deliberately not alphabetical, so a set or sort round trip shows up.
+        options=CHECKPOINT_OPTIONS,
+        status=CheckpointStatus.CREATED,
+        created_at=NOW,
+        responded_at=None,
+        responded_by=None,
+        response_action=None,
+        response_payload={},
+    )
+
+
+async def commit_run_and_checkpoint(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> CommittedCheckpoint:
+    """Commit a run with its foreign keys and one ``created`` checkpoint."""
+    run = make_generation_run()
+    await persist_generation_run_prerequisites(session_factory, run)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.generation_runs.create_run(run)
+        created = await uow.generation_runs.create_checkpoint(make_checkpoint(run.id))
+        await uow.commit()
+    return CommittedCheckpoint(run_id=run.id, checkpoint_id=created.id)

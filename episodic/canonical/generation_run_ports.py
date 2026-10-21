@@ -15,6 +15,8 @@ async def use_runs(port: GenerationRunPort) -> None:
 import dataclasses as dc
 import typing as typ
 
+from .generation_run_lease_ports import GenerationRunLeaseReclamationPort
+
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
@@ -22,6 +24,7 @@ if typ.TYPE_CHECKING:
     from .domain import (
         Checkpoint,
         CheckpointResponse,
+        CheckpointStatus,
         GenerationEvent,
         GenerationRun,
         GenerationRunStatus,
@@ -163,6 +166,13 @@ class GenerationEventLog(typ.Protocol):
     otherwise it starts from sequence 1. `offset` skips records within the
     range selected by `after_seq`, and `limit` is a hard cap. Callers must use
     either `after_seq` or `offset`, not both.
+
+    Sequences are allocated per run and are **gapless**: after `N` successful
+    appends the persisted sequence numbers are exactly `{1, ..., N}`, and
+    `list_events` never returns a previously-unseen sequence at or below one it
+    has already returned. That guarantee assumes a **single writer per run**;
+    it holds under concurrent writers only because allocation takes a row lock
+    on the parent run, so allocation order equals commit order.
     """
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
@@ -174,7 +184,16 @@ class GenerationEventLog(typ.Protocol):
         payload: JsonMapping,
         occurred_at: dt.datetime | None = None,
     ) -> GenerationEvent:
-        """Append an event and return it with the allocated sequence."""
+        """Append an event and return it with the allocated sequence.
+
+        Raises
+        ------
+        RunNotFound
+            If `run_id` does not identify a stored generation run.
+        RunAlreadyTerminal
+            If the run has already reached a terminal status. A run's event
+            stream is closed when the run ends.
+        """
         raise NotImplementedError
 
     async def list_events(
@@ -192,6 +211,8 @@ class GenerationEventLog(typ.Protocol):
         ValueError
             If ``after_seq`` is supplied with a non-zero ``offset``. These
             pagination mechanisms are mutually exclusive.
+        RunNotFound
+            If `run_id` does not identify a stored generation run.
         """
         raise NotImplementedError
 
@@ -222,17 +243,80 @@ class GenerationRunEventStore(
 
 @typ.runtime_checkable
 class GenerationCheckpointPort(typ.Protocol):
-    """Port for user-facing generation-run checkpoints."""
+    """Port for user-facing generation-run checkpoints.
+
+    Notes
+    -----
+    The contract below is the part two independent implementers could not
+    otherwise agree on, and is what the shared scenarios in
+    ``tests/generation_run_contract_scenarios.py`` enforce.
+
+    Creation preconditions are *existence*, not lifecycle: `create_checkpoint`
+    requires the parent run to exist and raises `RunNotFound` when it does not,
+    but it does **not** consult the run's status. An implementer that reused a
+    run-level "must be mutable" guard would reject checkpoints on a running run
+    and diverge from every other implementation.
+
+    A duplicate identifier raises `CheckpointAlreadyExists` rather than
+    overwriting. A checkpoint arriving with a status other than `created`
+    raises `CheckpointAlreadyTerminal`. Together these make creation
+    non-destructive under a replayed request.
+
+    Adapters may impose length limits on `node`, `prompt`, `responded_by`, and
+    the option strings; the port states no bound, so callers must not assume
+    one. Option *order* is part of the value and survives a round trip.
+
+    Every transition below raises `CheckpointNotFound` when no checkpoint holds
+    the identifier, and `CheckpointAlreadyTerminal` when the checkpoint is
+    already resolved; a rejected transition leaves the stored row untouched.
+    """
 
     async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
-        """Persist a checkpoint."""
+        """Persist a checkpoint.
+
+        Returns
+        -------
+        Checkpoint
+            The stored checkpoint. It must equal what a later read returns, so
+            a caller observes any adapter normalization at once.
+
+        Raises
+        ------
+        RunNotFound
+            If the parent generation run does not exist. The run's status is
+            deliberately not a precondition.
+        CheckpointAlreadyExists
+            If the identifier is already in use.
+        CheckpointAlreadyTerminal
+            If `checkpoint.status` is not `created`.
+        """
         raise NotImplementedError
 
     async def get_checkpoint(
         self,
         checkpoint_id: uuid.UUID,
     ) -> Checkpoint | None:
-        """Return a checkpoint by identifier."""
+        """Return a checkpoint by identifier, or `None` when absent."""
+        raise NotImplementedError
+
+    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
+    async def list_checkpoints(
+        self,
+        run_id: uuid.UUID,
+        *,
+        status: CheckpointStatus | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[Checkpoint, ...]:
+        """List a run's checkpoints, oldest-created first.
+
+        Raises
+        ------
+        RunNotFound
+            If `run_id` does not identify a stored generation run.
+        ValueError
+            If `limit` or `offset` is negative.
+        """
         raise NotImplementedError
 
     async def respond_to_checkpoint(
@@ -241,7 +325,16 @@ class GenerationCheckpointPort(typ.Protocol):
         *,
         response: CheckpointResponse,
     ) -> Checkpoint:
-        """Record a reviewer response for a checkpoint."""
+        """Record a reviewer response for a checkpoint.
+
+        Raises
+        ------
+        CheckpointNotFound
+            If no checkpoint holds the identifier.
+        CheckpointAlreadyTerminal
+            If the checkpoint is already `responded`, `timed_out`, or
+            `cancelled`. The stored row is left unchanged.
+        """
         raise NotImplementedError
 
     async def time_out_checkpoint(
@@ -250,7 +343,11 @@ class GenerationCheckpointPort(typ.Protocol):
         *,
         at: dt.datetime,
     ) -> Checkpoint:
-        """Record that a checkpoint timed out."""
+        """Record that a checkpoint timed out.
+
+        The expiry instant is the caller's, so a replayed timeout records when
+        the review window actually closed rather than when the call was made.
+        """
         raise NotImplementedError
 
     async def cancel_checkpoint(
@@ -259,7 +356,11 @@ class GenerationCheckpointPort(typ.Protocol):
         *,
         at: dt.datetime,
     ) -> Checkpoint:
-        """Record that a checkpoint was cancelled."""
+        """Record that a checkpoint was cancelled.
+
+        Cancellation is an operator's deliberate act, so it is not derived from
+        the expiry instant the caller supplies.
+        """
         raise NotImplementedError
 
 
@@ -268,6 +369,13 @@ class GenerationRunPort(
     GenerationRunRepository,
     GenerationEventLog,
     GenerationCheckpointPort,
+    GenerationRunLeaseReclamationPort,
     typ.Protocol,
 ):
-    """Composite port matching the design-document class diagram."""
+    """Composite port matching the design-document class diagram.
+
+    The lease-reclamation primitive is declared in
+    `episodic.canonical.generation_run_lease_ports` and mixed in here, because
+    it is the union of repository and event-log behaviour rather than either
+    one alone.
+    """
