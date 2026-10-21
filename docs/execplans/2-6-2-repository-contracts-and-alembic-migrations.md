@@ -888,6 +888,31 @@ Record a timestamp against each item as it completes, in the form
   side. The shared-constant guard survives because what both sides must agree
   on is the *predicate*, and that constant remains. (2026-10-21)
 
+- **Observation: fixing the df12 abort moved the abort one line down, to
+  Skylos.** `make lint` has three independent steps after the df12 checks, and
+  nothing had ever exercised them on this branch. Repairing `C9105` produced the
+  first-ever readings for C9112 and `ambrleaks`, and then failed at Makefile:148
+  with two `SKY-U006 unused parameter` findings on the in-memory no-op's `now`
+  and `limit`. The lesson is that an aborted gate hides a *queue* of findings,
+  not one: each repair can reveal the next, and only a run that reaches exit 0
+  is evidence about the steps behind it. A partial run must be recorded as
+  unverified for every step it did not reach. (2026-10-21)
+
+- **Observation: the honest Skylos remedy was the typed entry-point rule, and
+  the probe showed which entries were actually needed.** The parameters are
+  unused by design — the in-memory adapter stores no lease, so the no-op cannot
+  consult `now` — but they must match the port signature. The repository already
+  treats that pattern this way for the no-op metrics and tracing adapters, so
+  the rule follows an existing convention rather than inventing one. Two
+  details are worth recording. First, analysing the single file produced a
+  *third* finding, `SKY-U004 unused class`, that the real gate command over the
+  full `SKYLOS_PRODUCTION_TARGETS` never reports; adding a rule for it would
+  have documented a finding that does not exist, so a single-file probe is not a
+  substitute for the gate's own command. Second, the decisive check was
+  re-running the real command against a probe copy of the config with the
+  proposed rule added and then with extra rules stripped, which showed the
+  two-parameter entry alone reaches exit 0. (2026-10-21)
+
 Append further observations here as work proceeds.
 
 ## Decision log
@@ -2213,7 +2238,15 @@ offending span rather than reverting the format.
   the nose duplication gate unrun — unverified, not passing. Repaired by
   inlining the status into the predicate and dropping the unconsumed constant;
   the predicate is unchanged at `status = 'running'`, checked by exec-ing the
-  pre- and post-repair modules side by side against a stubbed enum.
+  pre- and post-repair modules side by side against a stubbed enum. The second
+  run reached **`Makefile:148`** and failed there on two `SKY-U006 unused
+  parameter` findings in
+  `episodic/canonical/adapters/generation_run_lease_reclamation.py`, leaving
+  only the duplication gate unrun; that is repaired with a typed
+  `type = "parameter"` entry-point rule in `pyproject.toml`, naming the
+  composite port and the in-memory store as the verified caller. The third run
+  **completed with exit 0**, executing all eight steps for the first time on
+  this branch.
 
 ### EP-M5 — documentation and reconciliation
 
