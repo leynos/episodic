@@ -521,10 +521,24 @@ Stop and escalate rather than improvising when any of these is reached.
       delta is the new module). A CLI review of `59249971` then returned
       **zero findings** over all 44 changed files — a fresh run, with the
       examined-file set byte-identical to `git diff --name-only
-      origin/main…HEAD`. Two non-blocking advisories were recorded and left
-      alone as pre-existing on `origin/main`: a stale duplication allow entry at
+      origin/main…HEAD`. Two non-blocking advisories were recorded, both
+      pre-existing on `origin/main`: a stale duplication allow entry at
       `pyproject.toml:885`, and an `SAWarning` about unresolvable table cycles at
-      `migration_check.py:44`. D-21 records the two declined items.
+      `migration_check.py:44`. D-21 records the two declined review items. The
+      stale entry was cleared separately below; the `SAWarning` stays, because it
+      is not this slice's to fix and removing it would mean touching the
+      migration checker's table sort.
+- [x] (2026-10-21) Cleared the stale duplication allow entry as its own atomic
+      commit (`8772f0cc`), per `AGENTS.md` and following the precedent of
+      `88b2d9e8`. Verified dormant rather than assumed: the gate's own functions
+      run against the frozen HEAD config and the worktree config side by side
+      show findings unchanged at 30, blocking at 0, and stale falling 1 → 0, with
+      the removed pair absent from the detector output entirely. The gate's
+      printed figure counts silenced *findings*, not allow entries, so it stays
+      at `30 allowed by reasoned exceptions` while the entry count falls 25 →
+      24 — reading that number as an entry count would make a correct removal
+      look like a no-op. `make check-fmt` and `make lint` green afterwards, nine
+      lint substeps executed, no stale entry reported.
 - [x] (2026-10-21) EP-M5: documentation and reconciliation. `docs/contents.md`
       gains the ADR-024 entry after ADR-023, using the file's inline-link
       convention; `docs/adr/adr-024-review-checkpoint-persistence.md` follows
@@ -1012,6 +1026,17 @@ Record a timestamp against each item as it completes, in the form
   would re-open repairs already made; dismissing the zero-finding run as
   unreliable would re-run a review that already passed. The resolution is to
   bind each finding to the commit it can be shown to describe. (2026-10-21)
+
+- **Observation: the duplication gate's printed count is silenced *findings*,
+  not allow entries, so a correct removal of a stale entry leaves it unmoved.**
+  `scripts/duplication_gate.py:98` interpolates `len(allowed)` over the
+  findings the allow-list silenced. A stale entry silences nothing by
+  definition, so removing one changes the reported figure not at all — it stays
+  `30 allowed by reasoned exceptions` while the entry count falls 25 → 24. Read
+  as an entry count, that number makes a correct removal look like a no-op,
+  which is exactly the reading that would invite reverting it. Recorded because
+  the count is the only figure the gate prints, so it is the only thing a
+  future reader has to go on. (2026-10-21)
 
 Append further observations here as work proceeds.
 
