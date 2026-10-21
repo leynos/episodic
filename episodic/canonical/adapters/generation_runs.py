@@ -28,6 +28,9 @@ from episodic.canonical.generation_run_ports import (
 from episodic.logging import log_event as _log_event
 
 from .generation_checkpoints import InMemoryGenerationCheckpointMixin
+from .generation_run_lease_reclamation import (
+    InMemoryGenerationRunLeaseReclamationMixin,
+)
 
 type TimeProvider = cabc.Callable[[], dt.datetime]
 
@@ -43,7 +46,10 @@ def _default_time_provider() -> TimeProvider:
 
 
 @dc.dataclass(slots=True)
-class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
+class InMemoryGenerationRunStore(
+    InMemoryGenerationCheckpointMixin,
+    InMemoryGenerationRunLeaseReclamationMixin,
+):
     """In-memory reference adapter for the composite generation-run port."""
 
     time_provider: TimeProvider = dc.field(default_factory=_default_time_provider)

@@ -15,6 +15,8 @@ async def use_runs(port: GenerationRunPort) -> None:
 import dataclasses as dc
 import typing as typ
 
+from .generation_run_lease_ports import GenerationRunLeaseReclamationPort
+
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
@@ -372,6 +374,13 @@ class GenerationRunPort(
     GenerationRunRepository,
     GenerationEventLog,
     GenerationCheckpointPort,
+    GenerationRunLeaseReclamationPort,
     typ.Protocol,
 ):
-    """Composite port matching the design-document class diagram."""
+    """Composite port matching the design-document class diagram.
+
+    The lease-reclamation primitive is declared in
+    `episodic.canonical.generation_run_lease_ports` and mixed in here, because
+    it is the union of repository and event-log behaviour rather than either
+    one alone.
+    """

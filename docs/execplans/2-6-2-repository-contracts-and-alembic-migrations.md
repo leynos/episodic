@@ -476,8 +476,25 @@ Stop and escalate rather than improvising when any of these is reached.
       entry is a latent hazard: if those modules drift back into a shared
       block, the entry silently suppresses the finding and nothing announces
       that it went live. `make lint` re-run green afterwards.
-- [ ] EP-M4: lease-reclamation primitive (gated; see Tolerances and Risk 3).
-      **Now unblocked** — the gate is "Stage C fully green", which it is.
+- [x] (2026-10-21) EP-M4: lease-reclamation primitive. Stage D steps 1–5 all
+      landed. `fail_expired_leases` sits on the composite `GenerationRunPort`
+      only, declared in the new `episodic/canonical/generation_run_lease_ports.py`
+      because it is the union of repository and event-log behaviour rather than
+      either alone; the SQL mixin reclaims with a correlated `NOT EXISTS`
+      checkpoint guard, and the in-memory adapter is an honest no-op whose
+      docstring says the emptiness is a divergence and that a shared suite must
+      not treat agreement as evidence. Revision `20261020_000015` adds the
+      partial index in its **own** revision with `000014` untouched, and both
+      the migration and the ORM index consume one shared predicate constant
+      (D-20). Both duplicated test helpers are now port calls, and the de-
+      duplication surfaced a real assertion gap that the merge closed. No
+      scheduler, worker, or beat entry was added, per the Risk 3 gate.
+      Focused suite: **36 passed**. `make check-migrations` exit 0 with
+      `Running upgrade 20261020_000014 -> 20261020_000015`. Ruff, `make
+      typecheck`, `make fmt`, and `make markdownlint` all clean; pinned Pylint
+      4.0.9 at **10.00/10** on every touched file. Every touched code file is
+      within the 400-line ceiling. The Stage D audit gates and the milestone
+      CLI review are recorded below once dispatched.
 - [ ] EP-M5: documentation, ADR-024, and roadmap reconciliation.
 
 Record a timestamp against each item as it completes, in the form
@@ -787,6 +804,54 @@ Record a timestamp against each item as it completes, in the form
   unverified rather than green — the same failure mode as the df12 abort
   recorded above, which is exactly how it went unnoticed the first time.
   (2026-10-21)
+
+- **Observation: Stage D's "delete the duplicates" step was the whole point,
+  and the two helpers had already drifted apart.** `_recover_expired_lease` in
+  `test_sql_generation_run_property_contract.py` appended
+  `payload={"error_category": "launcher.lease_expired"}` — category only —
+  while its own `update_run_status` call wrote **both** category and message.
+  Nothing observed the disagreement, because both were the same hand-rolled
+  transaction under test and no assertion compared them. Re-expressing the
+  helper as a call to `fail_expired_leases` forced the question, and the richer
+  pair won, so the run's error fields and its event payload now agree. The
+  lesson: a duplicated transaction is not merely extra text, it is an
+  independent chance to drift, and only the de-duplication makes the drift
+  visible. (2026-10-21)
+
+- **Observation: the plan's own predicate literal was a fourth specification of
+  the same fact.** Stage D step 4 writes
+  `postgresql_where=sa.text("status = 'running'")` and asks for it to be
+  "mirrored exactly in the ORM `__table_args__`". Two literal copies of a
+  predicate that Alembic **provably cannot compare** (alembic#750:
+  partial-index predicates are outside what `compare_metadata` reaches, so
+  `make check-migrations` reports no drift however far the two diverge) is a
+  guard that fails open. The landed form shares one constant,
+  `GENERATION_RUN_EXPIRED_LEASE_PREDICATE_SQL` in
+  `episodic/canonical/storage/generation_run_schema.py`, and both sites
+  `sa.text(...)` that. The cited precedent (`reference_document_schema.py` plus
+  `20260228_000004`) shares *values* — the enum members interpolated into
+  f-strings — but still writes predicate text at each site, and the ORM side
+  uses SQLAlchemy expressions rather than matching text, so it does not close
+  this hole either. Sharing the predicate text is a deliberate strengthening of
+  the precedent, not a departure from it. (2026-10-21)
+
+- **Observation: `SKIP LOCKED` was considered and deliberately not used.**
+  Stage D does not request it. It was ruled out because AXIOM-3 holds: under
+  `py-pglite`'s single WebAssembly backend every session serializes, so no test
+  can show the clause skipping a locked row. Shipping it would assert a
+  concurrency guarantee nothing here demonstrates. `expired_lease_candidates`
+  documents the omission, and `grep -rn "skip_locked" episodic/` returns
+  nothing. (2026-10-21)
+
+- **Observation: a lease expiry is not proof of abandonment, and the plan
+  accounted for this only on the code side.** The checkpoint clause was
+  specified for `fail_expired_leases` but not for the manual SQL runbook in
+  `docs/developers-guide.md`, which is the copy an operator actually runs. A
+  run suspended at a human-review checkpoint is legitimately `running` while it
+  waits, and its lease expires regardless, so the unguarded runbook would fail
+  exactly the runs the review mechanism exists to protect. The runbook gained
+  the same `NOT EXISTS` predicate as the primitive, preceded by a read-only
+  diagnostic `SELECT`. (2026-10-21)
 
 Append further observations here as work proceeds.
 
@@ -1164,6 +1229,56 @@ Append further observations here as work proceeds.
   are deviations from explicit Stage C instructions and are recorded rather
   than applied silently. (2026-10-21)
 
+- **D-18. Re-stamp `updated_at` in the reclamation mixin rather than widening
+  `GenerationRunStatusUpdate`.**
+  `SqlAlchemyGenerationRunStore.update_run_status` stamps
+  `record.updated_at = self._runtime.clock()` and does not accept an instant,
+  so taking that transition's return value would publish a second "now"
+  different from `now`. Stage D step 1 requires one instant per call
+  (`ended_at`, `updated_at`, and the event's `occurred_at`), so the mixin
+  overwrites `record.updated_at = now` and maps the record itself via
+  `run_from_record`. This is the one site where the implementation departs from
+  a literal Stage D instruction, which said to use the transition's return
+  value; the return value cannot carry `now`, because `update_run_status` owns
+  that field. The re-stamp is safe because `expired_lease_candidates` loaded
+  that row into the same session, so the mixin writes the instance the
+  transition just updated, and `_require_mutable_run(..., lock=True)` resolves
+  through the identity map to the same object. The alternative — threading
+  `updated_at` through `GenerationRunStatusUpdate` — would widen a shared
+  domain-input type for one caller, and the asymmetry is recorded here as a
+  reviewer consideration rather than hidden. (2026-10-21)
+
+- **D-19. Assert the append-before-update ordering rather than document it.**
+  INV-LEASE-1 requires the `run.failed` event to be appended **before** the
+  status update, because the reverse order raises `RunAlreadyTerminal` on an
+  already-terminal row. A docstring cannot hold that, and a test that merely
+  inspects the final database state passes under either order.
+  `test_generation_run_lease_transitions.py` therefore monkeypatches
+  `append_event` and `update_run_status` to record call names, asserts
+  `calls == ["append_event", "update_run_status"]`, and additionally asserts
+  that a post-transition append raises `RunAlreadyTerminal`. Non-vacuity was
+  verified by temporarily swapping the two calls and observing the module go 4
+  failed / 0 passed — every test died with `RunAlreadyTerminal` — then
+  restoring. (2026-10-21)
+
+- **D-20. Split the lease suite three ways and record a shared predicate
+  constant question for review.** The first draft of
+  `test_generation_run_lease_reclamation.py` reached 422 lines, which Pylint's
+  `max-module-lines = 400` rejects; `tests` **is** a `PYLINT_TARGETS` member
+  (Makefile:41), so the ceiling binds test modules too. Splitting into a
+  support module plus a reclamation-state module plus a transitions module
+  landed at 146/226/176 and, in the process, replaced a count assertion with an
+  exact-identifier-set assertion over the full partition, with
+  `assert expected` and `assert len(expected) < len(PARTITION)` guarding
+  against a vacuous pass. Separately, and left open deliberately: nothing
+  asserts that the migration and the ORM agree on the partial-index predicate,
+  and `make check-migrations` **cannot** — see the alembic#750 observation
+  above. The shared constant makes divergence require editing one file rather
+  than two, but a test reading `pg_indexes` (or `postgresql_where`) would be
+  the actual guard; `test_pricing_snapshot_constraint_migration.py` is the
+  nearest precedent. Raised for review rather than added unprompted, because it
+  is outside the slice's stated acceptance criteria. (2026-10-21)
+
 Append further decisions here, including any decision to escalate.
 
 ## Outcomes & retrospective
@@ -1212,12 +1327,15 @@ declares, and adapters that implement them.
   mapping functions. Adapters never build domain dataclasses inline.
 - `episodic/canonical/storage/uow.py` — `SqlAlchemyUnitOfWork`, whose
   `__aenter__` instantiates every repository from one shared `AsyncSession`.
-- `episodic/canonical/unit_of_work_protocols.py` — `CanonicalUnitOfWork`,
-  currently declaring `generation_runs: GenerationRunEventStore`.
+- `episodic/canonical/unit_of_work_protocols.py` — `CanonicalUnitOfWork`, which
+  at the Stage A baseline declared `generation_runs: GenerationRunEventStore`;
+  this slice widened it to the composite `GenerationRunPort`.
 - `alembic/versions/` — migrations named `YYYYMMDD_NNNNNN_description.py`,
-  chained linearly by `down_revision`. Current head: `20261010_000013`.
-  Filename dates are not in chain order (`20260601_000009` follows
-  `20260610_000009`), so trust `down_revision`, not `ls`.
+  chained linearly by `down_revision`. Head at the Stage A baseline
+  (`2026-10-20`): `20261010_000013`; the chain reaches `20261020_000015` at
+  merge time, `000014` from EP-M1 and `000015` from EP-M4. Filename dates are
+  not in chain order (`20260601_000009` follows `20260610_000009`), so trust
+  `down_revision`, not `ls`.
 - `tests/` — top-level `test_*.py` are unit tests; `tests/canonical_storage/`
   holds PostgreSQL-backed integration tests; `tests/features/*.feature` with
   `tests/steps/test_*_steps.py` hold behavioural tests.
@@ -1227,12 +1345,15 @@ declares, and adapters that implement them.
   full Alembic chain, per test function) → `session_factory` and
   `pglite_session`.
 
-**The specific gap.** `SqlAlchemyGenerationRunStore` has no checkpoint methods.
-There is no checkpoint table.
-`tests/test_generation_checkpoint_port_contract.py` runs against the in-memory
-store only. `uow.generation_runs` is typed as the narrower
-`GenerationRunEventStore`, and nothing in the repository implements the
-composite `GenerationRunPort` except a no-op stub used for type-checking.
+**The specific gap, as it stood at the Stage A baseline (`2026-10-20`).**
+`SqlAlchemyGenerationRunStore` had no checkpoint methods. There was no
+checkpoint table. `tests/test_generation_checkpoint_port_contract.py` ran
+against the in-memory store only. `uow.generation_runs` was typed as the
+narrower `GenerationRunEventStore`, and nothing in the repository implemented
+the composite `GenerationRunPort` except a no-op stub used for type-checking.
+Every clause of this paragraph was closed by the slice; it is retained because
+it is the diagnosis that motivated the work, not a description of the tree at
+merge time.
 
 **Terms used in this plan.**
 
@@ -1292,7 +1413,7 @@ Trace links from upstream item, through milestone, to acceptance evidence:
 ROADMAP-2.6.2    -> EP-M1 -> make check-migrations reports no drift
 ROADMAP-2.6.2    -> EP-M3 -> tests/canonical_storage/test_generation_runs.py
 API-GENRUN-SEQ   -> EP-M3 -> test_sql_generation_run_property_contract.py
-DESIGN-ORCH-CKPT -> EP-M1 -> alembic/versions/YYYYMMDD_000014_add_review_checkpoints.py
+DESIGN-ORCH-CKPT -> EP-M1 -> alembic/versions/20261020_000014_add_review_checkpoints.py
 DESIGN-ORCH-CKPT -> EP-M2 -> episodic/canonical/storage/review_checkpoints.py
 API-GENRUN-CKPT  -> EP-M2 -> uow.generation_runs satisfies GenerationRunPort
 API-GENRUN-CKPT  -> EP-M3 -> tests/features/generation_run_lifecycle.feature
@@ -1300,6 +1421,7 @@ ADR-015          -> EP-M5 -> docs/adr/adr-024-review-checkpoint-persistence.md
 ADR-018          -> EP-M2 -> compare-and-set transitions; ON DELETE RESTRICT
 ADR-014          -> EP-M2 -> generation_run_ports in Hecate domain_ports (D-12)
 EP-4.3.2-DEFER   -> EP-M4 -> tests/canonical_storage/test_generation_run_lease_reclamation.py
+EP-4.3.2-DEFER   -> EP-M4 -> alembic/versions/20261020_000015_add_expired_lease_index.py
 ```
 
 When an artefact is renamed or folded into an existing module, update this
@@ -1754,12 +1876,12 @@ violation.
    `ReviewCheckpointRecord` per the table in `Interfaces and dependencies`.
    Re-export from `models.py` and `storage/__init__.py`.
 3. **Migration.** Add
-   `alembic/versions/YYYYMMDD_000014_add_review_checkpoints.py`, dated on the
-   day it is written and chained off `20261010_000013`. Follow
-   `20260624_000010_add_generation_run_tables.py` exactly — not the current
-   head, `20261010_000013`, which is an offline-aware constraint rename with a
-   catalogue precondition check and a different shape entirely: module
-   docstring, a private `_enum(name, *values)` helper returning
+   `alembic/versions/20261020_000014_add_review_checkpoints.py` (the plan's
+   `YYYYMMDD` placeholder resolved to the day it was written), chained off
+   `20261010_000013`. Follow `20260624_000010_add_generation_run_tables.py`
+   exactly — not the current head, `20261010_000013`, which is an offline-aware
+   constraint rename with a catalogue precondition check and a different shape
+   entirely: module docstring, a private `_enum(name, *values)` helper returning
    `postgresql.ENUM(*values, name=name, create_type=False)`, and
    `_create_enums` / `_drop_enums` / `_create_*_table` / `_drop_*_table`
    helpers composed by `upgrade()` and `downgrade()`. Create enums before the
@@ -1909,11 +2031,12 @@ async def fail_expired_leases(
    `_manually_fail_expired_run` in `test_generation_run_claims.py` as calls to
    the new method. This is an acceptance criterion, not a nicety: without it
    the slice ships a fourth copy of the same transaction.
-4. Add the revision `YYYYMMDD_000015_add_expired_lease_index.py` for the
-   partial index `ix_generation_runs_expired_lease` on `(lease_expires_at)` with
-   `postgresql_where=sa.text("status = 'running'")`, mirrored exactly in the
-   ORM `__table_args__`. **Its own revision** — never edit `000014`, which
-   EP-M1 already applied (Risk 6). Follow
+4. Add the revision `20261020_000015_add_expired_lease_index.py` (the plan's
+   `YYYYMMDD` placeholder resolved to the day it was written) for the partial
+   index `ix_generation_runs_expired_lease` on `(lease_expires_at)` with
+   `postgresql_where=sa.text("status = 'running'")`, mirrored exactly in the ORM
+   `__table_args__`. **Its own revision** — never edit `000014`, which EP-M1
+   already applied (Risk 6). Follow
    `episodic/canonical/storage/reference_models.py` and
    `alembic/versions/20260228_000004_add_reference_document_model.py`, the
    established partial-index precedent, rather than improvising the predicate
