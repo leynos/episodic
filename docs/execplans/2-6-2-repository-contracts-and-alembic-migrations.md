@@ -389,11 +389,46 @@ Stop and escalate rather than improvising when any of these is reached.
 - [x] (2026-10-20 20:32Z) EP-M0 Stage A: orientation, production **and test**
       sweep (no changes). Baseline measured; all expectations re-confirmed
       against the tree; no deviation found.
-- [ ] EP-M1: `review_checkpoints` table, ORM model, reversible migration.
-- [ ] EP-M2: `SqlAlchemyReviewCheckpointStore`, composite port adapter,
-      unit-of-work wiring, commit-safety warning.
-- [ ] EP-M3: shared checkpoint contract scenarios across both adapters, plus
-      durability and sequencing evidence.
+- [x] (2026-10-20 23:20Z) Stage B: red tests written for EP-M1, EP-M2, and
+      EP-M3. All five steps landed; every new test fails for the intended
+      reason. Stage B's closing condition is met: **36 failed, 24 passed**,
+      with every failure an `AttributeError` on a missing checkpoint method, a
+      missing table, or `DID NOT RAISE` on an adapter precondition — no import
+      error, no fixture typo, no foreign-key violation. The milestones below
+      stay unticked: red tests are evidence about what is absent, not
+      implementation. Two deviations, both recorded as decisions: the SQL
+      driver is a sibling module, not `test_generation_runs.py` (**D-14**), and
+      the duplicate-identifier error is named `CheckpointAlreadyExists`
+      (**D-13**). One non-vacuity obligation is deferred and cannot be
+      discharged here — see the last observation under
+      *Surprises & discoveries*.
+- [x] (2026-10-21) EP-M1: `review_checkpoints` table, ORM model, reversible
+      migration. Revision `20261020_000014` with its two native enums, both
+      `.drop(bind, checkfirst=True)` calls, the options-array and
+      responded-fields check constraints, and the two indexes.
+- [x] (2026-10-21) EP-M2: `SqlAlchemyReviewCheckpointStore`, composite port
+      adapter, unit-of-work wiring, commit-safety warning.
+- [x] (2026-10-21) EP-M3: shared checkpoint contract scenarios across both
+      adapters, plus durability and sequencing evidence.
+- [~] Stage C repaired and re-verified in part; EP-M4 stays gated. Gates now
+      observed on this revision: `ruff format --check` → `637 files already
+      formatted`; `ruff check` → `All checks passed!`; the df12 rule set
+      (`R9101`–`R9111`) → `10.00/10`, no findings; `C9112` → `10.00/10`, no
+      findings. The seven affected suites give **89 passed** where the same
+      selection previously gave 17 failed / 38 passed, in 18s rather than
+      1,154s.
+      Two corrections of record against the earlier entry. First, the 16
+      `ConnectionTimeout` failures were **not** host contention: they reproduce
+      in isolation on an idle host, and the cause is that the SQL scenario
+      driver's `store` fixture held one unit of work open while each hook opened
+      a second connection, which `py-pglite`'s single WebAssembly backend never
+      grants. Fixed by making the driver commit before it reads, per the plan's
+      "commit-plus-new-unit-of-work" instruction. Second, `make lint` had been
+      aborting inside the df12 step, so `ambrleaks`, Skylos dead-code, and the
+      nose duplication gate were **unverified rather than passing**; the
+      `C9112` findings above were only reachable once that abort was cleared.
+      Still outstanding: `make lint` and `make test` verdicts on the repaired
+      revision. (2026-10-21)
 - [ ] EP-M4: lease-reclamation primitive (gated; see Tolerances and Risk 3).
 - [ ] EP-M5: documentation, ADR-024, and roadmap reconciliation.
 
@@ -490,6 +525,189 @@ Record a timestamp against each item as it completes, in the form
   `tests/test_generation_run_port_contract_support.py`, which already stubs all
   five checkpoint methods; only `list_checkpoints` (and, under EP-M4,
   `fail_expired_leases`) must be added. Re-confirmed 2026-10-18.
+
+- **Observation: Stage B step 2 cannot "still pass" as written, and that is
+  the finding rather than a defect in the work.** The step says re-pointing
+  `tests/test_generation_checkpoint_port_contract.py` at the shared scenarios
+  is "a pure refactor and the safety net for step 3" that "must still pass". It
+  does not: four scenarios fail against `InMemoryGenerationRunStore` with
+  `DID NOT RAISE` — the three `creation_rejects_terminal_status` cases and
+  `creation_rejects_duplicate_identifier`. Evidence: that is precisely what
+  INV-CKPT-5 asserts about the current tree, "neither adapter checks either
+  today", and its rationale names the in-memory overwrite explicitly. A shared
+  suite that passes against an unguarded adapter would be certifying the
+  divergence as interchangeable — the Risk 8 blind spot. Impact: the step's
+  premise holds for the *other* nineteen scenarios, which do pass unchanged and
+  are the real safety net; the four failures are the intended INV-CKPT-5 red,
+  surfaced one stage earlier than the plan sequenced it. Re-pointing stays a
+  genuine no-behaviour-change refactor — the four failures are assertions the
+  old module did not make. (2026-10-20)
+
+- **Observation: the domain forbids constructing a `RESPONDED` checkpoint
+  without its response fields, which constrains every fixture that builds one.**
+  `Checkpoint.__post_init__` routes to `_validate_responded_fields`, so
+  `make_checkpoint(..., status=RESPONDED)` with `responded_at=None` raises
+  `ValueError: responded checkpoints require responded_at.` — not the
+  `CheckpointAlreadyTerminal` a creation-precondition scenario expects. Impact:
+  the shared factory must populate `responded_at`, `responded_by`, and
+  `response_action` for `RESPONDED` (and `responded_at` for the other two
+  terminal states, which the domain permits to be bare). Caught by the first
+  run of the re-pointed driver; a fixture typo of exactly the kind Stage B's
+  closing condition rules out as an acceptable red. (2026-10-20)
+
+- **Observation: Stage B step 3's "into
+  `tests/canonical_storage/test_generation_runs.py`" is not affordable, and
+  Stage A's own headline finding said so.** That module is 368 lines against a
+  **hard** pylint `max-module-lines = 400`, and `PYLINT_TARGETS` includes
+  `tests`, so the cap binds. A SQL driver needs one `@dc.dataclass` bundle of
+  hooks, one `pytest_asyncio.fixture` to build them, and nine thin wrappers
+  each carrying a docstring and a `prepare_run`/`read_fresh` call — roughly 130
+  lines, against 32 available. The result would be a 500-line module that fails
+  `make lint` outright. The plan's intent is unambiguous and is stated twice:
+  "New SQL contract scenarios belong here, **not in a parallel module**."
+  Impact: the wrappers go into a sibling
+  `tests/canonical_storage/test_generation_run_checkpoint_contract.py`, which
+  is not a *parallel* suite — it is a driver for the shared scenario module
+  exactly as `tests/test_generation_checkpoint_port_contract.py` is, so there
+  is still one definition of each checkpoint contract and no duplicated
+  assertions. `test_generation_runs.py` keeps its run- and event-level
+  scenarios untouched. Recorded as D-14. (2026-10-20)
+
+- **Observation: the first SQL driver run was not a red at all, and only a
+  control run could tell the difference.** It reported 23 errors, every one
+  `Failed: Timeout (>180.0s) from pytest-timeout` — but the whole run took
+  `180.66s`, which is one wall-clock, not 23. All 23 were `ERROR at setup`, and
+  the captured setup log shows PGlite reaching "PGlite server started
+  successfully" before hanging. The host was at load average 27–36 on 6 cores
+  with all 4 compile slots held. Re-running the **pre-existing**
+  `tests/canonical_storage/test_generation_runs.py` as a control gave
+  `10 passed in 9.05s`, which localizes the cause to the environment rather
+  than to the new module; the driver then re-ran clean in 9.49s. Lesson worth
+  keeping: a red that is uniformly a setup timeout across every test, with a
+  total runtime equal to the timeout, is a fixture stall and carries no
+  information about the code under test. The control run is what makes that
+  distinguishable, and it costs 9 seconds. (2026-10-20)
+
+- **Observation: `SqlAlchemyUnitOfWork.__aexit__` does not commit, so the
+  durability scenario must commit explicitly — and a failing scenario leaks its
+  open session.** The step "the unit of work is committed and closed" therefore
+  cannot be pure Gherkin decoration; it is the only thing that persists the
+  response. More sharply, when the scenario fails *before* that step, the unit
+  of work is never closed and SQLAlchemy emits
+  `SAWarning: The garbage collector
+  is trying to clean up non-checked-in connection … [INTRANS]`.
+  That warning appeared in the first successful red and is a real defect in
+  the step module, not noise: it is the same class of leak Risk 4 describes.
+  Fixed by holding the unit of work open on a `contextlib.AsyncExitStack`,
+  which the context's `tear_down()` closes; pylint then flagged the initial
+  `__aenter__`/`__aexit__` calls directly as `C2801 unnecessary-dunder-call`,
+  which is what pointed at the exit stack. The `SAWarning` is the signal that
+  this worked. (2026-10-20)
+
+- **Observation: three of the eight new Step 4 tests cannot be red, by
+  construction, and one passes vacuously.**
+  `test_review_checkpoint_migration_creates_table_and_enums`,
+  `test_upgrade_downgrade_upgrade_leaves_schema_identical`, and
+  `test_review_checkpoints_keeps_its_check_constraints` fail today for the
+  intended reason (no table), but `test_downgrade_removes_table_and_both_enums`
+  **passes** — there is nothing to drop yet, so
+  `"review_checkpoints" not in _table_names(...)` holds and
+  `_enum_types(...) == set()` holds trivially. It becomes discriminating only
+  once revision `000014` exists. This is worth stating rather than counting as
+  a red: INV-MIG-2's non-vacuity requirement ("remove either explicit
+  `.drop(bind, checkfirst=True)` call and the test must fail; verify both fail
+  independently") is an obligation for **Stage C**, not something Stage B can
+  discharge, and it cannot be discharged by a green run. (2026-10-20)
+
+- **Observation: the migration test must reach the new revision as `head`, not
+  by name.** The plan writes the revision as
+  `alembic/versions/YYYYMMDD_000014_add_review_checkpoints.py` and dates it "on
+  the day it is written", so its literal identifier is not knowable when the
+  test is written. Hard-coding `"20261020_000014"` produced
+  `ResolutionError: No such revision or branch '20261020_000014'` — a failure
+  about the test's own coupling, which Stage B's closing condition explicitly
+  rules out. Using `"head"` for the upgrade removes the coupling and is
+  equivalent here, because the migration under test is the head. (2026-10-20)
+
+- **Observation: Stage C step 9's pending-state test is vacuous as written, and
+  the defect is real.** The plan specifies
+  `session.new or session.dirty or session.deleted` as the trigger for the Risk
+  4 warning. Probe evidence shows that predicate cannot see either write path
+  this slice cares about: a `flush()` empties `.new`, and a **core** `UPDATE`
+  issued through `Session.execute` — which is exactly how D-10's
+  compare-and-set transition persists — populates none of the three collections
+  at all. `SqlAlchemyReviewCheckpointStore._resolve` uses that core `UPDATE`,
+  so INV-COMMIT-1's warning would never fire on the transition it was written
+  to guard. Confirmed by `test_uncommitted_response_does_not_persist` failing
+  on its warning assertion while its persisted-state assertion passed. Fixed
+  with `episodic/canonical/storage/session_write_tracker.py`, which listens for
+  `before_flush` and `do_orm_execute`, reading `is_insert`, `is_update`, and
+  `is_delete` off the execute state — the two events every write passes through
+  regardless of shape. A design that cleared the flag on `after_commit` was
+  rejected: that event also fires on savepoint release, and `create_checkpoint`
+  wraps its insert in `begin_nested()`. Non-vacuity: reverting
+  `_has_pending_changes` to the original predicate makes the test fail again,
+  and the tracker has its own seven-case suite covering the reads and no-op
+  flush that must *not* count. (2026-10-21)
+
+- **Observation: `caplog` cannot observe the Risk 4 warning, whatever the
+  predicate.** `episodic.logging.get_logger` returns a femtologging
+  `FemtoLogger`, not a stdlib `Logger`, and its records never reach a stdlib
+  handler — verified directly. The plan's INV-COMMIT-1 test as drafted would
+  therefore have failed even once the write detection was correct. The warning
+  is now emitted as a structured event
+  (`canonical_unit_of_work.closed_with_uncommitted_changes`) through the same
+  `log_event` helper the storage adapters use, and asserted by patching
+  `_log_event` — the pattern
+  `tests/canonical_storage/test_workflow_checkpoint_payload_observability.py`
+  already uses. This is a strict improvement on the plan's intent: the event is
+  greppable *and* observable, which a bare `logger.warning` was not.
+  (2026-10-21)
+
+- **Observation: the 16 `ConnectionTimeout` failures were a defect in this
+  slice's test driver, not host contention.** The first gate run attributed
+  them to "suspected host contention" at low confidence. That is falsified:
+  running `test_creation_persists_checkpoint` alone on an idle host reproduces
+  it after 68.08s, which is the connection string's `connect_timeout=60` and
+  nothing else. The mechanism is in
+  `tests/canonical_storage/ test_generation_run_checkpoint_contract.py`. Its
+  `store` fixture yielded a composite port bound to an *open* unit of work, and
+  every hook that observes committed state then opened a *second* session.
+  `py-pglite` serves one WebAssembly PostgreSQL backend, so the second
+  connection is never granted and the scenario dies on the connect timeout. The
+  pass/fail split confirms it: all 16 failures use `read_fresh` or
+  `count_checkpoints`, and all 7 passes use neither. Fixed by sharing one
+  `scenario_uow` fixture between `store` and the hooks, and committing it
+  before any observation — the plan's "commit-plus-new-unit-of-work" shape. With
+  `NullPool` the commit closes the DBAPI connection, releasing the backend. 16
+  failures at ~68s each became 23 passes in 7.51s. The general lesson: under
+  `py-pglite` a test that needs to observe committed state must not hold a
+  session open while it observes, and a `ConnectionTimeout` is a
+  connection-contention signal long before it is a host one. (2026-10-21)
+
+- **Observation: `make lint` aborting inside the df12 step hid three later
+  gates.** The df12 pylint step exited 24, so `ambrleaks`, the blocking Skylos
+  dead-code scan, and the nose duplication gate never ran on this branch. After
+  the df12 findings were repaired, re-running revealed five `C9112`
+  (`redundant-future-annotations`) findings in this slice's own new test
+  modules — a real gate failure that the abort had masked. The branch is on a
+  3.14 baseline, where `from __future__ import annotations` is redundant. An
+  aborted lint run means every later gate in the recipe is **unverified**, not
+  passing, and the record must say so. (2026-10-21)
+
+- **Observation: the pricing migration tests coupled to `"head"`, and this
+  slice's revision broke them.** `20261020_000014` chains off
+  `20261010_000013`, so every place the pricing suite asked for `"head"` began
+  resolving one revision further up and pulling this slice's
+  `review_checkpoints` SQL into assertions and offline snapshots about pricing.
+  The fix is to pin the pricing revision explicitly (`_PRICING_REVISION`) at
+  the five sites that targeted `"head"`, which *uncouples* the suite rather
+  than re-baselining it: the two syrupy snapshots still pass **unchanged**,
+  because the offline range once again spans exactly the one migration under
+  test. Had the snapshots been regenerated instead, the suite would have kept
+  the coupling and grown an unexplained dependency on a later revision's SQL.
+  The general lesson: a migration test that says `"head"` is asserting about
+  every future migration too. (2026-10-21)
 
 Append further observations here as work proceeds.
 
@@ -735,6 +953,137 @@ Append further observations here as work proceeds.
   `make check-architecture` fails with `ARCH001`, then remove it. If adding the
   modules exposes an existing violation, stop and escalate rather than adding a
   Hecate ignore. Date/Author: 2026-10-18, planning agent.
+
+- **D-13. Name the duplicate-identifier error `CheckpointAlreadyExists`.**
+  Rationale: INV-CKPT-5 requires `create_checkpoint` to reject a duplicate
+  identifier identically in both adapters, and D-10 classifies that case as "a
+  plain conflict … classified through `integrity_helpers.constraint_name`", but
+  the plan names **no exception** for it anywhere. Stage C enumerates only
+  `RunNotFound`, `CheckpointNotFound`, and `CheckpointAlreadyTerminal` for the
+  adapter. The omission is real and blocks Stage B: a shared scenario cannot
+  assert the duplicate rule without naming the type it expects.
+  `CheckpointAlreadyExists` is chosen over reusing `CheckpointAlreadyTerminal`
+  because the two are genuinely different: a duplicate identifier is a conflict
+  on the key, and a terminal checkpoint is a conflict on the state machine. A
+  replay against a `responded` checkpoint is **both**, so the two preconditions
+  can collide on one input. No scenario here exercises that collision — the
+  duplicate scenario replays a `created` entity, which passes the status
+  precondition, and the terminal-status scenario uses a fresh identifier — so
+  the relative order of the two checks is deliberately left unobservable, and
+  Stage C should validate the incoming entity's own status first because that
+  is an argument check rather than a storage lookup. It lives in
+  `episodic/canonical/generation_run_errors.py` beside its siblings, carrying
+  the same
+  `# ruff: ignore[error-suffix-on-exception-name] - stable ExecPlan contract.`
+  marker, and follows the house message shape
+  (`"generation checkpoint already exists: {checkpoint_id}"`). Consequence for
+  Stage C: the in-memory adapter must gain the duplicate check in
+  `InMemoryGenerationCheckpointMixin.create_checkpoint` in the **same commit**
+  as the SQL adapter, as INV-CKPT-5 already requires.
+
+  Sequencing note, because it bears on the Stage B red evidence: adding the
+  class is a contract *declaration*, and the shared scenarios cannot be
+  imported without it. It is therefore added in Stage B, before the Stage C
+  behaviour, so that the red is the intended behavioural failure
+  (`DID NOT RAISE`) rather than an `ImportError` — which the stage-closing
+  condition rules out by name. Date/Author: 2026-10-20, implementation agent.
+
+- **D-14. Drive the SQL scenarios from a sibling module, not by growing
+  `test_generation_runs.py` past the module-length cap.** Rationale: Stage B
+  step 3 says to add the SQL parameterization "into
+  `tests/canonical_storage/test_generation_runs.py`", and
+  `Context and orientation` reinforces it — "New SQL contract scenarios belong
+  here, not in a parallel module." That is affordable only if the module has
+  room. It does not: 368 lines against pylint's `max-module-lines = 400`, a
+  target that includes `tests`, leaving 32 lines where a driver needs roughly
+  130. The two requirements — stay in that file, and pass `make lint` — cannot
+  both hold, so one must yield, and the length cap is the non-negotiable one
+  (`AGENTS.md`: "No single code file should be longer than 400 lines").
+  Decision: the nine driver wrappers live in
+  `tests/canonical_storage/test_generation_run_checkpoint_contract.py`. This
+  preserves the intent behind "not in a parallel module", which is that there
+  must be **one** definition of each checkpoint contract: the scenarios stay in
+  `tests/generation_run_contract_scenarios.py` and drive both adapters, and the
+  new module adds no assertions of its own. `test_generation_runs.py` keeps its
+  run- and event-level coverage unchanged. (2026-10-20)
+
+- **D-15. Hold the Stage B red tests out of `git` until the milestone that
+  turns them green, rather than committing them as a red commit.** Rationale:
+  the plan's *Idempotence and recovery* says "Each milestone is a separate
+  commit, so `git revert` returns the tree to the previous plateau" — and Stage
+  B is not a milestone. `AGENTS.md` is explicit and unconditional: "Do not
+  commit changes that fail any quality gate," and `make test` is a quality
+  gate. A red commit would therefore be a commit that fails `make test` by
+  construction; the plan never asks for one, and *Concrete steps* runs "full
+  gates at every milestone boundary" — not per stage. Consequence for
+  sequencing, which is the substantive part: Stage B and its consumers must
+  interleave at file granularity rather than landing as one blob. The red tests
+  for EP-M1 (`test_review_checkpoint_migration.py`) go in the EP-M1 commit;
+  those for EP-M2 and EP-M3 (`test_review_checkpoints.py`, the SQL driver, the
+  BDD scenario, and the in-memory duplicate/terminal-status preconditions) go
+  in the EP-M2 commit, because EP-M2 is the commit that adds
+  `SqlAlchemyReviewCheckpointStore` and the `CheckpointAlreadyExists` check in
+  the in-memory mixin. EP-M3 then carries no test changes of its own; its
+  milestone is the *shared* scenario module driving both adapters, which is
+  already satisfied by those two commits. This is a deliberate departure from a
+  literal reading of "Write the failing tests before any production code",
+  which the ordering still honours in the working tree — the tests are written
+  and observed failing before any production code exists. It is the *commit*
+  boundary that moves, not the work order. Recorded here rather than silently,
+  because a reviewer reading the Stage C commit will see tests and
+  implementation arriving together and should know that is intended.
+  (2026-10-20)
+
+- **D-16. Replace the planned `apply_checkpoint_to_record` mapper with
+  `resolved_values`, and refresh rather than mutate the identity-mapped
+  record.** Stage C step 4 names three mapper functions in
+  `review_checkpoint_mappers.py`: `checkpoint_from_record`,
+  `checkpoint_to_record`, and
+  `apply_checkpoint_to_record(record, checkpoint) -> None`, the last justified
+  as necessary because "`checkpoint_to_record` manufactures a *new* record, and
+  `session.add()` would raise on the primary key". That justification presumes
+  transitions are applied by assigning ORM attributes onto the loaded record.
+  They are not: D-10's compare-and-set is a **core
+  `UPDATE … WHERE id = :id AND status = 'created'`** with a `rowcount` check,
+  which is what makes the lost-race branch (D-10) and INV-CKPT-5's identical
+  conflict classification possible. Under that shape
+  `apply_checkpoint_to_record` has no correct caller. The record is already in
+  the session's identity map and already matches the row the `UPDATE` just
+  wrote, so writing the resolved columns onto it would mark it **dirty** and
+  emit a second, redundant `UPDATE` at the next flush — the same values, on a
+  row that is already correct, from a session that has not refreshed it. That
+  is not merely wasteful: it is a second write path to columns the store's
+  docstring promises nothing else writes. The alternative — reverting to ORM
+  attribute assignment — would trade one guarded statement for a
+  load-then-flush pair and make the `rowcount` check indirect, which is the
+  whole mechanism D-10 chose. Decision: `review_checkpoint_mappers.py` exports
+  `checkpoint_from_record`, `checkpoint_to_record`, and `resolved_values`, where
+  `resolved_values(checkpoint) -> dict[str, object]` returns the exact column
+  mapping the compare-and-set `UPDATE` writes. `resolved_values` keeps the
+  property the plan wanted from `apply_checkpoint_to_record` — one site naming
+  which columns a resolution writes, so the `UPDATE` and the entity the caller
+  receives cannot drift — but as a value the statement consumes rather than a
+  mutation of a record the session owns. Reconciliation of the session's stale
+  copy is `await session.refresh(record)` in `_refresh_resolved`, which is
+  recorded in that helper's docstring. This is a deviation from an explicit
+  Stage C instruction and is recorded rather than applied silently. (2026-10-20)
+
+- **D-17. Detect pending writes with a session-event tracker, not with
+  `Session.new`/`.dirty`/`.deleted`, and emit the Risk 4 warning as a
+  structured event.** Rationale: the plan's literal predicate is blind to both
+  write paths this slice uses (see *Surprises & discoveries*), so implementing
+  step 9 as written would have shipped a guard that never fires. The
+  replacement lives in `episodic/canonical/storage/session_write_tracker.py`
+  and is consulted through the existing `_has_pending_changes()` seam, so
+  `__aexit__` keeps the single branch the plan asked for. The tracker is
+  cleared by `commit()`, `rollback()`, and the exception path of `__aexit__`,
+  since all three settle the session. Second, the warning is emitted through
+  `log_event` rather than `logger.warning`, because `caplog` cannot see a
+  femtologging record; the event name
+  `canonical_unit_of_work.closed_with_uncommitted_changes` follows the
+  `<component>.<event>` convention already used across `storage/`. Both changes
+  are deviations from explicit Stage C instructions and are recorded rather
+  than applied silently. (2026-10-21)
 
 Append further decisions here, including any decision to escalate.
 
@@ -1809,6 +2158,99 @@ One constraint discovered during the sweep and not stated in the plan: the
 `tests/canonical_storage/test_generation_runs.py`, which is the file Stage B
 step 3 adds the SQL parameterization to. The scenario module therefore has to
 carry the assertions, and the SQL parameterization has to be a thin driver.
+
+### Stage B red evidence, measured 2026-10-20 23:20Z
+
+Stage B's closing condition is that every new test fails for the intended
+reason. The full set, run together:
+
+```bash
+uv run pytest tests/test_generation_checkpoint_port_contract.py \
+  tests/canonical_storage/test_generation_run_checkpoint_contract.py \
+  tests/canonical_storage/test_review_checkpoint_migration.py \
+  tests/canonical_storage/test_review_checkpoints.py \
+  tests/steps/test_generation_run_lifecycle_steps.py \
+  -q -p no:randomly --timeout=120 \
+  2>&1 | tee /tmp/RED-stage-b-full-2-6-2-repository-contracts-and-alembic-migrations.md.out
+```
+
+```plaintext
+36 failed, 24 passed, 1 warning in 12.45s
+```
+
+Every failure falls into one of four intended classes. Counted, not sampled:
+
+- **31 ×**
+  `AttributeError: 'SqlAlchemyGenerationRunStore' object has no attribute 'create_checkpoint'`
+  (also `respond_to_checkpoint`, `time_out_checkpoint`, `cancel_checkpoint`).
+  This is the INV-CKPT-1 red the plan names by name.
+- **1 ×** `AssertionError: checkpoint sub-port` — the composite does not yet
+  satisfy `GenerationCheckpointPort`.
+- **3 ×** a missing `review_checkpoints` relation:
+  `AssertionError: the migration must create the review_checkpoints table`,
+  `AssertionError: the re-upgrade must recreate both enum types`, and
+  `psycopg.errors.UndefinedTable: relation "review_checkpoints" does not exist`.
+  These are the INV-MIG-2 and INV-CKPT-3 reds.
+- **4 ×** `Failed: DID NOT RAISE` — three `CheckpointAlreadyTerminal` and one
+  `CheckpointAlreadyExists`, all from the in-memory driver. These are
+  INV-CKPT-5's "neither adapter checks either today", surfacing one stage
+  earlier than the plan sequenced them; recorded as an observation.
+
+No import error, no fixture typo, and no foreign-key violation appears in the
+set. The SQL driver's own transcript, taken separately, is **23 failed in 9.49
+s**.
+
+The one non-vacuity obligation Stage B cannot discharge is INV-MIG-2's: the
+downgrade test passes today because there is nothing to drop. That is a Stage C
+obligation and is recorded as such.
+
+### D-12 negative-control transcript, measured 2026-10-21 02:05Z
+
+Stage C step 11 requires proof that adding the two port modules to
+`domain_ports` actually brought them *under* the gate, rather than leaving them
+ungrouped as before while the suite merely stayed green. The control is to
+introduce the exact violation the gate is supposed to catch — a port module
+importing a storage adapter — and confirm `ARCH001` fires.
+
+Injected into `episodic/canonical/generation_run_ports.py`, immediately after
+its existing `import typing as typ` line:
+
+```python
+import episodic.canonical.storage  # NEGATIVE CONTROL - temporary
+```
+
+```plaintext
+$ make check-architecture
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools \
+  /home/leynos/.local/bin/uv run hecate check
+ARCH001: episodic.canonical.generation_run_ports:18 imports forbidden module
+  episodic.canonical.storage (domain_ports -> outbound_adapter)
+make: *** [Makefile:203: check-architecture] Error 1
+GATE_EXIT=2
+```
+
+The verdict named the injected line (18) and the correct group pair, so the
+control is specific rather than incidental. The injection was then removed
+verbatim and the gate re-run:
+
+```plaintext
+$ make check-architecture
+hecate: architecture check passed
+GATE_EXIT=0
+```
+
+Both halves matter: the control shows the module is now checked, and the clean
+re-run shows Stage C's own edits introduce no violation. Before D-12 the same
+injection would have produced no finding at all, because `checker.py` skips any
+edge whose endpoint is ungrouped — which is exactly why the blind spot survived
+until this slice.
+
+The `pyproject.toml` half of D-12 sits in the EP-M2 commit, with the two
+prefixes placed alphabetically between `generation_quality` and
+`history_protocols`. `composition_root` is the only group ordered before
+`domain_ports` that could capture them, and it matches only
+`episodic.api.runtime` and `episodic.worker.runtime`, so no first-match
+misrouting is possible.
 
 ## Interfaces and dependencies
 

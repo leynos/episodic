@@ -14,6 +14,7 @@ import dataclasses as dc
 import typing as typ
 
 from episodic.canonical.generation_run_errors import (
+    CheckpointAlreadyExists,
     CheckpointAlreadyTerminal,
     CheckpointNotFound,
     RunNotFound,
@@ -29,6 +30,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         Checkpoint,
         CheckpointResponse,
+        CheckpointStatus,
         GenerationRun,
     )
 
@@ -79,6 +81,12 @@ class InMemoryGenerationCheckpointMixin:
         ------
         RunNotFound
             Raised when the checkpoint references an unknown generation run.
+        CheckpointAlreadyExists
+            Raised when the identifier is already in use. Without this the
+            store silently overwrites, which would reset a resolved checkpoint
+            to ``created`` on a replayed create.
+        CheckpointAlreadyTerminal
+            Raised when the checkpoint arrives already resolved.
 
         Examples
         --------
@@ -87,6 +95,15 @@ class InMemoryGenerationCheckpointMixin:
         True
         """
         async with self._lock:
+            if checkpoint.status.is_terminal():
+                _log_event(
+                    "warning",
+                    "generation_run_store.create_checkpoint_terminal",
+                    checkpoint_id=str(checkpoint.id),
+                    run_id=str(checkpoint.generation_run_id),
+                    status=checkpoint.status.value,
+                )
+                raise CheckpointAlreadyTerminal(checkpoint.id)
             if checkpoint.generation_run_id not in self._runs:
                 _log_event(
                     "warning",
@@ -95,6 +112,14 @@ class InMemoryGenerationCheckpointMixin:
                     run_id=str(checkpoint.generation_run_id),
                 )
                 raise RunNotFound(checkpoint.generation_run_id)
+            if checkpoint.id in self._checkpoints:
+                _log_event(
+                    "warning",
+                    "generation_run_store.create_checkpoint_duplicate",
+                    checkpoint_id=str(checkpoint.id),
+                    run_id=str(checkpoint.generation_run_id),
+                )
+                raise CheckpointAlreadyExists(checkpoint.id)
             self._checkpoints[checkpoint.id] = checkpoint
             _log_event(
                 "info",
@@ -129,6 +154,62 @@ class InMemoryGenerationCheckpointMixin:
         """
         async with self._lock:
             return self._checkpoints.get(checkpoint_id)
+
+    async def list_checkpoints(
+        self,
+        run_id: uuid.UUID,
+        *,
+        status: CheckpointStatus | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[Checkpoint, ...]:
+        """List a run's checkpoints, oldest-created first.
+
+        Parameters
+        ----------
+        run_id : uuid.UUID
+            Identifier of the generation run whose checkpoints to list.
+        status : CheckpointStatus | None, optional
+            Restrict the result to one lifecycle status.
+        limit : int, optional
+            Maximum number of checkpoints to return.
+        offset : int, optional
+            Number of checkpoints to skip after ordering.
+
+        Returns
+        -------
+        tuple[Checkpoint, ...]
+            Matching checkpoints in ``(created_at, id)`` order.
+
+        Raises
+        ------
+        RunNotFound
+            Raised when the run is not present in the store.
+        ValueError
+            Raised when ``limit`` or ``offset`` is negative.
+
+        Examples
+        --------
+        >>> # await store.list_checkpoints(run_id, status=CheckpointStatus.CREATED)
+        >>> # returns the run's unresolved checkpoints
+        True
+        """
+        if limit < 0 or offset < 0:
+            msg = "limit and offset must be non-negative."
+            raise ValueError(msg)
+        async with self._lock:
+            if run_id not in self._runs:
+                raise RunNotFound(run_id)
+            found = sorted(
+                (
+                    checkpoint
+                    for checkpoint in self._checkpoints.values()
+                    if checkpoint.generation_run_id == run_id
+                    and (status is None or checkpoint.status is status)
+                ),
+                key=lambda checkpoint: (checkpoint.created_at, str(checkpoint.id)),
+            )
+        return tuple(found[offset : offset + limit])
 
     async def _apply_checkpoint_transition(
         self,
@@ -218,19 +299,12 @@ class InMemoryGenerationCheckpointMixin:
         Checkpoint
             The updated checkpoint with the reviewer response applied.
 
-        Raises
-        ------
-        CheckpointNotFound
-            Raised when the checkpoint cannot be found.
-        CheckpointAlreadyTerminal
-            Raised when the checkpoint has already reached a terminal state.
-
         Examples
         --------
         >>> # await store.respond_to_checkpoint(checkpoint_id, response=response)
         >>> # returns the checkpoint after applying the response
         True
-        """  # ruff: ignore[docstring-extraneous-exception]  # The shared transition helper raises these domain exceptions.
+        """
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.respond(response),
@@ -261,19 +335,12 @@ class InMemoryGenerationCheckpointMixin:
         Checkpoint
             The updated checkpoint after timing out.
 
-        Raises
-        ------
-        CheckpointNotFound
-            Raised when the checkpoint cannot be found.
-        CheckpointAlreadyTerminal
-            Raised when the checkpoint has already reached a terminal state.
-
         Examples
         --------
         >>> # await store.time_out_checkpoint(checkpoint_id, at=moment)
         >>> # returns the checkpoint after applying the timeout
         True
-        """  # ruff: ignore[docstring-extraneous-exception]  # The shared transition helper raises these domain exceptions.
+        """
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.time_out(at),
@@ -303,19 +370,12 @@ class InMemoryGenerationCheckpointMixin:
         Checkpoint
             The updated checkpoint after cancellation.
 
-        Raises
-        ------
-        CheckpointNotFound
-            Raised when the checkpoint cannot be found.
-        CheckpointAlreadyTerminal
-            Raised when the checkpoint has already reached a terminal state.
-
         Examples
         --------
         >>> # await store.cancel_checkpoint(checkpoint_id, at=moment)
         >>> # returns the checkpoint after applying the cancellation
         True
-        """  # ruff: ignore[docstring-extraneous-exception]  # The shared transition helper raises these domain exceptions.
+        """
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.cancel(at),
