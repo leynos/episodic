@@ -91,9 +91,12 @@ def expired_lease_candidates(
     -----
     The checkpoint clause is a ``NOT EXISTS`` subquery rather than a Python
     read-filter-write, so the whole reclamation condition is one predicate the
-    database evaluates. A split version would leave the checkpoint guard
-    unprotected by the row selection, and no test under a harness that
-    serializes every session could observe the difference.
+    database evaluates for row selection. That guarantees a single atomic
+    decision about which rows are candidates; it does **not** close the window
+    a ``FOR UPDATE`` wait opens, because under ``READ COMMITTED`` the statement
+    may return a row after waiting for its lock even though the row's checkpoint
+    committed during the wait. ``fail_expired_leases`` therefore rechecks the
+    candidates once the lock is held; see its ``Notes``.
 
     ``FOR UPDATE`` is retained: it is what the manual runbook relies on to stop
     a second operator acting on a row being reclaimed. ``SKIP LOCKED`` is
@@ -174,6 +177,17 @@ class GenerationRunLeaseReclamationMixin(_MixinBase):
         checkpoint in ``created``. The checkpoint clause protects a run
         suspended awaiting human review, whose lease expires while it waits.
 
+        The candidates are rechecked for a ``created`` checkpoint after the
+        ``FOR UPDATE`` lock is held, not only inside the selection predicate.
+        Under ``READ COMMITTED`` the select can wait on a run's lock and then
+        return it, even though a reviewer's checkpoint committed while the
+        statement was waiting; without the recheck such a run would be failed
+        while it was suspended awaiting review. The recheck preserves the
+        selection order and may return fewer than ``limit`` runs, which the port
+        permits. **No test in this repository can observe the recheck**: under
+        ``py-pglite`` AXIOM-3 serializes every session, so no lock wait ever
+        occurs and the two checks cannot disagree.
+
         Each reclaimed run gets exactly one ``run.failed`` event, appended
         **before** the status update: a run's event stream closes when the run
         ends, so an append attempted afterwards is rejected. The transition
@@ -185,6 +199,24 @@ class GenerationRunLeaseReclamationMixin(_MixinBase):
             expired_lease_candidates(now=now, limit=limit)
         )
         candidates = list(result.scalars())
+        if candidates:
+            # One fresh query over the locked candidates, rather than trusting
+            # the pre-lock subquery: see the Notes above. The cost is a second
+            # round trip, paid even when nothing changed, because py-pglite's
+            # serialized sessions mean no test can flag the window this exists
+            # to close.
+            checkpoint_result = await self._session.execute(
+                sa.select(ReviewCheckpointRecord.generation_run_id).where(
+                    ReviewCheckpointRecord.generation_run_id.in_(
+                        tuple(record.id for record in candidates)
+                    ),
+                    ReviewCheckpointRecord.status == CheckpointStatus.CREATED,
+                )
+            )
+            checkpointed_run_ids = set(checkpoint_result.scalars())
+            candidates = [
+                record for record in candidates if record.id not in checkpointed_run_ids
+            ]
         _log_event(
             "info",
             "sql_generation_run_store.fail_expired_leases",

@@ -11,6 +11,7 @@ import typing as typ
 import pytest
 
 from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
+from tests import generation_run_checkpoint_listing_scenarios as listing
 from tests import generation_run_contract_scenarios as scenarios
 
 if typ.TYPE_CHECKING:
@@ -191,4 +192,68 @@ async def test_creation_rejects_duplicate_identifier(
         store,
         prepare_run=prepare_run,
         read_fresh=read_fresh,
+    )
+
+
+async def test_listing_returns_checkpoints_oldest_created_first(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+) -> None:
+    """The listing orders checkpoints by ``(created_at, id)``."""
+    await listing.scenario_listing_returns_checkpoints_oldest_created_first(
+        store,
+        prepare_run=prepare_run,
+    )
+
+
+async def test_listing_filters_by_status(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+) -> None:
+    """The listing's status filter selects only matching checkpoints."""
+    await listing.scenario_listing_filters_by_status(
+        store,
+        prepare_run=prepare_run,
+    )
+
+
+async def test_listing_applies_bounds_within_a_status_filter(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+) -> None:
+    """The listing paginates the filtered result, not the stored rows."""
+    await listing.scenario_listing_applies_bounds_within_a_status_filter(
+        store,
+        prepare_run=prepare_run,
+    )
+
+
+async def test_listing_rejects_unknown_run(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+) -> None:
+    """Listing for a run that was never stored raises ``RunNotFound``."""
+    await listing.scenario_listing_rejects_unknown_run(
+        store,
+        prepare_run=prepare_run,
+    )
+
+
+@pytest.mark.parametrize(
+    ("limit", "offset"),
+    listing.NEGATIVE_BOUND_CASES,
+    ids=["negative-limit", "negative-offset"],
+)
+async def test_listing_rejects_negative_bounds(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    limit: int,
+    offset: int,
+) -> None:
+    """A negative ``limit`` or ``offset`` is refused, not clamped."""
+    await listing.scenario_listing_rejects_negative_bounds(
+        store,
+        prepare_run=prepare_run,
+        limit=limit,
+        offset=offset,
     )

@@ -273,9 +273,8 @@ class GenerationCheckpointPort(typ.Protocol):
         Returns
         -------
         Checkpoint
-            The stored checkpoint. Implementations return a re-read of what was
-            persisted, not the input object, so a caller observes any adapter
-            normalisation at once.
+            The stored checkpoint. It must equal what a later read returns, so
+            a caller observes any adapter normalization at once.
 
         Raises
         ------
