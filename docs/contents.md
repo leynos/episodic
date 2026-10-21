@@ -123,6 +123,10 @@ or delivery planning.
   library](adr/adr-023-adopt-the-shared-cv005-contract-library.md)
   - why the CV-005 contract runs from a pinned shared library, and what stays
     local.
+- [ADR 024: Review checkpoint persistence](
+  adr/adr-024-review-checkpoint-persistence.md)
+  - durable review checkpoints, compare-and-set transitions, and why the SQL
+    stores compose rather than inherit.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 
