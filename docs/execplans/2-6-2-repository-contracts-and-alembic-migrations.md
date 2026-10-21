@@ -446,12 +446,38 @@ Stop and escalate rather than improvising when any of these is reached.
       the Verification plan has been corrected accordingly. Transcripts under
       *Artefacts and notes*. Every break was reverted; the four touched files
       are byte-identical to the commit and `git status --porcelain` is empty.
-- [~] Stage C gate verification on `60f8f740`. `make test` is green (above).
-      `make lint`, `make check-fmt`, `make typecheck`, `make markdownlint`,
-      `make nixie`, and `make check-migrations` are **not yet observed as
-      complete ordered lanes** on this commit — the individual steps were run
-      before the commit and are not a substitute. Outstanding, not passing.
+- [x] (2026-10-21) **Stage C fully green.** All seven gates ran as complete
+      ordered lanes against `74f84a64`, sequentially, with HEAD verified
+      unchanged before and after: `make check-fmt` (824 files already
+      formatted; mdtablefix 127 unchanged), `make lint` (55 s — **every step
+      ran**, including the three that had never executed on this branch:
+      `ambrleaks`, the blocking Skylos dead-code scan, and the nose duplication
+      gate, which passed with "30 allowed by reasoned exceptions"),
+      `make typecheck` (`ty 0.0.32` — all checks passed), `make markdownlint`
+      (127 files, 0 issues), `make nixie` (all diagrams validated),
+      `make check-migrations` (15 migrations applied through `20261020_000014`,
+      then `compare_metadata` reached — the log's final line is the `SAWarning`
+      raised from `migration_check.py:44`, which executes only after every
+      migration is applied, and exit 0 is reachable only past the `if diffs:`
+      block), and `make test` (**1784 passed, 1 skipped, 30 warnings in
+      170.70 s**; 55 snapshots passed; no `pytest-timeout` kill). No gate
+      required a retry.
+      The `make lint` result matters more than its exit code: the earlier
+      overstatement was that an abbreviated run had passed, and the specific
+      risk was that the *later* steps had never run at all. They now have, and
+      the log shows each printing its own trailing output after the pylint
+      steps rather than the recipe aborting behind them.
+- [x] (2026-10-21) Removed one stale nose duplication allow entry reported by
+      the now-running gate (`storage/generation_runs.py` ~
+      `adapters/generation_runs.py`). Pre-existing rather than introduced here
+      — added in `d9e5ac0d` (2026-09-25), and neither member is touched by this
+      slice; the duplication stopped matching after `e1cda7a7` (2026-10-03).
+      Removed anyway because `AGENTS.md` asks for it and because a dormant
+      entry is a latent hazard: if those modules drift back into a shared
+      block, the entry silently suppresses the finding and nothing announces
+      that it went live. `make lint` re-run green afterwards.
 - [ ] EP-M4: lease-reclamation primitive (gated; see Tolerances and Risk 3).
+      **Now unblocked** — the gate is "Stage C fully green", which it is.
 - [ ] EP-M5: documentation, ADR-024, and roadmap reconciliation.
 
 Record a timestamp against each item as it completes, in the form
