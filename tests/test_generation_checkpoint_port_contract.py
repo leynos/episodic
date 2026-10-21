@@ -1,123 +1,194 @@
-"""Contract tests for generation checkpoint port implementations."""
+"""Contract tests for generation checkpoint port implementations.
 
-import datetime as dt
-import uuid
+The scenarios themselves live in
+``tests/generation_run_contract_scenarios.py`` and are driven against every
+adapter. This module supplies the in-memory driver and the hooks that make an
+in-process mapping behave like a committed store.
+"""
+
+import typing as typ
 
 import pytest
 
 from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
-from episodic.canonical.domain import (
-    CheckpointAction,
-    CheckpointResponse,
-    CheckpointStatus,
-)
-from episodic.canonical.generation_run_errors import CheckpointNotFound
-from tests.test_generation_run_port_contract import (
-    NOW,
-    make_checkpoint,
-    make_generation_run,
-)
+from tests import generation_run_contract_scenarios as scenarios
+
+if typ.TYPE_CHECKING:
+    import uuid
+
+    from episodic.canonical.domain import Checkpoint, CheckpointStatus
+    from episodic.canonical.generation_run_ports import GenerationRunPort
+    from tests.generation_run_contract_scenarios import (
+        CountCheckpoints,
+        PrepareRun,
+        ReadFresh,
+    )
+
+pytestmark = [pytest.mark.asyncio]
 
 
 @pytest.fixture
-def store() -> InMemoryGenerationRunStore:
+def store() -> GenerationRunPort:
     """Create a deterministic in-memory store for each contract test."""
-    return InMemoryGenerationRunStore(time_provider=lambda: NOW)
+    return InMemoryGenerationRunStore(time_provider=lambda: scenarios.NOW)
 
 
-class TestGenerationCheckpointPort:
-    """Contract tests for generation checkpoint operations."""
+@pytest.fixture
+def prepare_run() -> PrepareRun:
+    """Return the in-memory no-op prerequisite hook."""
 
-    @pytest.mark.asyncio
-    async def test_checkpoint_response_uses_domain_transition(
-        self,
-        store: InMemoryGenerationRunStore,
-    ) -> None:
-        """The checkpoint port persists the response returned by the entity."""
-        run = await store.create_run(make_generation_run())
-        checkpoint = await store.create_checkpoint(make_checkpoint(run.id))
+    async def _prepare(_run: object) -> None:
+        """Do nothing: the in-memory store enforces no foreign keys."""
 
-        responded = await store.respond_to_checkpoint(
-            checkpoint.id,
-            response=CheckpointResponse(
-                action=CheckpointAction.APPROVE,
-                payload={"approved": True},
-                responded_at=NOW + dt.timedelta(minutes=1),
-                responded_by="reviewer@example.com",
-            ),
-        )
+    return _prepare
 
-        assert responded.status is CheckpointStatus.RESPONDED, (
-            "checkpoint status must transition to RESPONDED"
-        )
-        assert responded.response_payload == {"approved": True}, (
-            "response payload must be persisted"
-        )
-        assert await store.get_checkpoint(checkpoint.id) == responded, (
-            "retrieved checkpoint must reflect response"
-        )
 
-    @pytest.mark.asyncio
-    async def test_checkpoint_timeout_uses_domain_transition(
-        self,
-        store: InMemoryGenerationRunStore,
-    ) -> None:
-        """The checkpoint port persists the timeout returned by the entity."""
-        run = await store.create_run(make_generation_run())
-        checkpoint = await store.create_checkpoint(make_checkpoint(run.id))
+@pytest.fixture
+def read_fresh(store: GenerationRunPort) -> ReadFresh:
+    """Return a hook that reads a checkpoint back from the same mapping."""
 
-        timed_out = await store.time_out_checkpoint(
-            checkpoint.id,
-            at=NOW + dt.timedelta(minutes=30),
-        )
+    async def _read(checkpoint_id: uuid.UUID) -> Checkpoint | None:
+        """Return the stored checkpoint, already visible to readers."""
+        return await store.get_checkpoint(checkpoint_id)
 
-        assert timed_out.status is CheckpointStatus.TIMED_OUT, (
-            "checkpoint status must transition to TIMED_OUT"
-        )
-        assert timed_out.responded_at == NOW + dt.timedelta(minutes=30), (
-            "timeout timestamp must be persisted"
-        )
-        assert await store.get_checkpoint(checkpoint.id) == timed_out, (
-            "retrieved checkpoint must reflect timeout"
-        )
+    return _read
 
-    @pytest.mark.asyncio
-    async def test_checkpoint_cancellation_uses_domain_transition(
-        self,
-        store: InMemoryGenerationRunStore,
-    ) -> None:
-        """The checkpoint port persists cancellation returned by the entity."""
-        run = await store.create_run(make_generation_run())
-        checkpoint = await store.create_checkpoint(make_checkpoint(run.id))
 
-        cancelled = await store.cancel_checkpoint(
-            checkpoint.id,
-            at=NOW + dt.timedelta(minutes=10),
-        )
+@pytest.fixture
+def count_checkpoints(store: GenerationRunPort) -> CountCheckpoints:
+    """Return a hook counting stored checkpoints by identifier."""
 
-        assert cancelled.status is CheckpointStatus.CANCELLED, (
-            "checkpoint status must transition to CANCELLED"
-        )
-        assert cancelled.responded_at == NOW + dt.timedelta(minutes=10), (
-            "cancellation timestamp must be persisted"
-        )
-        assert await store.get_checkpoint(checkpoint.id) == cancelled, (
-            "retrieved checkpoint must reflect cancellation"
-        )
+    async def _count(checkpoint_id: uuid.UUID) -> int:
+        """Report whether the identifier is present in the mapping."""
+        return int(await store.get_checkpoint(checkpoint_id) is not None)
 
-    @pytest.mark.asyncio
-    async def test_checkpoint_response_rejects_unknown_checkpoint(
-        self,
-        store: InMemoryGenerationRunStore,
-    ) -> None:
-        """Responding to a missing checkpoint should raise the domain error."""
-        with pytest.raises(CheckpointNotFound, match=r"unknown generation checkpoint:"):
-            await store.respond_to_checkpoint(
-                uuid.uuid7(),
-                response=CheckpointResponse(
-                    action=CheckpointAction.APPROVE,
-                    payload={},
-                    responded_at=NOW,
-                    responded_by="reviewer@example.com",
-                ),
-            )
+    return _count
+
+
+async def test_store_satisfies_generation_run_port(store: GenerationRunPort) -> None:
+    """The in-memory adapter satisfies the composite port."""
+    await scenarios.scenario_store_satisfies_generation_run_port(store)
+
+
+async def test_creation_persists_checkpoint(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    read_fresh: ReadFresh,
+) -> None:
+    """A created checkpoint is readable and keeps its option order."""
+    await scenarios.scenario_creation_persists_checkpoint(
+        store,
+        prepare_run=prepare_run,
+        read_fresh=read_fresh,
+    )
+
+
+@pytest.mark.parametrize(
+    "transition",
+    scenarios.TRANSITIONS,
+    ids=scenarios.TRANSITION_IDS,
+)
+async def test_transition_persists_domain_result(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    read_fresh: ReadFresh,
+    transition: scenarios.Transition,
+) -> None:
+    """Each transition persists the entity the domain returned."""
+    await scenarios.scenario_transition_persists_domain_result(
+        store,
+        prepare_run=prepare_run,
+        read_fresh=read_fresh,
+        transition=transition,
+    )
+
+
+async def test_response_round_trips_payload(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    read_fresh: ReadFresh,
+) -> None:
+    """A reviewer response round-trips action, identity, and payload."""
+    await scenarios.scenario_response_round_trips_payload(
+        store,
+        prepare_run=prepare_run,
+        read_fresh=read_fresh,
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    scenarios.TERMINAL_CASES,
+    ids=scenarios.TERMINAL_CASE_IDS,
+)
+async def test_terminal_checkpoint_rejects_transition(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    read_fresh: ReadFresh,
+    case: scenarios.TerminalCase,
+) -> None:
+    """A terminal checkpoint rejects all nine further transitions."""
+    await scenarios.scenario_terminal_checkpoint_rejects_transition(
+        store,
+        prepare_run=prepare_run,
+        read_fresh=read_fresh,
+        case=case,
+    )
+
+
+@pytest.mark.parametrize(
+    "transition",
+    scenarios.TRANSITIONS,
+    ids=scenarios.TRANSITION_IDS,
+)
+async def test_transition_rejects_unknown_checkpoint(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    transition: scenarios.Transition,
+) -> None:
+    """Each transition refuses an identifier that was never stored."""
+    await scenarios.scenario_transition_rejects_unknown_checkpoint(
+        store,
+        prepare_run=prepare_run,
+        transition=transition,
+    )
+
+
+async def test_creation_rejects_unknown_run(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    count_checkpoints: CountCheckpoints,
+) -> None:
+    """Creating against a missing run fails and writes nothing."""
+    await scenarios.scenario_creation_rejects_unknown_run(
+        store,
+        prepare_run=prepare_run,
+        count_checkpoints=count_checkpoints,
+    )
+
+
+@pytest.mark.parametrize("status", scenarios.TERMINAL_STATUSES, ids=str)
+async def test_creation_rejects_terminal_status(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    status: CheckpointStatus,
+) -> None:
+    """Creating a checkpoint in a terminal state is refused."""
+    await scenarios.scenario_creation_rejects_terminal_status(
+        store,
+        prepare_run=prepare_run,
+        status=status,
+    )
+
+
+async def test_creation_rejects_duplicate_identifier(
+    store: GenerationRunPort,
+    prepare_run: PrepareRun,
+    read_fresh: ReadFresh,
+) -> None:
+    """A duplicate identifier must not overwrite the stored checkpoint."""
+    await scenarios.scenario_creation_rejects_duplicate_identifier(
+        store,
+        prepare_run=prepare_run,
+        read_fresh=read_fresh,
+    )

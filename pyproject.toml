@@ -125,6 +125,9 @@ extend-ignore = [
 "tests/test_local_k8s_kind_tooling.py" = ["suspicious-subprocess-import"]
 "tests/test_local_k8s_tooling.py" = ["suspicious-subprocess-import"]
 "tests/workflow_reading.py" = ["assert"]
+# Unprefixed support module: deliberately uncollected, so it misses the
+# `**/test_*.py` ignores and needs `assert` declared the same way.
+"tests/generation_run_contract_scenarios.py" = ["assert"]
 
 [tool.ruff.lint.flake8-import-conventions]
 # Declare the banned `from` imports.
@@ -546,8 +549,17 @@ full_name = [
     "alembic.versions.20260624_000010_add_generation_run_tables._drop_enums",
     "alembic.versions.20260624_000010_add_generation_run_tables._drop_generation_runs_table",
     "alembic.versions.20260624_000010_add_generation_run_tables._drop_generation_events_table",
+    "alembic.versions.20261020_000014_add_review_checkpoints._drop_enums",
+    "alembic.versions.20261020_000014_add_review_checkpoints._drop_review_checkpoints_table",
 ]
 reason = "Alembic invokes these downgrade helpers when an operator rolls migration revisions back."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "class"
+full_name = [
+    "episodic.canonical.storage.review_checkpoints.SqlAlchemyReviewCheckpointStore",
+]
+reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -909,6 +921,9 @@ reason = "Both idempotent API resources import the same source_idempotency helpe
 members = ["episodic/generation/guest_bios_tei.py", "episodic/generation/show_notes_enrichment.py"]
 reason = "Per-tool TEI enrichment modules: an identical import surface over the shared tei_payload helpers, each binding its own domain models and div_type at the point of use; merging them would couple two independent enrichment features."
 
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/storage/review_checkpoints.py"]
+reason = "Parallel implementations of one port: the in-memory checkpoint mixin and the SQLAlchemy checkpoint store bind the same domain exception set and the same log-event helper. An import list cannot be factored into shared code without changing which names each module binds."
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"
@@ -945,6 +960,8 @@ prefixes = [
     "episodic.canonical.entity_protocols",
     "episodic.canonical.episode_errors",
     "episodic.canonical.generation_quality",
+    "episodic.canonical.generation_run_errors",
+    "episodic.canonical.generation_run_ports",
     "episodic.canonical.history_protocols",
     "episodic.canonical.health",
     "episodic.canonical.hashing",

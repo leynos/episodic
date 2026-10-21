@@ -11,6 +11,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         Checkpoint,
         CheckpointResponse,
+        CheckpointStatus,
         GenerationEvent,
         GenerationRun,
         GenerationRunStatus,
@@ -269,6 +270,38 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
             Always ``None`` because this implementation stores no checkpoints.
         """
         return None
+
+    async def list_checkpoints(
+        self,
+        run_id: uuid.UUID,
+        *,
+        status: CheckpointStatus | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[Checkpoint, ...]:
+        """Return no checkpoints for the supplied run.
+
+        Parameters
+        ----------
+        run_id
+            Run identifier, which is ignored by this no-op implementation.
+        status
+            Optional lifecycle filter accepted by the port contract and
+            ignored here.
+        limit
+            Maximum number of checkpoints accepted by the port contract and
+            ignored here.
+        offset
+            Number of checkpoints to skip accepted by the port contract and
+            ignored here.
+
+        Returns
+        -------
+        tuple of Checkpoint
+            Always an empty tuple because this implementation stores no
+            checkpoints.
+        """
+        return ()
 
     async def respond_to_checkpoint(
         self,

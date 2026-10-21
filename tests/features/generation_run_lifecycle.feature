@@ -20,3 +20,11 @@ Feature: Generation run checkpoint lifecycle
     Given a generation run with a created checkpoint
     When the checkpoint is cancelled
     Then the checkpoint status becomes "cancelled"
+
+  Scenario: A responded checkpoint survives a new unit of work
+    Given a generation run persisted in PostgreSQL
+    And a checkpoint created against that run
+    When the reviewer responds with action "approve"
+    And the unit of work is committed and closed
+    Then reading the checkpoint in a new unit of work reports status "responded"
+    And the recorded reviewer action is "approve"
