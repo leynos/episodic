@@ -8,7 +8,6 @@ real fidelity evidence for INV-CKPT-3, and the commit-safety evidence for
 INV-COMMIT-1 that no adapter comparison can express.
 """
 
-import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -23,12 +22,14 @@ from episodic.canonical.domain import (
     CheckpointResponse,
     CheckpointStatus,
     GenerationRun,
-    GenerationRunStatus,
     SeriesProfile,
 )
-from episodic.canonical.generation_quality import QaStatus, QualityMode
-from episodic.canonical.storage import SqlAlchemyUnitOfWork, uow
+from episodic.canonical.storage import (
+    SqlAlchemyUnitOfWork,
+    uow,
+)
 from tests import generation_run_checkpoint_listing_scenarios as listing
+from tests.canonical_storage import _generation_run_support as support
 from tests.canonical_storage._generation_run_support import (
     persist_generation_run_prerequisites,
 )
@@ -38,9 +39,6 @@ if typ.TYPE_CHECKING:
 
 NOW = dt.datetime(2026, 6, 24, 8, 30, tzinfo=dt.UTC)
 
-#: Deliberately not alphabetical, so a set or sort round-trip becomes visible.
-OPTIONS = ("edit", "approve", "request_changes")
-
 #: A nested mapping plus a list, so a JSONB round trip that flattens either one
 #: is caught rather than tolerated.
 PAYLOAD = {
@@ -48,66 +46,6 @@ PAYLOAD = {
     "notes": ["alpha", "beta"],
     "annotations": {"target": "section-3", "spans": [1, 2, 3]},
 }
-
-
-def _run() -> GenerationRun:
-    """Build a pending generation run with deterministic timestamps."""
-    return GenerationRun(
-        id=uuid.uuid7(),
-        episode_id=uuid.uuid7(),
-        source_bundle_id=uuid.uuid7(),
-        actor="editor@example.com",
-        status=GenerationRunStatus.PENDING,
-        current_node=None,
-        budget_snapshot={},
-        configuration={},
-        created_at=NOW,
-        updated_at=NOW,
-        started_at=None,
-        ended_at=None,
-        error_message=None,
-        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
-        qa_status=QaStatus.SKIPPED,
-        skip_qa_rationale="No-QA vertical-slice draft.",
-    )
-
-
-def _checkpoint(run_id: uuid.UUID) -> Checkpoint:
-    """Build a created checkpoint carrying the non-alphabetical options."""
-    return Checkpoint(
-        id=uuid.uuid7(),
-        generation_run_id=run_id,
-        node="review",
-        prompt="Approve the draft?",
-        options=OPTIONS,
-        status=CheckpointStatus.CREATED,
-        created_at=NOW,
-        responded_at=None,
-        responded_by=None,
-        response_action=None,
-        response_payload={},
-    )
-
-
-@dc.dataclass(frozen=True, slots=True)
-class Committed:
-    """A run and checkpoint already committed to PostgreSQL."""
-
-    run_id: uuid.UUID
-    checkpoint_id: uuid.UUID
-
-
-async def _commit_run_and_checkpoint(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> Committed:
-    """Commit a run with its foreign keys and one created checkpoint."""
-    run = _run()
-    await persist_generation_run_prerequisites(session_factory, run)
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await uow.generation_runs.create_run(run)
-        created = await uow.generation_runs.create_checkpoint(_checkpoint(run.id))
-        await uow.commit()
-    return Committed(run_id=run.id, checkpoint_id=created.id)
 
 
 async def _read_fresh(
@@ -201,12 +139,14 @@ async def test_options_keep_their_order_across_a_fresh_unit_of_work(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The options tuple round-trips in order, not sorted or set-ified."""
-    committed = await _commit_run_and_checkpoint(session_factory)
+    committed = await support.commit_run_and_checkpoint(session_factory)
 
     reloaded = await _read_fresh(session_factory, committed.checkpoint_id)
 
     assert reloaded is not None, "the committed checkpoint must be readable"
-    assert reloaded.options == OPTIONS, f"option order: {reloaded.options!r}"
+    assert reloaded.options == support.CHECKPOINT_OPTIONS, (
+        f"option order: {reloaded.options!r}"
+    )
     assert isinstance(reloaded.options, tuple), (
         "options must be restored as a tuple, not a JSON list"
     )
@@ -217,7 +157,7 @@ async def test_nested_payload_round_trips_through_jsonb(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A nested mapping and a list survive JSONB without being flattened."""
-    committed = await _commit_run_and_checkpoint(session_factory)
+    committed = await support.commit_run_and_checkpoint(session_factory)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.generation_runs.respond_to_checkpoint(
             committed.checkpoint_id,
@@ -249,7 +189,7 @@ async def test_timestamps_round_trip_as_timezone_aware_instants(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Timestamps keep their exact instant and their UTC offset."""
-    committed = await _commit_run_and_checkpoint(session_factory)
+    committed = await support.commit_run_and_checkpoint(session_factory)
     responded_at = NOW + dt.timedelta(minutes=1)
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -290,7 +230,7 @@ async def test_uncommitted_response_does_not_persist(
     logger, whose records never reach a stdlib handler, so ``caplog`` observes
     nothing regardless of whether the event fires.
     """
-    committed = await _commit_run_and_checkpoint(session_factory)
+    committed = await support.commit_run_and_checkpoint(session_factory)
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def record_event(level: str, message: str, **fields: object) -> None:
@@ -368,7 +308,7 @@ async def test_options_must_be_a_json_array(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A scalar written into options is rejected by the CHECK constraint."""
-    committed = await _commit_run_and_checkpoint(session_factory)
+    committed = await support.commit_run_and_checkpoint(session_factory)
     statement = sa.text(
         "UPDATE review_checkpoints SET options = '\"approve\"'::jsonb "
         "WHERE id = :checkpoint_id"
