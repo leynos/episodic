@@ -35,13 +35,30 @@ if typ.TYPE_CHECKING:
     )
 
 
+_EVENT_PREFIX = "generation_run_store."
+
+
 @dc.dataclass(frozen=True, slots=True)
 class _CheckpointTransitionSpec:
-    """Logging specification for a checkpoint domain transition."""
+    """Logging specification for a checkpoint domain transition.
 
-    missing_event: str
-    done_event: str
+    The event names are derived from one stem so the ``_missing`` suffix that
+    distinguishes a rejected lookup from a completed transition is applied in
+    one place rather than re-spelled at each call site.
+    """
+
+    stem: str
     extra_fields: dict[str, str] = dc.field(default_factory=dict)
+
+    @property
+    def missing_event(self) -> str:
+        """Event name logged when no stored checkpoint holds the identifier."""
+        return f"{_EVENT_PREFIX}{self.stem}_missing"
+
+    @property
+    def done_event(self) -> str:
+        """Event name logged when the transition has been applied."""
+        return f"{_EVENT_PREFIX}{self.stem}"
 
 
 class InMemoryGenerationCheckpointMixin:
@@ -50,6 +67,11 @@ class InMemoryGenerationCheckpointMixin:
     The mixin centralises checkpoint persistence and state transitions so the
     in-memory adapter can reuse the same domain rules as the rest of the
     generation-run implementation.
+
+    Transitions run under the store's lock and a rejected one leaves the
+    stored checkpoint untouched. Each transition method reports the same
+    two failures: `CheckpointNotFound` when no stored checkpoint holds the
+    identifier, and `CheckpointAlreadyTerminal` on one already resolved.
 
     Examples
     --------
@@ -200,16 +222,25 @@ class InMemoryGenerationCheckpointMixin:
         async with self._lock:
             if run_id not in self._runs:
                 raise RunNotFound(run_id)
-            found = sorted(
-                (
-                    checkpoint
-                    for checkpoint in self._checkpoints.values()
-                    if checkpoint.generation_run_id == run_id
-                    and (status is None or checkpoint.status is status)
-                ),
-                key=lambda checkpoint: (checkpoint.created_at, str(checkpoint.id)),
-            )
+            found = self._matching_checkpoints(run_id, status=status)
         return tuple(found[offset : offset + limit])
+
+    def _matching_checkpoints(
+        self,
+        run_id: uuid.UUID,
+        *,
+        status: CheckpointStatus | None,
+    ) -> list[Checkpoint]:
+        """Return a run's checkpoints, ordered; callers hold the lock."""
+        return sorted(
+            (
+                checkpoint
+                for checkpoint in self._checkpoints.values()
+                if checkpoint.generation_run_id == run_id
+                and (status is None or checkpoint.status is status)
+            ),
+            key=lambda checkpoint: (checkpoint.created_at, str(checkpoint.id)),
+        )
 
     async def _apply_checkpoint_transition(
         self,
@@ -217,35 +248,7 @@ class InMemoryGenerationCheckpointMixin:
         transition: cabc.Callable[[Checkpoint], Checkpoint],
         spec: _CheckpointTransitionSpec,
     ) -> Checkpoint:
-        """Apply a domain transition to a stored checkpoint under the lock.
-
-        Parameters
-        ----------
-        checkpoint_id : uuid.UUID
-            Identifier of the checkpoint to transition.
-        transition : collections.abc.Callable[[Checkpoint], Checkpoint]
-            Domain transition to apply to the stored checkpoint.
-        spec : _CheckpointTransitionSpec
-            Logging labels associated with the transition.
-
-        Returns
-        -------
-        Checkpoint
-            The updated checkpoint after the domain transition.
-
-        Raises
-        ------
-        CheckpointNotFound
-            Raised when the checkpoint is not present in the store.
-        CheckpointAlreadyTerminal
-            Raised when the domain transition rejects a terminal checkpoint.
-
-        Examples
-        --------
-        >>> # await store._apply_checkpoint_transition(checkpoint_id, transition, spec)
-        >>> # returns the updated checkpoint when the transition succeeds
-        True
-        """
+        """Apply a domain transition under the lock, then store what it returns."""
         async with self._lock:
             checkpoint = self._checkpoints.get(checkpoint_id)
             if checkpoint is None:
@@ -285,32 +288,32 @@ class InMemoryGenerationCheckpointMixin:
         *,
         response: CheckpointResponse,
     ) -> Checkpoint:
-        """Record a reviewer response using the checkpoint domain transition.
+        """Record a reviewer response against a stored checkpoint.
 
         Parameters
         ----------
         checkpoint_id : uuid.UUID
-            Identifier of the checkpoint to respond to.
+            Identifier of the checkpoint the reviewer answered.
         response : CheckpointResponse
-            Reviewer response to persist against the checkpoint.
+            The reviewer's action, payload, and instant, applied through the
+            domain's ``respond`` rule rather than interpreted here.
 
         Returns
         -------
         Checkpoint
-            The updated checkpoint with the reviewer response applied.
+            The checkpoint the rule resolved, carrying the reviewer's payload.
 
         Examples
         --------
         >>> # await store.respond_to_checkpoint(checkpoint_id, response=response)
-        >>> # returns the checkpoint after applying the response
+        >>> # returns the checkpoint carrying the reviewer's payload
         True
         """
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.respond(response),
             _CheckpointTransitionSpec(
-                missing_event="generation_run_store.respond_checkpoint_missing",
-                done_event="generation_run_store.respond_checkpoint",
+                stem="respond_checkpoint",
                 extra_fields={"action": response.action.value},
             ),
         )
@@ -321,33 +324,31 @@ class InMemoryGenerationCheckpointMixin:
         *,
         at: dt.datetime,
     ) -> Checkpoint:
-        """Record a checkpoint timeout using the domain transition.
+        """Record that a review window closed with nobody answering.
 
         Parameters
         ----------
         checkpoint_id : uuid.UUID
-            Identifier of the checkpoint to time out.
+            Identifier of the checkpoint whose window closed.
         at : datetime.datetime
-            Timestamp at which the timeout is recorded.
+            The instant the window closed, supplied by the caller, not read
+            from the store's clock.
 
         Returns
         -------
         Checkpoint
-            The updated checkpoint after timing out.
+            The checkpoint the rule expired at the supplied instant.
 
         Examples
         --------
         >>> # await store.time_out_checkpoint(checkpoint_id, at=moment)
-        >>> # returns the checkpoint after applying the timeout
+        >>> # returns the checkpoint expired at the caller's instant
         True
         """
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.time_out(at),
-            _CheckpointTransitionSpec(
-                missing_event="generation_run_store.timeout_checkpoint_missing",
-                done_event="generation_run_store.timeout_checkpoint",
-            ),
+            _CheckpointTransitionSpec(stem="timeout_checkpoint"),
         )
 
     async def cancel_checkpoint(
@@ -356,31 +357,31 @@ class InMemoryGenerationCheckpointMixin:
         *,
         at: dt.datetime,
     ) -> Checkpoint:
-        """Record checkpoint cancellation using the domain transition.
+        """Record an operator withdrawing a checkpoint.
+
+        Withdrawal is deliberate rather than time-driven, so the instant is
+        recorded but gates nothing: the ``cancel`` rule alone decides.
 
         Parameters
         ----------
         checkpoint_id : uuid.UUID
-            Identifier of the checkpoint to cancel.
+            Identifier of the checkpoint being withdrawn.
         at : datetime.datetime
-            Timestamp at which the cancellation is recorded.
+            When the operator withdrew it, recorded as the resolution time.
 
         Returns
         -------
         Checkpoint
-            The updated checkpoint after cancellation.
+            The checkpoint the ``cancel`` rule withdrew.
 
         Examples
         --------
         >>> # await store.cancel_checkpoint(checkpoint_id, at=moment)
-        >>> # returns the checkpoint after applying the cancellation
+        >>> # returns the checkpoint withdrawn by the operator's act
         True
         """
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.cancel(at),
-            _CheckpointTransitionSpec(
-                missing_event="generation_run_store.cancel_checkpoint_missing",
-                done_event="generation_run_store.cancel_checkpoint",
-            ),
+            _CheckpointTransitionSpec(stem="cancel_checkpoint"),
         )

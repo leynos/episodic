@@ -76,7 +76,11 @@ async def test_creation_persists_checkpoint(
     prepare_run: PrepareRun,
     read_fresh: ReadFresh,
 ) -> None:
-    """A created checkpoint is readable and keeps its option order."""
+    """A created checkpoint is readable and keeps its option order.
+
+    The in-memory store keeps the instance the caller passed, so this also
+    pins that the option list is not copied into a different sequence.
+    """
     await scenarios.scenario_creation_persists_checkpoint(
         store,
         prepare_run=prepare_run,
@@ -187,7 +191,12 @@ async def test_creation_rejects_duplicate_identifier(
     prepare_run: PrepareRun,
     read_fresh: ReadFresh,
 ) -> None:
-    """A duplicate identifier must not overwrite the stored checkpoint."""
+    """A duplicate identifier must not overwrite the stored checkpoint.
+
+    Here the conflict is detected against the live mapping rather than a
+    database constraint, so this pins that the in-memory path still raises the
+    domain exception instead of quietly replacing the entry.
+    """
     await scenarios.scenario_creation_rejects_duplicate_identifier(
         store,
         prepare_run=prepare_run,

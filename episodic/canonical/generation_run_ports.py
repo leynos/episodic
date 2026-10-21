@@ -265,6 +265,10 @@ class GenerationCheckpointPort(typ.Protocol):
     Adapters may impose length limits on `node`, `prompt`, `responded_by`, and
     the option strings; the port states no bound, so callers must not assume
     one. Option *order* is part of the value and survives a round trip.
+
+    Every transition below raises `CheckpointNotFound` when no checkpoint holds
+    the identifier, and `CheckpointAlreadyTerminal` when the checkpoint is
+    already resolved; a rejected transition leaves the stored row untouched.
     """
 
     async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
@@ -341,12 +345,8 @@ class GenerationCheckpointPort(typ.Protocol):
     ) -> Checkpoint:
         """Record that a checkpoint timed out.
 
-        Raises
-        ------
-        CheckpointNotFound
-            If no checkpoint holds the identifier.
-        CheckpointAlreadyTerminal
-            If the checkpoint is already resolved.
+        The expiry instant is the caller's, so a replayed timeout records when
+        the review window actually closed rather than when the call was made.
         """
         raise NotImplementedError
 
@@ -358,12 +358,8 @@ class GenerationCheckpointPort(typ.Protocol):
     ) -> Checkpoint:
         """Record that a checkpoint was cancelled.
 
-        Raises
-        ------
-        CheckpointNotFound
-            If no checkpoint holds the identifier.
-        CheckpointAlreadyTerminal
-            If the checkpoint is already resolved.
+        Cancellation is an operator's deliberate act, so it is not derived from
+        the expiry instant the caller supplies.
         """
         raise NotImplementedError
 

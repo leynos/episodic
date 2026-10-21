@@ -72,7 +72,25 @@ class SqlAlchemyGenerationRunPortAdapter:
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[GenerationRun, ...]:
-        """List runs for an episode, ordered by creation time."""
+        """List an episode's runs, oldest-created first.
+
+        Parameters
+        ----------
+        episode_id : uuid.UUID
+            Episode that owns the runs.
+        status : GenerationRunStatus | None, optional
+            When given, only runs in this lifecycle state are returned.
+        limit : int, optional
+            Maximum number of runs to return. Defaults to 50, matching the
+            run store's narrower default.
+        offset : int, optional
+            Runs to skip after ordering.
+
+        Returns
+        -------
+        tuple of GenerationRun
+            Ordered by ``(created_at, id)``.
+        """
         return await self._runs.list_runs(
             episode_id,
             status=status,
@@ -131,7 +149,17 @@ class SqlAlchemyGenerationRunPortAdapter:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
-        """List events for a run."""
+        """Return the run's recorded events from ``after_seq`` onwards.
+
+        The adapter forwards both selectors as given; the run store rejects a
+        request supplying both, because a sequence cursor and an offset name the
+        same window two ways and combining them is ambiguous.
+
+        Returns
+        -------
+        tuple of GenerationEvent
+            Ordered by ascending ``seq``, the run store's own order.
+        """
         return await self._runs.list_events(
             run_id,
             after_seq=after_seq,
@@ -177,7 +205,16 @@ class SqlAlchemyGenerationRunPortAdapter:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[Checkpoint, ...]:
-        """List a run's checkpoints, oldest-created first."""
+        """List a run's review checkpoints, oldest-created first.
+
+        Checkpoints live in their own table, so this forwards to the
+        checkpoint store rather than to the run store the other listings use.
+
+        Returns
+        -------
+        tuple of Checkpoint
+            Ordered by ``(created_at, id)``.
+        """
         return await self._checkpoints.list_checkpoints(
             run_id,
             status=status,

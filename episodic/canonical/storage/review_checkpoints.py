@@ -65,7 +65,24 @@ _CHECKPOINT_PKEY_CONSTRAINT = "review_checkpoints_pkey"
 
 @typ.final
 class SqlAlchemyReviewCheckpointStore:
-    """Durable review-checkpoint adapter."""
+    """Durable review-checkpoint adapter.
+
+    Creation is non-destructive: an identifier already in use raises
+    :class:`CheckpointAlreadyExists` rather than overwriting the stored row,
+    because two adapters must not disagree on whether a replayed create destroys
+    a reviewer's decision. Any other violation propagates as ``IntegrityError``,
+    since a foreign-key or CHECK failure is a different fault.
+
+    Every terminal transition is applied as one compare-and-set. The write is
+    guarded by ``status = 'created'`` rather than by locking the row, so a
+    losing writer learns it lost from `rowcount` instead of from lock ordering.
+    The named domain transition runs first and its result is what gets
+    persisted, so the adapter reimplements no lifecycle rule and a rejection
+    leaves the stored row untouched. Each transition returns that resolved
+    checkpoint, and raises :class:`CheckpointNotFound` when no row holds the
+    identifier or :class:`CheckpointAlreadyTerminal` when another writer
+    resolved the row first.
+    """
 
     def __init__(
         self,
@@ -97,15 +114,8 @@ class SqlAlchemyReviewCheckpointStore:
             If the parent generation run does not exist. Only existence is
             checked; the run's own status is deliberately not a precondition,
             so this adapter agrees with the in-memory one.
-        CheckpointAlreadyExists
-            If the identifier is already in use. Two adapters must not disagree
-            on whether a replayed create overwrites a reviewer's decision.
         CheckpointAlreadyTerminal
             If the checkpoint arrives already resolved.
-        sqlalchemy.exc.IntegrityError
-            If the insert violates a constraint other than the primary key.
-            A foreign-key or CHECK failure is a different fault from a
-            duplicate identifier and propagates rather than being mislabelled.
         """
         if checkpoint.status is not CheckpointStatus.CREATED:
             _log_event(
@@ -129,18 +139,7 @@ class SqlAlchemyReviewCheckpointStore:
             )
             raise RunNotFound(checkpoint.generation_run_id)
 
-        record = checkpoint_to_record(checkpoint)
-        try:
-            # A nested transaction contains the primary-key violation, so a
-            # rejected create does not poison unrelated pending writes on the
-            # outer session.
-            async with self._session.begin_nested():
-                self._session.add(record)
-                await self._session.flush()
-        except IntegrityError as exc:
-            if constraint_name(exc) != _CHECKPOINT_PKEY_CONSTRAINT:
-                raise
-            raise CheckpointAlreadyExists(checkpoint.id) from exc
+        record = await self._insert_record(checkpoint)
 
         # Also observed on resolution: both ends, so accumulation is visible.
         record_checkpoint_created(
@@ -155,6 +154,22 @@ class SqlAlchemyReviewCheckpointStore:
             status=checkpoint.status.value,
         )
         return checkpoint_from_record(record)
+
+    async def _insert_record(self, checkpoint: Checkpoint) -> ReviewCheckpointRecord:
+        """Insert the row, translating a primary-key clash to its domain error."""
+        record = checkpoint_to_record(checkpoint)
+        try:
+            # A nested transaction contains the primary-key violation, so a
+            # rejected create does not poison unrelated pending writes on the
+            # outer session.
+            async with self._session.begin_nested():
+                self._session.add(record)
+                await self._session.flush()
+        except IntegrityError as exc:
+            if constraint_name(exc) != _CHECKPOINT_PKEY_CONSTRAINT:
+                raise
+            raise CheckpointAlreadyExists(checkpoint.id) from exc
+        return record
 
     async def get_checkpoint(
         self,
@@ -233,12 +248,15 @@ class SqlAlchemyReviewCheckpointStore:
         *,
         at: dt.datetime,
     ) -> Checkpoint:
-        """Record a timeout through the domain transition.
+        """Record the expiry of an unanswered review window.
+
+        Nobody answered before the window closed, so the expiry the caller
+        supplies is what resolves it.
 
         Returns
         -------
         Checkpoint
-            The resolved checkpoint the domain transition returned.
+            The expired checkpoint the transition returned.
         """
         return await self._resolve(
             checkpoint_id,
@@ -252,12 +270,14 @@ class SqlAlchemyReviewCheckpointStore:
         *,
         at: dt.datetime,
     ) -> Checkpoint:
-        """Record a cancellation through the domain transition.
+        """Record an operator withdrawing a pending review.
+
+        A withdrawal is a deliberate act that follows no expiry rule.
 
         Returns
         -------
         Checkpoint
-            The resolved checkpoint the domain transition returned.
+            The withdrawn checkpoint, resolved by that act.
         """
         return await self._resolve(
             checkpoint_id,
@@ -273,26 +293,7 @@ class SqlAlchemyReviewCheckpointStore:
         event: str,
         extra: dict[str, str] | None = None,
     ) -> Checkpoint:
-        """Apply one terminal transition by compare-and-set.
-
-        The write is guarded by ``status = 'created'`` rather than by locking
-        the row, so a losing writer learns it lost from `rowcount` instead of
-        from lock ordering. The domain transition runs first and its result is
-        what gets persisted; the adapter never reimplements the rule, and a
-        rejection leaves the row untouched.
-
-        Returns
-        -------
-        Checkpoint
-            The resolved checkpoint, once the `UPDATE` has applied it.
-
-        Raises
-        ------
-        CheckpointNotFound
-            If no checkpoint holds the identifier.
-        CheckpointAlreadyTerminal
-            If the checkpoint was resolved by someone else first.
-        """  # ruff: ignore[docstring-extraneous-exception]  # Raised by the lost-race helper this delegates to.
+        """Apply one terminal transition by compare-and-set."""
         fields: dict[str, str] = {} if extra is None else extra
         record = await self._session.get(ReviewCheckpointRecord, checkpoint_id)
         if record is None:

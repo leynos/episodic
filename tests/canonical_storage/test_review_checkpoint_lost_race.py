@@ -30,9 +30,52 @@ from episodic.canonical.storage.review_checkpoint_models import ReviewCheckpoint
 from tests.canonical_storage import _generation_run_support as support
 
 if typ.TYPE_CHECKING:
+    import uuid
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 NOW = dt.datetime(2026, 6, 24, 8, 30, tzinfo=dt.UTC)
+
+
+def _capture_log_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, str, dict[str, object]]]:
+    """Capture the store's structured log events in place of the real sink."""
+    events: list[tuple[str, str, dict[str, object]]] = []
+
+    def record_event(level: str, message: str, **fields: object) -> None:
+        events.append((level, message, fields))
+
+    monkeypatch.setattr(review_checkpoints, "_log_event", record_event)
+    return events
+
+
+async def _resolve_row_externally(
+    session: AsyncSession,
+    checkpoint_id: uuid.UUID,
+    *,
+    at: dt.datetime,
+) -> None:
+    """Resolve the stored row the way a different process would.
+
+    A raw ``UPDATE`` with ``synchronize_session=False`` leaves this session's
+    copy of the row untouched, which is exactly the state a second writer
+    produces. Going through the ORM instead would refresh the copy and remove
+    the condition under test -- and a second unit of work cannot stand in for
+    it, because py-pglite serves one PostgreSQL backend, so a concurrent
+    session would block rather than race.
+    """
+    await session.execute(
+        sa
+        .update(ReviewCheckpointRecord)
+        .where(ReviewCheckpointRecord.id == checkpoint_id)
+        .values(
+            status=CheckpointStatus.TIMED_OUT.value,
+            resolved_at=at,
+            responded_by="system",
+        )
+        .execution_options(synchronize_session=False)
+    )
 
 
 @pytest.mark.asyncio
@@ -60,18 +103,9 @@ async def test_lost_race_reports_the_stored_status_not_the_rejected_write(
 
     The comparison is made against a raw ``SELECT`` of the row, so the two ORM
     reads below cannot agree on the same wrong answer.
-
-    The row is resolved through a raw ``UPDATE`` rather than a second unit of
-    work, because py-pglite serves one PostgreSQL backend: a concurrent session
-    would block rather than race.
     """
     committed = await support.commit_run_and_checkpoint(session_factory)
-    events: list[tuple[str, str, dict[str, object]]] = []
-
-    def record_event(level: str, message: str, **fields: object) -> None:
-        events.append((level, message, fields))
-
-    monkeypatch.setattr(review_checkpoints, "_log_event", record_event)
+    events = _capture_log_events(monkeypatch)
 
     async with session_factory() as session:
         store = SqlAlchemyReviewCheckpointStore(session)
@@ -83,16 +117,10 @@ async def test_lost_race_reports_the_stored_status_not_the_rejected_write(
             "the session must begin by holding the row as created"
         )
         # An external writer resolves the row without touching this session.
-        await session.execute(
-            sa
-            .update(ReviewCheckpointRecord)
-            .where(ReviewCheckpointRecord.id == committed.checkpoint_id)
-            .values(
-                status=CheckpointStatus.TIMED_OUT.value,
-                resolved_at=NOW + dt.timedelta(minutes=5),
-                responded_by="system",
-            )
-            .execution_options(synchronize_session=False)
+        await _resolve_row_externally(
+            session,
+            committed.checkpoint_id,
+            at=NOW + dt.timedelta(minutes=5),
         )
 
         with pytest.raises(CheckpointAlreadyTerminal):

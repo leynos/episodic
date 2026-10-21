@@ -59,6 +59,24 @@ def _drop_enums() -> None:
     ).drop(op.get_bind(), checkfirst=True)
 
 
+def _create_review_checkpoint_indexes() -> None:
+    """Create the review-checkpoint lookup indexes."""
+    op.create_index(
+        "ix_review_checkpoints_run_status",
+        "review_checkpoints",
+        ["generation_run_id", "status"],
+    )
+    # Partial: only live checkpoints are indexed, so the index stays small as
+    # terminal rows accumulate without bound. No standalone index on `status`,
+    # which has four values and would be seq-scanned past.
+    op.create_index(
+        "ix_review_checkpoints_open",
+        "review_checkpoints",
+        ["generation_run_id"],
+        postgresql_where=sa.text("status = 'created'"),
+    )
+
+
 def _create_review_checkpoints_table() -> None:
     """Create durable reviewer checkpoint records."""
     op.create_table(
@@ -121,20 +139,7 @@ def _create_review_checkpoints_table() -> None:
             name="ck_review_checkpoints_responded_fields",
         ),
     )
-    op.create_index(
-        "ix_review_checkpoints_run_status",
-        "review_checkpoints",
-        ["generation_run_id", "status"],
-    )
-    # Partial: only live checkpoints are indexed, so the index stays small as
-    # terminal rows accumulate without bound. No standalone index on `status`,
-    # which has four values and would be seq-scanned past.
-    op.create_index(
-        "ix_review_checkpoints_open",
-        "review_checkpoints",
-        ["generation_run_id"],
-        postgresql_where=sa.text("status = 'created'"),
-    )
+    _create_review_checkpoint_indexes()
 
 
 def _drop_review_checkpoints_table() -> None:

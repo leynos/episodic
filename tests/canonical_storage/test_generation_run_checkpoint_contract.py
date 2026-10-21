@@ -139,7 +139,12 @@ async def test_creation_persists_checkpoint(
     store: GenerationRunPort,
     hooks: SqlScenarioHooks,
 ) -> None:
-    """A created checkpoint survives into a later unit of work."""
+    """A created checkpoint survives into a later unit of work.
+
+    The hook commits the scenario's unit of work before reading it again, so
+    this pins that the SQL adapter's write really reached PostgreSQL rather
+    than only its own session.
+    """
     await scenarios.scenario_creation_persists_checkpoint(
         store,
         prepare_run=hooks.prepare_run,
@@ -252,7 +257,12 @@ async def test_creation_rejects_duplicate_identifier(
     store: GenerationRunPort,
     hooks: SqlScenarioHooks,
 ) -> None:
-    """A duplicate identifier is translated to the domain conflict."""
+    """A duplicate identifier is translated to the domain conflict.
+
+    The identifier already holds a responded checkpoint, so this also pins that
+    a replayed create does not reset a reviewer's decision; the SQL adapter
+    translates the primary-key violation instead of overwriting the row.
+    """
     await scenarios.scenario_creation_rejects_duplicate_identifier(
         store,
         prepare_run=hooks.prepare_run,

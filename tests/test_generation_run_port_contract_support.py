@@ -31,6 +31,10 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
     and mutation operations raise the corresponding not-found exception. The
     implementation exists only to exercise the complete composite protocol
     surface without persistence.
+
+    Every parameter is accepted to match the port's signature and otherwise
+    unused: there is no store to consult, so nothing here reads one. Each
+    method states the empty or rejected outcome it produces.
     """
 
     async def create_run(
@@ -40,37 +44,11 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         idempotency_key: str | None = None,
         idempotency_principal_id: str | None = None,
     ) -> GenerationRun:
-        """Return the supplied run without persisting it.
-
-        Parameters
-        ----------
-        run
-            Generation run to return.
-        idempotency_key
-            Idempotency key accepted by the port contract and ignored here.
-        idempotency_principal_id
-            Principal identifier accepted by the port contract and ignored here.
-
-        Returns
-        -------
-        GenerationRun
-            The supplied generation run.
-        """
+        """Hand back the run unchanged, as a create would after storing it."""
         return run
 
     async def get_run(self, run_id: uuid.UUID) -> GenerationRun | None:
-        """Return no run for the supplied identifier.
-
-        Parameters
-        ----------
-        run_id
-            Run identifier, which is ignored by this no-op implementation.
-
-        Returns
-        -------
-        GenerationRun or None
-            Always ``None`` because this implementation stores no runs.
-        """
+        """Report that no run exists under any identifier."""
         return None
 
     async def list_runs(
@@ -81,26 +59,23 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[GenerationRun, ...]:
-        """Return no runs for the supplied episode.
+        """Return an empty run page for every episode and filter.
 
         Parameters
         ----------
         episode_id
-            Episode identifier, which is ignored by this no-op implementation.
+            Episode whose runs would be listed; none exist here.
         status
-            Optional lifecycle filter accepted by the port contract and ignored
-            here.
+            Optional lifecycle filter, accepted and unused.
         limit
-            Maximum number of runs accepted by the port contract and ignored
-            here.
+            Page cap, accepted and unused.
         offset
-            Number of runs to skip accepted by the port contract and ignored
-            here.
+            Rows to skip, accepted and unused.
 
         Returns
         -------
         tuple of GenerationRun
-            Always an empty tuple because this implementation stores no runs.
+            Always empty, because this stub creates no runs.
         """
         return ()
 
@@ -110,20 +85,7 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         *,
         update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
-        """Reject every lifecycle update because no run is stored.
-
-        Parameters
-        ----------
-        run_id
-            Identifier of the run to update.
-        update
-            Lifecycle update to apply.
-
-        Raises
-        ------
-        RunNotFound
-            Always, because this implementation stores no runs.
-        """
+        """Refuse the update by raising ``RunNotFound`` for the identifier."""
         _ = update
         raise RunNotFound(run_id)
 
@@ -213,26 +175,15 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
-        """Return no events for the supplied run.
+        """Return an empty event page for every run and cursor.
 
-        Parameters
-        ----------
-        run_id
-            Run identifier, which is ignored by this no-op implementation.
-        after_seq
-            Optional event-sequence cursor accepted by the port contract and
-            ignored here.
-        limit
-            Maximum number of events accepted by the port contract and ignored
-            here.
-        offset
-            Number of events to skip accepted by the port contract and ignored
-            here.
+        A cursor beyond any real sequence still yields nothing rather than an
+        error, because nothing was ever appended through this stub.
 
         Returns
         -------
         tuple of GenerationEvent
-            Always an empty tuple because this implementation stores no events.
+            Always empty.
         """
         return ()
 
@@ -242,55 +193,18 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         *,
         after_seq: EventSeq | None = None,
     ) -> int:
-        """Return zero for the supplied run's event count.
-
-        Parameters
-        ----------
-        run_id
-            Run identifier, which is ignored by this no-op implementation.
-        after_seq
-            Optional event-sequence cursor accepted by the port contract and
-            ignored here.
-
-        Returns
-        -------
-        int
-            Always zero because this implementation stores no events.
-        """
+        """Count zero events for every run and cursor."""
         return 0
 
     async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
-        """Return the supplied checkpoint without persisting it.
-
-        Parameters
-        ----------
-        checkpoint
-            Checkpoint to return.
-
-        Returns
-        -------
-        Checkpoint
-            The supplied checkpoint.
-        """
+        """Hand back the checkpoint unchanged, as a stored create would."""
         return checkpoint
 
     async def get_checkpoint(
         self,
         checkpoint_id: uuid.UUID,
     ) -> Checkpoint | None:
-        """Return no checkpoint for the supplied identifier.
-
-        Parameters
-        ----------
-        checkpoint_id
-            Checkpoint identifier, which is ignored by this no-op
-            implementation.
-
-        Returns
-        -------
-        Checkpoint or None
-            Always ``None`` because this implementation stores no checkpoints.
-        """
+        """Report that no checkpoint exists under any identifier."""
         return None
 
     async def list_checkpoints(
@@ -301,27 +215,15 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[Checkpoint, ...]:
-        """Return no checkpoints for the supplied run.
+        """Return an empty checkpoint page for every run and filter.
 
-        Parameters
-        ----------
-        run_id
-            Run identifier, which is ignored by this no-op implementation.
-        status
-            Optional lifecycle filter accepted by the port contract and
-            ignored here.
-        limit
-            Maximum number of checkpoints accepted by the port contract and
-            ignored here.
-        offset
-            Number of checkpoints to skip accepted by the port contract and
-            ignored here.
+        Filtering an empty store by status cannot change the result, so the
+        filtered and unfiltered calls agree.
 
         Returns
         -------
         tuple of Checkpoint
-            Always an empty tuple because this implementation stores no
-            checkpoints.
+            Always empty.
         """
         return ()
 
@@ -331,20 +233,7 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         *,
         response: CheckpointResponse,
     ) -> Checkpoint:
-        """Reject every checkpoint response because none is stored.
-
-        Parameters
-        ----------
-        checkpoint_id
-            Identifier of the checkpoint to respond to.
-        response
-            Reviewer response to record.
-
-        Raises
-        ------
-        CheckpointNotFound
-            Always, because this implementation stores no checkpoints.
-        """
+        """Refuse the response: no checkpoint holds that identifier."""
         raise CheckpointNotFound(checkpoint_id)
 
     async def time_out_checkpoint(
@@ -353,20 +242,7 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         *,
         at: dt.datetime,
     ) -> Checkpoint:
-        """Reject every checkpoint timeout because none is stored.
-
-        Parameters
-        ----------
-        checkpoint_id
-            Identifier of the checkpoint to time out.
-        at
-            Timestamp at which the timeout would be recorded.
-
-        Raises
-        ------
-        CheckpointNotFound
-            Always, because this implementation stores no checkpoints.
-        """
+        """Refuse the timeout: no checkpoint holds that identifier."""
         raise CheckpointNotFound(checkpoint_id)
 
     async def cancel_checkpoint(
@@ -375,18 +251,5 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         *,
         at: dt.datetime,
     ) -> Checkpoint:
-        """Reject every checkpoint cancellation because none is stored.
-
-        Parameters
-        ----------
-        checkpoint_id
-            Identifier of the checkpoint to cancel.
-        at
-            Timestamp at which the cancellation would be recorded.
-
-        Raises
-        ------
-        CheckpointNotFound
-            Always, because this implementation stores no checkpoints.
-        """
+        """Refuse the cancellation: no checkpoint holds that identifier."""
         raise CheckpointNotFound(checkpoint_id)
