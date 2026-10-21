@@ -562,6 +562,14 @@ full_name = [
 reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.canonical.adapters.generation_run_lease_reclamation.InMemoryGenerationRunLeaseReclamationMixin.fail_expired_leases.now",
+    "episodic.canonical.adapters.generation_run_lease_reclamation.InMemoryGenerationRunLeaseReclamationMixin.fail_expired_leases.limit",
+]
+reason = "The mixin's no-op must match GenerationRunLeaseReclamationPort.fail_expired_leases, which GenerationRunPort composes; InMemoryGenerationRunStore mixes it in and the port contract tests call it through the protocol."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
     "episodic.api.authorization._authorization_result",
