@@ -31,10 +31,16 @@ from .generation_run_storage_runtime import (
     GenerationRunStorageRuntime,
     generation_run_storage_runtime,
 )
+from .integrity_helpers import constraint_name
 from .review_checkpoint_mappers import (
     checkpoint_from_record,
     checkpoint_to_record,
     resolved_values,
+)
+from .review_checkpoint_metrics import (
+    record_checkpoint_created,
+    record_checkpoint_resolved,
+    record_terminal_conflict,
 )
 from .review_checkpoint_models import ReviewCheckpointRecord
 
@@ -48,10 +54,10 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import CheckpointResponse
 
-_METRIC_CREATED = "review_checkpoint_created_total"
-_METRIC_RESOLVED = "review_checkpoint_resolved_total"
-_METRIC_OPEN = "review_checkpoint_open_gauge"
-_METRIC_TERMINAL_CONFLICT = "review_checkpoint_terminal_conflict_total"
+#: PostgreSQL names the table's primary-key index `<table>_pkey`. Matching it
+#: keeps a foreign-key or CHECK violation from being reported as a duplicate
+#: identifier, which would hide the real fault.
+_CHECKPOINT_PKEY_CONSTRAINT = "review_checkpoints_pkey"
 
 
 @typ.final
@@ -93,6 +99,10 @@ class SqlAlchemyReviewCheckpointStore:
             on whether a replayed create overwrites a reviewer's decision.
         CheckpointAlreadyTerminal
             If the checkpoint arrives already resolved.
+        sqlalchemy.exc.IntegrityError
+            If the insert violates a constraint other than the primary key.
+            A foreign-key or CHECK failure is a different fault from a
+            duplicate identifier and propagates rather than being mislabelled.
         """
         if checkpoint.status is not CheckpointStatus.CREATED:
             _log_event(
@@ -125,9 +135,15 @@ class SqlAlchemyReviewCheckpointStore:
                 self._session.add(record)
                 await self._session.flush()
         except IntegrityError as exc:
+            if constraint_name(exc) != _CHECKPOINT_PKEY_CONSTRAINT:
+                raise
             raise CheckpointAlreadyExists(checkpoint.id) from exc
 
-        self._metrics.increment_counter(_METRIC_CREATED, labels={})
+        # Also observed on resolution: both ends, so accumulation is visible.
+        record_checkpoint_created(
+            self._metrics,
+            open_count=await self._count_open(checkpoint.generation_run_id),
+        )
         _log_event(
             "info",
             "sql_review_checkpoint_store.create_checkpoint",
@@ -301,9 +317,11 @@ class SqlAlchemyReviewCheckpointStore:
         cursor_result = typ.cast("CursorResult[object]", result)
         if cursor_result.rowcount != 1:
             await self._raise_lost_race(checkpoint_id, event=event, fields=fields)
-        self._metrics.increment_counter(
-            _METRIC_RESOLVED,
-            labels={"action": updated.status.value},
+        await self._refresh_resolved(record)
+        record_checkpoint_resolved(
+            self._metrics,
+            updated.status,
+            open_count=await self._count_open(updated.generation_run_id),
         )
         _log_event(
             "info",
@@ -313,15 +331,10 @@ class SqlAlchemyReviewCheckpointStore:
             status=updated.status.value,
             **fields,
         )
-        await self._refresh_resolved(record, updated)
         return updated
 
-    async def _refresh_resolved(
-        self,
-        record: ReviewCheckpointRecord,
-        checkpoint: Checkpoint,
-    ) -> None:
-        """Synchronise the identity-mapped record with the row just written.
+    async def _refresh_resolved(self, record: ReviewCheckpointRecord) -> None:
+        """Synchronize the identity-mapped record with the row just written.
 
         A core ``UPDATE`` bypasses the ORM's unit of work, so the session's copy
         of the row is stale until something reconciles it. The record is
@@ -329,11 +342,6 @@ class SqlAlchemyReviewCheckpointStore:
         entity, remains authoritative.
         """
         await self._session.refresh(record)
-        self._metrics.observe_value(
-            _METRIC_OPEN,
-            await self._count_open(checkpoint.generation_run_id),
-            labels={},
-        )
 
     async def _count_open(self, run_id: uuid.UUID) -> float:
         """Return the number of unresolved checkpoints for one run."""
@@ -376,7 +384,7 @@ class SqlAlchemyReviewCheckpointStore:
                 **fields,
             )
             raise CheckpointNotFound(checkpoint_id)
-        self._metrics.increment_counter(_METRIC_TERMINAL_CONFLICT, labels={})
+        record_terminal_conflict(self._metrics)
         _log_event(
             "warning",
             f"sql_review_checkpoint_store.{event}_already_terminal",

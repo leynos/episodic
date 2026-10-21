@@ -256,17 +256,27 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
     def _has_pending_changes(self) -> bool:
         """Return whether the active session holds unsettled writes.
 
-        Delegated to the tracker rather than read off ``Session.new`` and
-        friends, which are emptied by every flush and never populated by a core
-        ``UPDATE``. Consulting them here would make this check silent on
-        exactly the writes it exists to catch.
+        Delegated to the tracker in addition to the session's own staged
+        collections, because each is blind where the other sees.
+
+        The collections are emptied by every flush and never populated by a
+        core ``UPDATE``, so a check built on them alone is silent on exactly
+        the writes it exists to catch. The tracker's ``before_flush`` listener
+        does not fire until a flush happens, so it alone is silent on a
+        staged-but-unflushed ``add`` -- which is how every repository in this
+        package stages its rows.
 
         Returns
         -------
         bool
             Whether a write has been observed and not yet settled.
         """
-        return self._writes is not None and self._writes.wrote
+        if self._writes is not None and self._writes.wrote:
+            return True
+        session = self._session
+        return session is not None and bool(
+            session.new or session.dirty or session.deleted
+        )
 
     def _mark_settled(self) -> None:
         """Clear tracked writes once the session's work has been settled."""

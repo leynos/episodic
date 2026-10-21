@@ -24,9 +24,11 @@ from episodic.canonical.domain import (
     CheckpointStatus,
     GenerationRun,
     GenerationRunStatus,
+    SeriesProfile,
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.storage import SqlAlchemyUnitOfWork, uow
+from tests import generation_run_checkpoint_listing_scenarios as listing
 from tests.canonical_storage._generation_run_support import (
     persist_generation_run_prerequisites,
 )
@@ -115,6 +117,83 @@ async def _read_fresh(
     """Read a checkpoint back through a brand-new unit of work."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         return await uow.generation_runs.get_checkpoint(checkpoint_id)
+
+
+async def _prepare_run(
+    session_factory: async_sessionmaker[AsyncSession],
+    run: GenerationRun,
+) -> None:
+    """Commit the series, episode, and job a run's foreign keys need."""
+    await persist_generation_run_prerequisites(session_factory, run)
+
+
+@pytest.mark.asyncio
+async def test_listing_returns_checkpoints_oldest_created_first(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The SQL listing orders checkpoints by ``(created_at, id)``."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow_instance:
+        await listing.scenario_listing_returns_checkpoints_oldest_created_first(
+            uow_instance.generation_runs,
+            prepare_run=lambda run: _prepare_run(session_factory, run),
+        )
+
+
+@pytest.mark.asyncio
+async def test_listing_filters_by_status(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The SQL listing's status filter selects only matching checkpoints."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow_instance:
+        await listing.scenario_listing_filters_by_status(
+            uow_instance.generation_runs,
+            prepare_run=lambda run: _prepare_run(session_factory, run),
+        )
+
+
+@pytest.mark.asyncio
+async def test_listing_applies_bounds_within_a_status_filter(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The SQL listing paginates the filtered result, not the stored rows."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow_instance:
+        await listing.scenario_listing_applies_bounds_within_a_status_filter(
+            uow_instance.generation_runs,
+            prepare_run=lambda run: _prepare_run(session_factory, run),
+        )
+
+
+@pytest.mark.asyncio
+async def test_listing_rejects_unknown_run(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Listing for a run that was never stored raises ``RunNotFound``."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow_instance:
+        await listing.scenario_listing_rejects_unknown_run(
+            uow_instance.generation_runs,
+            prepare_run=lambda run: _prepare_run(session_factory, run),
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("limit", "offset"),
+    listing.NEGATIVE_BOUND_CASES,
+    ids=["negative-limit", "negative-offset"],
+)
+async def test_listing_rejects_negative_bounds(
+    session_factory: async_sessionmaker[AsyncSession],
+    limit: int,
+    offset: int,
+) -> None:
+    """A negative ``limit`` or ``offset`` is refused, not clamped."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow_instance:
+        await listing.scenario_listing_rejects_negative_bounds(
+            uow_instance.generation_runs,
+            prepare_run=lambda run: _prepare_run(session_factory, run),
+            limit=limit,
+            offset=offset,
+        )
 
 
 @pytest.mark.asyncio
@@ -239,6 +318,48 @@ async def test_uncommitted_response_does_not_persist(
     assert [event[1] for event in events] == [
         "canonical_unit_of_work.closed_with_uncommitted_changes"
     ], "closing with pending state must warn, not discard work silently"
+    assert events[0][0] == "warning", "the uncommitted-work event must be a warning"
+
+
+@pytest.mark.asyncio
+async def test_uncommitted_staged_add_warns_before_it_is_discarded(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare staged add is warned about, though nothing has flushed it yet.
+
+    ``test_uncommitted_response_does_not_persist`` cannot cover this shape: its
+    write is a core ``UPDATE`` issued through ``Session.execute``, which the
+    session write tracker observes directly. Every repository ``add`` in this
+    package is instead a bare ``session.add`` with no flush, and the tracker's
+    ``before_flush`` listener does not fire until a flush happens -- which, on
+    this exit path, never does. Without the session's staged collections in the
+    predicate the row would be discarded in silence.
+    """
+    events: list[tuple[str, str, dict[str, object]]] = []
+
+    def record_event(level: str, message: str, **fields: object) -> None:
+        events.append((level, message, fields))
+
+    monkeypatch.setattr(uow, "_log_event", record_event)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow_instance:
+        await uow_instance.series_profiles.add(
+            SeriesProfile(
+                id=uuid.uuid7(),
+                slug=f"staged-{uuid.uuid7()}",
+                title="Staged series profile",
+                description=None,
+                configuration={},
+                guardrails={},
+                created_at=NOW,
+                updated_at=NOW,
+            )
+        )
+
+    assert [event[1] for event in events] == [
+        "canonical_unit_of_work.closed_with_uncommitted_changes"
+    ], "closing with a staged add must warn, not discard work silently"
     assert events[0][0] == "warning", "the uncommitted-work event must be a warning"
 
 

@@ -27,6 +27,7 @@ import pytest_asyncio
 import sqlalchemy as sa
 
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from tests import generation_run_checkpoint_listing_scenarios as listing
 from tests import generation_run_contract_scenarios as scenarios
 from tests.canonical_storage._generation_run_support import (
     persist_generation_run_prerequisites,
@@ -256,4 +257,73 @@ async def test_creation_rejects_duplicate_identifier(
         store,
         prepare_run=hooks.prepare_run,
         read_fresh=hooks.read_fresh,
+    )
+
+
+@pytest.mark.asyncio
+async def test_listing_returns_checkpoints_oldest_created_first(
+    store: GenerationRunPort,
+    hooks: SqlScenarioHooks,
+) -> None:
+    """The SQL listing orders checkpoints by ``(created_at, id)``."""
+    await listing.scenario_listing_returns_checkpoints_oldest_created_first(
+        store,
+        prepare_run=hooks.prepare_run,
+    )
+
+
+@pytest.mark.asyncio
+async def test_listing_filters_by_status(
+    store: GenerationRunPort,
+    hooks: SqlScenarioHooks,
+) -> None:
+    """The SQL listing's status filter selects only matching checkpoints."""
+    await listing.scenario_listing_filters_by_status(
+        store,
+        prepare_run=hooks.prepare_run,
+    )
+
+
+@pytest.mark.asyncio
+async def test_listing_applies_bounds_within_a_status_filter(
+    store: GenerationRunPort,
+    hooks: SqlScenarioHooks,
+) -> None:
+    """The SQL listing paginates the filtered result, not the stored rows."""
+    await listing.scenario_listing_applies_bounds_within_a_status_filter(
+        store,
+        prepare_run=hooks.prepare_run,
+    )
+
+
+@pytest.mark.asyncio
+async def test_listing_rejects_unknown_run(
+    store: GenerationRunPort,
+    hooks: SqlScenarioHooks,
+) -> None:
+    """Listing for a run that was never stored raises ``RunNotFound``."""
+    await listing.scenario_listing_rejects_unknown_run(
+        store,
+        prepare_run=hooks.prepare_run,
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("limit", "offset"),
+    listing.NEGATIVE_BOUND_CASES,
+    ids=["negative-limit", "negative-offset"],
+)
+async def test_listing_rejects_negative_bounds(
+    store: GenerationRunPort,
+    hooks: SqlScenarioHooks,
+    limit: int,
+    offset: int,
+) -> None:
+    """A negative ``limit`` or ``offset`` is refused, not clamped."""
+    await listing.scenario_listing_rejects_negative_bounds(
+        store,
+        prepare_run=hooks.prepare_run,
+        limit=limit,
+        offset=offset,
     )

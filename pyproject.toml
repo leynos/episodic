@@ -128,6 +128,7 @@ extend-ignore = [
 # Unprefixed support module: deliberately uncollected, so it misses the
 # `**/test_*.py` ignores and needs `assert` declared the same way.
 "tests/generation_run_contract_scenarios.py" = ["assert"]
+"tests/generation_run_checkpoint_listing_scenarios.py" = ["assert"]
 
 [tool.ruff.lint.flake8-import-conventions]
 # Declare the banned `from` imports.
