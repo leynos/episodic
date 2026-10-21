@@ -846,10 +846,6 @@ members = ["episodic/canonical/storage/repositories.py", "episodic/canonical/sto
 reason = "Paged-query tail (offset, optional limit, execute, map rows) whose only variation is the per-entity row mapper; the surrounding query construction differs per repository."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/storage/generation_runs.py", "episodic/canonical/adapters/generation_runs.py"]
-reason = "Parallel implementations of one port: the SQLAlchemy store and the in-memory adapter share the signature, docstring, and argument guard but not the query."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/canonical/ports.py", "episodic/canonical/__init__.py"]
 reason = "Port re-export blocks; the package surface and the ports facade deliberately list the same protocol names."
 
