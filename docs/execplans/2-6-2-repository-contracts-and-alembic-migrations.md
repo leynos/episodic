@@ -429,6 +429,28 @@ Stop and escalate rather than improvising when any of these is reached.
       `C9112` findings above were only reachable once that abort was cleared.
       Still outstanding: `make lint` and `make test` verdicts on the repaired
       revision. (2026-10-21)
+- [x] (2026-10-21) EP-M3 committed as `60f8f740`; `make test` green on that
+      commit — **1784 passed, 1 skipped, 0 failed, 0 errors** in 186.17 s,
+      against a Stage A baseline of 748.53 s with 1 failed + 1 error. The
+      fifteen-per-cent growth tolerance is met with a 75 per cent *reduction*
+      in wall clock, confirming the baseline was contention-dominated rather
+      than the change being cheap. Both previously-red checkpoint suites now
+      pass in full (23 contract tests; 16 pricing-migration tests). The single
+      skip remains the pre-existing `EPISODIC_RUN_DOCKER_TESTS` opt-in.
+- [x] (2026-10-21 05:05Z) Stage C negative controls: **all four discharged**
+      against frozen candidate `60f8f740`. INV-MIG-2 both enum drops fail
+      independently; INV-SEQ-1's cross-run predicate removal fails two property
+      tests; INV-CKPT-3's `set()` and scalar-options breaks each fail the
+      fidelity assertion they cover; INV-CKPT-2 fires **only** on the
+      stale-writer route — the plan's stated sequential route is falsified, and
+      the Verification plan has been corrected accordingly. Transcripts under
+      *Artefacts and notes*. Every break was reverted; the four touched files
+      are byte-identical to the commit and `git status --porcelain` is empty.
+- [~] Stage C gate verification on `60f8f740`. `make test` is green (above).
+      `make lint`, `make check-fmt`, `make typecheck`, `make markdownlint`,
+      `make nixie`, and `make check-migrations` are **not yet observed as
+      complete ordered lanes** on this commit — the individual steps were run
+      before the commit and are not a substitute. Outstanding, not passing.
 - [ ] EP-M4: lease-reclamation primitive (gated; see Tolerances and Risk 3).
 - [ ] EP-M5: documentation, ADR-024, and roadmap reconciliation.
 
@@ -708,6 +730,37 @@ Record a timestamp against each item as it completes, in the form
   the coupling and grown an unexplained dependency on a later revision's SQL.
   The general lesson: a migration test that says `"head"` is asserting about
   every future migration too. (2026-10-21)
+
+- **Surprise: the INV-CKPT-2 negative control as written in the Verification
+  plan could not fire, and the reason was a real property of where the guard
+  lives — not a weak test.** The plan's route ("widen the predicate; confirm
+  every terminal case fails") produced **23 passed**. `_resolve` calls
+  `transition(checkpoint_from_record(record))`, and
+  `Checkpoint.respond`/`time_out`/`cancel` each call `_raise_if_terminal()`
+  *inside* that call, before `_resolve` builds the `UPDATE`. So every terminal
+  case is refused by the domain, the statement is never issued, and no
+  predicate can be what rejects it. Whole-suite instrumentation:
+  `CAS_RESOLVE_ENTERED: 27`,
+  `DOMAIN_GUARD_RAISED CheckpointAlreadyTerminal: 10`, `LOST_RACE_ENTERED: 0`,
+  and 14 `UPDATE`s issued for exactly the 14 *successful* transitions. The
+  predicate is nonetheless load-bearing — a caller holding a **stale
+  pre-terminal** copy reaches the `UPDATE`, and under the widened predicate it
+  silently overwrites a terminal row instead of raising. The lesson generalizes
+  to the next test of this shape: a compare-and-set predicate is only exercised
+  by a caller whose view is stale, and "mutate the row between two sequential
+  calls" does not produce one when the domain re-reads and re-guards on every
+  call. (2026-10-21)
+
+- **Observation: the green-suite figure is the honest one, and the earlier gate
+  figure was not.** The EP-M3 entry above had recorded `make lint`,
+  `make check-fmt`, and `make typecheck` as passing. Reading the logs showed
+  the post-repair runs were **per-step, out of lane order, and before** commit
+  `60f8f740`. Complete ordered lanes have not been observed on that commit and
+  the Progress entry now says so. A step-by-step pass is not a lane pass: the
+  recipe's later steps are the ones that abort, and a lane that aborted is
+  unverified rather than green — the same failure mode as the df12 abort
+  recorded above, which is exactly how it went unnoticed the first time.
+  (2026-10-21)
 
 Append further observations here as work proceeds.
 
@@ -1301,7 +1354,13 @@ uv run pytest \
   Negative control: drop the `generation_run_id` predicate from the `MAX(seq)`
   subquery and confirm the cross-run case fails. **Do not** use "remove
   `lock=True`" as the negative control — it provably does not reproduce under
-  py-pglite, and a control that cannot fire is worse than none.
+  py-pglite, and a control that cannot fire is worse than none. **Discharged
+  2026-10-21:** with the predicate dropped,
+  `test_sql_event_batches_are_gap_free_and_isolated` fails as a Hypothesis
+  `FlakyFailure` from inconsistent replays and
+  `test_sql_pages_match_creation_and_cursor_reference_slices` fails on a wrong
+  `GenerationEvent` sequence — `2 failed, 2 passed`, transcript under
+  *Artefacts and notes*.
 
 ### INV-SEQ-2 and INV-SEQ-3 — paging and cross-run isolation
 
@@ -1342,12 +1401,30 @@ uv run pytest \
   module's `read_fresh` hook and assert the status is unchanged. Without the
   re-read the test passes even if the adapter wrote the mutation and then
   raised. Negative control: widen the compare-and-set predicate to
-  `WHERE id = :id` and confirm every terminal case then fails.
+  `WHERE id = :id` and confirm the stale-writer route below then fails.
+- **Corrected 2026-10-21 after the control was run.** The original text here
+  claimed the control could be driven by "mutating stored state between calls,
+  sequentially, which py-pglite supports", and that this made the
+  `WHERE status = 'created'` clause exercised by the terminal cases. **It is
+  not.** The nine terminal cases never reach the `UPDATE`: `_resolve` calls
+  `transition(checkpoint_from_record(record))`, and the domain's
+  `_raise_if_terminal()` fires inside that call, before the statement is built.
+  Widening the predicate therefore leaves all 23 checkpoint contract tests
+  passing — observed, not inferred (`CAS_RESOLVE_ENTERED: 27`,
+  `DOMAIN_GUARD_RAISED CheckpointAlreadyTerminal: 10`, `LOST_RACE_ENTERED: 0`;
+  14 `UPDATE`s issued for exactly the 14 *successful* transitions). The
+  load-bearing route is a caller holding a *stale pre-terminal* copy of the
+  record: the domain guard then passes, the `UPDATE` is issued, and
+  `rowcount == 0` is the only thing refusing the transition. Under the widened
+  predicate that route silently overwrites a terminal row
+  (`Failed: DID NOT RAISE CheckpointAlreadyTerminal`). See the INV-CKPT-2
+  transcript under *Artefacts and notes*.
 - This obligation is *verifiable* precisely because D-10 chose compare-and-set:
-  the `WHERE status = 'created'` clause is exercised by mutating stored state
-  between calls, sequentially, which py-pglite supports. Had the adapter relied
-  on `FOR UPDATE`, the losing-writer path would have been unobservable for the
-  same reason INV-SEQ-1's concurrency claim is.
+  `rowcount == 0` is observable by a caller that holds a stale view, which is
+  what the corrected control above constructs. Had the adapter relied on
+  `FOR UPDATE`, that losing-writer path would have been unobservable for the
+  same reason INV-SEQ-1's concurrency claim is — and, as corrected above, the
+  terminal cases would not have exercised the predicate either.
 
 ### INV-CKPT-3 — checkpoints round-trip through PostgreSQL exactly
 
@@ -1361,7 +1438,15 @@ uv run pytest \
   `response_payload` containing a nested mapping and a list. Negative controls:
   (a) map `options` through `set()` and confirm the ordering assertion fails;
   (b) write `'"approve"'::jsonb` into `options` directly and confirm the read
-  fails loudly rather than yielding seven single-character options.
+  fails loudly rather than yielding seven single-character options. **Both
+  discharged 2026-10-21.** (a) fails with
+  `AssertionError: option order: ('request_changes', 'edit', 'approve')` — a
+  hash-ordered permutation of the declared tuple. (b) requires dropping
+  `ck_review_checkpoints_options_array` first, since the constraint makes the
+  write otherwise unreachable; the control then confirms the stored column
+  really reads back as a Python `str` and `_options_to_tuple` raises
+  `TypeError` on it rather than iterating it. Transcripts under *Artefacts and
+  notes*.
 - No syrupy snapshot. `AGENTS.md` scopes snapshots to "multivariant output
   format consistency"; there is one variant here, and explicit field assertions
   on a twelve-field frozen dataclass already catch everything a snapshot would.
@@ -1418,7 +1503,11 @@ uv run pytest \
   returns no rows, then upgrade again and assert no drift.
 - Non-vacuity: the `pg_type` assertion is the point. Remove either explicit
   `.drop(bind, checkfirst=True)` call and the test must fail; verify both fail
-  independently before trusting it.
+  independently before trusting it. **Discharged 2026-10-21.** Each drop was
+  removed in turn, with the other restored: both give `1 failed, 3 passed` with
+  `AssertionError: downgrade must drop both enum types`. Neither drop is
+  redundant and the test discriminates each one separately; transcript under
+  *Artefacts and notes*.
 
 ### INV-COMMIT-1 — uncommitted work does not persist, and says so
 
@@ -2251,6 +2340,170 @@ prefixes placed alphabetically between `generation_quality` and
 `domain_ports` that could capture them, and it matches only
 `episodic.api.runtime` and `episodic.worker.runtime`, so no first-match
 misrouting is possible.
+
+### Negative-control transcripts, measured 2026-10-21 05:05Z
+
+The four controls the Verification plan requires as acceptance evidence. A
+green suite does not discharge any of them: each asks whether a *specific*
+assertion is load-bearing, which only the corresponding break can answer. All
+four were run against frozen candidate `60f8f740`, with the break applied,
+observed, and then reverted; the reverted files are byte-identical to the commit
+(`git hash-object` re-checked, `git status --porcelain` empty).
+
+#### INV-MIG-2 — each enum drop fails independently
+
+Revision `20261020_000014` drops two native enums. Removing *either*
+`.drop(bind, checkfirst=True)` call alone must fail
+`test_downgrade_removes_table_and_both_enums`, or the test only proves that
+*something* was dropped.
+
+```plaintext
+# status enum drop removed
+1 failed, 3 passed
+AssertionError: downgrade must drop both enum types
+
+# action enum drop removed, status drop restored
+1 failed, 3 passed
+AssertionError: downgrade must drop both enum types
+```
+
+Both halves fail independently, so the obligation is non-vacuous: neither drop
+is redundant, and the test discriminates each one separately.
+
+#### INV-SEQ-1 — the per-run predicate in the `MAX(seq)` subquery
+
+`append_event` allocates its sequence with
+`SELECT max(seq) FROM generation_events WHERE generation_run_id = :run_id`.
+Dropping the `generation_run_id` predicate (leaving a bare
+`SELECT max(seq) FROM generation_events`) must break the cross-run case.
+
+```plaintext
+$ uv run pytest tests/canonical_storage/test_sql_generation_run_property_contract.py -p no:randomly -q
+2 failed, 2 passed, 1 warning in 8.09s
+FAILED test_sql_event_batches_are_gap_free_and_isolated
+       - hypothesis.errors.FlakyFailure: Inconsistent results from replaying a test ...
+FAILED test_sql_pages_match_creation_and_cursor_reference_slices
+       - AssertionError: (GenerationEvent(id=UUID('01a15c52-148b-70c6-a25d-efe5e4d29...
+```
+
+The predicate is what keeps two runs' sequence spaces separate. Note the
+control is deliberately **not** "remove `lock=True`": that variant provably
+cannot reproduce, because `py-pglite`'s single WebAssembly backend serializes
+every session, so no concurrent writer can ever be admitted to race. Removing a
+predicate that the *serial* path evaluates is observable; removing a lock the
+serial path never contends is not.
+
+#### INV-CKPT-3 — options ordering and the scalar-over-array read
+
+Two independent breaks, one per fidelity claim.
+
+**(a) map `options` through `set()`.** Restores a tuple, but in hash order:
+
+```plaintext
+$ uv run pytest tests/canonical_storage/test_review_checkpoints.py -p no:randomly -q
+1 failed, 4 passed, 1 warning in 3.37s
+FAILED test_options_keep_their_order_across_a_fresh_unit_of_work
+       - AssertionError: option order: ('request_changes', 'edit', 'approve')
+```
+
+The declared order `("edit", "approve", "request_changes")` comes back
+permuted, so the ordering assertion — the reason the fixture options are
+deliberately non-alphabetical — is exactly what catches it.
+
+**(b) write `'"approve"'::jsonb` into `options`.** The CHECK constraint
+`ck_review_checkpoints_options_array` makes that write unreachable through
+normal SQL, so the control drops the constraint first and then performs it,
+which is what makes this a control on the *read* path rather than on the
+constraint. The read must fail loudly:
+
+```plaintext
+STORED_SCALAR='approve' python_type=str
+1 passed, 1 warning in 2.96s
+```
+
+The stored value really is a Python `str`, and `_options_to_tuple` raises
+`TypeError: checkpoint options must be a JSON array.` on it instead of
+iterating it into seven single-character options. The sequencing matters: had
+the mapper only checked `isinstance(raw, list)` without the guard, or iterated
+a bare `raw`, this would have silently produced
+`('a', 'p', 'p', 'r', 'o', 'v', 'e')` — a checkpoint with seven one-letter
+choices that no other test would notice.
+
+#### INV-CKPT-2 — the compare-and-set predicate, and a correction of record
+
+**The plan's stated route for this control does not work, and the reason is a
+real property of the design.** The Verification plan says to "widen the
+compare-and-set predicate to `WHERE id = :id` and confirm every terminal case
+then fails", and asserts that "the `WHERE status = 'created'` clause is
+exercised by mutating stored state between calls, sequentially, which
+`py-pglite` supports". Both sentences are **false as written**, and the control
+was run before they were corrected:
+
+```plaintext
+$ # predicate widened to WHERE id = :id in _resolve
+$ uv run pytest tests/test_generation_checkpoint_port_contract.py \
+    tests/canonical_storage/test_generation_run_checkpoint_contract.py -q -p no:randomly
+23 passed
+```
+
+The control did not fire, and this is not a gap in the test. In `_resolve` the
+adapter calls `transition(checkpoint_from_record(record))`, and
+`Checkpoint.respond`/`time_out`/`cancel` each call `_raise_if_terminal()`
+*inside* that call — **before** `_resolve` builds the `UPDATE`. So on the
+terminal cases the domain guard rejects the transition first, the statement is
+never issued, and no predicate can be what refuses it. Two read-only probes
+confirmed the mechanism across the whole suite:
+
+```plaintext
+# /tmp/sdlc-2-6-2-negctl/probe_cas_plugin.py — every UPDATE on review_checkpoints
+total_update_statements_issued=14
+
+# /tmp/sdlc-2-6-2-negctl/probe_layer.py — which layer refuses
+CAS_RESOLVE_ENTERED: 27
+DOMAIN_GUARD_RAISED CheckpointAlreadyTerminal: 10
+LOST_RACE_ENTERED: 0
+```
+
+Fourteen `UPDATE` statements were issued for exactly the fourteen *successful*
+transitions the suite performs (nine terminal-case setups, three transition
+tests, one payload test, one duplicate test). Not one came from a refused
+transition. `LOST_RACE_ENTERED: 0` is the decisive line: the `rowcount == 0`
+branch is never entered, so the widened predicate has nothing to change. The 27
+resolves reconcile as 3 + 1 + 9 + 9 + 1 + 3 + 1 across the scenario groups.
+
+**The predicate is nevertheless load-bearing**, and the route that shows it is
+one the plan did not anticipate: a caller holding a *stale pre-terminal* copy
+of the record. Then the domain guard passes, the `UPDATE` is genuinely issued,
+and `rowcount == 0` is the only thing refusing the transition. This is the
+losing-writer path D-10 chose compare-and-set to make observable, reached by
+giving one reader a stale view rather than by driving two live sessions — which
+`py-pglite`'s single backend forbids, and which the plan's phrase "mutating
+stored state between calls" describes but does not achieve. Two `monkeypatch`
+sub-routes were needed to construct the stale reader: `Checkpoint` construction
+rather than `dataclasses.replace` (it is not a dataclass), and a module-level
+capture of the real `checkpoint_from_record` before stubbing (calling
+`store_module.checkpoint_from_record` from inside the stub recurses).
+
+With the row already terminal in `responded` and the reader still seeing
+`created`:
+
+```plaintext
+# unmodified code, stale-writer route
+CAS_RESOLVE_ENTERED: 1
+LOST_RACE_ENTERED: 1
+1 passed
+
+# widened predicate, same route
+LOST_RACE_ENTERED: 0        # absent — the branch is no longer reachable
+Failed: DID NOT RAISE CheckpointAlreadyTerminal
+```
+
+So the control **does** fire on the predicate, and the row is silently
+overwritten with a second transition when the predicate is widened. The design
+is sound; only the plan's stated non-vacuity route was wrong, and the two
+sentences quoted above have been corrected in the Verification plan to describe
+the stale-writer route and to record why the sequential-mutation route cannot
+reach the statement.
 
 ## Interfaces and dependencies
 
