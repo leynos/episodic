@@ -2019,16 +2019,27 @@ The port surface is intentionally split:
   the inbound adapter and invoke this helper only after values become domain
   types.
 - `GenerationRunEventStore` composes the run repository and event log for
-  durable generation-run storage. `CanonicalUnitOfWork.generation_runs` exposes
-  this port; `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunStore` to
-  its session, so callers use the same unit of work and own its commit or
-  rollback. `GenerationRunStorageRuntime` supplies the adapter's clock and UUID
-  providers, with production defaults and deterministic injection available to
-  tests.
+  durable generation-run storage, and remains the narrower seam for callers
+  that need only run-plus-event persistence. `SqlAlchemyGenerationRunStore`
+  implements it; `GenerationRunStorageRuntime` supplies the adapter's clock and
+  UUID providers, with production defaults and deterministic injection
+  available to tests. `CanonicalUnitOfWork.generation_runs` no longer exposes
+  this port — see `GenerationRunPort` below.
 - `GenerationCheckpointPort` creates checkpoints and records reviewer
   responses through the `Checkpoint.respond(...)` domain transition.
-- `GenerationRunPort` composes the three sub-ports for callers that need the
-  complete surface.
+- `GenerationRunLeaseReclamationPort` declares `fail_expired_leases`, which
+  fails runs abandoned by a worker holding an expired execution lease. It is
+  the only sub-port that reads two tables: a run is eligible only when no
+  checkpoint is still in `created`, so a run suspended awaiting human review is
+  never reclaimed out from under its reviewer.
+- `GenerationRunPort` composes the four sub-ports for callers that need the
+  complete surface. `CanonicalUnitOfWork.generation_runs` exposes this port, and
+  `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunPortAdapter` to its
+  session, so callers use the same unit of work and own its commit or rollback.
+
+`SqlAlchemyGenerationRunPortAdapter` holds a `SqlAlchemyGenerationRunStore` and
+a `SqlAlchemyReviewCheckpointStore` and delegates to each explicitly, rather
+than mixing both into one class.
 
 Use `InMemoryGenerationRunStore` from
 `episodic.canonical.adapters.generation_runs` as the reference adapter in fast
@@ -2041,6 +2052,12 @@ review checkpoint attached to a generation run. It is not the same as
 `episodic.orchestration.WorkflowCheckpoint`, which stores internal LangGraph
 suspend/resume state through `CheckpointPort`. Do not convert between the two
 implicitly; bridge logic belongs in the later orchestration and REST work.
+
+Migrations lead the code. `SqlAlchemyReviewCheckpointStore` writes
+`review_checkpoints`, which exists only once revision `20261020_000014` has
+been applied, so a deployment that ships the new code before running
+`alembic upgrade head` fails at its first checkpoint write. Apply migrations
+first; the application does not apply them itself.
 
 ### No-QA launcher and TEI retrieval
 

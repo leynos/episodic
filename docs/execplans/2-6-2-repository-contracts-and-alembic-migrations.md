@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -502,7 +502,50 @@ Stop and escalate rather than improvising when any of these is reached.
       is behaviour-preserving, with the predicate still evaluating to
       `status = 'running'`. The Stage D audit gates and the milestone CLI
       review are recorded below once dispatched.
-- [ ] EP-M5: documentation, ADR-024, and roadmap reconciliation.
+- [x] (2026-10-21) Round-2 review repair. One valid finding: `_raise_lost_race`
+      answered the lost-race re-read from the identity map, so a caller that
+      caught `CheckpointAlreadyTerminal` and read the checkpoint back was told
+      a reviewer had answered a checkpoint that timed out. Repaired with
+      `populate_existing=True`; a drafted companion
+      (`.execution_options(synchronize_session=False)`) was **removed** after
+      reverting each half independently showed only `populate_existing` is
+      load-bearing. The regression test is new
+      (`tests/canonical_storage/test_review_checkpoint_lost_race.py`) and holds
+      the record deliberately, because without a strong reference the identity
+      map's weak entry is collected and the test would pass against the
+      unfixed store. Committed `59249971`. All eight gates green on that exact
+      revision: fmt, check-fmt, lint (45 s, all nine substeps, duplication gate
+      `30 allowed by reasoned exceptions`), typecheck, markdownlint (127 files,
+      0 issues), nixie, check-migrations (17 revisions, no drift), and test at
+      **1810 passed, 1 skipped, 30 warnings in 216.30 s** (up from 1809; the
+      delta is the new module). A CLI review of `59249971` then returned
+      **zero findings** over all 44 changed files — a fresh run, with the
+      examined-file set byte-identical to `git diff --name-only
+      origin/main…HEAD`. Two non-blocking advisories were recorded and left
+      alone as pre-existing on `origin/main`: a stale duplication allow entry at
+      `pyproject.toml:885`, and an `SAWarning` about unresolvable table cycles at
+      `migration_check.py:44`. D-21 records the two declined items.
+- [x] (2026-10-21) EP-M5: documentation and reconciliation. `docs/contents.md`
+      gains the ADR-024 entry after ADR-023, using the file's inline-link
+      convention; `docs/adr/adr-024-review-checkpoint-persistence.md` follows
+      `adr-015-generation-run-port-split.md`'s shape rather than the style
+      guide's literal template, as every ADR from 010 onward does. The
+      developers' guide gained the
+      `GenerationRunLeaseReclamationPort` bullet, the corrected
+      `GenerationRunEventStore` bullet (its `CanonicalUnitOfWork` claim was
+      stale, not its existence), the widening of the composite bullet to four
+      sub-ports, the composition-rationale paragraph, and the
+      migrate-before-deploy note. The design document's false partitioning claim
+      was replaced with the real schema — verified against
+      `generation_run_models.py:137-155` and
+      `20260624_000010_add_generation_run_tables.py`: one single-column index
+      plus `uq_generation_events_run_seq`, no composite index — and its class
+      diagram gained the fourth realization, which makes
+      `GenerationRunPort`'s own docstring true again. The roadmap ticked 2.6.2
+      and gained follow-ups 2.6.4 through 2.6.10, giving every `Residual gaps`
+      item an explicit home. `docs/users-guide.md` is deliberately unchanged:
+      no production path creates a checkpoint until 2.6.3, so telling users
+      checkpoints are durable would describe a capability with no entry point.
 
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
@@ -912,6 +955,63 @@ Record a timestamp against each item as it completes, in the form
   decisive check was re-running the real command against a probe copy of the
   config with the proposed rule added and then with extra rules stripped, which
   showed the two-parameter entry alone reaches exit 0. (2026-10-21)
+
+- **Observation: the identity map holds *weak* references, which is what made a
+  naive lost-race test pass against the unfixed store.** The lost-race branch
+  re-read the row through `session.get`, which answers from the identity map
+  when the instance is still alive and only then round-trips. Two probes
+  settled it. With no caller holding the record, its entry is collected, the
+  next `session.get` re-queries, and the branch reports the truth — so a test
+  written in the obvious way observes nothing wrong. With a caller holding it
+  across the compare-and-set, the branch reads the stale copy and reports a
+  status the row never held. `_resolve` is exactly such a caller: it binds the
+  record at its own read and keeps it alive over the `UPDATE`, so the defect is
+  real in production and invisible in a carelessly written test. The regression
+  test therefore holds the reference deliberately, and says so, because without
+  the reference it would pass against the unfixed store. Impact: the fix is one
+  argument, and the *test* is the load-bearing part. (2026-10-21)
+
+- **Observation: a same-session core `UPDATE` does not mark the ORM copy dirty,
+  so the stale copy can be written by a later flush with nothing to announce
+  it.** Probe output on the unfixed store: the refused transition raised
+  correctly, yet the in-session object read `RESPONDED`, `session.dirty` was
+  empty, a subsequent `get_checkpoint` returned `RESPONDED`, and the structured
+  event logged `responded` — all while a raw `SELECT` showed the row still held
+  `timed_out`. So the damage is not a wrong log line only: any caller that
+  catches `CheckpointAlreadyTerminal` and reads the checkpoint back is told a
+  reviewer answered a checkpoint that timed out. (2026-10-21)
+
+- **Observation: of the two candidate halves of the fix, only
+  `populate_existing` is load-bearing, and the other was removed.** The review
+  suggested `populate_existing=True`; a draft also added
+  `.execution_options(synchronize_session=False)` on the reasoning that
+  `synchronize_session="auto"` could write the rejected values into the
+  in-session copy. Reverting each half independently settled it: reverting
+  `synchronize_session` left the test **passing**, reverting
+  `populate_existing` made it **failing**. Since `_resolve`'s own read supplies
+  the strong reference, the `auto` strategy has a stale-but-live instance to
+  match against — but the predicate it matches on still holds, so nothing is
+  rewritten. The `synchronize_session` line was removed rather than kept as
+  belt-and-braces: a line no test can fail is a line that cannot be maintained.
+  (2026-10-21)
+
+- **Observation: a docstring that names a specific mechanism must be checked
+  against what the mechanism actually does.** The comment written with the
+  first draft of the fix claimed `synchronize_session=False` prevented the ORM
+  from inventing state. The experiment above falsified the claim, and the
+  comment was rewritten to describe the identity-map read-back instead.
+  Recorded because the same class of error — a plausible-sounding mechanism
+  assertion that no test exercises — is what the negative-control discipline
+  exists to catch. (2026-10-21)
+
+- **Observation: the reviewers' clean verdict and the local CLI store can
+  disagree, and only one of them is about the current head.** A review run may
+  return zero findings while `coderabbit review findings` still reports items,
+  because that command surfaces the most recent session *that had any*. Those
+  items carry no verified head binding. Treating them as current-head findings
+  would re-open repairs already made; dismissing the zero-finding run as
+  unreliable would re-run a review that already passed. The resolution is to
+  bind each finding to the commit it can be shown to describe. (2026-10-21)
 
 Append further observations here as work proceeds.
 
@@ -1339,14 +1439,112 @@ Append further observations here as work proceeds.
   nearest precedent. Raised for review rather than added unprompted, because it
   is outside the slice's stated acceptance criteria. (2026-10-21)
 
+- **D-21. Fix the lost-race read with `populate_existing`, and decline the
+  re-stamp optimization.** Two review items arrived on the EP-M4 commit and
+  were adjudicated against current source rather than applied on sight, because
+  one was a genuine defect, one was correct-but-not-worth-doing, and one was
+  already fixed.
+
+  The genuine defect: `_raise_lost_race` answered from the identity map. Fixed
+  with `populate_existing=True` — **the fix is the regression test as much as
+  the argument**, because the identity map's entries are weak and the obvious
+  test passes without a caller holding the record (see the observations above).
+  The half of the drafted fix that does not fail a test was removed.
+
+  The optimization declined: the review proposed folding the post-update
+  `record.updated_at = now` in the reclamation mixin into a single write,
+  halving statements per reclaimed run. Not applied. The re-stamp exists
+  precisely because `update_run_status` stamps its own `now`, and D-18 records
+  why taking the transition's return value would publish a *second* instant,
+  violating Stage D step 1's one-instant-per-call requirement. The suggested
+  remedies — passing `now` into the status transition, or setting `updated_at`
+  before the first flush — both reintroduce that defect: the first widens a
+  shared domain-input type (the option D-18 already rejected), and the second
+  writes a field the transition is about to overwrite. The cost is bounded and
+  measured: one extra `UPDATE` per reclaimed run, on a path that runs at most
+  `limit` times per call, for a primitive nothing yet schedules (see Risk 3 and
+  2.6.5). Trading a recorded correctness argument for a write count on an
+  unscheduled code path is the wrong direction. Recorded here rather than in a
+  review reply so the reasoning survives the conversation. (2026-10-21)
+
+  The already-fixed item: the double hyphen at `developers-guide.md` :2314
+  became an em dash, and the file was re-checked for further double hyphens in
+  prose — there are none.
+
 Append further decisions here, including any decision to escalate.
 
 ## Outcomes & retrospective
 
-To be completed at each milestone boundary and at completion. Before setting
-this plan to `COMPLETE`, reconcile every implementation discovery against the
-artefacts named in `Conformance basis`, and confirm that `docs/roadmap.md` item
-2.6.2 has been ticked by the implementor.
+**What shipped.** Roadmap item 2.6.2 is complete. Durable review-checkpoint
+storage exists end to end: the `review_checkpoints` table and both native enums
+arrive in revision `20261020_000014` with a reversible migration; revision
+`20261020_000015` adds the partial index the lease-reclamation predicate needs
+in its own revision, leaving `000014` untouched.
+`SqlAlchemyReviewCheckpointStore` persists checkpoints, and
+`uow.generation_runs` is the four-base `GenerationRunPort` — repository, event
+log, checkpoint port, and the gated lease-reclamation primitive — bound by
+`SqlAlchemyGenerationRunPortAdapter`, which holds two stores and delegates
+rather than mixing them. Every acceptance criterion named in *Conformance
+basis* has an artefact, and the trace table lists them.
+
+**Requirement status against the upstream items.** `ROADMAP-2.6.2` is ticked in
+`docs/roadmap.md` with the note that run and event persistence had already
+landed under 4.3.2. `DESIGN-ORCH-CKPT`, `API-GENRUN-CKPT`, and `API-GENRUN-SEQ`
+are discharged by the table, the port, and the sequencing evidence respectively.
+`ADR-015` is honoured by the split and extended by ADR-024; `ADR-018` is
+honoured by the compare-and-set shape, the `RESTRICT` foreign key, and D-11's
+recorded reason for having no history table. `EP-4.3.2-DEFER` named two gaps —
+checkpoint persistence and an automated stuck-run recovery worker. The first is
+closed. The second is **not**, and is not claimed to be: the primitive exists
+and nothing calls it. That is a deliberate gate, not an oversight, and it is
+now roadmap item 2.6.5.
+
+**What the plan got right, in hindsight.** The risk register's top entry — that
+`py-pglite`'s single backend would make concurrency requirements untestable —
+was correct and load-bearing: it converted an entire class of tempting tests
+(`FOR UPDATE` contention, `SKIP LOCKED`) into requirements that were *reframed*
+until they became sequentially observable, and that reframing is why the
+compare-and-set predicate carries real evidence instead of a green-looking test
+that could never fail. The corresponding cost is stated plainly in *Residual
+gaps* and handed to roadmap 2.6.7 rather than hidden. The plan's insistence
+that **recording negative-control transcripts is an acceptance condition** was
+the second thing that paid off: it is precisely what caught the fact that the
+INV-CKPT-2 predicate could be widened without any test noticing, and it is the
+same discipline that exposed the round-2 identity-map defect.
+
+**What it got wrong.** Three things, all recorded rather than tidied away.
+First, the plan expected the migration test to hard-code the revision
+identifier and the date it was written; it is not knowable in advance, and the
+test had to reach the new revision as `head`. Second, the EP-M4 gate history
+shows three attempts before `make lint` completed — two distinct failures, each
+of which left *later* substeps unrun, so an abbreviated green was briefly
+mistaken for a pass. The lesson is in the plan: exit code is not the only thing
+to read; the recipe's trailing steps must be shown to have executed. Third, and
+most instructive, the first characterization of the round-2 defect was
+incomplete — it described a stale log line, when the observable damage is that
+a caller reading the checkpoint back is told a reviewer answered a checkpoint
+that timed out. The half of the drafted fix that no test could fail was removed
+rather than kept.
+
+**Verification discipline that mattered.** Three habits did the work.
+*Non-vacuity by construction*: the lease-state partition asserts an exact
+identifier set, guarded by `assert expected` and
+`assert len(expected) < len(PARTITION)`, so the suite cannot pass by
+enumerating nothing. *Revert-to-falsify*: every claimed fix was checked by
+reverting it alone and watching the test fail — this is how `populate_existing`
+was identified as load-bearing and its companion line discarded. *Adjudicate
+against source, not against the report*: review items and advisories were each
+checked against the current tree, which is how the `GenerationRunEventStore`
+bullet was corrected rather than deleted (its claim about `CanonicalUnitOfWork`
+was stale; its existence was not), and how the re-stamp optimization was
+declined with a reason (D-21).
+
+**Handover.** Eight gates are green on `59249971`, and a CLI review of that
+revision returned zero findings across all 44 changed files. What remains is
+outside this plan's authority: hosted assessment on the PR, the two
+`pr-babysitting`-owned CodeRabbit assessments, and merge. *Residual gaps* is
+deliberately long — eight items, each with a roadmap number — because the
+plan's own conformance check requires that nothing be silently dropped.
 
 ## Context and orientation
 
@@ -1799,6 +1997,19 @@ uv run pytest \
 - **`StaleEventSequence` is dead surface** — declared, never raised, never
   imported, and unreachable given ADR-015's decision that the adapter owns
   sequence allocation. Deleting it touches a frozen module; follow-up.
+- **`GenerationRunEventStore` is superseded surface** — declared in
+  `episodic/canonical/generation_run_ports.py` as the two-base composition of
+  the run repository and the event log, and referenced by nothing outside its
+  own definition. It is not dead in the `StaleEventSequence` sense (it is a
+  coherent protocol that an adapter still satisfies), but nothing selects it:
+  `CanonicalUnitOfWork.generation_runs` exposes the four-base
+  `GenerationRunPort`, so the narrower seam has no consumer. Kept, and its
+  bullet in the developers' guide corrected rather than deleted, because
+  ADR-015's "tests can fake only the sub-port they exercise" reasoning applies
+  to it directly — a future test wanting run-plus-event persistence without
+  checkpoints should use this port, and deleting it would force such a test to
+  stand up the full composite. Recorded so that if no such caller appears, its
+  removal is a deliberate act rather than an unexplained deletion.
 - **Episode deletion is already broken.** `generation_runs.episode_id` cascades
   from `episodes`, but `generation_events.generation_run_id` has no `ondelete`,
   so deleting an episode with any run that has any event raises a foreign-key
