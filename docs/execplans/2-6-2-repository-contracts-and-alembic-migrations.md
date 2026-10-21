@@ -491,10 +491,17 @@ Stop and escalate rather than improvising when any of these is reached.
       scheduler, worker, or beat entry was added, per the Risk 3 gate.
       Focused suite: **36 passed**. `make check-migrations` exit 0 with
       `Running upgrade 20261020_000014 -> 20261020_000015`. Ruff, `make
-      typecheck`, `make fmt`, and `make markdownlint` all clean; pinned Pylint
-      4.0.9 at **10.00/10** on every touched file. Every touched code file is
-      within the 400-line ceiling. The Stage D audit gates and the milestone
-      CLI review are recorded below once dispatched.
+      typecheck`, `make fmt`, and `make markdownlint` all clean. Every touched
+      code file is within the 400-line ceiling. The first gate attempt was
+      **red**: stock Pylint 4.0.9 scored 10.00/10, but the next recipe line,
+      `$(DF12_PYLINT)`, failed with `C9105 reexport-by-assignment` on
+      `generation_run_schema.py:13`, aborting `make lint` at Makefile:145 and
+      leaving C9112, `ambrleaks`, Skylos, and the nose duplication gate
+      unrun. Repaired by inlining the interpolated status into the predicate
+      and dropping the unconsumed export (see the surprise below); the repair
+      is behaviour-preserving, with the predicate still evaluating to
+      `status = 'running'`. The Stage D audit gates and the milestone CLI
+      review are recorded below once dispatched.
 - [ ] EP-M5: documentation, ADR-024, and roadmap reconciliation.
 
 Record a timestamp against each item as it completes, in the form
@@ -852,6 +859,34 @@ Record a timestamp against each item as it completes, in the form
   exactly the runs the review mechanism exists to protect. The runbook gained
   the same `NOT EXISTS` predicate as the primitive, preceded by a read-only
   diagnostic `SELECT`. (2026-10-21)
+
+- **Observation: the aborted-df12 lesson recurred on EP-M4, and a green stock
+  Pylint is what made it recur.** The observation above records this failure
+  mode for the Stage C revision; EP-M4 repeated it, which is itself the
+  finding. The artisan reported "pinned Pylint 4.0.9 at 10.00/10 on every
+  touched file" and that was literally true — but it had run only `$(PYLINT)`,
+  the stock step with `--load-plugins=` empty. `C9105` is emitted **only** by
+  `$(DF12_PYLINT)` on the next recipe line, so no amount of green stock-Pylint
+  evidence could have found it. Two corollaries worth carrying forward: a
+  *score line* is not a verdict — 10.00/10 is computed across ~800 files, so a
+  single convention message rounds away, while the same finding measured on an
+  isolated two-statement probe scores 5.00/10; and the exit code, not the
+  score, is what `make` acts on. Only the Makefile recipe is evidence of a
+  passing lint. (2026-10-21)
+
+- **Observation: the EP-M4 `C9105` hit a constant that nothing consumed.** The
+  flagged line was
+  `GENERATION_RUN_RUNNING_STATUS = GenerationRunStatus.RUNNING .value`,
+  exported in `__all__` but referenced in exactly three places — its own
+  definition, the f-string on the next line, and `__all__` itself. Both real
+  consumers (`generation_run_models.py` and the `000015` migration) import only
+  the index name and the predicate. The honest repair was therefore to inline
+  `GenerationRunStatus.RUNNING.value` into the predicate and drop the name, not
+  to re-export it via a from-import: satisfying the checker by adding an import
+  would have preserved an export no one consumes. The predicate still evaluates
+  to `status = 'running'`, verified by exec-ing the old and new modules side by
+  side. The shared-constant guard survives because what both sides must agree
+  on is the *predicate*, and that constant remains. (2026-10-21)
 
 Append further observations here as work proceeds.
 
@@ -2172,6 +2207,13 @@ offending span rather than reverting the format.
   `000015`. EP-M3 remains a valid plateau.
 - Remaining gaps: nothing schedules the reclamation, and nothing detects a
   stuck run. Both stated explicitly in the developers' guide.
+- Gate history: the first `make lint` run on this milestone was **red** at
+  `Makefile:145` (`$(DF12_PYLINT)`, `C9105 reexport-by-assignment`), which
+  aborted the recipe with C9112, `ambrleaks`, the Skylos dead-code scan, and
+  the nose duplication gate unrun — unverified, not passing. Repaired by
+  inlining the status into the predicate and dropping the unconsumed constant;
+  the predicate is unchanged at `status = 'running'`, checked by exec-ing the
+  pre- and post-repair modules side by side against a stubbed enum.
 
 ### EP-M5 — documentation and reconciliation
 
