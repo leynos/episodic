@@ -1215,7 +1215,10 @@ class MeteredRate:
     unit: UsageUnit
 
     @classmethod
-    def reduced(cls, amount_minor: int, per_units: int, unit: UsageUnit) -> MeteredRate: ...
+    def reduced(
+        cls, amount_minor: int, per_units: int, unit: UsageUnit
+    ) -> MeteredRate: ...
+
     # __post_init__ rejects values outside bounds and fractions not in lowest terms.
 
 
@@ -1268,10 +1271,20 @@ so later mutation of the caller's dictionaries cannot change the snapshot.
 
 ```python
 PRICING_SNAPSHOT_V1_FIELDS: typ.Final = (
-    "currency", "effective_from", "model", "operation", "provider_name",
-    "rates", "retrieved_at", "schema_version", "service_kind",
-    "source_document", "source_kind", "source_metadata",
+    "currency",
+    "effective_from",
+    "model",
+    "operation",
+    "provider_name",
+    "rates",
+    "retrieved_at",
+    "schema_version",
+    "service_kind",
+    "source_document",
+    "source_kind",
+    "source_metadata",
 )
+
 
 def canonical_pricing_document(snapshot: PricingSnapshot) -> dict[str, object]: ...
 def pricing_snapshot_content_hash(snapshot: PricingSnapshot) -> str: ...
@@ -1306,7 +1319,11 @@ class EnsuredPricingSnapshot:
 
 
 class PricingSnapshotError(CostAccountingError): ...
+
+
 class PricingSnapshotNotFoundError(PricingSnapshotError, LookupError): ...
+
+
 class PricingSnapshotIntegrityError(PricingSnapshotError): ...
 
 
