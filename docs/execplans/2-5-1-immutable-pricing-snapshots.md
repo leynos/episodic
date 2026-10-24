@@ -66,9 +66,11 @@ Success is observable as follows:
    both still report the original cost while a new run uses the new price.
 2. A Vidai Mock-served chat completion reporting 2,000,000 prompt tokens
    (1,000,000 cached) and 500,000 completion tokens is recorded at 53 minor
-   units against the shipped `gpt-4o-mini` card, and still reprices to 53 minor
-   units after the card is corrected to 7.5 cents per million cached tokens (a
-   new run prices the same usage at 52).
+   units against a `gpt-4o-mini` card charging 8 minor units per million cached
+   tokens (the pre-correction card, copied into a temporary catalogue), and
+   still reprices to 53 minor units after the card is corrected to 7.5 minor
+   units per million cached tokens; a new run prices the same usage at 52,
+   which is also what the corrected shipped card charges.
 3. A TTS rate card charging 1500 minor units per 1,000,000 input characters
    and 5 minor units per 60,000 output audio milliseconds is persisted, read
    back unchanged, and prices 2,000,000 characters plus 120,000 milliseconds at
@@ -189,6 +191,11 @@ Success is observable as follows:
   and the design document explain that billing periods belong to run pins,
   ledger rows, and quotas, and rate applicability is governed by
   `effective_from`.
+- Risk: `RunPricingKey` (and the `run_pricing_pins` primary key) has no
+  service kind, so an LLM and a TTS subject sharing provider, model, and
+  operation would share one pin. Severity: low. Likelihood: low (no TTS
+  producer exists yet). Mitigation: recorded as a residual risk for the first
+  TTS adapter; no pin-key change in `2.5.1`.
 - Risk: two concurrent `ensure` calls for identical content race. Severity:
   low. Likelihood: medium. Mitigation:
   `INSERT … ON CONFLICT ON CONSTRAINT
@@ -211,6 +218,8 @@ Success is observable as follows:
 - [x] (2026-10-16) ExecPlan drafted.
 - [x] (2026-10-24) ExecPlan restored after the uncommitted draft was lost
   from the worktree, gated, and committed.
+- [x] (2026-10-24) Final read-only consistency review of the written plan
+  against the code; corrections applied (see revision note).
 - [ ] Plan approved by the user.
 - [ ] EP-M1: shared leaf modules and ADR-024 draft.
 - [ ] EP-M2: persisted read path and `PricingSnapshotRepository`.
@@ -345,8 +354,11 @@ Success is observable as follows:
   `episodic/canonical/idempotency_service.py` (application group) to a new leaf
   module `episodic/json_canonicalization.py` (domain_ports group), and both
   source intake and pricing use it. Rationale: AGENTS.md requires reuse of an
-  existing helper; the domain cannot import the application group; a module
-  name outside the `episodic.canonical` prefix avoids Hecate prefix shadowing.
+  existing helper; the domain cannot import the application group; and a leaf
+  module outside the `episodic.canonical` package keeps domain imports from
+  executing `episodic/canonical/__init__.py`, which pulls in ingestion and
+  services modules (an import-cycle risk, because
+  `episodic/canonical/storage/uow.py` already imports `episodic.cost.storage`).
   Date/Author: 2026-10-16, planning agent.
 - Decision: legacy-format catalogue files fail fast at startup rather than
   being read by a legacy reader. Rationale: a second reader is compatibility
@@ -613,9 +625,10 @@ non-vacuity evidence.
   equals `u * r // 1_000_000`. Method: Hypothesis property with the old formula
   as oracle. Artefact: `tests/test_cost_pricing_engine_properties.py`
   (extended). Non-vacuity: generated `r` values include ones that reduce (for
-  example `8 -> 1/125000`). Negative control: an engine using
-  `amount_minor * u // per_units` with unreduced versus reduced inputs must
-  agree, and an engine using true division must fail.
+  example `8 -> 1/125000`), and a positive check asserts that pricing with the
+  unreduced and the reduced form of the same rate agrees. Negative control: a
+  seeded engine that uses true division and rounds at the end must be rejected
+  by the oracle.
 - Obligation `INV-ROUNDTRIP`:
   `store.get(store.ensure(s).pricing_snapshot_id) == s` and passes the
   integrity check, for snapshots with non-UTC instants, microsecond precision,
@@ -671,11 +684,14 @@ non-vacuity evidence.
   YAML files inserted through `sa.table` at the old schema.
 - Obligation `INV-ARCH`: new modules sit in the intended Hecate groups and no
   domain module imports SQLAlchemy, YAML, or the application group. Method:
-  `make lint` (Hecate) plus the existing structural tests in
-  `tests/test_architecture_hecate_config.py`, extended with the new module
-  names so an ungrouped module fails. Negative control: Hecate must reject a
-  temporary import of `sqlalchemy` in `episodic/cost/pricing_snapshot.py` (run
-  once locally, not committed).
+  `make lint` (Hecate) plus a new structural test,
+  `tests/test_production_hecate_cost_config.py`, modelled on
+  `tests/test_production_hecate_orchestration_config.py` (which maps production
+  orchestration modules to groups), asserting each new cost module's group so
+  an ungrouped module fails. (`tests/test_architecture_hecate_config.py` tests
+  fixture-config generation and is not the right home.) Negative control:
+  Hecate must reject a temporary import of `sqlalchemy` in
+  `episodic/cost/pricing_snapshot.py` (run once locally, not committed).
 
 Residual gaps: TTS pricing is verified only with synthetic usage because no TTS
 adapter exists; SLA4OAI documents are stored and hashed but not interpreted;
@@ -693,25 +709,32 @@ green step; no marker survives the milestone.
 Purely structural, no behaviour change.
 
 1. Move `canonical_json_bytes` from `episodic/canonical/idempotency_service.py`
-   to a new module `episodic/json_canonicalization.py`; update its callers
+   to a new module `episodic/json_canonicalization.py`; update every importer
    (`episodic/canonical/idempotency_service.py`,
-   `episodic/api/source_intake_support.py`, and any test) to import it from
-   there. Add `episodic.json_canonicalization` to the `domain_ports` group in
+   `episodic/api/source_idempotency.py`, `tests/test_idempotency_service.py`,
+   and any other hit from `rg canonical_json_bytes`) to import it from there.
+   Add `episodic.json_canonicalization` to the `domain_ports` group in
    `[tool.hecate]`.
 2. Create `episodic/cost/primitives.py` holding `CostAccountingError`, the
    `NewType` identifiers (`PricingSnapshotId`, `CostLedgerEntryId`,
    `IdempotencyKey`, `CurrencyCode`, `BillingPeriodKey`, `MeteringCounterKey`),
    `PricingSourceKind`, and the currency validation helper.
-   `episodic/cost/ports.py` imports them; callers import from `episodic.cost`
-   (the package facade) or the new module. Update the Skylos entries in
-   `pyproject.toml` that name `episodic.cost.ports._validate_*`. Add
+   `episodic/cost/ports.py` imports them. Domain modules import
+   `episodic.cost.primitives` directly and never the package facade
+   `episodic/cost/__init__.py`, which belongs to no Hecate group (so its edges
+   go unchecked) and imports the recorder; application and adapter callers may
+   keep using the facade. Update the Skylos entry for
+   `episodic.cost.ports._validate_currency_code` (`pyproject.toml`, near line
+   641) to its new path; `_validate_usage_metrics` stays in `ports.py`. Add
    `episodic.cost.primitives` to `domain_ports`.
 3. Write `docs/adr/adr-024-content-addressed-pricing-snapshots.md` with status
-   `Proposed`, following ADR-022's layout (Status, Date, Context and problem
-   statement, Decision drivers, Considered options, Decision outcome,
-   Consequences, References), recording the decisions in this plan's
-   `Decision log` and the v1 canonical form with placeholder vectors (filled in
-   EP-M3).
+   `Proposed`, following the ADR template in
+   `docs/documentation-style-guide.md` (Status, Date, Context and problem
+   statement, Decision drivers, Requirements, Options considered, Decision
+   outcome or proposed direction, Goals and non-goals, Consequences,
+   References; ADR-022 shows the heading style used in `docs/adr/`), recording
+   the decisions in this plan's `Decision log` and the v1 canonical form with
+   placeholder vectors (filled in EP-M3).
 
 Acceptance: all gates pass; `git diff --stat` shows moves only;
 `uv run hecate check` passes.
@@ -752,7 +775,9 @@ Closes G1 on the current schema.
    every fake and test that used the removed methods.
 3. Add `(PricingSnapshotError, "cost.pricing_snapshot", False)` to
    `_FAILURE_CATEGORIES` in `episodic/generation/launcher_support_events.py`
-   with a unit test in the launcher failure-classification tests.
+   with a test alongside the existing end-to-end category assertions in
+   `tests/test_generation_run_launcher.py` (near lines 211–243); no direct unit
+   test of `classify_failure` exists today.
 4. Keep metric names and label values stable (`pricing_snapshot.ensure`,
    `operation=ensure_snapshot`); add `pricing_snapshot.get` counter and latency
    with outcomes `found`, `not_found`, and `integrity_mismatch` (the latter
@@ -780,11 +805,16 @@ expected-failure markers, then the implementation.
    `PricingSnapshot`) and `episodic/cost/pricing_snapshot_hash.py`
    (`PRICING_SNAPSHOT_V1_FIELDS`, `canonical_pricing_document`,
    `pricing_snapshot_content_hash`). Remove `PricingSnapshot` and
-   `PricingSnapshotCollisionError` from `episodic/cost/ports.py`. Add both new
-   modules to `domain_ports`.
+   `PricingSnapshotCollisionError` from `episodic/cost/ports.py` and from the
+   `episodic/cost/__init__.py` facade. Delete the now-unreachable collision
+   path in the store (`_is_pricing_snapshot_hash_collision`, the `collision`
+   outcome, and the `pricing_snapshot.collision` failure category) so Skylos
+   finds no dead code. Add both new modules to `domain_ports`.
 3. Engine: `PricingEngine.price` reads `snapshot.rates[metric]` and computes
    `usage * rate.amount_minor // rate.per_units`; `PricingRequest` loses
-   `billing_period_key`; `BillingPeriodMismatchError` is removed.
+   `billing_period_key`; `BillingPeriodMismatchError` (defined in
+   `episodic/cost/ports.py`) is removed with its exports; the module docstring
+   example in `episodic/cost/engine.py` is updated.
 4. Catalogue: `PricingCataloguePort.resolve(subject: PricingSubject)`.
    Extract YAML document parsing into
    `episodic/cost/pricing_catalogue/_document.py` (v1 parser, decimal-string
@@ -794,11 +824,24 @@ expected-failure markers, then the implementation.
    rejected) and raise `PricingCatalogueError(ValueError)` naming the file.
    `episodic/api/runtime.py` uses the factory so a bad catalogue fails at
    startup.
-5. Recorder and callers: `CostProviderOperation` gains `service_kind`;
-   `CostRecorder` builds a `PricingSubject`, pins the identifier returned by
-   `snapshots.ensure`, and records unpinned calls with that identifier. Update
-   `_planning_orchestrator.py`, `langgraph_costs.py`, and
-   `launcher_persistence.py` call sites (they pass `PricedService.LLM`).
+5. Recorder and callers: `CostProviderOperation` gains `service_kind`, set to
+   `PricedService.LLM` where it is built
+   (`episodic/orchestration/_planning_orchestrator.py`
+   `_cost_provider_operations`, near lines 287–315, and
+   `episodic/generation/launcher_persistence.py`). For unpinned calls,
+   `CostRecorder` derives the subject's service kind from
+   `ProviderCallRecord.provider_type` with
+   `PricedService(record.provider_type)` and rejects an unknown value with
+   `ValueError` (records are built in
+   `episodic/generation/launcher_support_events.py` near line 94,
+   `_planning_orchestrator.py` near line 325, and
+   `tests/test_cost_recorder.py`; cover the rejection with a unit test).
+   Because the v1 `PricingSnapshot` has no identifier, the recorder's snapshot
+   resolver returns the pair `(PricingSnapshot, PricingSnapshotId)`: the pinned
+   identifier with `snapshots.get(pinned_id)`, or the identifier returned by
+   `snapshots.ensure(resolved)`. `_build_provider_call_entry` takes that
+   identifier explicitly instead of reading `snapshot.pricing_snapshot_id`.
+   `pin_run_pricing` pins the identifier returned by `snapshots.ensure`.
 6. Store: `ensure` inserts with a new UUIDv7 `id` using
    `ON CONFLICT ON CONSTRAINT uq_pricing_snapshots_content_hash DO NOTHING
    RETURNING id`,
@@ -806,20 +849,29 @@ expected-failure markers, then the implementation.
    the snapshot, compares hashes, and raises `PricingSnapshotIntegrityError` on
    mismatch (metric outcome `integrity_mismatch`, failure category
    `pricing_snapshot.tampered`; the snapshot identifier goes only into the span
-   attributes).
+   attributes). Keep the existing `pricing_snapshot.integrity` category for
+   database `IntegrityError`s; the two must not be merged.
 7. ORM model and migration: update `PricingSnapshotRecord` to the v1 columns
    (see `Interfaces and dependencies`). Add
    `alembic/versions/<YYYYMMDD>_000014_content_address_pricing_snapshots.py`
    (`down_revision = "20261010_000013"`). Online upgrade: lock the table; add
    the new columns as nullable; read every legacy row; convert it with a frozen
-   inline converter and canonicalizer (no imports from `episodic`); abort with
-   `CommandError` naming identifiers on any recomputed-hash collision, unknown
-   legacy metric, or non-identifier `source_metadata` key; write the converted
-   values and hashes; set `NOT NULL`; add check constraints; drop
-   `billing_period_key` and `rates_minor_per_metric`. Offline upgrade emits the
-   DDL preceded by a `DO $$ … $$` block that raises when `pricing_snapshots`
-   has rows. Downgrade (online and offline) refuses unless the table is empty,
-   then reverses the DDL.
+   inline converter and canonicalizer (no imports from `episodic`). The
+   converter's legacy defaults are `service_kind = 'llm'`,
+   `schema_version = 1`, no source document, `effective_from` and
+   `retrieved_at` unchanged, and each legacy rate `r` becomes `r/1_000_000` in
+   lowest terms with `unit = 'token'` for the seven legacy metric names
+   (`input_tokens`, `output_tokens`, `cached_input_tokens`,
+   `cache_write_tokens`, `reasoning_tokens`, `audio_input_tokens`,
+   `audio_output_tokens`; `cache_write_tokens` appears in
+   `anthropic-2026-05.yaml`). Abort with `CommandError` naming identifiers on
+   any recomputed-hash collision, unknown legacy metric, or non-identifier
+   `source_metadata` key; write the converted values and hashes; set
+   `NOT NULL`; add check constraints; drop `billing_period_key` and
+   `rates_minor_per_metric`. Offline upgrade emits the DDL preceded by a
+   `DO $$ … $$` block that raises when `pricing_snapshots` has rows. Downgrade
+   (online and offline) refuses unless the table is empty, then reverses the
+   DDL.
 8. Configuration: rewrite the three shipped cards in
    `config/pricing-snapshots/` to schema version 1 with identical values (so
    alpha rows convert to the same hash), removing `pricing_snapshot_id` and
@@ -837,7 +889,7 @@ expected-failure markers, then the implementation.
    `tests/test_pricing_snapshot_constraint_migration.py` (pin its targets to
    `20261010_000013` and insert legacy rows with `sa.table`),
    `tests/test_env_runtime_wiring.py`, `tests/test_runtime_configuration.py`,
-   and `tests/test_architecture_hecate_config.py`.
+   and the new `tests/test_production_hecate_cost_config.py`.
 10. Fill the hash vectors in ADR-024 from the syrupy snapshots.
 
 Acceptance: strict `xfail` markers removed; all gates pass;
@@ -851,16 +903,25 @@ Acceptance: strict `xfail` markers removed; all gates pass;
    config and a response template reporting `prompt_tokens: 2000000`,
    `prompt_tokens_details.cached_tokens: 1000000`, and
    `completion_tokens: 500000`, starts the server with
-   `start_vidaimock_process`, calls it through `OpenAICompatibleLLMAdapter`,
-   and records the call through the real `CostRecorder` on py-pglite. Reuse
+   `start_vidaimock_process`, calls it through `OpenAICompatibleLLMAdapter`
+   (`episodic/llm/openai_api/adapter.py`; it defaults to Chat Completions and
+   routes to `/chat/completions`), and records the call through the real
+   `CostRecorder` on py-pglite. The template must return
+   `"model": "gpt-4o-mini"`, because the recorder records the response's model
+   and the pin key includes it. Every scenario copies a pre-correction
+   `gpt-4o-mini` card (8 minor units per million cached tokens) into a
+   temporary catalogue directory rather than reading `config/`, and builds a
+   fresh `FilePricingCatalogue` after revising or deleting a file, because the
+   catalogue loads eagerly and caches. Reuse
    `tests/steps/vidaimock_harness.py`; do not copy the orchestration template
    writers (the nose duplication gate will flag a copy).
 2. Correct the shipped `gpt-4o-mini` card: change `cached_input_tokens` to
    `amount_minor: "7.5"` in `config/pricing-snapshots/openai-2026-05.yaml` (an
    in-place edit that becomes a new version), with a commit message that
    explains that historical runs keep the earlier version. Add a test that the
-   shipped catalogue loads and that the corrected card's hash differs from the
-   original's.
+   shipped catalogue loads, that the corrected card's hash differs from the
+   original's, and that the corrected shipped card prices the BDD usage at 22
+   minor units.
 
 Acceptance: `uv run pytest tests/steps/test_pricing_snapshots_steps.py -v`
 passes all scenarios; all gates pass.
@@ -1006,7 +1067,7 @@ Feature: Immutable pricing snapshots
   run costs remain reproducible after rate cards change.
 
   Scenario: A pinned run reprices identically after its rate card is revised
-    Given the shipped gpt-4o-mini rate card charging 8 minor units per million cached input tokens
+    Given a gpt-4o-mini rate card charging 8 minor units per million cached input tokens
     And a generation run pinned to that rate card
     When the run records a call with 1000000 input tokens and 1000000 cached input tokens
     And the rate card file is revised to charge 7.5 minor units per million cached input tokens
@@ -1015,7 +1076,7 @@ Feature: Immutable pricing snapshots
     And a new run pinned after the revision prices the same usage at 22 minor units
 
   Scenario: A pinned run keeps pricing after its rate card file is deleted
-    Given the shipped gpt-4o-mini rate card charging 8 minor units per million cached input tokens
+    Given a gpt-4o-mini rate card charging 8 minor units per million cached input tokens
     And a generation run pinned to that rate card
     When the rate card file is deleted
     And the run records a call with 1000000 input tokens and 1000000 cached input tokens
@@ -1041,7 +1102,7 @@ Feature: Immutable pricing snapshots
 
   Scenario: A Vidai Mock completion is priced from the persisted snapshot
     Given a Vidai Mock server reporting 2000000 prompt tokens of which 1000000 are cached and 500000 completion tokens
-    And a generation run pinned to the shipped gpt-4o-mini rate card
+    And a generation run pinned to a gpt-4o-mini rate card charging 8 minor units per million cached input tokens
     When the run completes a chat completion through the OpenAI-compatible adapter and records its cost
     Then the run's ledger entry costs 53 minor units
     When the rate card file is revised to charge 7.5 minor units per million cached input tokens
@@ -1332,3 +1393,11 @@ effective_from: "2026-05-01T00:00:00Z"
   worktree; added the Hecate note that ungrouped modules are never checked
   (with a structural test in `INV-ARCH`) and the discovery about committing
   living documents before long-running gates. No design change.
+- 2026-10-24: applied a final consistency review. BDD scenarios now use a
+  pre-correction card copied into a temporary catalogue (the shipped card is
+  corrected in EP-M4); the recorder resolver returns the snapshot identifier
+  explicitly and derives the unpinned subject's service kind from
+  `provider_type`; corrected caller lists, the Hecate structural test file, the
+  ADR template reference, the Skylos entry, the legacy migration defaults, the
+  `INV-LEGACY-EQ` control wording, and the `canonical_json_bytes` rationale;
+  added the pin-key residual risk. No change to the approved design direction.
