@@ -787,6 +787,18 @@ full_name = [
 ]
 reason = "Process launchers and structured exception consumers read these documented public contract values."
 
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.qa.chrono_langgraph.build_chrono_graph",
+    "episodic.qa.chrono_langgraph.build_chrono_graph.chrono_node",
+    "episodic.qa.langgraph._pedante_node",
+    "episodic.qa.langgraph.build_pedante_graph._run_pedante_node",
+    "episodic.qa.langgraph.build_pedante_graph",
+    "episodic.qa.langgraph.route_after_pedante",
+]
+reason = "Roadmap item 4.4.1 routes qa_gated runs through these graph builders and their node and routing callbacks, and item 4.4.2 invokes the Chrono branch in-loop; until that wiring lands the only callers are their own tests."
+
 [tool.skylos.whitelist]
 names = []
 
@@ -1031,6 +1043,8 @@ prefixes = [
     "episodic.canonical.object_store",
     "episodic.canonical.pagination",
     "episodic.canonical.ports",
+    "episodic.canonical.qa_artefact_ports",
+    "episodic.canonical.qa_artefacts",
     "episodic.canonical.reference_protocols",
     "episodic.canonical.unit_of_work_protocols",
     "episodic.canonical.upload_protocols",
@@ -1039,7 +1053,10 @@ prefixes = [
     "episodic.cost.engine",
     "episodic.llm.ports",
     "episodic.metrics_ports",
+    "episodic.observability",
     "episodic.orchestration._types",
+    "episodic.qa.chrono",
+    "episodic.qa.pedante.types",
     "episodic.worker.workloads",
 ]
 allowed = ["domain_ports", "logging_port"]
@@ -1098,9 +1115,13 @@ prefixes = [
     "episodic.canonical.generation_persistence",
     "episodic.canonical.source_intake_service",
     "episodic.canonical.profile_templates",
+    "episodic.canonical.qa_artefact_recording",
+    "episodic.canonical.qa_artefact_service",
     "episodic.canonical.reference_documents",
     "episodic.cost.recorder",
     "episodic.generation",
+    "episodic.qa.chrono_langgraph",
+    "episodic.qa.langgraph",
 ]
 allowed = ["application", "domain_ports", "external_libraries", "logging_port"]
 
@@ -1121,6 +1142,7 @@ allowed = [
 name = "inbound_adapter"
 prefixes = [
     "episodic.api",
+    "episodic.api.resources.qa_artefacts",
     "episodic.worker.topology",
 ]
 allowed = [
@@ -1137,6 +1159,9 @@ name = "outbound_adapter"
 prefixes = [
     "episodic.canonical.adapters",
     "episodic.canonical.storage",
+    "episodic.canonical.storage.qa_artefact_mappers",
+    "episodic.canonical.storage.qa_artefact_models",
+    "episodic.canonical.storage.qa_artefacts",
     "episodic.cost.storage",
     "episodic.cost.pricing_catalogue",
     "episodic.llm.openai_api",
@@ -1151,6 +1176,11 @@ allowed = [
     "external_libraries",
     "logging_port",
 ]
+
+[[tool.hecate.groups]]
+name = "cli"
+prefixes = ["episodic.cli"]
+allowed = ["cli", "domain_ports"]
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]

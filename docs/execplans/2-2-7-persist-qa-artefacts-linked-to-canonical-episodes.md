@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: ACTIVE — approved for implementation 2026-10-29; `EP-M0` complete.
 
 ## Purpose / big picture
 
@@ -111,7 +111,7 @@ Stop and escalate when any of these is reached.
   (`docs/episodic-podcast-generation-system-design.md`, Data Model and Storage
   section), whereas this plan proposes `qa_evaluations` + `qa_findings` with
   compliance as a column. Severity: medium. Likelihood: high (it is a
-  deliberate deviation). Mitigation: record the deviation in ADR 018, update
+  deliberate deviation). Mitigation: record the deviation in ADR 024, update
   the design document's Data Model bullet in the same change, and trace it in
   `Conformance basis`.
 - Risk: `episodic/qa/__init__.py` unconditionally imports the LangGraph
@@ -124,7 +124,7 @@ Stop and escalate when any of these is reached.
 - Risk: `ERRORED` has **no production producer** in this slice, because
   evaluators are not wired into the run path. It is exercised only by the
   recording service's failure entry point and by tests. Severity: low.
-  Likelihood: certain. Mitigation: state this plainly in ADR 018 and in the
+  Likelihood: certain. Mitigation: state this plainly in ADR 024 and in the
   developers' guide rather than implying an end-to-end producer exists. The
   status is still worth modelling now because adding a PostgreSQL enum value
   later is a two-deploy operation (`ALTER TYPE ... ADD VALUE` cannot use the
@@ -133,7 +133,7 @@ Stop and escalate when any of these is reached.
   today. Severity: low. Likelihood: high. Mitigation: the column is nullable,
   is exercised directly by repository round-trip and property tests (where the
   repository, not an evaluator, is the unit under test), and the absence of a
-  producer is stated explicitly in the developers' guide and ADR 018.
+  producer is stated explicitly in the developers' guide and ADR 024.
 - Risk: `make check-migrations` cannot verify what this schema most depends on.
   `episodic/canonical/storage/migration_check.py` uses Alembic
   `compare_metadata`, which does **not** compare `CHECK` constraints or foreign
@@ -177,7 +177,25 @@ Stop and escalate when any of these is reached.
 
 ## Progress
 
-- [ ] EP-M0 Import purity, architecture grouping, and baseline gates.
+- [x] EP-M0 Import purity, architecture grouping, and baseline gates.
+  - Stage A baseline on `ebef8fec` (clean tree): `make check-fmt`,
+    `make typecheck`, `make lint`, and `make test` all exit 0; `1723 passed,
+    3 skipped`, 55 snapshots. Logs in `/tmp/<gate>-episodic-<slug>.out`.
+  - Red: `tests/test_qa_import_purity.py` failed on
+    `episodic.qa.pedante.types` with `langgraph` and `httpx` present.
+  - Green: barrel slimmed, Hecate prefixes added, `cli` group declared last.
+  - Evidence: `tests/test_qa_import_purity.py` (2 passed),
+    `tests/test_architecture_enforcement.py` (25 passed, 2 snapshots),
+    `tests/test_chrono_langgraph.py` and `tests/test_pedante_langgraph.py`
+    unchanged and passing, and `make check-architecture` exits 0.
+  - Non-vacuity: injecting `episodic.llm` into `domain_ports` makes
+    `test_no_prefix_shadows_a_later_group` fail; the import-purity probe
+    reports `langgraph: True` for `episodic.qa.langgraph`.
+  - Repair: the first `make lint` after the barrel change failed the Skylos
+    dead-code gate on the six graph-builder symbols, which the removed
+    re-exports had been keeping "used". A typed
+    `[[tool.skylos.dead_code.entrypoints]]` rule now names roadmap items
+    `4.4.1` and `4.4.2` as the runtime callers that will wire those graphs.
 - [ ] EP-M1 QA artefact domain model, compliance policy, and ports.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
@@ -249,7 +267,7 @@ Stop and escalate when any of these is reached.
   around lines 93 and 290); `generation_events.generation_run_id` is `NOT NULL`
   with no episode foreign key. QA recording happens after a run completes, or
   with no run at all. Impact: rules out the "just use the event log"
-  alternative on evidence, not taste. Record it in ADR 018 so the question is
+  alternative on evidence, not taste. Record it in ADR 024 so the question is
   not reopened.
 - Observation: no repository test runs one contract suite over both an
   in-memory fake and a SQL adapter. Evidence:
@@ -269,6 +287,53 @@ Stop and escalate when any of these is reached.
   it. Pre-existing drift. Impact: none for this work, but do not copy the
   omission. Declare `qa_artefacts` on the protocol.
 
+- Observation (execution, 2026-10-29): `SupportLevel` has **13** members, not
+  14 as revisions 2–5 state. Evidence: `episodic/qa/pedante/types.py` lists 13
+  members and `_BLOCKING_SUPPORT_LEVELS` holds the documented 8 of them.
+  Impact: the exhaustive parameterized obligation and the Hypothesis domain in
+  `INV-BLOCKING-SET` and `INV-COMPLIANCE-BLOCKING` iterate 13 members.
+  Corrected in this revision; the blocking set is unaffected.
+- Observation (execution, 2026-10-29): ADR 001 does not enumerate the blocking
+  support-level set, so the earlier claim that `INV-BLOCKING-SET`'s literal is
+  "transcribed from ADR 001" was unsupportable. Evidence: grep of
+  `docs/adr-001-pedante-evaluator-contract.md` finds only generic references to
+  "a support-level taxonomy value". Impact: the test still carries an
+  independently written literal, but its provenance is the taxonomy plus the
+  recorded compliance policy, and it also asserts exact equality with
+  `_BLOCKING_SUPPORT_LEVELS` so a transcription slip is visible. The obligation
+  is unchanged in strength; only its stated source changed.
+- Observation (execution, 2026-10-29): ADR numbers 018 and 019 were already
+  taken — `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` and
+  `docs/adr/adr-019-episode-tei-revision-history.md` — and the highest existing
+  ADR is 023. Impact: the two ADRs this plan creates are **024**
+  (`adr-024-qa-artefact-persistence-contract.md`) and **025**
+  (`adr-025-cli-client-boundary.md`). This revision renumbers every reference;
+  no design decision changed.
+- Observation (execution, 2026-10-29): the barrel slimming is sufficient on its
+  own. `episodic/qa/pedante/__init__.py` imports `.evaluator`, which imports
+  `episodic.llm`, but `episodic/llm/__init__.py` re-exports only
+  `episodic.llm.ports`; no `httpx` enters that chain. Evidence: after removing
+  the three LangGraph re-exports, the fresh-interpreter probe reports
+  `{"langgraph": false, "httpx": false}` for `episodic.qa.pedante.types`.
+  Impact: `EP-M0` needed no change to the Pedante package, and `EP-M3`'s
+  recording module can import the evaluator contracts directly.
+
+- Observation (execution, 2026-10-29): the `episodic.qa` barrel re-export was
+  the only *production* reference keeping the LangGraph graph builders alive
+  for Skylos. Removing it is correct for import purity, but `make lint`'s
+  blocking dead-code gate then reported `build_chrono_graph`, `chrono_node`,
+  `_pedante_node`, `route_after_pedante`, `build_pedante_graph`, and
+  `_run_pedante_node` as unused. Evidence: `make lint` exit 2 with six
+  `SKY-U001` findings. Impact: `EP-M0` adds one typed `entrypoints` rule with a
+  reason naming roadmap items `4.4.1` (qa-gated graph routing) and `4.4.2`
+  (Chrono in-loop) as the runtime callers. No code was deleted; the builders
+  remain tested and are the orchestration seam those items extend. The two
+  graph nodes are closures defined inside the builders, so Skylos matches them
+  only by enclosing-function-qualified name
+  (`...build_chrono_graph.chrono_node` and
+  `...build_pedante_graph._run_pedante_node`); the bare module-qualified names
+  leave them flagged.
+
 ## Decision log
 
 - Decision: model QA artefacts as one `qa_evaluations` parent table plus one
@@ -279,7 +344,7 @@ Stop and escalate when any of these is reached.
   the roadmap (Anthem, item `2.2.4`, unimplemented). Building a second table
   for a producer that does not exist is speculative generality, and it would
   make the roadmap's own requirement — "retrieval … filtered by evaluator and
-  compliance status" — a union query across two tables. Recorded as ADR 018;
+  compliance status" — a union query across two tables. Recorded as ADR 024;
   the design document's Data Model bullet is updated in the same change.
   Date/Author: 2026-08-23, planning agent. **Deviation status: accepted.** This
   is a deviation from `TDD-DATA`, which names `qa_findings` and
@@ -287,14 +352,14 @@ Stop and escalate when any of these is reached.
   `RM-2.2.7-b`. Downstream impact: `EP-M2`'s schema, `EP-M4`'s filter contract,
   and the design document's Data Model bullet, which `EP-M6` must rewrite to
   name the tables actually created. Upstream document changes required:
-  `docs/episodic-podcast-generation-system-design.md` plus a new ADR 018.
+  `docs/episodic-podcast-generation-system-design.md` plus a new ADR 024.
   Accepted by leynos, 2026-08-23. `EP-M6` may not be marked complete until both
   upstream edits have landed.
 - Decision: keep a child `qa_findings` table rather than a JSONB findings array
   on the evaluation row. Rationale: roadmap items `4.4.1` and `4.4.2` aggregate
   findings across evaluators and drive refinement turns from individual
   findings, so findings need stable identifiers and cross-episode queryability
-  within two roadmap items. Recorded with its trade-off in ADR 018: if `EP-M2`
+  within two roadmap items. Recorded with its trade-off in ADR 024: if `EP-M2`
   proves the child table costly, collapsing to a JSONB array is a legitimate
   retreat. Date/Author: 2026-08-23, planning agent.
 - Decision: store `compliance_status` rather than deriving it at read time.
@@ -318,7 +383,7 @@ Stop and escalate when any of these is reached.
   `running` have no representable state. `superseded` is handled by the
   errored-supersession rule below plus ordering by `evaluated_at`. A single
   column keeps the roadmap's "filtered by … compliance status" unambiguous. The
-  split is recorded in ADR 018 as the considered alternative, together with the
+  split is recorded in ADR 024 as the considered alternative, together with the
   trigger that would justify it: an evaluator that reports partial results.
   Date/Author: 2026-08-23, planning agent.
 - Decision: `not_applicable` means "this evaluator renders no compliance
@@ -327,7 +392,7 @@ Stop and escalate when any of these is reached.
   thresholds land, Chrono rows recorded under `compliance_policy_version = 1`
   remain accurate *for that policy*; new rows carry a later policy version and
   a real verdict. Without the policy version this would be a mislabelling that
-  forces a backfill; with it, it is a versioned statement. ADR 018 must state
+  forces a backfill; with it, it is a versioned statement. ADR 024 must state
   the semantics in exactly these words. Date/Author: 2026-08-23, planning agent.
 - Decision: do not store token usage on the QA artefact. Correlate to the cost
   ledger through `generation_run_id` plus the `provider_response_id` carried in
@@ -352,7 +417,7 @@ Stop and escalate when any of these is reached.
   alongside the web console, and `docs/episodic-tui-api-design.md` fixes the
   authentication, error, and pagination contracts that clients use. A CLI that
   opened its own unit of work would create a second persistence entry point
-  with its own authorization story. Recorded as ADR 019, which also gives
+  with its own authorization story. Recorded as ADR 025, which also gives
   `episodic.cli` its own Hecate group so the boundary is enforced rather than
   merely intended. Date/Author: 2026-08-23, planning agent.
 - Decision: ship only `episodic qa evaluations list` in this slice; do not add
@@ -360,7 +425,7 @@ Stop and escalate when any of these is reached.
   which `list` satisfies. `GET /v1/qa-evaluations/{evaluation_id}` still serves
   the Terminal User Interface (TUI) client. Roadmap item `4.6.1` extends the
   CLI; the top-level noun structure is provisional until a second command group
-  lands, and ADR 019 says so. Date/Author: 2026-08-23, planning agent.
+  lands, and ADR 025 says so. Date/Author: 2026-08-23, planning agent.
 - Decision: populate the `qa_evaluator` enum with all six evaluators named in
   the design document (Pedante, Bromide, Chiltern, Anthem, Caesura, Chrono)
   even though four are unimplemented. Rationale: `ALTER TYPE ... ADD VALUE`
@@ -379,7 +444,7 @@ Stop and escalate when any of these is reached.
   2026-08-23, planning agent.
 - Decision (pre-authorized escalation): if `EP-M5` exceeds 6 production
   modules or 500 net production lines, stop and split the CLI **bootstrap** —
-  `episodic/cli/__init__.py`, `app.py`, `client.py`, `rendering.py`, ADR 019,
+  `episodic/cli/__init__.py`, `app.py`, `client.py`, `rendering.py`, ADR 025,
   the `[project.scripts]` change, the `cyclopts` promotion, and the users'
   guide *Getting Started* section — into a new roadmap addendum item `2.2.8`,
   "Bootstrap the first-party CLI client", and mark `2.2.7` as requiring it.
@@ -408,13 +473,27 @@ Stop and escalate when any of these is reached.
   production consumer for Skylos to flag. Existing API tests already run
   against py-pglite through `canonical_api_client`. Date/Author: 2026-08-23,
   planning agent.
+- Decision: number this item's ADRs **024** and **025** rather than the 018 and
+  019 the plan proposed. Rationale: both numbers are already in use by
+  unrelated ADRs and the highest existing number is 023, so keeping the planned
+  numbers would either overwrite history or produce duplicate filenames.
+  Date/Author: 2026-10-29, implementation agent. **Deviation status: accepted**
+  — bookkeeping only, no design decision or requirement changed.
+- Decision: `INV-BLOCKING-SET`'s literal set is authored from the Pedante
+  taxonomy and the compliance policy, and the test asserts exact equality with
+  `_BLOCKING_SUPPORT_LEVELS` in addition to per-member membership. Rationale:
+  ADR 001 does not enumerate the blocking subset, so a "transcribed from ADR
+  001" claim would be false; the equality assertion restores the
+  transcription-check property the original wording intended. Date/Author:
+  2026-10-29, implementation agent. **Deviation status: accepted** — the
+  obligation's strength is unchanged.
 
 ## Outcomes & retrospective
 
 To be completed at `EP-M6`. Before setting this plan to `COMPLETE`, reconcile
 every discovery against the artefacts listed in `Conformance basis`: the design
 document's Data Model bullet must name the tables actually created, ADR 001's
-open item about persisting evaluator results must be discharged by ADR 018, and
+open item about persisting evaluator results must be discharged by ADR 024, and
 `docs/roadmap.md` item `2.2.7` must be marked done.
 
 ## Context and orientation
@@ -443,7 +522,7 @@ Terms used throughout:
 
 Evaluator contracts live in `episodic/qa/`:
 
-- `episodic/qa/pedante/types.py` defines `ClaimKind`, `SupportLevel` (14
+- `episodic/qa/pedante/types.py` defines `ClaimKind`, `SupportLevel` (13
   members, 8 of which are in the module-private `_BLOCKING_SUPPORT_LEVELS`
   frozenset), `FindingSeverity` (`low`, `medium`, `high`, `critical`),
   `PedanteFinding` (`claim_id`, `claim_text`, `claim_kind`, `support_level`,
@@ -611,13 +690,13 @@ Trace links:
 
 ```plaintext
 ADR-014     -> EP-M0 -> tests/test_architecture_enforcement.py::test_no_prefix_shadows_a_later_group
-ADR-014     -> EP-M0 -> tests/test_qa_import_purity.py::test_recording_module_does_not_load_langgraph
+ADR-014     -> EP-M0 -> tests/test_qa_import_purity.py::test_evaluator_contract_import_is_pure
 RM-2.2.7-a  -> TDD-DATA -> EP-M1 -> tests/test_qa_artefact_domain.py::test_blocking_support_levels_match_documented_set
 RM-2.2.7-a  -> TDD-DATA -> EP-M2 -> tests/canonical_storage/test_qa_artefacts.py::test_evaluation_round_trip
 RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_records_pedante_result
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)
 RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_artefact_retrieval.feature (CLI scenarios)
-ADR-001(open item) -> EP-M6 -> docs/adr/adr-018-qa-artefact-persistence-contract.md
+ADR-001(open item) -> EP-M6 -> docs/adr/adr-024-qa-artefact-persistence-contract.md
 TDD-DATA(deviation, accepted 2026-08-23) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
 ```
 
@@ -635,26 +714,29 @@ resets per test *function*, not per example.
 **INV-BLOCKING-SET.** The set of `SupportLevel` members treated as blocking is
 exactly the set documented in ADR 001.
 
-- Method: parameterized test over all 14 `SupportLevel` members, comparing
+- Method: parameterized test over all 13 `SupportLevel` members, comparing
   `PedanteFinding.is_blocking` against an **independently written literal set**
   in the test module.
 - Rationale: this obligation exists because `INV-COMPLIANCE-BLOCKING` below
   cannot see a wrong blocking set — it inherits the set from the code under
   test. Without an independent literal, the property is `f(x) == f(x)`.
-- Domain: all 14 members, exhaustively.
+- Domain: all 13 members, exhaustively.
 - Artefact: `tests/test_qa_artefact_domain.py`.
 - Evidence: `uv run pytest tests/test_qa_artefact_domain.py -q`.
-- Non-vacuity: the literal set is transcribed from ADR 001, not from
-  `episodic/qa/pedante/types.py`. Negative control: flip one member's
-  membership in the production frozenset and confirm exactly one parameterized
-  case fails.
+- Non-vacuity: the literal set is written out in the test module and checked
+  for exact equality with `_BLOCKING_SUPPORT_LEVELS` (8 members), which makes
+  the pair a transcription check as well as a membership check. ADR 001 names
+  the taxonomy but does not enumerate the blocking subset, so the literal's
+  provenance is the taxonomy plus the recorded compliance policy, not a
+  transcription of ADR 001. Negative control: flip one member's membership in
+  the production frozenset and confirm exactly one parameterized case fails.
 
 **INV-COMPLIANCE-BLOCKING.** For any `PedanteEvaluationResult` `r`, the derived
 evaluation's `compliance_status` is `NON_COMPLIANT` if and only if at least one
 derived `QaFinding` has `is_blocking` true; otherwise `COMPLIANT`.
 
 - Method: property test with Hypothesis over a composite strategy generating
-  `PedanteEvaluationResult` values across all 14 `SupportLevel` members and all
+  `PedanteEvaluationResult` values across all 13 `SupportLevel` members and all
   4 `FindingSeverity` members, including the empty-findings case.
 - Rationale: this is the mapping's total-function property; paired with
   `INV-BLOCKING-SET` it covers both the rule and the set it consults.
@@ -896,7 +978,7 @@ list endpoint equals `len(findings)` returned by the detail endpoint.
 
 **INV-ENUM-TAXONOMY.** The value sets of `QaEvaluator`, `QaComplianceStatus`,
 and `QaFindingSeverity` are exactly those documented in the system design
-document and ADR 018.
+document and ADR 024.
 
 - Method: parameterized test against literal expected sets.
 - Rationale: the enums are persisted as PostgreSQL types; drift between code
@@ -1141,7 +1223,7 @@ fenced blocks.
      - `inbound_adapter`: `episodic.api.resources.qa_artefacts`.
      - New group `cli`, declared last: `prefixes = ["episodic.cli"]`,
        `allowed = ["cli", "domain_ports"]`. This is what actually enforces
-       ADR 019 — without it, `inbound_adapter` would let the CLI import the
+       ADR 025 — without it, `inbound_adapter` would let the CLI import the
        application services and the API package.
      Do **not** add `episodic.llm`; use `episodic.llm.ports`, which is already
      grouped. Hecate's re-export index resolves
@@ -1347,7 +1429,7 @@ fenced blocks.
   describe the new behaviour, and the roadmap entry is marked done.
 - Requirements and gaps: `ADR-001` open item; `TDD-DATA` deviation.
 - Files added or changed:
-  - `docs/adr/adr-018-qa-artefact-persistence-contract.md` — new, following the
+  - `docs/adr/adr-024-qa-artefact-persistence-contract.md` — new, following the
     ADR template in `docs/documentation-style-guide.md`. Must cover: the
     unified `qa_evaluations` + `qa_findings` model; the compliance-status
     taxonomy and the exact meaning of `not_applicable`;
@@ -1360,7 +1442,7 @@ fenced blocks.
     `RunAlreadyTerminal` evidence), a JSONB findings array, a
     `lifecycle_status` plus `verdict` split, and derive-at-read compliance.
     Note that extending `qa_evaluator` later is a two-deploy operation.
-  - `docs/adr/adr-019-cli-client-boundary.md` — new. Covers the CLI as a REST
+  - `docs/adr/adr-025-cli-client-boundary.md` — new. Covers the CLI as a REST
     client, the `cyclopts` choice, the dedicated Hecate group that enforces the
     boundary, authentication via `--token`/environment, output-format policy,
     and an explicit statement that the top-level command noun structure is
@@ -1368,7 +1450,7 @@ fenced blocks.
   - `docs/episodic-podcast-generation-system-design.md` — replace the
     `qa_findings` and `brand_compliance_results` bullet in *Data Model and
     Storage* with the tables actually created; add a QA-artefact paragraph to
-    *Quality Assurance Stack* referencing ADR 018.
+    *Quality Assurance Stack* referencing ADR 024.
   - `docs/developers-guide.md` — extend *Quality-assurance evaluators* with a
     QA-artefact persistence subsection (module layout, maintainer rules, the
     versioning obligations, the fact that no evaluator populates `rubric_score`
@@ -1548,7 +1630,7 @@ class QaArtefactRepository(typ.Protocol):
 Return `tuple[list[...], int]` to match the repository's existing paged-listing
 convention (see `episodic/canonical/reference_documents/documents.py`).
 
-### Versioning semantics (EP-M1, formalized in ADR 018)
+### Versioning semantics (EP-M1, formalized in ADR 024)
 
 `artefact_schema_version` versions the **shape of the payload fields** —
 `evaluator_metadata`, `QaFinding.details`, and the interpretation of
@@ -1895,7 +1977,7 @@ Note a deliberate divergence from `docs/episodic-tui-api-design.md`: an
 `None` and the existing `episode_tei.py` precedent returns not-found in that
 case rather than `401 unauthorized`. This plan follows the code, not the
 document, so the two episode-scoped read surfaces behave alike. Record the
-divergence in ADR 018's *Outstanding decisions* and raise `401` handling as a
+divergence in ADR 024's *Outstanding decisions* and raise `401` handling as a
 separate item rather than fixing it here.
 
 An unknown `evaluator` or `compliance_status` value returns `400` with code
@@ -2265,7 +2347,7 @@ idempotency key gains a derivation rule, artefacts gain a documented
 errored-supersession exception, `rubric_score` gains a JSON representation, the
 store gains metrics and structured logging and a constraint-name-narrowed
 exception handler, the index set is rebuilt around the actual queries, and
-`episodic.cli` gains its own Hecate group so ADR 019 is enforced rather than
+`episodic.cli` gains its own Hecate group so ADR 025 is enforced rather than
 merely intended. The verification plan drops an infeasible
 `RuleBasedStateMachine` and a precedent that does not exist, replaces two
 negative controls that would have failed for the wrong reason, and adds seven
@@ -2333,3 +2415,19 @@ required.
 Revision 4's claim that `ty` is pinned at 0.0.78 was wrong: 0.0.78 is the
 development dependency, but `make typecheck` runs the `Makefile`'s own
 `ty==0.0.32` pin, and the gate facts now say so.
+
+Revision 6, 2026-10-29. Implementation began; no design change. Status moves
+from `DRAFT` to `ACTIVE` because the plan was approved for implementation.
+Three premise corrections found by reading the code were recorded in
+`Surprises & discoveries` and accepted in `Decision log`: `SupportLevel` has 13
+members, not 14; ADR 001 does not enumerate the blocking subset, so
+`INV-BLOCKING-SET`'s literal is authored from the taxonomy and cross-checked
+against `_BLOCKING_SUPPORT_LEVELS`; and the item's ADRs are numbered 024 and
+025 because 018 and 019 are already taken. `EP-M0` is complete: the
+`episodic.qa` barrel no longer re-exports the LangGraph builders, the Hecate
+prefixes for the modules this plan adds are declared, a `cli` group is declared
+last, and two guard tests make both failures observable. Stage A baseline on
+`ebef8fec` was green for `check-fmt`, `typecheck`, `lint`, and `test`. The
+barrel change also exposed the graph builders as production-unreferenced, so
+`EP-M0` adds a Skylos `entrypoints` rule naming roadmap items `4.4.1` and
+`4.4.2` as their runtime callers.
