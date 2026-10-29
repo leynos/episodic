@@ -101,7 +101,11 @@
       REASON="Loaded by plugin registry"
     ```
 
-    with the verified caller in the reason.
+    with the verified caller in the reason. A symbol that a completed item
+    delivered ahead of its named consumer has no caller to verify: see
+    [retaining deferred implementation](docs/developers-guide.md), which
+    requires a directly tested behaviour, the still-open consumer, and the
+    condition that deletes the entry.
     The lint pipeline ends with the blocking nose duplication gate, which
     `make lint` provisions through `make install-nose`. Prefer extracting
     shared logic over suppressing a finding; when parallel structure is

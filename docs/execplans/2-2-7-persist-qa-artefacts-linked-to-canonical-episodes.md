@@ -533,9 +533,11 @@ Stop and escalate when any of these is reached.
   first hard constraint. Because the guide had no policy for retaining
   delivered-but-unwired behaviour, this decision also adds one — *Retaining
   deferred implementation* in `docs/developers-guide.md` — and the six reasons
-  cite it. Date/Author: 2026-10-29, implementation agent. **Deviation status:
-  accepted** — no code deleted, no scope change; six documented temporary
-  exceptions must be removed when roadmap item `4.4.1` wires the run path.
+  cite it. `AGENTS.md`'s Python-lint paragraph points at that policy too, so
+  the root instruction and the developers' guide no longer disagree.
+  Date/Author: 2026-10-29, implementation agent. **Deviation status: accepted**
+  — no code deleted, no scope change; six documented temporary exceptions must
+  be removed when roadmap item `4.4.1` wires the run path.
 
 ## Outcomes & retrospective
 
@@ -2517,3 +2519,12 @@ consumer, and a deletion condition — and the six QA exceptions, together with
 the guidance `EP-M3` and `EP-M5` follow, cite it. The other two review findings
 stay closed: the `entrypoints` rule is gone and `_prefixes_overlap` rejects
 equal prefixes.
+
+Revision 9, 2026-10-30. No design change. The third `EP-M0` review accepted the
+deferred-implementation policy and filed no finding at `pyproject.toml`, but
+raised two `major` findings at `docs/developers-guide.md` pointing at one gap:
+`AGENTS.md`'s Python-lint paragraph still demanded a verified runtime caller
+and had not been aligned with the new policy, so the two rule sets contradicted
+each other. `AGENTS.md` now sends authored-ahead symbols to *Retaining deferred
+implementation*, which keeps its own bar — delivered behaviour, a direct test,
+a named still-open consumer, and a deletion condition. Nothing else changed.
