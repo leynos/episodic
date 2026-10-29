@@ -355,6 +355,16 @@ Stop and escalate when any of these is reached.
   that deletes them. Deleting the builders was rejected — they are the accepted
   deliverable of completed roadmap items `2.2.5` and `2.2.6` — and wiring them
   is excluded by this plan's first constraint.
+- Observation (execution, 2026-10-30): the re-review accepted the correction to
+  the reason text but kept one `major` finding, asking for the symbols to be
+  deleted, wired, or covered by "an explicit policy for retaining deferred
+  implementation". Evidence:
+  `/tmp/coderabbit-ep-m0-rereview-20261029T230626Z.log`, one finding at
+  `pyproject.toml:765`. Impact: the developers' guide gained a *Retaining
+  deferred implementation* policy — completed delivering item, a named
+  still-open consumer, a direct test, and a deletion condition — and the six
+  `make skylos-allow` reasons cite it. The policy is general: `EP-M3`'s
+  recording entry points use the same route.
 
 ## Decision log
 
@@ -520,10 +530,12 @@ Stop and escalate when any of these is reached.
   tracking reference, and expiry condition that policy requires. Deleting the
   symbols was rejected because they are the accepted deliverable of completed
   roadmap items `2.2.5` and `2.2.6`; wiring them is excluded by this plan's
-  first hard constraint. Date/Author: 2026-10-29, implementation agent.
-  **Deviation status: accepted** — no code deleted, no scope change; six
-  documented temporary exceptions must be removed when roadmap item `4.4.1`
-  wires the run path.
+  first hard constraint. Because the guide had no policy for retaining
+  delivered-but-unwired behaviour, this decision also adds one — *Retaining
+  deferred implementation* in `docs/developers-guide.md` — and the six reasons
+  cite it. Date/Author: 2026-10-29, implementation agent. **Deviation status:
+  accepted** — no code deleted, no scope change; six documented temporary
+  exceptions must be removed when roadmap item `4.4.1` wires the run path.
 
 ## Outcomes & retrospective
 
@@ -1360,9 +1372,12 @@ fenced blocks.
     `list_qa_evaluations`, and `QaEvaluationRecorder`, an application service
     holding a `uow_factory` and a clock that opens a unit of work, records, and
     commits. `CostRecorder` is the shape to follow.
-  - `pyproject.toml` — `[[tool.skylos.dead_code.entrypoints]]` rules for the
-    mapping and recording entry points, with a reason naming roadmap item
-    `4.4.1` as the verified future caller.
+  - `pyproject.toml` — `make skylos-allow` named exceptions for the mapping
+    and recording entry points, each reason citing *Retaining deferred
+    implementation* in `docs/developers-guide.md`, naming roadmap item `4.4.1`
+    as the still-open consumer, and stating when the entry is deleted. Do not
+    use an `entrypoints` rule: these symbols have no runtime caller yet, and
+    that table is reserved for verified dynamic boundaries.
 - Acceptance evidence: the recording, recording-property, and service suites
   pass, and `make lint` is clean including the Skylos gate. `EV-M3-service`.
 
@@ -2160,7 +2175,7 @@ on branch `2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md`.
 
 7. `EP-M3`. Red then green for `episodic/canonical/qa_artefact_recording.py`,
    `episodic/canonical/qa_artefact_service.py`, and `PEDANTE_CONTRACT_VERSION`.
-   Add the Skylos entry-point rules in the same commit as the code they cover,
+   Add the Skylos named exceptions in the same commit as the code they cover,
    not later. Commit.
 
 8. Milestone gate. Run the full sequence and expect all four to pass:
@@ -2289,10 +2304,13 @@ Quality criteria (what "done" means):
   reported.
 - Lint and typecheck: `make check-fmt`, `make typecheck`, and `make lint` all
   exit 0. `make lint` includes the blocking Skylos dead-code scan; investigate
-  every finding rather than suppressing it. Where a symbol is genuinely
-  reachable only from future roadmap work, use a typed entry-point rule in
-  `[tool.skylos.dead_code]` naming that work, matching methods as
-  `type = "method"`.
+  every finding rather than suppressing it. Use a typed `entrypoints` rule in
+  `[tool.skylos.dead_code]` only where a framework, protocol, or launcher
+  boundary really invokes the symbol, and explain that verified caller. Where a
+  symbol is reachable only from future roadmap work, add a `make skylos-allow`
+  named exception under *Retaining deferred implementation* in
+  `docs/developers-guide.md`, stating the missing caller, the owning roadmap
+  item, and the condition that deletes the entry.
 - Migrations: `make check-migrations` reports no drift, and
   `alembic downgrade -1 && alembic upgrade head` round-trips.
 - Documentation: `make markdownlint` and `make nixie` exit 0.
@@ -2486,3 +2504,16 @@ groups sharing an identical Hecate prefix as a shadowing, not just dotted
 ancestry, and the guard was proven non-vacuous by duplicating `episodic.cli`
 into the earlier `application` group and observing the test fail. `EP-M0` is
 re-gated and ready for review reassessment.
+
+Revision 8, 2026-10-30. No design change. The `EP-M0` re-review over
+`ebef8fec..11ff4aac` accepted the corrected reason text but kept one `major`
+finding: exempting symbols that a reason admits have no production caller needs
+either their removal, a verified caller, or "an explicit policy for retaining
+deferred implementation". The repository had no such policy, which is the real
+gap: entries such as `StaleEventSequence` already relied on an unstated
+practice. So `docs/developers-guide.md` now states one — a completed item that
+delivered working behaviour, a directly exercised test, a named still-open
+consumer, and a deletion condition — and the six QA exceptions, together with
+the guidance `EP-M3` and `EP-M5` follow, cite it. The other two review findings
+stay closed: the `entrypoints` rule is gone and `_prefixes_overlap` rejects
+equal prefixes.

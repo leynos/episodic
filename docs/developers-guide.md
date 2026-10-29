@@ -381,7 +381,9 @@ reason = "Falcon invokes this middleware lifecycle callback through its ASGI pro
 
 Use `make skylos-allow` only for a narrow named exception when an entry-point
 rule cannot describe the boundary. Its reason must include who or what calls
-the symbol and how that was verified. Add one with:
+the symbol and how that was verified, or — for a deferred implementation — the
+three items listed under _Retaining deferred implementation_ below. Add one
+with:
 
 ```shell
 make skylos-allow SYMBOL=registered_handler \
@@ -396,6 +398,28 @@ when neither an entry-point rule nor a named exception can describe the
 boundary, and keep its reason beside the suppression. Temporary exceptions must
 name an owner, tracking reference, and expiry condition. Remove exception
 entries when the dynamic boundary disappears.
+
+### Retaining deferred implementation
+
+A completed roadmap item sometimes delivers a symbol whose only consumer is a
+named, still-open roadmap item. The LangGraph QA graph builders and their node
+callbacks, delivered by roadmap items `2.2.5` and `2.2.6` and awaiting the
+run-path wiring of item `4.4.1`, are the current example. Such a symbol has no
+caller at all, so an entry-point rule would assert a boundary that does not
+exist, and deleting it would discard accepted prior work. Keep it, and exempt
+it with a named exception, only when every condition below holds:
+
+- a completed, checked-in roadmap item or an accepted Architecture Decision
+  Record (ADR) delivered working behaviour, not a reserved signature;
+- at least one test exercises the symbol directly;
+- the reason names the completed item that delivered it, the still-open roadmap
+  item that will call it, and the condition that deletes the entry.
+
+Record the exception in the same commit as the code it covers, so no commit
+leaves the gate broken. Delete the entry in the commit that lands the consumer:
+an exception that outlives its consumer is dead-code suppression. Do not use
+this route to park speculative interfaces, and do not use it where a framework,
+protocol, or launcher boundary really exists — those take an entry-point rule.
 
 ## Module size and façade modules
 
