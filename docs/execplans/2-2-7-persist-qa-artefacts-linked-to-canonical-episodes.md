@@ -159,12 +159,14 @@ Stop and escalate when any of these is reached.
   to run against a recorded evaluator result when the mock is unavailable.
 - Risk: Skylos runs with `[tool.skylos.gate] strict = true` and the recording
   entry points have no production caller by design. Severity: medium.
-  Likelihood: high. Mitigation: plan the
-  `[[tool.skylos.dead_code.entrypoints]]` rules as part of `EP-M3`, with a
-  reason naming roadmap item `4.4.1` as the verified future caller — not as a
-  late scramble at the final gate. Note that Skylos scans production targets
-  only (`SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py` in
-  the `Makefile`), so a test-only caller does not satisfy it.
+  Likelihood: high. Mitigation: plan the `make skylos-allow` named exceptions
+  as part of `EP-M3`, with a reason that states the missing caller, names
+  roadmap item `4.4.1` as the owner, and states when the entry is deleted — not
+  as a late scramble at the final gate, and not as an `entrypoints` rule, which
+  would claim a verified caller that does not exist. Note that Skylos scans
+  production targets only
+  (`SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py` in the
+  `Makefile`), so a test-only caller does not satisfy it.
 - Risk: this item is large for a phase-2 roadmap entry because `RM-2.2.7-b`
   requires a CLI and no CLI exists. The CLI bootstrap alone is five modules, a
   runtime dependency promotion, an entry-point change, an ADR, and a users'
@@ -193,9 +195,21 @@ Stop and escalate when any of these is reached.
     reports `langgraph: True` for `episodic.qa.langgraph`.
   - Repair: the first `make lint` after the barrel change failed the Skylos
     dead-code gate on the six graph-builder symbols, which the removed
-    re-exports had been keeping "used". A typed
-    `[[tool.skylos.dead_code.entrypoints]]` rule now names roadmap items
-    `4.4.1` and `4.4.2` as the runtime callers that will wire those graphs.
+    re-exports had been keeping "used". Six named temporary exceptions under
+    `[tool.skylos.whitelist.documented]`, added with `make skylos-allow`, now
+    record that no production caller exists yet, name roadmap item `4.4.1` as
+    the owner, and state the deletion condition.
+  - Review: the `EP-M0` CodeRabbit CLI review returned three findings. The
+    Skylos exemption was first written as an `entrypoints` rule whose reason
+    named roadmap items as if they were current runtime callers; that phrasing
+    was validly criticized and replaced (see `Decision log`). The second
+    Skylos finding raised the same objection. The third finding was valid and
+    was repaired: `_prefixes_overlap` now also treats two groups sharing an
+    identical prefix as a shadowing, and the guard is proven non-vacuous by
+    duplicating `episodic.cli` into the earlier `application` group.
+  - Evidence after review repairs: `tests/test_architecture_enforcement.py`
+    and `tests/test_qa_import_purity.py` pass together (27 passed, 2
+    snapshots); the Skylos dead-code gate exits 0.
 - [ ] EP-M1 QA artefact domain model, compliance policy, and ports.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
@@ -324,15 +338,23 @@ Stop and escalate when any of these is reached.
   blocking dead-code gate then reported `build_chrono_graph`, `chrono_node`,
   `_pedante_node`, `route_after_pedante`, `build_pedante_graph`, and
   `_run_pedante_node` as unused. Evidence: `make lint` exit 2 with six
-  `SKY-U001` findings. Impact: `EP-M0` adds one typed `entrypoints` rule with a
-  reason naming roadmap items `4.4.1` (qa-gated graph routing) and `4.4.2`
-  (Chrono in-loop) as the runtime callers. No code was deleted; the builders
-  remain tested and are the orchestration seam those items extend. The two
-  graph nodes are closures defined inside the builders, so Skylos matches them
-  only by enclosing-function-qualified name
-  (`...build_chrono_graph.chrono_node` and
-  `...build_pedante_graph._run_pedante_node`); the bare module-qualified names
-  leave them flagged.
+  `SKY-U001` findings. Impact: `EP-M0` records six named temporary exceptions
+  under `[tool.skylos.whitelist.documented]`. No code was deleted; the builders
+  remain tested and are the orchestration seam roadmap items `4.4.1` and
+  `4.4.2` extend. Skylos matches them by bare name, so the enclosing-function
+  qualification the closured nodes need under an `entrypoints` rule is not
+  relevant on this path; each exception's reason names the modules instead.
+- Observation (execution, 2026-10-29): a Skylos `entrypoints` rule cannot
+  honestly describe this boundary. The developers' guide reserves entry-point
+  rules for dynamic boundaries whose runtime caller can be verified, and
+  `AGENTS.md` says to treat every finding as dead code until that caller is
+  verified. These six symbols have no caller at all, only tests. Evidence: the
+  `EP-M0` CLI review raised the mismatch as two `major` findings. Impact: the
+  rule was replaced by the documented temporary exceptions above, whose reasons
+  state the absence of a caller, the owning roadmap item, and the condition
+  that deletes them. Deleting the builders was rejected — they are the accepted
+  deliverable of completed roadmap items `2.2.5` and `2.2.6` — and wiring them
+  is excluded by this plan's first constraint.
 
 ## Decision log
 
@@ -487,6 +509,21 @@ Stop and escalate when any of these is reached.
   transcription-check property the original wording intended. Date/Author:
   2026-10-29, implementation agent. **Deviation status: accepted** — the
   obligation's strength is unchanged.
+- Decision: exempt the six production-unreferenced LangGraph graph builders and
+  nodes from the blocking Skylos gate with named `make skylos-allow` exceptions
+  rather than an `[[tool.skylos.dead_code.entrypoints]]` rule. Rationale: the
+  entry-point table exists for dynamic boundaries whose runtime caller can be
+  verified, and these symbols have no caller at all, so a rule there would
+  assert a caller that does not exist — which the `EP-M0` CLI review validly
+  rejected. The named-exception path is the one the developers' guide reserves
+  for cases an entry-point rule cannot describe, and it carries the owner,
+  tracking reference, and expiry condition that policy requires. Deleting the
+  symbols was rejected because they are the accepted deliverable of completed
+  roadmap items `2.2.5` and `2.2.6`; wiring them is excluded by this plan's
+  first hard constraint. Date/Author: 2026-10-29, implementation agent.
+  **Deviation status: accepted** — no code deleted, no scope change; six
+  documented temporary exceptions must be removed when roadmap item `4.4.1`
+  wires the run path.
 
 ## Outcomes & retrospective
 
@@ -2431,3 +2468,21 @@ last, and two guard tests make both failures observable. Stage A baseline on
 barrel change also exposed the graph builders as production-unreferenced, so
 `EP-M0` adds a Skylos `entrypoints` rule naming roadmap items `4.4.1` and
 `4.4.2` as their runtime callers.
+
+Revision 7, 2026-10-29. No design change. Closes the `EP-M0` milestone review.
+The CodeRabbit CLI review returned three findings against `6ad78584`. Two were
+the same objection to the Skylos `entrypoints` rule revision 6 describes: its
+reason named roadmap items `4.4.1` and `4.4.2` as though they were current
+runtime callers, and the gate's policy requires a verified caller. The
+objection is upheld. The rule is replaced by six named exceptions added with
+`make skylos-allow` whose reasons say plainly that no production caller exists,
+name roadmap item `4.4.1` as the owner, and state that the entries are deleted
+when that wiring lands. Both remedies the review proposed — delete the symbols,
+or add the runtime wiring — are inadmissible here: the symbols are the accepted
+deliverable of completed roadmap items `2.2.5` and `2.2.6`, and this plan's
+first constraint forbids wiring evaluators into the generation-run path. The
+third finding was valid and is repaired: `_prefixes_overlap` now treats two
+groups sharing an identical Hecate prefix as a shadowing, not just dotted
+ancestry, and the guard was proven non-vacuous by duplicating `episodic.cli`
+into the earlier `application` group and observing the test fail. `EP-M0` is
+re-gated and ready for review reassessment.

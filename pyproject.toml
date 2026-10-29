@@ -787,22 +787,16 @@ full_name = [
 ]
 reason = "Process launchers and structured exception consumers read these documented public contract values."
 
-[[tool.skylos.dead_code.entrypoints]]
-type = "function"
-full_name = [
-    "episodic.qa.chrono_langgraph.build_chrono_graph",
-    "episodic.qa.chrono_langgraph.build_chrono_graph.chrono_node",
-    "episodic.qa.langgraph._pedante_node",
-    "episodic.qa.langgraph.build_pedante_graph._run_pedante_node",
-    "episodic.qa.langgraph.build_pedante_graph",
-    "episodic.qa.langgraph.route_after_pedante",
-]
-reason = "Roadmap item 4.4.1 routes qa_gated runs through these graph builders and their node and routing callbacks, and item 4.4.2 invokes the Chrono branch in-loop; until that wiring lands the only callers are their own tests."
-
 [tool.skylos.whitelist]
 names = []
 
 [tool.skylos.whitelist.documented]
+"_run_pedante_node" = "Delivered by roadmap items 2.2.5 and 2.2.6 and retained until roadmap item 4.4.1 invokes it from the qa_gated run path; no production caller exists today and this entry must be deleted when that wiring lands. Owner: roadmap item 4.4.1."
+"chrono_node" = "Delivered by roadmap items 2.2.5 and 2.2.6 and retained until roadmap item 4.4.1 invokes it from the qa_gated run path; no production caller exists today and this entry must be deleted when that wiring lands. Owner: roadmap item 4.4.1."
+"_pedante_node" = "Delivered by roadmap items 2.2.5 and 2.2.6 and retained until roadmap item 4.4.1 invokes it from the qa_gated run path; no production caller exists today and this entry must be deleted when that wiring lands. Owner: roadmap item 4.4.1."
+"route_after_pedante" = "Delivered by roadmap items 2.2.5 and 2.2.6 and retained until roadmap item 4.4.1 invokes it from the qa_gated run path; no production caller exists today and this entry must be deleted when that wiring lands. Owner: roadmap item 4.4.1."
+"build_pedante_graph" = "Delivered by roadmap items 2.2.5 and 2.2.6 and retained until roadmap item 4.4.1 invokes it from the qa_gated run path; no production caller exists today and this entry must be deleted when that wiring lands. Owner: roadmap item 4.4.1."
+"build_chrono_graph" = "Delivered by roadmap items 2.2.5 and 2.2.6 and retained until roadmap item 4.4.1 invokes it from the qa_gated run path; no production caller exists today and this entry must be deleted when that wiring lands. Owner: roadmap item 4.4.1."
 "enum" = "Used by PEP 695 generic bounds; Ruff still rejects genuinely unused imports."
 "_VersionedEntity" = "Used as the PEP 695 bound for versioned profile and template helpers."
 "create_reference_binding" = "Public compatibility re-export listed in the reference-document facade __all__."

@@ -345,9 +345,9 @@ def _hecate_group_prefixes() -> list[tuple[str, str]]:
     ]
 
 
-def _is_dotted_prefix_ancestor(ancestor: str, descendant: str) -> bool:
-    """Return whether *ancestor* contains *descendant* at a dotted boundary."""
-    return descendant.startswith(f"{ancestor}.")
+def _prefixes_overlap(ancestor: str, descendant: str) -> bool:
+    """Return whether *ancestor* and *descendant* name overlapping prefixes."""
+    return descendant == ancestor or descendant.startswith(f"{ancestor}.")
 
 
 def test_no_prefix_shadows_a_later_group() -> None:
@@ -356,8 +356,9 @@ def test_no_prefix_shadows_a_later_group() -> None:
     Hecate classifies a module by the first group whose prefix contains it, so
     an ancestor prefix declared earlier — for example `episodic.llm` in
     `domain_ports` — reclassifies every module of a later group while the gate
-    still exits 0. This guard makes that silent loss of a boundary a test
-    failure instead.
+    still exits 0. An identical prefix repeated in two groups loses the later
+    boundary the same way. This guard makes both silent losses a test failure
+    instead.
     """
     pairs = _hecate_group_prefixes()
 
@@ -366,11 +367,11 @@ def test_no_prefix_shadows_a_later_group() -> None:
         for earlier_index, (earlier_group, earlier_prefix) in enumerate(pairs)
         for later_group, later_prefix in pairs[earlier_index + 1 :]
         if earlier_group != later_group
-        and _is_dotted_prefix_ancestor(earlier_prefix, later_prefix)
+        and _prefixes_overlap(earlier_prefix, later_prefix)
     ]
 
     assert not shadowing, (
-        "an earlier Hecate group prefix contains a later group's prefix, so "
+        "an earlier Hecate group prefix overlaps a later group's prefix, so "
         "Hecate will classify those modules into the earlier group:\n"
         + "\n".join(
             f"  {earlier_group}:{earlier_prefix} shadows {later_group}:{later_prefix}"
