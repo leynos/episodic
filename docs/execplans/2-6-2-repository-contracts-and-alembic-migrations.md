@@ -7,6 +7,8 @@ be kept up to date as work proceeds.
 
 Status: COMPLETE
 
+Approval: Approved by the user on 2026-10-29 for execution and rebase.
+
 ## Purpose / big picture
 
 A *generation run* is the record of one attempt to turn an ingested source
