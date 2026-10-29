@@ -43,3 +43,13 @@ class CheckpointAlreadyTerminal(  # ruff: ignore[error-suffix-on-exception-name]
     def __init__(self, checkpoint_id: uuid.UUID) -> None:
         msg = f"generation checkpoint is already terminal: {checkpoint_id}"
         super().__init__(msg)
+
+
+class CheckpointAlreadyExists(  # ruff: ignore[error-suffix-on-exception-name] - stable ExecPlan contract.
+    GenerationRunError
+):
+    """Raised when a checkpoint identifier is already in use."""
+
+    def __init__(self, checkpoint_id: uuid.UUID) -> None:
+        msg = f"generation checkpoint already exists: {checkpoint_id}"
+        super().__init__(msg)

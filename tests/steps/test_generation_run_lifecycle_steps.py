@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -22,9 +22,18 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import CheckpointAlreadyTerminal
+from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from tests.canonical_storage._generation_run_support import (
+    persist_generation_run_prerequisites,
+)
 
 if typ.TYPE_CHECKING:
+    import asyncio
     import collections.abc as cabc
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from episodic.canonical.generation_run_ports import GenerationRunPort
 
 NOW = dt.datetime(2026, 6, 4, 8, 0, tzinfo=dt.UTC)
 _ACTION_PAYLOADS: dict[str, dict[str, object]] = {
@@ -34,21 +43,56 @@ _ACTION_PAYLOADS: dict[str, dict[str, object]] = {
 }
 
 
+# The durability scenario holds one unit of work open across three steps, so the
+# session cannot be owned by a `with` block inside a single step. The runner
+# supplies the event loop in that case: a session is bound to the loop that
+# created it, so every step in a scenario must share one loop.
 @dc.dataclass(slots=True)
 class GenerationRunLifecycleContext:
     """Shared state for checkpoint lifecycle scenarios."""
 
-    store: InMemoryGenerationRunStore = dc.field(
-        default_factory=InMemoryGenerationRunStore
-    )
+    runner: asyncio.Runner
+    session_factory: async_sessionmaker[AsyncSession] | None = None
+    store: GenerationRunPort = dc.field(default_factory=InMemoryGenerationRunStore)
+    uow: SqlAlchemyUnitOfWork | None = None
+    stack: contextlib.AsyncExitStack | None = None
+    run: GenerationRun | None = None
     checkpoint: Checkpoint | None = None
+    reloaded: Checkpoint | None = None
     error: Exception | None = None
+
+    def tear_down(self) -> None:
+        """Release a unit of work the scenario left open."""
+        self.runner.run(_close(self))
+
+
+async def _close(ctx: GenerationRunLifecycleContext) -> None:
+    """Close a scenario's exit stack, releasing its unit of work."""
+    stack = ctx.stack
+    ctx.stack = None
+    if stack is not None:
+        await stack.aclose()
 
 
 @pytest.fixture
-def generation_run_context() -> GenerationRunLifecycleContext:
+def generation_run_context(
+    _function_scoped_runner: asyncio.Runner,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> cabc.Iterator[GenerationRunLifecycleContext]:
     """Create isolated BDD state for each scenario."""
-    return GenerationRunLifecycleContext()
+    ctx = GenerationRunLifecycleContext(
+        runner=_function_scoped_runner,
+        session_factory=session_factory,
+    )
+    yield ctx
+    ctx.tear_down()
+
+
+def _require[T](value: T | None, message: str) -> T:
+    """Return a required context value, failing the scenario when absent."""
+    if value is None:
+        raise AssertionError(message)
+    return value
 
 
 def _run() -> GenerationRun:
@@ -90,6 +134,16 @@ def _checkpoint(run_id: uuid.UUID) -> Checkpoint:
     )
 
 
+def _response(action: str, *, offset_minutes: int) -> CheckpointResponse:
+    """Build a reviewer response for the named action."""
+    return CheckpointResponse(
+        action=CheckpointAction(action),
+        payload=_ACTION_PAYLOADS[action],
+        responded_at=NOW + dt.timedelta(minutes=offset_minutes),
+        responded_by="reviewer@example.com",
+    )
+
+
 @scenario(
     "../features/generation_run_lifecycle.feature", "Reviewer approves a checkpoint"
 )
@@ -114,15 +168,22 @@ def test_checkpoint_is_cancelled() -> None:
     """Run the cancellation scenario."""
 
 
+@scenario(
+    "../features/generation_run_lifecycle.feature",
+    "A responded checkpoint survives a new unit of work",
+)
+def test_responded_checkpoint_survives_new_unit_of_work() -> None:
+    """Run the durability scenario."""
+
+
 @given("a generation run with a created checkpoint")
 def created_checkpoint(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Create a generation run checkpoint awaiting review."""
-    run = asyncio.run(generation_run_context.store.create_run(_run()))
-    generation_run_context.checkpoint = asyncio.run(
-        generation_run_context.store.create_checkpoint(_checkpoint(run.id))
-    )
+    ctx = generation_run_context
+    run = ctx.runner.run(ctx.store.create_run(_run()))
+    ctx.checkpoint = ctx.runner.run(ctx.store.create_checkpoint(_checkpoint(run.id)))
 
 
 @given("a checkpoint that has already been responded to")
@@ -130,21 +191,47 @@ def responded_checkpoint(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Create a checkpoint that already reached a terminal response state."""
-    run = asyncio.run(generation_run_context.store.create_run(_run()))
-    checkpoint = asyncio.run(
-        generation_run_context.store.create_checkpoint(_checkpoint(run.id))
-    )
-    generation_run_context.checkpoint = asyncio.run(
-        generation_run_context.store.respond_to_checkpoint(
+    ctx = generation_run_context
+    run = ctx.runner.run(ctx.store.create_run(_run()))
+    checkpoint = ctx.runner.run(ctx.store.create_checkpoint(_checkpoint(run.id)))
+    ctx.checkpoint = ctx.runner.run(
+        ctx.store.respond_to_checkpoint(
             checkpoint.id,
-            response=CheckpointResponse(
-                action=CheckpointAction.APPROVE,
-                payload={"approved": True},
-                responded_at=NOW + dt.timedelta(minutes=1),
-                responded_by="reviewer@example.com",
-            ),
+            response=_response("approve", offset_minutes=1),
         )
     )
+
+
+@given("a generation run persisted in PostgreSQL")
+def run_persisted_in_postgres(
+    generation_run_context: GenerationRunLifecycleContext,
+) -> None:
+    """Open a unit of work over a run whose foreign keys are committed."""
+    ctx = generation_run_context
+
+    async def prepare() -> GenerationRun:
+        factory = _require(ctx.session_factory, "Scenario needs a session factory.")
+        run = _run()
+        await persist_generation_run_prerequisites(factory, run)
+        stack = contextlib.AsyncExitStack()
+        uow = await stack.enter_async_context(SqlAlchemyUnitOfWork(factory))
+        ctx.stack = stack
+        ctx.uow = uow
+        ctx.store = uow.generation_runs
+        await uow.generation_runs.create_run(run)
+        return run
+
+    ctx.run = ctx.runner.run(prepare())
+
+
+@given("a checkpoint created against that run")
+def checkpoint_created_against_run(
+    generation_run_context: GenerationRunLifecycleContext,
+) -> None:
+    """Create the checkpoint the durability scenario responds to."""
+    ctx = generation_run_context
+    run = _require(ctx.run, "Generation run was not prepared.")
+    ctx.checkpoint = ctx.runner.run(ctx.store.create_checkpoint(_checkpoint(run.id)))
 
 
 @when(parsers.parse('the reviewer responds with action "{action}"'))
@@ -153,19 +240,12 @@ def reviewer_responds(
     action: str,
 ) -> None:
     """Respond to the active checkpoint."""
-    checkpoint = generation_run_context.checkpoint
-    if checkpoint is None:
-        msg = "Checkpoint was not prepared."
-        raise AssertionError(msg)
-    generation_run_context.checkpoint = asyncio.run(
-        generation_run_context.store.respond_to_checkpoint(
+    ctx = generation_run_context
+    checkpoint = _require(ctx.checkpoint, "Checkpoint was not prepared.")
+    ctx.checkpoint = ctx.runner.run(
+        ctx.store.respond_to_checkpoint(
             checkpoint.id,
-            response=CheckpointResponse(
-                action=CheckpointAction(action),
-                payload=_ACTION_PAYLOADS[action],
-                responded_at=NOW + dt.timedelta(minutes=1),
-                responded_by="reviewer@example.com",
-            ),
+            response=_response(action, offset_minutes=1),
         )
     )
 
@@ -175,35 +255,17 @@ def reviewer_attempts_second_response(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Try to respond to a terminal checkpoint."""
-    checkpoint = generation_run_context.checkpoint
-    if checkpoint is None:
-        msg = "Checkpoint was not prepared."
-        raise AssertionError(msg)
+    ctx = generation_run_context
+    checkpoint = _require(ctx.checkpoint, "Checkpoint was not prepared.")
     try:
-        asyncio.run(
-            generation_run_context.store.respond_to_checkpoint(
+        ctx.runner.run(
+            ctx.store.respond_to_checkpoint(
                 checkpoint.id,
-                response=CheckpointResponse(
-                    action=CheckpointAction.EDIT,
-                    payload={},
-                    responded_at=NOW + dt.timedelta(minutes=2),
-                    responded_by="reviewer@example.com",
-                ),
+                response=_response("edit", offset_minutes=2),
             )
         )
     except Exception as exc:  # ruff: ignore[blind-except] - BDD step captures the outcome.
-        generation_run_context.error = exc
-
-
-def _require_checkpoint(
-    ctx: GenerationRunLifecycleContext,
-) -> Checkpoint:
-    """Return the context checkpoint, raising AssertionError if absent."""
-    checkpoint = ctx.checkpoint
-    if checkpoint is None:
-        msg = "Checkpoint was not prepared."
-        raise AssertionError(msg)
-    return checkpoint
+        ctx.error = exc
 
 
 def _apply_terminal_transition(
@@ -215,7 +277,7 @@ def _apply_terminal_transition(
     async def await_transition() -> Checkpoint:
         return await coro
 
-    ctx.checkpoint = asyncio.run(await_transition())
+    ctx.checkpoint = ctx.runner.run(await_transition())
 
 
 @when("the checkpoint times out")
@@ -223,10 +285,11 @@ def checkpoint_times_out(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Move the checkpoint to the timeout terminal state."""
+    ctx = generation_run_context
     _apply_terminal_transition(
-        generation_run_context,
-        generation_run_context.store.time_out_checkpoint(
-            _require_checkpoint(generation_run_context).id,
+        ctx,
+        ctx.store.time_out_checkpoint(
+            _require(ctx.checkpoint, "Checkpoint was not prepared.").id,
             at=NOW + dt.timedelta(hours=1),
         ),
     )
@@ -237,13 +300,23 @@ def checkpoint_is_cancelled(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Move the checkpoint to the cancelled terminal state."""
+    ctx = generation_run_context
     _apply_terminal_transition(
-        generation_run_context,
-        generation_run_context.store.cancel_checkpoint(
-            _require_checkpoint(generation_run_context).id,
+        ctx,
+        ctx.store.cancel_checkpoint(
+            _require(ctx.checkpoint, "Checkpoint was not prepared.").id,
             at=NOW + dt.timedelta(minutes=10),
         ),
     )
+
+
+@when("the unit of work is committed and closed")
+def unit_of_work_committed_and_closed(
+    generation_run_context: GenerationRunLifecycleContext,
+) -> None:
+    """Commit the scenario's unit of work and release its session."""
+    ctx = generation_run_context
+    ctx.runner.run(_commit_and_close(ctx))
 
 
 @then(parsers.parse('the checkpoint status becomes "{status}"'))
@@ -252,9 +325,9 @@ def checkpoint_status_becomes(
     status: str,
 ) -> None:
     """Assert the final checkpoint status."""
-    assert _require_checkpoint(generation_run_context).status is CheckpointStatus(
-        status
-    ), "Expected values to match"
+    ctx = generation_run_context
+    checkpoint = _require(ctx.checkpoint, "Checkpoint was not prepared.")
+    assert checkpoint.status is CheckpointStatus(status), "Expected values to match"
 
 
 @then("the response payload is recorded")
@@ -262,10 +335,8 @@ def response_payload_recorded(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Assert the reviewer response payload was persisted on the entity."""
-    checkpoint = generation_run_context.checkpoint
-    if checkpoint is None:
-        msg = "Checkpoint was not prepared."
-        raise AssertionError(msg)
+    ctx = generation_run_context
+    checkpoint = _require(ctx.checkpoint, "Checkpoint was not prepared.")
     assert checkpoint.response_payload == {"approved": True}, "Expected values to match"
 
 
@@ -278,3 +349,49 @@ def checkpoint_already_terminal_error_raised(
         generation_run_context.error,
         CheckpointAlreadyTerminal,
     ), f"Expected CheckpointAlreadyTerminal, got {generation_run_context.error!r}."
+
+
+async def _commit_and_close(ctx: GenerationRunLifecycleContext) -> None:
+    """Commit the scenario's unit of work, then release its stack."""
+    await _require(ctx.uow, "No unit of work is open.").commit()
+    await _close(ctx)
+
+
+async def _read_fresh(
+    ctx: GenerationRunLifecycleContext,
+    checkpoint_id: uuid.UUID,
+) -> Checkpoint | None:
+    """Read a checkpoint back through a brand-new unit of work."""
+    factory = _require(ctx.session_factory, "Scenario needs a session factory.")
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        return await uow.generation_runs.get_checkpoint(checkpoint_id)
+
+
+@then(
+    parsers.parse(
+        'reading the checkpoint in a new unit of work reports status "{status}"'
+    )
+)
+def checkpoint_status_read_fresh(
+    generation_run_context: GenerationRunLifecycleContext,
+    status: str,
+) -> None:
+    """Assert a later unit of work observes the committed status."""
+    ctx = generation_run_context
+    checkpoint = _require(ctx.checkpoint, "Checkpoint was not prepared.")
+    ctx.reloaded = ctx.runner.run(_read_fresh(ctx, checkpoint.id))
+    reloaded = _require(ctx.reloaded, "Checkpoint was not re-read.")
+    assert reloaded.status is CheckpointStatus(status), "Expected values to match"
+
+
+@then(parsers.parse('the recorded reviewer action is "{action}"'))
+def recorded_reviewer_action(
+    generation_run_context: GenerationRunLifecycleContext,
+    action: str,
+) -> None:
+    """Assert the reviewer action survived the commit."""
+    ctx = generation_run_context
+    reloaded = _require(ctx.reloaded, "Checkpoint was not re-read.")
+    assert reloaded.response_action is CheckpointAction(action), (
+        "Expected values to match"
+    )

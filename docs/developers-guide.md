@@ -2019,16 +2019,27 @@ The port surface is intentionally split:
   the inbound adapter and invoke this helper only after values become domain
   types.
 - `GenerationRunEventStore` composes the run repository and event log for
-  durable generation-run storage. `CanonicalUnitOfWork.generation_runs` exposes
-  this port; `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunStore` to
-  its session, so callers use the same unit of work and own its commit or
-  rollback. `GenerationRunStorageRuntime` supplies the adapter's clock and UUID
-  providers, with production defaults and deterministic injection available to
-  tests.
+  durable generation-run storage, and remains the narrower seam for callers
+  that need only run-plus-event persistence. `SqlAlchemyGenerationRunStore`
+  implements it; `GenerationRunStorageRuntime` supplies the adapter's clock and
+  UUID providers, with production defaults and deterministic injection
+  available to tests. `CanonicalUnitOfWork.generation_runs` no longer exposes
+  this port — see `GenerationRunPort` below.
 - `GenerationCheckpointPort` creates checkpoints and records reviewer
   responses through the `Checkpoint.respond(...)` domain transition.
-- `GenerationRunPort` composes the three sub-ports for callers that need the
-  complete surface.
+- `GenerationRunLeaseReclamationPort` declares `fail_expired_leases`, which
+  fails runs abandoned by a worker holding an expired execution lease. It is
+  the only sub-port that reads two tables: a run is eligible only when no
+  checkpoint is still in `created`, so a run suspended awaiting human review is
+  never reclaimed out from under its reviewer.
+- `GenerationRunPort` composes the four sub-ports for callers that need the
+  complete surface. `CanonicalUnitOfWork.generation_runs` exposes this port, and
+  `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunPortAdapter` to its
+  session, so callers use the same unit of work and own its commit or rollback.
+
+`SqlAlchemyGenerationRunPortAdapter` holds a `SqlAlchemyGenerationRunStore` and
+a `SqlAlchemyReviewCheckpointStore` and delegates to each explicitly, rather
+than mixing both into one class.
 
 Use `InMemoryGenerationRunStore` from
 `episodic.canonical.adapters.generation_runs` as the reference adapter in fast
@@ -2041,6 +2052,12 @@ review checkpoint attached to a generation run. It is not the same as
 `episodic.orchestration.WorkflowCheckpoint`, which stores internal LangGraph
 suspend/resume state through `CheckpointPort`. Do not convert between the two
 implicitly; bridge logic belongs in the later orchestration and REST work.
+
+Migrations lead the code. `SqlAlchemyReviewCheckpointStore` writes
+`review_checkpoints`, which exists only once revision `20261020_000014` has
+been applied, so a deployment that ships the new code before running
+`alembic upgrade head` fails at its first checkpoint write. Apply migrations
+first; the application does not apply them itself.
 
 ### No-QA launcher and TEI retrieval
 
@@ -2200,12 +2217,29 @@ claim that updates zero rows has lost the race or found a terminal run. Do not
 reset an expired `running` row to `pending` or launch a replacement: this slice
 has no automatic reaper or reassignment path.
 
+An expired lease is not by itself proof of abandonment. A run suspended at a
+review checkpoint is legitimately `running` while it waits for a human, and its
+lease expires regardless. Before failing such a run, check whether a checkpoint
+is still open:
+
+```sql
+SELECT id, node, status
+FROM review_checkpoints
+WHERE generation_run_id = :run_id
+  AND status = 'created';
+```
+
+If that returns a row, the run is awaiting review rather than abandoned;
+resolving the checkpoint is the recovery, and failing the run would discard
+queued human work. Both the reclamation primitive and the manual statement
+below encode this guard, so a run awaiting review is not failed by either.
+
 To fail the run manually, use a privileged database transaction. The locking
-query below selects only a running run with a non-null expired lease. If it
-returns no row, execute `ROLLBACK` and stop: this is an explicit no-op, and the
-event and status update must not be executed. If it returns the requested run,
-keep the transaction open, append the failure event, update the terminal state,
-and then commit both writes together.
+query below selects only a running run with a non-null expired lease and no
+open checkpoint. If it returns no row, execute `ROLLBACK` and stop: this is an
+explicit no-op, and the event and status update must not be executed. If it
+returns the requested run, keep the transaction open, append the failure event,
+update the terminal state, and then commit both writes together.
 
 ```sql
 BEGIN;
@@ -2216,6 +2250,12 @@ WHERE id = :run_id
   AND status = 'running'
   AND lease_expires_at IS NOT NULL
   AND lease_expires_at <= CURRENT_TIMESTAMP
+  AND NOT EXISTS (
+      SELECT 1
+      FROM review_checkpoints
+      WHERE review_checkpoints.generation_run_id = generation_runs.id
+        AND review_checkpoints.status = 'created'
+  )
 FOR UPDATE;
 
 -- If no row is returned, execute ROLLBACK and stop. Do not execute the
@@ -2266,7 +2306,35 @@ before persistence.
 
 Keep `idempotency_principal_id` and `idempotency_key` unchanged. They remain
 attached to the failed generation run so a replay is tied to the existing
-record rather than creating an untracked replacement. Automatic recovery and
+record rather than creating an untracked replacement.
+
+#### Reclaiming expired leases through the port
+
+The same reclamation is available as `fail_expired_leases` on the composite
+`GenerationRunPort`, so operators and future schedulers do not have to
+reconstruct the statement by hand:
+
+```python
+async with SqlAlchemyUnitOfWork(session_factory) as uow:
+    reclaimed = await uow.generation_runs.fail_expired_leases(now=now, limit=100)
+    await uow.commit()
+```
+
+Each call reclaims at most `limit` runs, oldest expiry first, and returns the
+runs it moved. A call returning exactly `limit` runs has more work waiting, so
+drain a backlog by re-invoking until the returned tuple is empty; a call
+returning fewer than `limit` has reached the end. The call appends each
+`run.failed` event and its terminal update in one transaction and writes one
+instant, `now`, to the event's `occurred_at`, `ended_at`, and `updated_at`. A
+non-positive `limit` raises `ValueError`. Both adapters expose the method: the
+SQL adapter reclaims, while the in-memory adapter necessarily returns `()`
+because `GenerationRun` carries no lease field — its emptiness is a divergence,
+not a contract, so a shared suite must not treat agreement between the two as
+evidence.
+
+Nothing schedules this method yet. No reaper, worker, or cron entry invokes it,
+so during this slice it runs only when an operator or test calls it, and a
+backlog persists until something does. Periodic reclamation, retry, and
 reassignment remain roadmap item `2.6.2`.
 
 TEI representation selection is centralized in

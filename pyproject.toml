@@ -125,6 +125,10 @@ extend-ignore = [
 "tests/test_local_k8s_kind_tooling.py" = ["suspicious-subprocess-import"]
 "tests/test_local_k8s_tooling.py" = ["suspicious-subprocess-import"]
 "tests/workflow_reading.py" = ["assert"]
+# Unprefixed support module: deliberately uncollected, so it misses the
+# `**/test_*.py` ignores and needs `assert` declared the same way.
+"tests/generation_run_contract_scenarios.py" = ["assert"]
+"tests/generation_run_checkpoint_listing_scenarios.py" = ["assert"]
 
 [tool.ruff.lint.flake8-import-conventions]
 # Declare the banned `from` imports.
@@ -546,8 +550,25 @@ full_name = [
     "alembic.versions.20260624_000010_add_generation_run_tables._drop_enums",
     "alembic.versions.20260624_000010_add_generation_run_tables._drop_generation_runs_table",
     "alembic.versions.20260624_000010_add_generation_run_tables._drop_generation_events_table",
+    "alembic.versions.20261020_000014_add_review_checkpoints._drop_enums",
+    "alembic.versions.20261020_000014_add_review_checkpoints._drop_review_checkpoints_table",
 ]
 reason = "Alembic invokes these downgrade helpers when an operator rolls migration revisions back."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "class"
+full_name = [
+    "episodic.canonical.storage.review_checkpoints.SqlAlchemyReviewCheckpointStore",
+]
+reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.canonical.adapters.generation_run_lease_reclamation.InMemoryGenerationRunLeaseReclamationMixin.fail_expired_leases.now",
+    "episodic.canonical.adapters.generation_run_lease_reclamation.InMemoryGenerationRunLeaseReclamationMixin.fail_expired_leases.limit",
+]
+reason = "The mixin's no-op must match GenerationRunLeaseReclamationPort.fail_expired_leases, which GenerationRunPort composes; InMemoryGenerationRunStore mixes it in and the port contract tests call it through the protocol."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -834,10 +855,6 @@ members = ["episodic/canonical/storage/repositories.py", "episodic/canonical/sto
 reason = "Paged-query tail (offset, optional limit, execute, map rows) whose only variation is the per-entity row mapper; the surrounding query construction differs per repository."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/storage/generation_runs.py", "episodic/canonical/adapters/generation_runs.py"]
-reason = "Parallel implementations of one port: the SQLAlchemy store and the in-memory adapter share the signature, docstring, and argument guard but not the query."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/canonical/ports.py", "episodic/canonical/__init__.py"]
 reason = "Port re-export blocks; the package surface and the ports facade deliberately list the same protocol names."
 
@@ -882,10 +899,6 @@ members = ["episodic/api/resources/series_profiles.py::_get_serializer_fn", "epi
 reason = "Template Method hooks returning the profile serializer; each override exists to bind one concrete callable for its handler."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/generation/tei_payload.py::require_payload_object", "episodic/generation/tei_payload.py::require_payload_list"]
-reason = "Typed facades over require_mapping and require_sequence; the residue is the return type and the docstring each facade documents."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/logging.py::log_info", "episodic/logging.py::log_warning", "episodic/logging.py::log_error"]
 reason = "Level-specific wrappers over _log_at kept explicit so call sites name the level; the shared body is one delegating call plus its documented signature."
 
@@ -909,6 +922,9 @@ reason = "Both idempotent API resources import the same source_idempotency helpe
 members = ["episodic/generation/guest_bios_tei.py", "episodic/generation/show_notes_enrichment.py"]
 reason = "Per-tool TEI enrichment modules: an identical import surface over the shared tei_payload helpers, each binding its own domain models and div_type at the point of use; merging them would couple two independent enrichment features."
 
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/storage/review_checkpoints.py"]
+reason = "Parallel implementations of one port: the in-memory checkpoint mixin and the SQLAlchemy checkpoint store bind the same domain exception set and the same log-event helper. An import list cannot be factored into shared code without changing which names each module binds."
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"
@@ -945,6 +961,8 @@ prefixes = [
     "episodic.canonical.entity_protocols",
     "episodic.canonical.episode_errors",
     "episodic.canonical.generation_quality",
+    "episodic.canonical.generation_run_errors",
+    "episodic.canonical.generation_run_ports",
     "episodic.canonical.history_protocols",
     "episodic.canonical.health",
     "episodic.canonical.hashing",
