@@ -6,6 +6,8 @@ than alongside any single dataclass, so that every dataclass module can
 depend on them without importing from another dataclass module.
 """
 
+import copy
+
 from .generation_quality import QaStatus, QualityMode
 
 
@@ -64,9 +66,19 @@ def _validate_draft_without_qa_metadata(
 
 
 def _copy_json_mapping(owner: object, field_name: str) -> None:
-    """Validate and defensively copy a JSON mapping field."""
+    """Validate and defensively copy a JSON mapping field.
+
+    The copy is recursive: these payloads hold recorded evidence, and a
+    shallow copy would let a caller change a retained artefact by mutating a
+    nested dictionary it still holds.
+
+    Raises
+    ------
+    TypeError
+        If the field does not hold a dictionary.
+    """
     value = getattr(owner, field_name)
     if not isinstance(value, dict):
         msg = f"{field_name} must be a JSON mapping."
         raise TypeError(msg)
-    object.__setattr__(owner, field_name, dict(value))
+    object.__setattr__(owner, field_name, copy.deepcopy(value))

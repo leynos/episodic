@@ -35,6 +35,7 @@ _PURE_MODULES = (
     "episodic.qa.pedante.types",
     "episodic.canonical.qa_artefacts",
     "episodic.canonical.qa_artefact_ports",
+    "episodic.canonical.qa_artefact_validation",
 )
 
 

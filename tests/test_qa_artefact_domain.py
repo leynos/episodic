@@ -199,6 +199,33 @@ def test_summary_rejects_invalid_field_values(
         build()
 
 
+# --- defensive copying ------------------------------------------------------
+
+
+def test_finding_copies_nested_details() -> None:
+    """A nested evaluator payload cannot be changed through the caller's dict."""
+    evidence = {"source": "A"}
+    recorded = finding(details={"evidence": evidence})
+
+    evidence["source"] = "B"
+
+    assert recorded.details == {"evidence": {"source": "A"}}, (
+        "the nested details payload was retained by reference"
+    )
+
+
+def test_summary_copies_nested_evaluator_metadata() -> None:
+    """A nested metadata payload cannot be changed through the caller's dict."""
+    metadata = {"model": "pedante"}
+    recorded = summary(evaluator_metadata={"run": metadata})
+
+    metadata["model"] = "changed"
+
+    assert recorded.evaluator_metadata == {"run": {"model": "pedante"}}, (
+        "the nested evaluator metadata was retained by reference"
+    )
+
+
 # --- finding rejections -----------------------------------------------------
 
 

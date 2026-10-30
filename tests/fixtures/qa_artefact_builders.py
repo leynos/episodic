@@ -113,6 +113,7 @@ def summary(
     summary: str = "",
     rubric_score: decimal.Decimal | None = None,
     runtime_estimate_seconds: int | None = None,
+    evaluator_metadata: JsonMapping | None = None,
 ) -> QaEvaluationSummary:
     """Return a valid evaluation summary whose fields callers may override.
 
@@ -142,6 +143,8 @@ def summary(
         Optional unit-interval score.
     runtime_estimate_seconds : int | None
         Optional runtime estimate.
+    evaluator_metadata : JsonMapping | None
+        Evaluator-specific payload; ``None`` becomes an empty mapping.
 
     Returns
     -------
@@ -162,4 +165,5 @@ def summary(
         summary=summary,
         rubric_score=rubric_score,
         runtime_estimate_seconds=runtime_estimate_seconds,
+        evaluator_metadata={} if evaluator_metadata is None else evaluator_metadata,
     )

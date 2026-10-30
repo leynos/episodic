@@ -626,10 +626,10 @@ full_name = [
     "episodic.canonical.domain_validation._require_value",
     "episodic.canonical.domain_validation._validate_draft_without_qa_metadata",
     "episodic.canonical.qa_artefacts._validate_citations",
-    "episodic.canonical.qa_artefacts._validate_non_negative_integer",
-    "episodic.canonical.qa_artefacts._validate_optional_non_negative_integer",
-    "episodic.canonical.qa_artefacts._validate_positive_integer",
-    "episodic.canonical.qa_artefacts._normalize_rubric_score",
+    "episodic.canonical.qa_artefact_validation._validate_non_negative_integer",
+    "episodic.canonical.qa_artefact_validation._validate_optional_non_negative_integer",
+    "episodic.canonical.qa_artefact_validation._validate_positive_integer",
+    "episodic.canonical.qa_artefact_validation._normalize_rubric_score",
 ]
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
 
@@ -1046,6 +1046,7 @@ prefixes = [
     "episodic.canonical.pagination",
     "episodic.canonical.ports",
     "episodic.canonical.qa_artefact_ports",
+    "episodic.canonical.qa_artefact_validation",
     "episodic.canonical.qa_artefacts",
     "episodic.canonical.reference_protocols",
     "episodic.canonical.unit_of_work_protocols",

@@ -53,6 +53,19 @@ def test_rubric_score_round_trips_through_its_stored_precision() -> None:
     )
 
 
+def test_rubric_score_ignores_the_callers_decimal_context() -> None:
+    """A narrow or trap-enabled caller context cannot change the stored value."""
+    with decimal.localcontext() as ctx:
+        ctx.prec = 4
+        ctx.traps[decimal.Inexact] = True
+
+        stored = summary(rubric_score=decimal.Decimal(1)).rubric_score
+
+    assert stored == decimal.Decimal("1.0000"), (
+        "the score was quantized under the caller's decimal context"
+    )
+
+
 def test_absent_rubric_score_stays_absent() -> None:
     """An evaluator that reports no score must not acquire one."""
     assert summary(rubric_score=None).rubric_score is None, (

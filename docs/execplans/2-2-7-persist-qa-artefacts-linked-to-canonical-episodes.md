@@ -292,6 +292,29 @@ Stop and escalate when any of these is reached.
     through a new `_validate_positive_integer`, registered in the same Skylos
     entry-point rule as the other canonical validators. Red was observed first
     (collection failed on the missing constant), then 74 focused tests passed.
+    Both repairs are committed as `d48c1aa5` after a green six-gate sweep
+    (1798 tests, 3 skipped, 55 snapshots).
+  - Review round 3 (`d48c1aa5`, same CLI and scope, exit 0,
+    `review_completed`, 9/9 changed paths, no rate limit) returned three
+    findings, two of them major. Two were adjudicated valid and repaired, one
+    was not. (1) `_normalize_rubric_score` quantized under the caller's
+    decimal context, so a context with precision four or an enabled `Inexact`
+    trap would reject a score the column can hold; it now quantizes under a
+    module-owned `decimal.Context(prec=28)`. (2) `_copy_json_mapping` copied
+    only the top level, so a caller could change recorded `details` or
+    `evaluator_metadata` evidence by mutating a nested dictionary it still
+    held; the shared helper now deep-copies, which also fixes the same latent
+    aliasing in the `domain_generation` payloads that use it. (3) The reviewer
+    asked `QaEvaluation` to reject a `COMPLIANT` summary containing a blocking
+    finding. Not adopted: `INV-COMPLIANCE-BLOCKING` makes that an `EP-M3`
+    mapping property, `is_blocking` is documented as an evaluator-set flag
+    whose policy varies by evaluator, and enforcing it in the aggregate would
+    move the rule's only test from the mapping to the constructor. Recorded in
+    the Decision log instead. Red was observed for both repairs (three failing
+    tests), then 78 focused tests passed. The two added validator concerns
+    pushed `qa_artefacts.py` past 400 lines, so the validators moved to
+    `qa_artefact_validation.py`, registered in the same Hecate `domain_ports`
+    group and the same Skylos entry-point rule.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
@@ -670,6 +693,28 @@ Stop and escalate when any of these is reached.
   — the plan did not enumerate a `subject_id` bound or a version check; both
   extend the module's documented validation contract without changing a field,
   a column, or a stored value.
+- Decision: rubric scores are quantized under a module-owned
+  `decimal.Context(prec=28)`, and `_copy_json_mapping` deep-copies. Rationale:
+  `Decimal.quantize` reads the ambient context, so a caller that narrows
+  precision or enables the `Inexact` trap could make construction reject a
+  score the `NUMERIC(5, 4)` column stores; the rounding rule must not depend on
+  unrelated caller state. The JSON payloads on `QaFinding.details`,
+  `QaEvaluationSummary.evaluator_metadata`, and the `domain_generation`
+  payloads are recorded evidence, and a shallow copy let a caller change a
+  retained artefact through a nested dictionary. Date/Author: 2026-10-30,
+  implementation agent. **Deviation status: accepted** — the quantized value is
+  unchanged for every score the default context accepted; only its dependence
+  on caller state is removed, and the shared copy becomes recursive.
+- Decision: `QaEvaluation` does not reject a `COMPLIANT` summary that carries a
+  blocking finding. Rationale: `INV-COMPLIANCE-BLOCKING` states that rule as a
+  property of the Pedante mapping, which `EP-M3` implements and tests with
+  Hypothesis; `is_blocking` is documented as an evaluator-set flag whose policy
+  differs per evaluator, so a generic aggregate cannot know whether a blocking
+  finding forbids a compliant verdict. Moving the rule into construction would
+  make the mapping property test check the constructor instead of the mapping.
+  Date/Author: 2026-10-30, implementation agent. **Deviation status: accepted**
+  — the reviewer's concern is tracked at its planned location rather than
+  dropped.
 
 ## Outcomes & retrospective
 
@@ -1439,7 +1484,12 @@ fenced blocks.
   `INV-ENUM-TAXONOMY`, `INV-TIMEZONE` (domain half).
 - Files added:
   - `episodic/canonical/qa_artefacts.py` — enums, `QaFinding`,
-    `QaEvaluationSummary`, `QaEvaluation`, validation.
+    `QaEvaluationSummary`, `QaEvaluation`, bounds, and the citation check.
+  - `episodic/canonical/qa_artefact_validation.py` — the remaining
+    `__post_init__` validators and rubric-score normalization. Review repairs
+    pushed `qa_artefacts.py` to the 400-line module ceiling, and these checks
+    form one cohesive contract, so they live beside the models in the same way
+    `domain_validation.py` serves the older `domain_*` dataclasses.
   - `episodic/canonical/qa_artefact_ports.py` — the repository `Protocol`,
     request objects, and error types.
 - Acceptance evidence: `uv run pytest tests/test_qa_artefact_domain.py -q`
