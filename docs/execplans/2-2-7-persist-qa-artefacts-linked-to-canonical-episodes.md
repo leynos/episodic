@@ -229,7 +229,7 @@ Stop and escalate when any of these is reached.
     `episodic.canonical.qa_artefact_ports` are now in `_PURE_MODULES`, and
     both import in a fresh interpreter without loading `langgraph` or `httpx`.
   - Test-authoring repair: the first draft of the red test referenced an
-    undefined `_evaluation` helper and passed a `is_blocking` argument that
+    undefined `_evaluation` helper and passed an `is_blocking` argument that
     `_finding` did not accept. Both were authoring slips, found before the
     green step, and fixed by adding the argument and constructing the
     negative-ordinal finding directly.
@@ -252,6 +252,26 @@ Stop and escalate when any of these is reached.
     deferred-implementation policy; each reason names `EP-M1` as the
     deliverer, the milestone that will consume it, and the commit that must
     delete the entry.
+  - Review round 1: the `EP-M1` CodeRabbit CLI review (`coderabbit 0.9.1`,
+    `--committed --base-commit e3f1a6db`, exit 0, `review_completed`, all seven
+    changed paths in `reviewedFiles`) returned five findings — one major, two
+    minor, two trivial. All five were adjudicated valid and repaired: (1)
+    `QaEvaluation` now requires every finding's `evaluation_id` to equal
+    `summary_record.id` and every finding `id` to be distinct, with distinct
+    ids in the shared test fixtures; (2) `rubric_score` is normalized to the
+    four-decimal storage precision on construction, retaining the plan's
+    mandated `ROUND_HALF_EVEN` while making validation, storage, JSON
+    serialization (via `float`), and reconstruction agree — non-finite and
+    exponent-overflow decimals are now rejected as `ValueError`s instead of
+    leaking `decimal.InvalidOperation`; (3) the article before `is_blocking`
+    in this plan; (4) a NumPy `Parameters` section on
+    `QaEvaluationListRequest` stating that callers validate pagination bounds;
+    (5) NumPy `Attributes` sections on the three public domain models. Red was
+    observed first: 14 failures across the new and revised tests, then 65
+    focused tests passed. The review repairs pushed the domain test module
+    past Pylint's 400-line ceiling, so the rubric-score contract moved to
+    `tests/test_qa_artefact_rubric_score.py` and the shared builders to
+    `tests/fixtures/qa_artefact_builders.py`.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
@@ -590,6 +610,31 @@ Stop and escalate when any of these is reached.
   introduced in the commit that first raises it. Date/Author: 2026-10-29,
   implementation agent. **Deviation status: accepted** — the port contract is
   unchanged; only an unreferenced declaration is deferred.
+- Decision: `QaEvaluationSummary` stores `rubric_score` quantized to four
+  decimal places, rather than validating a rounded copy and keeping the raw
+  input. Rationale: the plan mandates `decimal.ROUND_HALF_EVEN` for the
+  interval check, but PostgreSQL rounds `NUMERIC(5, 4)` ties away from zero.
+  `Decimal("1.00005")` therefore passed validation as `1.0000` and could be
+  stored as `1.0001`, a value the domain model would reject on read; the
+  `float(score)` JSON serialization would have emitted a fifth decimal place
+  the column cannot hold. Quantizing on construction keeps the plan's rounding
+  rule and makes the in-memory, stored, serialized, and reconstructed values
+  identical. Non-finite scores and values whose exponent overflows the
+  quantization context are rejected as `ValueError` rather than leaking
+  `decimal.InvalidOperation`, and a rounded negative zero is canonicalized to
+  `0.0000` so JSON never carries `-0.0`. Date/Author: 2026-10-30,
+  implementation agent. **Deviation status: accepted** — the plan's mandated
+  rounding rule is retained; only the storage contract is made explicit.
+- Decision: `QaEvaluation` requires each finding's `evaluation_id` to equal
+  `summary_record.id` and each finding `id` to be unique within the evaluation,
+  in addition to the existing count and ordinal checks. Rationale: without the
+  identity check an evaluation could hold findings that belong to a different
+  evaluation, and without uniqueness the posting mapper cannot address a
+  finding and `qa_findings`' primary key would reject the row only after the
+  parent insert had succeeded. Both are cheap local invariants that make the
+  failure visible at construction. Date/Author: 2026-10-30, implementation
+  agent. **Deviation status: accepted** — this strengthens the aggregate's
+  stated contracts rather than changing them.
 
 ## Outcomes & retrospective
 
@@ -1687,13 +1732,15 @@ did not load them", and no test can tell those apart at the call site.
 
 `__post_init__` validation must reject: a negative `runtime_estimate_seconds`; a
 `rubric_score` outside `[0, 1]` after quantizing to four decimal places with
-`decimal.ROUND_HALF_EVEN`; an empty `evaluator_version`; an empty
-`idempotency_key`; a naive `evaluated_at`; a `finding_count` that disagrees with
-`len(findings)` on `QaEvaluation`; ordinals that are not `0..n-1` in order;
-and any string or collection exceeding the bounds above. The bounds are not
-decoration — `summary`, `subject_text`, `remediation`, `citations`, and
-`details` all originate in model output, and `generation_runs` already bounds
-its own string columns.
+`decimal.ROUND_HALF_EVEN` (the quantized value is the one the model stores, so
+a read returns exactly what construction accepted); an empty
+`evaluator_version`; an empty `idempotency_key`; a naive `evaluated_at`; a
+`finding_count` that disagrees with `len(findings)` on `QaEvaluation`; ordinals
+that are not `0..n-1` in order; a finding whose `evaluation_id` differs from
+`summary_record.id`; two findings sharing an `id`; and any string or collection
+exceeding the bounds above. The bounds are not decoration — `summary`,
+`subject_text`, `remediation`, `citations`, and `details` all originate in
+model output, and `generation_runs` already bounds its own string columns.
 
 ### `episodic/canonical/qa_artefact_ports.py` (EP-M1)
 

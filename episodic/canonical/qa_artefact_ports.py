@@ -22,7 +22,20 @@ if typ.TYPE_CHECKING:
 
 @dc.dataclass(frozen=True, slots=True)
 class QaEvaluationListRequest:
-    """Filter and page selectors for a QA evaluation listing."""
+    """Filter and page selectors for a QA evaluation listing.
+
+    Parameters
+    ----------
+    episode_id : uuid.UUID
+        Episode whose evaluations are listed.
+    pagination : Pagination
+        Page selectors. Bounds are validated by the caller, typically the API
+        adapter, because :class:`Pagination` does not validate them.
+    evaluator : QaEvaluator | None
+        Optional evaluator filter; ``None`` lists every evaluator.
+    compliance_status : QaComplianceStatus | None
+        Optional compliance-status filter; ``None`` lists every status.
+    """
 
     episode_id: uuid.UUID
     pagination: Pagination
