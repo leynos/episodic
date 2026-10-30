@@ -42,6 +42,7 @@ def finding(
     code: str = "citation_absent",
     summary: str = "Claim is unsupported.",
     remediation: str = "",
+    subject_id: str = "",
     subject_text: str = "",
     is_blocking: bool = False,
     citations: tuple[str, ...] = (),
@@ -65,6 +66,8 @@ def finding(
         Human-readable description of the problem.
     remediation : str
         Optional suggested remedy.
+    subject_id : str
+        Optional identifier of the claim, sentence, or segment assessed.
     subject_text : str
         Optional quoted subject text.
     is_blocking : bool
@@ -87,6 +90,7 @@ def finding(
         code=code,
         summary=summary,
         remediation=remediation,
+        subject_id=subject_id,
         subject_text=subject_text,
         is_blocking=is_blocking,
         citations=citations,
@@ -100,6 +104,8 @@ def summary(
     evaluation_id: uuid.UUID = EVALUATION_ID,
     evaluator: QaEvaluator = QaEvaluator.PEDANTE,
     evaluator_version: str = "pedante-1.0.0",
+    artefact_schema_version: int = QA_ARTEFACT_SCHEMA_VERSION,
+    compliance_policy_version: int = QA_COMPLIANCE_POLICY_VERSION,
     compliance_status: QaComplianceStatus = QaComplianceStatus.COMPLIANT,
     evaluated_at: dt.datetime = EVALUATED_AT,
     idempotency_key: str = "pedante:episode:1",
@@ -118,6 +124,10 @@ def summary(
         Evaluator that produced the artefact.
     evaluator_version : str
         Version of the evaluator's contract.
+    artefact_schema_version : int
+        Payload schema version to record.
+    compliance_policy_version : int
+        Compliance policy version to record.
     compliance_status : QaComplianceStatus
         Verdict to record.
     evaluated_at : dt.datetime
@@ -143,8 +153,8 @@ def summary(
         episode_id=EPISODE_ID,
         evaluator=evaluator,
         evaluator_version=evaluator_version,
-        artefact_schema_version=QA_ARTEFACT_SCHEMA_VERSION,
-        compliance_policy_version=QA_COMPLIANCE_POLICY_VERSION,
+        artefact_schema_version=artefact_schema_version,
+        compliance_policy_version=compliance_policy_version,
         compliance_status=compliance_status,
         evaluated_at=evaluated_at,
         idempotency_key=idempotency_key,

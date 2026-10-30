@@ -271,7 +271,27 @@ Stop and escalate when any of these is reached.
     focused tests passed. The review repairs pushed the domain test module
     past Pylint's 400-line ceiling, so the rubric-score contract moved to
     `tests/test_qa_artefact_rubric_score.py` and the shared builders to
-    `tests/fixtures/qa_artefact_builders.py`.
+    `tests/fixtures/qa_artefact_builders.py`. The repairs are committed as
+    `be95df47`.
+  - Review-fix gate sweeps: three exclusive sequential sweeps. Sweep 1 stopped
+    at `check-fmt` (mdtablefix prose reflow in this plan); sweep 2 stopped at
+    `lint` (`C0302`, 420 lines in the domain test module, which caused the
+    split above); sweep 3 was green on all six gates with 1789 tests, 3
+    skipped, and 55 snapshots.
+  - Review round 2 (`be95df47`, same CLI and scope over `e3f1a6db..be95df47`,
+    exit 0, `review_completed`, 9/9 changed paths reviewed, no rate limit)
+    returned three minor findings in `qa_artefacts.py`, reducing to two unique
+    remediations; both were adjudicated valid and repaired. (1) `QaFinding`
+    accepted a blank `code` and never bounded `subject_id`, so a blank
+    filter key and an unbounded slice of model output could reach the store;
+    it now rejects a blank `code` through `_validate_non_empty_text` and
+    bounds `subject_id` at `MAX_SUBJECT_ID_CHARS = 256`. (2) The
+    `QaEvaluationSummary.__post_init__` docstring promised version validation
+    that did not exist, so `0`, a negative, `True`, and `None` all passed for
+    `artefact_schema_version` and `compliance_policy_version`; both now go
+    through a new `_validate_positive_integer`, registered in the same Skylos
+    entry-point rule as the other canonical validators. Red was observed first
+    (collection failed on the missing constant), then 74 focused tests passed.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
@@ -635,6 +655,21 @@ Stop and escalate when any of these is reached.
   failure visible at construction. Date/Author: 2026-10-30, implementation
   agent. **Deviation status: accepted** — this strengthens the aggregate's
   stated contracts rather than changing them.
+- Decision: `QaFinding` bounds `subject_id` at `MAX_SUBJECT_ID_CHARS = 256` and
+  rejects a blank `code`, and `QaEvaluationSummary` requires both version
+  fields to be exact positive integers. Rationale: `subject_id` arrives as an
+  evaluator's claim identifier, so it is model-derived output of the same kind
+  as `subject_text`, which the plan already bounds; leaving it unbounded let an
+  arbitrarily long value reach a column whose insert happens only after the
+  parent row. A blank `code` contradicts the "stable machine-readable finding
+  code" contract that consumers filter on. `0`, a negative, `True`, and `None`
+  are not version numbers, and rejecting them at construction keeps a bad
+  artefact out of persistence and the policy audit trail; the "stored version
+  is newer than this release" comparison still belongs to the `EP-M2` reader.
+  Date/Author: 2026-10-30, implementation agent. **Deviation status: accepted**
+  — the plan did not enumerate a `subject_id` bound or a version check; both
+  extend the module's documented validation contract without changing a field,
+  a column, or a stored value.
 
 ## Outcomes & retrospective
 
@@ -1643,6 +1678,7 @@ MAX_SUMMARY_CHARS: int = 4096
 MAX_REMEDIATION_CHARS: int = 4096
 MAX_SUBJECT_TEXT_CHARS: int = 2048
 MAX_CODE_CHARS: int = 128
+MAX_SUBJECT_ID_CHARS: int = 256
 MAX_CITATIONS: int = 100
 MAX_CITATION_CHARS: int = 256
 
@@ -1734,13 +1770,17 @@ did not load them", and no test can tell those apart at the call site.
 `rubric_score` outside `[0, 1]` after quantizing to four decimal places with
 `decimal.ROUND_HALF_EVEN` (the quantized value is the one the model stores, so
 a read returns exactly what construction accepted); an empty
-`evaluator_version`; an empty `idempotency_key`; a naive `evaluated_at`; a
-`finding_count` that disagrees with `len(findings)` on `QaEvaluation`; ordinals
-that are not `0..n-1` in order; a finding whose `evaluation_id` differs from
-`summary_record.id`; two findings sharing an `id`; and any string or collection
-exceeding the bounds above. The bounds are not decoration — `summary`,
-`subject_text`, `remediation`, `citations`, and `details` all originate in
-model output, and `generation_runs` already bounds its own string columns.
+`evaluator_version`; an empty `idempotency_key`; a naive `evaluated_at`; an
+`artefact_schema_version` or `compliance_policy_version` that is not an exact
+positive integer; a `finding_count` that disagrees with `len(findings)` on
+`QaEvaluation`; ordinals that are not `0..n-1` in order; a finding whose
+`evaluation_id` differs from `summary_record.id`; two findings sharing an `id`;
+a blank finding `code`; and any string or collection exceeding the bounds
+above. The bounds are not decoration — `summary`, `subject_id`, `subject_text`,
+`remediation`, `citations`, and `details` all originate in model output, and
+`generation_runs` already bounds its own string columns. A stored version that
+is newer than the running release is a separate check made by the reader, not
+by construction.
 
 ### `episodic/canonical/qa_artefact_ports.py` (EP-M1)
 

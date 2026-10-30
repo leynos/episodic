@@ -628,6 +628,7 @@ full_name = [
     "episodic.canonical.qa_artefacts._validate_citations",
     "episodic.canonical.qa_artefacts._validate_non_negative_integer",
     "episodic.canonical.qa_artefacts._validate_optional_non_negative_integer",
+    "episodic.canonical.qa_artefacts._validate_positive_integer",
     "episodic.canonical.qa_artefacts._normalize_rubric_score",
 ]
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."

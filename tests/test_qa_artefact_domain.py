@@ -20,6 +20,7 @@ from episodic.canonical.qa_artefacts import (
     MAX_CODE_CHARS,
     MAX_FINDINGS_PER_EVALUATION,
     MAX_REMEDIATION_CHARS,
+    MAX_SUBJECT_ID_CHARS,
     MAX_SUBJECT_TEXT_CHARS,
     MAX_SUMMARY_CHARS,
     QaComplianceStatus,
@@ -179,6 +180,14 @@ def test_aware_evaluated_at_keeps_its_instant_and_offset(
         ("evaluator_version", lambda: summary(evaluator_version="   ")),
         ("idempotency_key", lambda: summary(idempotency_key="")),
         ("summary", lambda: summary(summary="x" * (MAX_SUMMARY_CHARS + 1))),
+        # A version number identifies a contract, so zero, a negative, and a
+        # boolean (an int subclass that means neither) are all unusable.
+        ("artefact_schema_version", lambda: summary(artefact_schema_version=0)),
+        ("artefact_schema_version", lambda: summary(artefact_schema_version=-1)),
+        ("artefact_schema_version", lambda: summary(artefact_schema_version=True)),
+        ("compliance_policy_version", lambda: summary(compliance_policy_version=0)),
+        ("compliance_policy_version", lambda: summary(compliance_policy_version=-1)),
+        ("compliance_policy_version", lambda: summary(compliance_policy_version=True)),
     ],
 )
 def test_summary_rejects_invalid_field_values(
@@ -193,10 +202,23 @@ def test_summary_rejects_invalid_field_values(
 # --- finding rejections -----------------------------------------------------
 
 
+@pytest.mark.parametrize("code", ["", "   "])
+def test_finding_rejects_a_blank_code(code: str) -> None:
+    """Consumers filter on ``code``, so a blank one is unusable."""
+    with pytest.raises(ValueError, match="code"):
+        finding(code=code)
+
+
 def test_finding_rejects_an_overlong_code() -> None:
     """A finding code longer than the bound is model output and is rejected."""
     with pytest.raises(ValueError, match="code"):
         finding(code="c" * (MAX_CODE_CHARS + 1))
+
+
+def test_finding_rejects_an_overlong_subject_id() -> None:
+    """The subject identifier is evaluator output, so it carries a bound too."""
+    with pytest.raises(ValueError, match="subject_id"):
+        finding(subject_id="s" * (MAX_SUBJECT_ID_CHARS + 1))
 
 
 def test_finding_rejects_an_overlong_summary() -> None:

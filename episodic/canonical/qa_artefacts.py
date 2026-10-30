@@ -40,6 +40,8 @@ MAX_SUMMARY_CHARS: int = 4096
 MAX_REMEDIATION_CHARS: int = 4096
 MAX_SUBJECT_TEXT_CHARS: int = 2048
 MAX_CODE_CHARS: int = 128
+# Identifiers handed back by an evaluator, not prose, so the bound is tight.
+MAX_SUBJECT_ID_CHARS: int = 256
 MAX_CITATIONS: int = 100
 MAX_CITATION_CHARS: int = 256
 
@@ -102,6 +104,13 @@ def _validate_non_negative_integer(value: int, field_name: str) -> None:
     """Require an exact non-negative integer, excluding booleans."""
     if type(value) is not int or value < 0:
         msg = f"{field_name} must be a non-negative integer."
+        raise ValueError(msg)
+
+
+def _validate_positive_integer(value: int, field_name: str) -> None:
+    """Require an exact positive integer, excluding booleans."""
+    if type(value) is not int or value < 1:
+        msg = f"{field_name} must be a positive integer."
         raise ValueError(msg)
 
 
@@ -193,7 +202,8 @@ class QaFinding:
     remediation : str
         Optional suggested remedy, bounded by :data:`MAX_REMEDIATION_CHARS`.
     subject_id : str
-        Identifier of the claim, sentence, or segment under assessment.
+        Identifier of the claim, sentence, or segment under assessment,
+        bounded by :data:`MAX_SUBJECT_ID_CHARS`.
     subject_text : str
         Quoted subject text, bounded by :data:`MAX_SUBJECT_TEXT_CHARS`.
     is_blocking : bool
@@ -225,12 +235,18 @@ class QaFinding:
         """Validate field types and the documented bounds."""
         _validate_non_negative_integer(self.ordinal, "ordinal")
         _validate_enum_member(self.severity, "severity", QaFindingSeverity)
+        _validate_non_empty_text(self.code, "code")
         _validate_bounded_text(self.code, "code", MAX_CODE_CHARS)
         _validate_bounded_text(self.summary, "summary", MAX_SUMMARY_CHARS)
         _validate_bounded_text(
             self.remediation,
             "remediation",
             MAX_REMEDIATION_CHARS,
+        )
+        _validate_bounded_text(
+            self.subject_id,
+            "subject_id",
+            MAX_SUBJECT_ID_CHARS,
         )
         _validate_bounded_text(
             self.subject_text,
@@ -309,6 +325,14 @@ class QaEvaluationSummary:
         """Validate field types, versions, and the documented bounds."""
         _validate_enum_member(self.evaluator, "evaluator", QaEvaluator)
         _validate_non_empty_text(self.evaluator_version, "evaluator_version")
+        _validate_positive_integer(
+            self.artefact_schema_version,
+            "artefact_schema_version",
+        )
+        _validate_positive_integer(
+            self.compliance_policy_version,
+            "compliance_policy_version",
+        )
         _validate_enum_member(
             self.compliance_status,
             "compliance_status",
