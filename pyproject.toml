@@ -625,6 +625,10 @@ full_name = [
     "episodic.canonical.domain_validation._require_positive_integer",
     "episodic.canonical.domain_validation._require_value",
     "episodic.canonical.domain_validation._validate_draft_without_qa_metadata",
+    "episodic.canonical.qa_artefacts._validate_citations",
+    "episodic.canonical.qa_artefacts._validate_non_negative_integer",
+    "episodic.canonical.qa_artefacts._validate_optional_non_negative_integer",
+    "episodic.canonical.qa_artefacts._validate_rubric_score",
 ]
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
 
@@ -791,6 +795,9 @@ reason = "Process launchers and structured exception consumers read these docume
 names = []
 
 [tool.skylos.whitelist.documented]
+"QA_COMPLIANCE_POLICY_VERSION" = "Delivered by EP-M1 of roadmap item 2.2.7 as the compliance policy version every stored evaluation carries and every test constructs; the EP-M3 recording service stamps it, so delete this entry in that commit."
+"QA_ARTEFACT_SCHEMA_VERSION" = "Delivered by EP-M1 of roadmap item 2.2.7 as the payload schema version every stored evaluation carries and every test constructs; the EP-M2 mapper compares it against a stored row, so delete this entry in that commit."
+"QaEvaluationListRequest" = "Delivered by EP-M1 of roadmap item 2.2.7 as the listing port's request value and exercised by tests/test_qa_artefact_ports.py; no production caller exists until the EP-M2 persistence adapter accepts it, so delete this entry in that commit."
 "build_chrono_graph" = "Delivered by completed roadmap items 2.2.5 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."
 "build_pedante_graph" = "Delivered by completed roadmap items 2.2.5 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."
 "route_after_pedante" = "Delivered by completed roadmap items 2.2.5 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."

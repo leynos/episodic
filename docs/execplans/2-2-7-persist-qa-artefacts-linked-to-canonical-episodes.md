@@ -210,7 +210,48 @@ Stop and escalate when any of these is reached.
   - Evidence after review repairs: `tests/test_architecture_enforcement.py`
     and `tests/test_qa_import_purity.py` pass together (27 passed, 2
     snapshots); the Skylos dead-code gate exits 0.
+  - Review loop: four CodeRabbit CLI rounds — 3 findings, 1, 2, then 0. Round
+    4 reviewed `ebef8fec..e3f1a6db` across all seven changed paths and returned
+    `findings: 0`. No rate limit occurred. Full gates were green on the final
+    tree (`check-fmt`, `markdownlint`, `nixie`, `typecheck`, `lint` with Skylos
+    and the duplication gate, `test`: 1726 passed, 3 skipped, 55 snapshots).
+    `EP-M0` closes at `e3f1a6db`.
 - [ ] EP-M1 QA artefact domain model, compliance policy, and ports.
+  - Red: `tests/test_qa_artefact_domain.py` aborted at collection with
+    `ModuleNotFoundError: No module named 'episodic.canonical.qa_artefacts'`.
+  - Green: added `episodic/canonical/qa_artefacts.py` and
+    `episodic/canonical/qa_artefact_ports.py`; the module's 46 tests pass.
+  - Non-vacuity: deleting `SupportLevel.MISQUOTATION` from
+    `_BLOCKING_SUPPORT_LEVELS` fails exactly the `[misquotation]` policy case
+    plus the transcription-equality test, and nothing else; restored
+    afterwards.
+  - Import purity: `episodic.canonical.qa_artefacts` and
+    `episodic.canonical.qa_artefact_ports` are now in `_PURE_MODULES`, and
+    both import in a fresh interpreter without loading `langgraph` or `httpx`.
+  - Test-authoring repair: the first draft of the red test referenced an
+    undefined `_evaluation` helper and passed a `is_blocking` argument that
+    `_finding` did not accept. Both were authoring slips, found before the
+    green step, and fixed by adding the argument and constructing the
+    negative-ordinal finding directly.
+  - Port test: `tests/test_qa_artefact_ports.py` covers the listing request
+    value — filter defaults, explicit filters and page retention, and the
+    runtime freeze — so the request type is exercised directly by a test.
+  - Gate repairs, first sweep: the first full gate run stopped at `check-fmt`
+    (mdtablefix reflow of this plan) and at `lint`'s first Pylint pass
+    (`R0913` on the two test builders, whose signatures mirror the domain
+    dataclasses and now carry reasoned Pylint disables). Standing the gate
+    up step by step then exposed `C9102` on sixteen assertions in the new
+    domain test, which now all carry failure messages, and seven Skylos
+    dead-code findings that the earlier steps had hidden.
+  - Skylos adjudication: the four private validators are called from
+    `__post_init__`, a boundary Skylos cannot see, so they join the existing
+    `type = "function"` entry-point rule for canonical post-initialization
+    validators. `QaEvaluationListRequest`, `QA_ARTEFACT_SCHEMA_VERSION`, and
+    `QA_COMPLIANCE_POLICY_VERSION` have no production caller until `EP-M2`
+    and `EP-M3`, so they take named exceptions under the developers' guide's
+    deferred-implementation policy; each reason names `EP-M1` as the
+    deliverer, the milestone that will consume it, and the commit that must
+    delete the entry.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
@@ -538,6 +579,17 @@ Stop and escalate when any of these is reached.
   Date/Author: 2026-10-29, implementation agent. **Deviation status: accepted**
   — no code deleted, no scope change; six documented temporary exceptions must
   be removed when roadmap item `4.4.1` wires the run path.
+- Decision: `EP-M1` ships `episodic/canonical/qa_artefact_ports.py` without the
+  "error types" its milestone entry lists. Rationale: nothing in this milestone
+  can raise one. The unsupported-schema failure belongs to the reader that
+  parses a stored `artefact_schema_version`, which arrives with the mapper in
+  `EP-M2`, and its HTTP mapping to the endpoint layer in `EP-M4`; declaring the
+  exception now would create an unreferenced symbol that the blocking Skylos
+  gate would flag, and the developers' guide's deferred-implementation policy
+  exists for delivered behaviour, not reserved signatures. Each error type is
+  introduced in the commit that first raises it. Date/Author: 2026-10-29,
+  implementation agent. **Deviation status: accepted** — the port contract is
+  unchanged; only an unreferenced declaration is deferred.
 
 ## Outcomes & retrospective
 

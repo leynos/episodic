@@ -31,7 +31,11 @@ print(json.dumps({
 """
 
 # Modules that must stay importable without orchestration or network support.
-_PURE_MODULES = ("episodic.qa.pedante.types",)
+_PURE_MODULES = (
+    "episodic.qa.pedante.types",
+    "episodic.canonical.qa_artefacts",
+    "episodic.canonical.qa_artefact_ports",
+)
 
 
 def _run_probe(module_name: str) -> dict[str, bool]:
