@@ -10,6 +10,7 @@ import dataclasses as dc
 import enum
 import os
 import typing as typ
+import urllib.parse
 
 import httpx
 
@@ -39,6 +40,12 @@ class CliError(Exception):
 
 class ApiError(CliError):
     """The API answered with an error envelope."""
+
+
+class InvalidConfigError(CliError):
+    """A global option names a value the HTTP client cannot use."""
+
+    exit_code = 2
 
 
 class ApiUnavailableError(CliError):
@@ -88,8 +95,10 @@ class CliRuntime:
     ) -> None:
         """Resolve the global arguments against the environment."""
         self.options = ClientOptions(
-            base_url=_first_present(base_url, os.environ.get(BASE_URL_ENV))
-            or DEFAULT_BASE_URL,
+            base_url=_validated_base_url(
+                _first_present(base_url, os.environ.get(BASE_URL_ENV))
+                or DEFAULT_BASE_URL
+            ),
             token=_first_present(token, os.environ.get(TOKEN_ENV)),
             timeout=timeout,
         )
@@ -101,6 +110,43 @@ def _first_present(*values: str | None) -> str | None:
         if value:
             return value
     return None
+
+
+def _validated_base_url(base_url: str) -> str:
+    """Return ``base_url`` after checking it names an HTTP(S) host.
+
+    ``httpx`` raises plain ``ValueError`` for a URL with no scheme, and its
+    transport layer can raise ``httpx.InvalidURL`` later, so rejecting the
+    obvious misconfiguration here gives one clean usage error instead of two
+    different failure paths.
+
+    Parameters
+    ----------
+    base_url : str
+        API root resolved from ``--base-url`` or the environment.
+
+    Returns
+    -------
+    str
+        The base URL, unchanged.
+
+    Raises
+    ------
+    InvalidConfigError
+        If the URL has no HTTP(S) scheme or names no host.
+    """
+    try:
+        parsed = urllib.parse.urlsplit(base_url)
+    except ValueError as error:
+        invalid = f"Invalid Episodic API URL {base_url}: {error}"
+        raise InvalidConfigError(invalid) from error
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        invalid = (
+            f"Invalid Episodic API URL {base_url}: "
+            "expected an http or https URL with a host"
+        )
+        raise InvalidConfigError(invalid)
+    return base_url
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -178,7 +224,10 @@ class QaApiClient:
         Raises
         ------
         ApiError
-            If the API answered with an error envelope.
+            If the API answered with an error envelope, or with a successful
+            body that is not a page envelope.
+        InvalidConfigError
+            If the configured base URL is not a usable HTTP URL.
         ApiUnavailableError
             If the API could not be reached before the timeout elapsed.
         RateLimitedError
@@ -193,6 +242,9 @@ class QaApiClient:
                 headers=self._authorization(),
             ) as client:
                 response = client.get(url, params=query.params())
+        except httpx.InvalidURL as error:
+            invalid = f"Invalid Episodic API URL {options.base_url}: {error}"
+            raise InvalidConfigError(invalid) from error
         except httpx.HTTPError as error:
             unreachable = (
                 f"Cannot reach the Episodic API at {options.base_url}: {error}"
@@ -217,6 +269,11 @@ def _decode_page(
     """Return a successful payload or raise the matching CLI error."""
     payload = _decode(response)
     if response.is_success:
+        if not isinstance(payload.get("items"), list):
+            unexpected = (
+                f"{response.status_code} the API returned an unexpected response body"
+            )
+            raise ApiError(unexpected)
         return payload
 
     status = response.status_code

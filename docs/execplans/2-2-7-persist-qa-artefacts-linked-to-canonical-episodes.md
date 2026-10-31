@@ -749,6 +749,23 @@ Stop and escalate when any of these is reached.
     Skylos, duplication gate with 30 reasoned exceptions), check-migrations,
     and test: 1930 passed, 3 skipped, 67 snapshots. Logs
     `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m5-repair5.out`.
+  - Commit `061b8a09`.
+  - Milestone CLI review round 1 at `061b8a09` (`coderabbit 0.9.2`, exit 0,
+    `review_completed`, 14/14 expected paths over `1edf224f..061b8a09`, no rate
+    limit): two findings, both upheld and repaired.
+    1. A 2xx response whose body was not a page envelope was accepted as
+       `{}`, so a proxy error page rendered as `0 of 0 evaluations` with exit
+       0. `_decode_page` now raises `ApiError` unless the successful body
+       carries an `items` list.
+    2. `httpx.InvalidURL` is not an `httpx.HTTPError`, so a malformed
+       `--base-url` or `EPISODIC_API_URL` escaped `main` as a traceback. The
+       base URL is now validated while the global options resolve, raising
+       `InvalidConfigError` (exit 2, a usage error), and the request path also
+       translates `httpx.InvalidURL`.
+  - Round-1 repair evidence: `tests/test_qa_cli.py` gained
+    `test_unexpected_success_body_is_an_error` and
+    `test_malformed_base_url_is_a_usage_error`; the file passes with 19 tests
+    and 4 snapshots.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of
@@ -1408,6 +1425,25 @@ Stop and escalate when any of these is reached.
   and keeps coercion to the enum. Date/Author: 2026-10-31, implementation
   agent. **Deviation status: none** — this aligns the CLI with the documented
   contract rather than changing it.
+- Decision: a successful response whose body is not a page envelope is an
+  error (`ApiError`, exit 1) rather than an empty page. Rationale: `_decode`
+  treats an unparsable body as absent, which is right for an error response
+  whose envelope may be missing, but on a 2xx it turns a catch-all proxy or
+  misconfigured `--base-url` into a plausible-looking `0 of 0 evaluations`.
+  Requiring an `items` list keeps the failure visible. Date/Author: 2026-10-31,
+  implementation agent. **Deviation status: none** — the response contract
+  already promises a page envelope on success.
+- Decision: an unusable base URL is a usage error (`InvalidConfigError`, exit
+  2), reported while the global options resolve, and `httpx.InvalidURL` raised
+  on the request path is translated as well. Rationale: the CLI's own promise
+  is that nothing escapes `main` as a traceback, and `httpx.InvalidURL` does
+  not derive from `httpx.HTTPError`, so the existing handler missed it;
+  meanwhile a URL with no scheme raises plain `ValueError` from the transport
+  layer. Validating the scheme and host once, where `--base-url` and
+  `EPISODIC_API_URL` are resolved, gives one clear message and matches the exit
+  code a mistyped option already earns. Date/Author: 2026-10-31, implementation
+  agent. **Deviation status: none** — the exit-code contract is unchanged; 2
+  already covers usage errors.
 
 ## Outcomes & retrospective
 

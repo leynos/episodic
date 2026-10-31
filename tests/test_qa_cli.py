@@ -14,7 +14,7 @@ import httpx
 import pytest
 
 from episodic.cli import main
-from episodic.cli.client import ApiUnavailableError
+from episodic.cli.client import ApiUnavailableError, InvalidConfigError
 from episodic.cli.rendering import render_json, render_table
 from tests.snapshot_redaction import redact_snapshot_uuids
 
@@ -355,6 +355,39 @@ def test_throttled_response_maps_to_exit_four(
     captured = capsys.readouterr()
     assert exit_code == 4, captured.err
     assert "retry after 30 seconds" in captured.err, captured.err
+
+
+def test_unexpected_success_body_is_an_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A 2xx body without an items list is a failure, not an empty page."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, text="<html>proxy error</html>")
+    )
+
+    exit_code = main(_list_arguments(), transport=transport)
+
+    captured = capsys.readouterr()
+    assert exit_code == 1, captured.err
+    assert not captured.out, captured.out
+    assert "unexpected response body" in captured.err, captured.err
+
+
+def test_malformed_base_url_is_a_usage_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An unusable base URL is reported without a traceback."""
+    transport, recorded = _canned(_PAGE)
+
+    exit_code = main(
+        ["--base-url", "not a url", *_list_arguments()],
+        transport=transport,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
+    assert recorded.seen == [], recorded.seen
+    assert "Invalid Episodic API URL" in captured.err, captured.err
 
 
 def test_help_succeeds(capsys: pytest.CaptureFixture[str]) -> None:
