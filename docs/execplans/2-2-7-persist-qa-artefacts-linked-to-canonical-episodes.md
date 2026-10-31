@@ -601,6 +601,42 @@ Stop and escalate when any of these is reached.
     `_is_episode_owner`, so the launcher-run rule exists once. Focused TEI and
     QA suites: 39 passed, 5 snapshots
     (`/tmp/test-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-refactor-targeted.out`).
+  - Refactor gate sweep (scrutineer, exclusive, sequential, seven gates): **all
+    green** — check-fmt, markdownlint, nixie, typecheck, lint (all nine stages),
+    check-migrations, and test: 1906 passed, 3 skipped, 63 snapshots. Logs
+    `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m4-refactor.out`.
+  - Milestone CLI review, attempt 1: `coderabbit 0.9.2` returned
+    `errorType: "rate_limit"`, `isProUser: true`, `waitTime: "4 minutes"`,
+    `onDemandReviewAvailable: false` ("You've used all 10 included reviews").
+    No review content was produced
+    (`/tmp/coderabbit-ep-m4-review-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md.log`).
+    The mandated cooldown was observed before the single retry.
+  - Milestone CLI review, attempt 2: exit 0, `review_completed`,
+    `coderabbit 0.9.2`, `--committed --base-commit 330050f7`, 16/16 changed
+    paths reviewed, three findings reported (two unique, one exact duplicate),
+    all trivial. Both unique findings were upheld and repaired:
+    1. `test_cross_principal_and_unauthenticated_requests_are_hidden` asserted
+       the ownership boundary only on the list endpoint, leaving
+       `QaEvaluationResource`'s own check untested. It now reads a real
+       evaluation identifier as principal A and asserts 404
+       `qa_evaluation_not_found` with `{"evaluation_id": ...}` plus 401 for
+       principal B and for a missing credential on the detail route.
+       Non-vacuity observed: disabling the detail ownership branch makes the
+       test fail with the leaked payload, and restoring it passes.
+    2. The three public QA serializers lacked NumPy `Parameters` sections, and
+       `serialize_qa_finding` also lacked `Returns`; all three now document
+       both, matching `serialize_tei_envelope`.
+  - Repair evidence: focused API, serializer, BDD, and TEI suites pass together
+    (40 passed, 5 snapshots) after the repairs.
+  - Repair gate sweep: the combined test tripped Ruff `PLR0914`
+    (`too-many-locals`, 12/10), so the boundary test split into a list-route
+    test and a detail-route test, each with its own assertions. The split
+    preserves the non-vacuity result above and raises the API module to 11
+    tests.
+  - Repair gate sweep 2 (scrutineer, exclusive, sequential, seven gates): **all
+    green** — check-fmt, markdownlint, nixie, typecheck, lint (all nine
+    stages), check-migrations, and test: 1907 passed, 3 skipped, 63 snapshots.
+    Logs `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m4-review1-2.out`.
 - [ ] EP-M5 First-party CLI retrieval surface.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's

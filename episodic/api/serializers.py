@@ -290,7 +290,19 @@ def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
 
 
 def serialize_qa_finding(finding: QaFinding) -> dict[str, typ.Any]:
-    """Serialize one QA finding, including its evaluator detail payload."""
+    """Serialize one QA finding, including its evaluator detail payload.
+
+    Parameters
+    ----------
+    finding : QaFinding
+        Finding to serialize.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        JSON-ready mapping of every finding field, with the identifier as a
+        string and citations as a list.
+    """
     return {
         "id": str(finding.id),
         "ordinal": finding.ordinal,
@@ -314,6 +326,11 @@ def serialize_qa_evaluation_summary(
     ``rubric_score`` becomes a JSON number because Falcon's default media
     handler cannot encode a ``decimal.Decimal``; the column's four decimal
     places round-trip exactly through the shortest float representation.
+
+    Parameters
+    ----------
+    summary_record : QaEvaluationSummary
+        Recorded evaluation summary to serialize.
 
     Returns
     -------
@@ -348,6 +365,11 @@ def serialize_qa_evaluation(evaluation: QaEvaluation) -> dict[str, typ.Any]:
 
     The result is a superset of :func:`serialize_qa_evaluation_summary`, so a
     client can decode one shape for list and detail responses.
+
+    Parameters
+    ----------
+    evaluation : QaEvaluation
+        Aggregate holding the summary and its findings.
 
     Returns
     -------

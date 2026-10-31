@@ -227,10 +227,10 @@ async def test_detail_returns_findings_in_emitted_order(
 
 
 @pytest.mark.asyncio
-async def test_cross_principal_and_unauthenticated_requests_are_hidden(
+async def test_list_hides_foreign_and_unauthenticated_callers(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Neither a foreign principal nor a missing credential can read artefacts."""
+    """The listing is absent to a foreign principal and denied without one."""
     dependencies = build_qa_dependencies(session_factory)
     async with _qa_client(dependencies) as client:
         episode = await _seed(dependencies)
@@ -242,6 +242,30 @@ async def test_cross_principal_and_unauthenticated_requests_are_hidden(
     assert cross_principal.status_code == 404, cross_principal.text
     assert envelope["code"] == "qa_evaluation_not_found", envelope
     assert envelope["details"] == {"episode_id": str(episode.episode_id)}, envelope
+    assert unauthenticated.status_code == 401, unauthenticated.text
+
+
+@pytest.mark.asyncio
+async def test_detail_hides_foreign_and_unauthenticated_callers(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The detail route applies its own ownership check, not just the listing."""
+    dependencies = build_qa_dependencies(session_factory)
+    async with _qa_client(dependencies) as client:
+        episode = await _seed(dependencies)
+        listing = await client.get(
+            f"/v1/episodes/{episode.episode_id}/qa-evaluations",
+            headers=PRINCIPAL_A,
+        )
+        evaluation_id = typ.cast("str", _items(listing)[0]["id"])
+        endpoint = f"/v1/qa-evaluations/{evaluation_id}"
+        cross_principal = await client.get(endpoint, headers=PRINCIPAL_B)
+        unauthenticated = await client.get(endpoint)
+
+    envelope = _envelope(cross_principal)
+    assert cross_principal.status_code == 404, cross_principal.text
+    assert envelope["code"] == "qa_evaluation_not_found", envelope
+    assert envelope["details"] == {"evaluation_id": evaluation_id}, envelope
     assert unauthenticated.status_code == 401, unauthenticated.text
 
 
