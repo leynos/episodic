@@ -20,6 +20,8 @@ Utilities provided
 - Source-intake resources:
   ``UploadsResource``, ``UploadResource``, ``IngestionJobsResource``,
   ``IngestionJobResource``, ``IngestionJobSourcesResource``
+- QA-artefact resources:
+  ``EpisodeQaEvaluationsResource``, ``QaEvaluationResource``
 - Health resources:
   ``HealthLiveResource``, ``HealthReadyResource``
 
@@ -43,6 +45,7 @@ from .generation_runs import (
     GenerationRunsResource,
 )
 from .health import HealthLiveResource, HealthReadyResource
+from .qa_artefacts import EpisodeQaEvaluationsResource, QaEvaluationResource
 from .reference_bindings import ReferenceBindingResource, ReferenceBindingsResource
 from .reference_documents import (
     ReferenceDocumentResource,
@@ -66,6 +69,7 @@ from .source_intake import (
 )
 
 __all__ = [
+    "EpisodeQaEvaluationsResource",
     "EpisodeTeiResource",
     "EpisodeTemplateHistoryResource",
     "EpisodeTemplateResource",
@@ -78,6 +82,7 @@ __all__ = [
     "IngestionJobResource",
     "IngestionJobSourcesResource",
     "IngestionJobsResource",
+    "QaEvaluationResource",
     "ReferenceBindingResource",
     "ReferenceBindingsResource",
     "ReferenceDocumentResource",

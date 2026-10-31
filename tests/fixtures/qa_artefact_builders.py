@@ -128,6 +128,7 @@ def summary(
     evaluated_at: dt.datetime = EVALUATED_AT,
     idempotency_key: str = "pedante:episode:1",
     finding_count: int = 0,
+    generation_run_id: uuid.UUID | None = None,
     summary: str = "",
     rubric_score: decimal.Decimal | None = None,
     runtime_estimate_seconds: int | None = None,
@@ -158,6 +159,8 @@ def summary(
         Key that makes a repeated recording replay this artefact.
     finding_count : int
         Number of findings the evaluation claims to carry.
+    generation_run_id : uuid.UUID | None
+        Optional launcher run that triggered the evaluation.
     summary : str
         Optional human-readable verdict.
     rubric_score : decimal.Decimal | None
@@ -185,6 +188,7 @@ def summary(
         evaluated_at=evaluated_at,
         idempotency_key=idempotency_key,
         finding_count=finding_count,
+        generation_run_id=generation_run_id,
         summary=summary,
         rubric_score=rubric_score,
         runtime_estimate_seconds=runtime_estimate_seconds,

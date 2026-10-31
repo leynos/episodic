@@ -540,6 +540,60 @@ Stop and escalate when any of these is reached.
     discharged and `EP-M3` is complete.
 - [ ] EP-M4 REST retrieval endpoints filtered by evaluator and compliance
       status.
+  - Red: the focused acceptance command failed collection with
+    `ImportError: cannot import name 'serialize_qa_evaluation' from
+    'episodic.api.serializers'`, which is the expected red step.
+  - Green: `tests/features/qa_artefact_retrieval.feature` carries the nine REST
+    scenarios; the CLI scenarios stay deferred to `EP-M5`. The focused command
+    from the milestone's acceptance evidence reports `25 passed, 4 snapshots`
+    (`/tmp/test-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md.out`).
+  - Delivered: `serialize_qa_evaluation_summary`, `serialize_qa_evaluation`,
+    and `serialize_qa_finding`; the two resources and their routes; the
+    `qa_artefacts.py` resource module's ownership check; and the shared BDD/API
+    helpers, split between `tests/steps/qa_artefact_retrieval_seed.py` (episode
+    and evaluation fixtures seeded through the production recording service,
+    because the REST surface is retrieval-only) and
+    `tests/steps/qa_artefact_retrieval_support.py` (scenario state and request
+    wrappers). The split keeps each module under the 400-line limit.
+  - Snapshot discipline: the four `syrupy` snapshots were generated once,
+    inspected in `tests/__snapshots__/test_qa_artefact_serializers.ambr`
+    (values, finding order, and redacted UUIDs), and only then accepted; the
+    re-run without `--snapshot-update` passes them unchanged.
+  - Skylos: the deferred-implementation exceptions for `list_qa_evaluations`
+    and `get_qa_evaluation` are deleted, because `EP-M4`'s REST retrieval is
+    their named consumer and now calls both.
+  - Discovery: the plan expected an unauthenticated request to receive 404 like
+    `episode_tei.py`, but `AuthorizationMiddleware` answers 401 before dispatch
+    and the existing TEI test asserts that. The endpoint follows the
+    implementation and returns 401 (see `Surprises & discoveries`).
+  - Gate sweep 1 (scrutineer, exclusive, sequential): red at `typecheck`
+    (dict invariance in `_evaluation_not_found`) and at the first `lint` stage
+    (ten Ruff diagnostics: two indirectly-raised exception contracts, two
+    missing `Returns` sections, one typing-only import, one unused import, one
+    composite assertion, and one float equality). The other five gates passed,
+    including 1906 tests and 62 snapshots. All findings were repaired: the
+    helper takes a covariant `Mapping` and copies it into the envelope, the
+    resource docstrings carry the same reasoned exception-contract suppression
+    as `episode_tei.py`, the serializers document their returns, and the tests
+    use `pytest.approx`, split the composite assertion, and drop the unused
+    import.
+  - Gate sweep 2 (scrutineer, exclusive, sequential): red at Pylint `C0302`
+    and `R0913` in `tests/steps/qa_artefact_retrieval_support.py` (502 lines;
+    a five-argument `_record`). Repaired by splitting the fixtures into
+    `tests/steps/qa_artefact_retrieval_seed.py` (324 lines) and leaving the
+    scenario state and request wrappers in the support module (221 lines), and
+    by giving `_record` a three-field slot object. Six gates passed; `lint`
+    aborted before its last four stages.
+  - Gate sweep 3 (scrutineer, exclusive, sequential): red at df12 `R9108`
+    (`prefer-snapshot-assertion`) on the 13-key inline finding literal. That
+    test now asserts through a fifth syrupy snapshot, whose contents were
+    inspected in the `.ambr` file before it was accepted.
+  - Gate sweep 4 (scrutineer, exclusive, sequential, seven gates): **all
+    green** — check-fmt, markdownlint, nixie (unsandboxed), typecheck, lint
+    (every stage, including ambrleaks, Skylos, and the duplication gate with
+    its 30 reasoned exceptions), check-migrations, and test: 1906 passed, 3
+    skipped, 63 snapshots. Logs
+    `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m4-4.out`.
 - [ ] EP-M5 First-party CLI retrieval surface.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
@@ -771,6 +825,16 @@ Stop and escalate when any of these is reached.
   keys in `pyproject.toml`, which is invalid TOML. Impact: correct a reason by
   editing the existing entry in place, or restore the file and re-add; verify
   with `grep -c '^"symbol" =' pyproject.toml` that the key count is one.
+- Observation (execution, 2026-10-31): the plan's `EP-M4` conformance check
+  says a request without a credential receives 404 "matching `episode_tei.py`",
+  but the authentication boundary answers before the resource runs. Evidence:
+  `episodic/api/authorization.py` sets `falcon.HTTP_401` with code
+  `unauthorized` for `AuthorizationDecision.UNAUTHORIZED`, and
+  `tests/test_episode_tei_api.py` asserts 401 for the unauthenticated case.
+  Impact: the QA endpoints also return 401 (body code `unauthorized`) when no
+  credential is presented, and reserve 404 `qa_evaluation_not_found` for an
+  authenticated principal that does not own the episode, so the two conditions
+  stay distinguishable. The test asserts both branches separately.
 
 ## Decision log
 
@@ -1128,6 +1192,20 @@ Stop and escalate when any of these is reached.
   per-signature and the rule still fires anywhere else. Date/Author:
   2026-10-31, implementation agent. **Deviation status: none** — approved
   interface honoured; the ignore is the repository's sanctioned escape hatch.
+- Decision: `EP-M4` keeps the middleware's 401 for an unauthenticated request
+  and uses 404 `qa_evaluation_not_found` only for an authenticated principal
+  that does not own the episode, rather than following the plan's literal
+  "unauthenticated requests get 404" wording. Rationale: the shared
+  authorization middleware completes the response before resource dispatch, so
+  a resource cannot turn a missing credential into 404 without disabling the
+  application's authentication boundary for this route; the existing TEI route
+  and its test establish the same 401 contract. The plan's parenthetical
+  "matching `episode_tei.py`" is therefore inaccurate about the code it cites,
+  while its central requirement (a foreign principal must not learn whether an
+  artefact exists) is preserved by the 404 branch. Date/Author: 2026-10-31,
+  implementation agent. **Deviation status: proposed-accepted** — a
+  documentation-level correction to an inaccurate conformance sentence, with
+  the security property unchanged; recorded here for the reviewer.
 
 ## Outcomes & retrospective
 

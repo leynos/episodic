@@ -21,6 +21,7 @@ from episodic.logging import get_logger, log_error
 from .authorization import AuthorizationMiddleware
 from .errors import serialize_http_error
 from .resources import (
+    EpisodeQaEvaluationsResource,
     EpisodeTeiResource,
     EpisodeTemplateHistoryResource,
     EpisodeTemplateResource,
@@ -33,6 +34,7 @@ from .resources import (
     IngestionJobResource,
     IngestionJobSourcesResource,
     IngestionJobsResource,
+    QaEvaluationResource,
     ReferenceBindingResource,
     ReferenceBindingsResource,
     ReferenceDocumentResource,
@@ -300,6 +302,20 @@ def _register_episode_tei_routes(
     )
 
 
+def _register_qa_artefact_routes(
+    app: asgi.App,
+    uow_factory: UowFactory,
+) -> None:
+    app.add_route(
+        "/v1/episodes/{episode_id}/qa-evaluations",
+        EpisodeQaEvaluationsResource(uow_factory),
+    )
+    app.add_route(
+        "/v1/qa-evaluations/{evaluation_id}",
+        QaEvaluationResource(uow_factory),
+    )
+
+
 def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
@@ -328,5 +344,6 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     _register_intake_routes(app, uow_factory, dependencies)
     _register_generation_run_routes(app, uow_factory, dependencies)
     _register_episode_tei_routes(app, uow_factory, dependencies)
+    _register_qa_artefact_routes(app, uow_factory)
 
     return app

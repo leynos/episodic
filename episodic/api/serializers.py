@@ -1,7 +1,8 @@
 """Serialize canonical resources for Falcon API responses.
 
 The serializers cover profiles and templates, reusable reference documents,
-source-intake resources, generation runs and events, and TEI envelopes.
+source-intake resources, generation runs and events, TEI envelopes, and QA
+artefacts.
 """
 
 import typing as typ
@@ -24,6 +25,11 @@ if typ.TYPE_CHECKING:
         SeriesProfileHistoryEntry,
     )
     from episodic.canonical.ingestion_sources import IngestionJobSource
+    from episodic.canonical.qa_artefacts import (
+        QaEvaluation,
+        QaEvaluationSummary,
+        QaFinding,
+    )
     from episodic.canonical.reference_documents import ResolvedBinding
     from episodic.canonical.uploads import Upload
 
@@ -281,3 +287,75 @@ def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
         "qa_status": None if episode.qa_status is None else episode.qa_status.value,
         "updated_at": episode.updated_at.isoformat(),
     }
+
+
+def serialize_qa_finding(finding: QaFinding) -> dict[str, typ.Any]:
+    """Serialize one QA finding, including its evaluator detail payload."""
+    return {
+        "id": str(finding.id),
+        "ordinal": finding.ordinal,
+        "severity": finding.severity.value,
+        "code": finding.code,
+        "summary": finding.summary,
+        "remediation": finding.remediation,
+        "subject_id": finding.subject_id,
+        "subject_text": finding.subject_text,
+        "is_blocking": finding.is_blocking,
+        "citations": list(finding.citations),
+        "details": finding.details,
+    }
+
+
+def serialize_qa_evaluation_summary(
+    summary_record: QaEvaluationSummary,
+) -> dict[str, typ.Any]:
+    """Serialize one evaluation without its findings.
+
+    ``rubric_score`` becomes a JSON number because Falcon's default media
+    handler cannot encode a ``decimal.Decimal``; the column's four decimal
+    places round-trip exactly through the shortest float representation.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        JSON-ready mapping of every summary field, with UUIDs and timestamps
+        in their string forms.
+    """
+    return {
+        "id": str(summary_record.id),
+        "episode_id": str(summary_record.episode_id),
+        "generation_run_id": _optional_uuid_str(summary_record.generation_run_id),
+        "evaluator": summary_record.evaluator.value,
+        "evaluator_version": summary_record.evaluator_version,
+        "artefact_schema_version": summary_record.artefact_schema_version,
+        "compliance_policy_version": summary_record.compliance_policy_version,
+        "compliance_status": summary_record.compliance_status.value,
+        "summary": summary_record.summary,
+        "rubric_score": (
+            None
+            if summary_record.rubric_score is None
+            else float(summary_record.rubric_score)
+        ),
+        "runtime_estimate_seconds": summary_record.runtime_estimate_seconds,
+        "finding_count": summary_record.finding_count,
+        "evaluator_metadata": summary_record.evaluator_metadata,
+        "evaluated_at": summary_record.evaluated_at.isoformat(),
+    }
+
+
+def serialize_qa_evaluation(evaluation: QaEvaluation) -> dict[str, typ.Any]:
+    """Serialize one evaluation together with its ordered findings.
+
+    The result is a superset of :func:`serialize_qa_evaluation_summary`, so a
+    client can decode one shape for list and detail responses.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        The summary mapping plus a ``findings`` list in ordinal order.
+    """
+    payload = serialize_qa_evaluation_summary(evaluation.summary_record)
+    payload["findings"] = [
+        serialize_qa_finding(finding) for finding in evaluation.findings
+    ]
+    return payload
