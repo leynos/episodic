@@ -202,14 +202,21 @@ class SqlAlchemyQaArtefactStore:
     ) -> QaEvaluation:
         """Return the stored artefact for a replay, or re-raise."""
         summary = evaluation.summary_record
+        # Lock the row before deciding whether to supersede it. Without the
+        # lock, two concurrent replays can both read the same errored artefact;
+        # the loser then replaces findings the winner already replaced and
+        # collides on their ordinal instead of replaying the committed result.
         if constraint_name(err) != _IDEMPOTENCY_CONSTRAINT:
             self._emit_failed(summary, "integrity_violation")
             raise err
         record = await self._select_with_findings(
-            sa.select(QaEvaluationRecord).where(
+            sa
+            .select(QaEvaluationRecord)
+            .where(
                 QaEvaluationRecord.episode_id == summary.episode_id,
                 QaEvaluationRecord.idempotency_key == summary.idempotency_key,
             )
+            .with_for_update()
         )
         if record is None:  # pragma: no cover - the unique violation proves a row.
             self._emit_failed(summary, "conflict_without_row")

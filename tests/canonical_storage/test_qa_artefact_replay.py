@@ -17,7 +17,6 @@ from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.qa_artefacts import (
     QaComplianceStatus,
-    QaFinding,
     QaFindingSeverity,
 )
 from episodic.canonical.storage import (
@@ -26,7 +25,6 @@ from episodic.canonical.storage import (
     QaFindingRecord,
     SqlAlchemyQaArtefactStore,
     SqlAlchemyUnitOfWork,
-    qa_artefacts,
 )
 from episodic.canonical.storage.integrity_helpers import constraint_name
 from tests.canonical_storage._qa_artefact_support import (
@@ -176,123 +174,53 @@ async def test_errored_artefact_is_superseded_in_place(
 async def test_non_idempotency_violation_is_not_treated_as_replay(
     session_factory: SessionFactory,
 ) -> None:
-    """A findings-constraint failure reaches the caller as an integrity error."""
-    episode_id = await create_episode(session_factory)
-    existing = make_evaluation(
-        episode_id,
-        idempotency_key="existing",
+    """A violation of another constraint reaches the caller as an integrity error.
+
+    The rejected row belongs to the store alone, so the savepoint also has to
+    leave the caller's transaction usable.
+    """
+    # The episode does not exist, so the evaluation's foreign key rejects the
+    # insert. That keeps the failure inside the store's own savepoint, unlike a
+    # caller-owned pending row, whose failed insert invalidates the outer
+    # transaction however the savepoint is rolled back.
+    orphan = make_evaluation(
+        uuid.uuid7(),
+        idempotency_key="orphan",
         severities=(QaFindingSeverity.LOW,),
     )
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        stored = await uow.qa_artefacts.record_evaluation(existing)
-        await uow.commit()
-
-    # An unrelated pending finding collides on ``uq_qa_findings_evaluation_ordinal``
-    # during the same flush that records a fresh, non-colliding evaluation.
-    duplicate = QaFindingRecord(
-        id=uuid.uuid7(),
-        evaluation_id=stored.summary_record.id,
-        ordinal=0,
-        severity=QaFindingSeverity.LOW,
-        code="duplicate",
-        summary="Duplicate ordinal.",
-        is_blocking=False,
-    )
-    fresh = make_evaluation(
-        episode_id,
-        idempotency_key="fresh",
-        severities=(QaFindingSeverity.LOW,),
-    )
-    async with session_factory() as session:
-        session.add(duplicate)
-        store = SqlAlchemyQaArtefactStore(session)
-        with pytest.raises(IntegrityError) as exc_info:
-            await store.record_evaluation(fresh)
-        await session.rollback()
-
-    assert constraint_name(exc_info.value) == "uq_qa_findings_evaluation_ordinal", (
-        "the rejected constraint should be the findings uniqueness constraint"
-    )
-    async with session_factory() as session:
-        assert await count_rows(session, QaEvaluationRecord) == 1, (
-            "the rejected recording should not persist its evaluation"
-        )
-
-
-@pytest.mark.asyncio
-async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
-    session_factory: SessionFactory,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A rejected supersession is bounded, reported, and rolled back alone."""
-    episode_id = await create_episode(session_factory)
-    first = make_evaluation(
-        episode_id,
-        idempotency_key="supersede-failure",
-        compliance_status=QaComplianceStatus.ERRORED,
-        severities=(QaFindingSeverity.LOW,),
-    )
-    incoming = make_evaluation(
-        episode_id,
-        idempotency_key="supersede-failure",
-        compliance_status=QaComplianceStatus.COMPLIANT,
-        severities=(QaFindingSeverity.HIGH,),
-        evaluated_at=REPLAYED_AT,
-    )
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        stored = await uow.qa_artefacts.record_evaluation(first)
-        await uow.commit()
-
-    real_finding_to_record = qa_artefacts.finding_to_record
-
-    def reject_replacement_findings(
-        finding: QaFinding,
-        *,
-        evaluation_id: uuid.UUID,
-    ) -> QaFindingRecord:
-        """Build a replacement finding that violates the ordinal check."""
-        record = real_finding_to_record(finding, evaluation_id=evaluation_id)
-        record.ordinal = -1
-        return record
-
     metrics = RecordingMetrics()
-    runtime = QaArtefactStorageRuntime(
-        clock=lambda: REPLAYED_AT,
-        uuid_factory=uuid.uuid7,
-        metrics=metrics,
-    )
     async with session_factory() as session:
-        monkeypatch.setattr(
-            qa_artefacts,
-            "finding_to_record",
-            reject_replacement_findings,
+        store = SqlAlchemyQaArtefactStore(
+            session,
+            runtime=QaArtefactStorageRuntime(
+                clock=lambda: REPLAYED_AT,
+                uuid_factory=uuid.uuid7,
+                metrics=metrics,
+            ),
         )
-        store = SqlAlchemyQaArtefactStore(session, runtime=runtime)
-        with pytest.raises(IntegrityError):
-            await store.record_evaluation(incoming)
+        with pytest.raises(IntegrityError) as exc_info:
+            await store.record_evaluation(orphan)
         assert await session.scalar(sa.text("SELECT 1")) == 1, (
-            "a rejected supersession must leave the caller's transaction usable"
+            "a non-idempotency violation should leave the transaction usable"
         )
         await session.rollback()
 
-    async with session_factory() as session:
-        reloaded = await SqlAlchemyQaArtefactStore(session).get_evaluation(
-            stored.summary_record.id
-        )
-
-    assert reloaded is not None, "the stored evaluation should still be readable"
-    assert reloaded.summary_record.compliance_status is QaComplianceStatus.ERRORED, (
-        "a failed supersession should leave the stored verdict untouched"
-    )
-    assert [item.severity for item in reloaded.findings] == [QaFindingSeverity.LOW], (
-        "a failed supersession should leave the stored findings untouched"
+    assert constraint_name(exc_info.value) == "qa_evaluations_episode_id_fkey", (
+        "the rejected constraint should be the evaluation's episode foreign key"
     )
     assert metrics.counters == [
         (
             "qa_evaluation_record_failed",
-            {"evaluator": "pedante", "error_category": "supersede_failed"},
+            {"evaluator": "pedante", "error_category": "integrity_violation"},
         )
-    ], "a supersession failure should count one bounded failure"
+    ], (
+        "the failure should be named for the constraint that fired; without the "
+        "narrowing the replay lookup finds no row and reports conflict_without_row"
+    )
+    async with session_factory() as session:
+        assert await count_rows(session, QaEvaluationRecord) == 0, (
+            "a rejected first recording should leave no evaluation behind"
+        )
 
 
 @given(operations=_OPERATIONS)

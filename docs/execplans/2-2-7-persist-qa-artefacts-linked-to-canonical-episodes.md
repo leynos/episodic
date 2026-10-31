@@ -410,8 +410,52 @@ Stop and escalate when any of these is reached.
     failed with `PendingRollbackError` on the caller's session — then 126
     focused canonical-storage tests passed, up one from the 125 recorded
     above.
-  - Pending: the repair's full gate sweep, review round 2, and the atomic
-    commit.
+  - Milestone CodeRabbit CLI review round 2 (`coderabbit 0.9.1`, same CLI and
+    scope over `aa7c5262..91d8a681`) returned four findings, adjudicated as
+    follows:
+    - F1 (upheld, repaired): `episode_records` used the first 12 hex digits of
+      the episode identifier as the series slug, and `series_profiles.slug` is
+      unique. A UUIDv7 leads with its timestamp, so episodes created in the same
+      millisecond shared a prefix. The slug now uses the whole hex.
+    - F2 (upheld, repaired): the replay lookup read the stored artefact without
+      a lock, so two concurrent replays could both decide to supersede and one
+      would collide on a finding ordinal rather than replay the committed
+      result. The lookup now ends `.with_for_update()`. The race itself cannot
+      be interleaved deterministically in this harness: once one transaction has
+      updated the stored artefact, the other's insert blocks on that row lock
+      before it reaches the lookup. The lock clause is therefore asserted
+      directly as the documented observable substitute, and its non-vacuity was
+      proven by removing the clause from a scratch copy and watching
+      `test_replay_lookup_locks_the_stored_row_against_supersession` fail.
+    - F3 (partly upheld, repaired; premise partly refuted): the
+      non-idempotency test did not discriminate the constraint narrowing, since
+      its caller-owned duplicate finding failed the flush regardless. The test
+      now makes the store's own row fail a foreign key to a missing episode and
+      asserts the `integrity_violation` metric; removing the narrowing makes it
+      report `conflict_without_row` and fail. The reviewer's premise that
+      `begin_nested()` flushes before it opens the savepoint is wrong — the
+      method emits no SQL (see `Decision log`), which is why the previous
+      scenario never reached the savepoint harmlessly.
+    - F4 (rejected): recording a second artefact for an existing key would
+      collide on `uq_qa_evaluations_episode_idempotency_key` before the findings
+      constraint could fire, so the suggested scenario cannot exercise the
+      branch it was meant to test.
+  - Round-2 green evidence: 14 focused tests across
+    `test_qa_artefact_replay.py` and the new
+    `test_qa_artefact_failure_handling.py` pass. The two failure tests moved to
+    the new module because the replay module had reached 441 lines.
+  - Round-2 gate sweep (scrutineer, exclusive, sequential, seven gates) against
+    `91d8a681` plus the working-tree repair: `nixie`, `typecheck`, `lint`,
+    `check-migrations`, and `test` passed — 1839 passed, 3 skipped, 57
+    snapshots — while `check-fmt` and `markdownlint` failed on this plan's own
+    prose (`mdtablefix` wanted a reflow, and the spelling gate rejected
+    `serialise`). Both were repaired, `mdtablefix --in-place` reflowed the file,
+    and both gates were re-run green. `make typecheck` also emitted two
+    `possibly-missing-submodule` warnings on the new test module's `sa.event`
+    access; the module now imports `from sqlalchemy import event`, and
+    typecheck is warning-free. Logs `/tmp/<gate>-episodic-ep-m2-round2-<slug>-8.out`
+    and `-9.out` for the two re-runs.
+  - Pending: review round 3 and the atomic commit.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
       mapping for Pedante and Chrono.
 - [ ] EP-M4 REST retrieval endpoints filtered by evaluator and compliance
@@ -929,6 +973,30 @@ Stop and escalate when any of these is reached.
   is exactly the deferred-implementation case. Date/Author: 2026-10-31,
   implementation agent. **Deviation status: none** — the reasons name the
   verified caller and the deleting commit.
+- Decision: the replay lookup carries `with_for_update()` and its exclusive
+  lock is asserted as a statement shape rather than by racing two sessions.
+  Rationale: once a transaction has updated the stored artefact, a competing
+  insert blocks on that row's lock before it can reach the replay lookup, so
+  the harness cannot interleave the two reads the lock exists to serialize. The
+  statement-level assertion is the observable substitute; the repository rule
+  for an inexpressible timing requirement permits it when documented, and
+  removing the clause makes the test fail. Date/Author: 2026-10-31,
+  implementation agent. **Deviation status: accepted** — recorded here because
+  the plan's `INV-REPLAY-IDEMPOTENT` evidence is otherwise a race the suite
+  never runs.
+- Decision: the non-idempotency test rejects a store-owned row through a
+  foreign key to a missing episode rather than through the caller's pending
+  duplicate finding. Rationale: `Session.begin_nested()` emits no SQL and does
+  not flush, so the previous scenario's caller-owned `QaFindingRecord` failed
+  during the store's savepoint flush and invalidated the outer transaction,
+  which no savepoint rollback can repair. That made the test's transaction-
+  usability assertion impossible to satisfy and, more importantly, made the
+  scenario fail for a reason unrelated to the narrowing it meant to exercise. A
+  store-owned foreign key failure keeps the whole rejection inside the
+  savepoint and still reaches the same
+  `constraint_name(err) != _IDEMPOTENCY_CONSTRAINT` branch. Date/Author:
+  2026-10-31, implementation agent. **Deviation status: none** — test
+  implementation only; the production contract is unchanged.
 
 ## Outcomes & retrospective
 

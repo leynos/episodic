@@ -89,7 +89,9 @@ def episode_records(
     now = dt.datetime.now(dt.UTC)
     series = SeriesProfile(
         id=uuid.uuid7(),
-        slug=f"qa-{episode_id.hex[:12]}",
+        # The whole hex keeps the slug unique: a UUIDv7's leading bits are its
+        # timestamp, so a prefix repeats for episodes created in one millisecond.
+        slug=f"qa-{episode_id.hex}",
         title="QA artefact tests",
         description="Episodes that carry recorded evaluations.",
         configuration={},
