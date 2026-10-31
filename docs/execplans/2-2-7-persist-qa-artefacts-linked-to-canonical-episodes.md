@@ -395,7 +395,23 @@ Stop and escalate when any of these is reached.
     test 312s. The suite reported 1837 passed, 3 skipped, and 57 snapshots,
     the two added ones being this milestone's observability snapshots. Logs
     `/tmp/<gate>-episodic-ep-m2-<slug>-3.out`.
-  - Pending: the milestone CodeRabbit CLI review, then the atomic commit.
+  - Milestone CodeRabbit CLI review round 1 (`coderabbit 0.9.1`,
+    `review --agent --committed --base-commit aa7c5262`, exit 0,
+    `review_completed`, 20/20 changed paths, no rate limit) returned one minor
+    finding: `_supersede` mutated the stored record and flushed twice outside
+    any savepoint, so a rejected supersession aborted the caller's whole unit
+    of work and emitted no failure metric, contradicting the
+    intact-transaction contract `record_evaluation` documents. Upheld and
+    repaired: the assignments and both flushes now run inside one
+    `begin_nested()`, a `SQLAlchemyError` emits the bounded `supersede_failed`
+    category and is re-raised, and the stored-record read happens after the
+    handler. Red was observed first — the new
+    `test_supersession_failure_is_counted_and_keeps_the_transaction_usable`
+    failed with `PendingRollbackError` on the caller's session — then 126
+    focused canonical-storage tests passed, up one from the 125 recorded
+    above.
+  - Pending: the repair's full gate sweep, review round 2, and the atomic
+    commit.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
       mapping for Pedante and Chrono.
 - [ ] EP-M4 REST retrieval endpoints filtered by evaluator and compliance

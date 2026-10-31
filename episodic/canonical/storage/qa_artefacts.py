@@ -245,27 +245,36 @@ class SqlAlchemyQaArtefactStore:
     ) -> QaEvaluation:
         """Replace the payload and findings of a stored errored artefact."""
         summary = evaluation.summary_record
-        record.evaluator_version = summary.evaluator_version
-        record.artefact_schema_version = summary.artefact_schema_version
-        record.compliance_policy_version = summary.compliance_policy_version
-        record.compliance_status = summary.compliance_status
-        record.summary = summary.summary
-        record.rubric_score = summary.rubric_score
-        record.runtime_estimate_seconds = summary.runtime_estimate_seconds
-        record.finding_count = summary.finding_count
-        record.evaluator_metadata = summary.evaluator_metadata
-        record.evaluated_at = summary.evaluated_at
-        record.generation_run_id = summary.generation_run_id
-        # The deletes must reach the database before the replacements are
-        # inserted: one flush emits inserts first, so ordinal 0 of the
-        # replacement would collide with ordinal 0 of the errored recording.
-        record.findings.clear()
-        await self._session.flush()
-        record.findings = [
-            finding_to_record(finding, evaluation_id=record.id)
-            for finding in evaluation.findings
-        ]
-        await self._session.flush()
+        try:
+            # The savepoint keeps a rejected supersession from taking the
+            # caller's unrelated pending work down with it, matching the
+            # read-then-replace contract ``record_evaluation`` documents.
+            async with self._session.begin_nested():
+                record.evaluator_version = summary.evaluator_version
+                record.artefact_schema_version = summary.artefact_schema_version
+                record.compliance_policy_version = summary.compliance_policy_version
+                record.compliance_status = summary.compliance_status
+                record.summary = summary.summary
+                record.rubric_score = summary.rubric_score
+                record.runtime_estimate_seconds = summary.runtime_estimate_seconds
+                record.finding_count = summary.finding_count
+                record.evaluator_metadata = summary.evaluator_metadata
+                record.evaluated_at = summary.evaluated_at
+                record.generation_run_id = summary.generation_run_id
+                # The deletes must reach the database before the replacements
+                # are inserted: one flush emits inserts first, so ordinal 0 of
+                # the replacement would collide with ordinal 0 of the errored
+                # recording.
+                record.findings.clear()
+                await self._session.flush()
+                record.findings = [
+                    finding_to_record(finding, evaluation_id=record.id)
+                    for finding in evaluation.findings
+                ]
+                await self._session.flush()
+        except SQLAlchemyError:
+            self._emit_failed(summary, "supersede_failed")
+            raise
         return await self._require_stored(record.id)
 
     def _emit_recorded(self, summary: QaEvaluationSummary) -> None:
