@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -404,6 +404,7 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "celery" },
+    { name = "cyclopts" },
     { name = "eventlet" },
     { name = "falcon" },
     { name = "femtologging" },
@@ -421,7 +422,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "crosshair-tool" },
-    { name = "cyclopts" },
     { name = "df12-python-lints" },
     { name = "hecate" },
     { name = "hypothesis" },
@@ -444,6 +444,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.19.2,<2.0" },
     { name = "asyncpg", specifier = ">=0.20.0,<1.0" },
     { name = "celery", specifier = ">=5.5,<6.0" },
+    { name = "cyclopts", specifier = ">=4.25.2,<5" },
     { name = "eventlet", specifier = ">=0.41.2,<0.42" },
     { name = "falcon", specifier = ">=4.3.1,<5.0" },
     { name = "femtologging", git = "https://github.com/leynos/femtologging?rev=691a73962df8f99308a82348d99c4f707c245e63" },
@@ -461,7 +462,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "crosshair-tool", specifier = ">=0.0.110,<0.1" },
-    { name = "cyclopts", specifier = ">=4.25.2,<5" },
     { name = "df12-python-lints", git = "https://github.com/leynos/df12-python-lints.git?rev=v0.2.0" },
     { name = "hecate", git = "https://github.com/leynos/hecate?rev=46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12" },
     { name = "hypothesis", extras = ["asyncio"], specifier = ">=6.168.1,<7" },

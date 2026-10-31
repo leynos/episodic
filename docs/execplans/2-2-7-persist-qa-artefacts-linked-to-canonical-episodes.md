@@ -690,6 +690,65 @@ Stop and escalate when any of these is reached.
     limit): **0 findings**. The milestone review obligation is discharged and
     `EP-M4` is complete.
 - [ ] EP-M5 First-party CLI retrieval surface.
+  - Implementation (2026-10-31): `episodic/cli/` now provides the `episodic`
+    console script. `app.py` builds the cyclopts application whose meta
+    launcher resolves `--base-url`, `--token`, and `--timeout` before dispatch;
+    `qa.py` registers `qa evaluations list`; `client.py` builds the request and
+    maps failures onto the documented exit codes; `rendering.py` renders the
+    table and JSON forms; `entrypoint.py` holds `main`, which `__init__.py`
+    re-exports. The command never raises past `main`: `CliError` carries its
+    own exit code, and usage errors and `SystemExit` are converted. There is
+    no domain import outside `episodic.canonical.qa_artefacts`, satisfying the
+    Hecate `cli` group. `pyproject.toml` replaces the dead `stilyagi` script
+    with `episodic = "episodic.cli:main"`, promotes `cyclopts>=4.25.2,<5`
+    from the dev group to the runtime dependencies, and records the three
+    dynamically invoked callables in the Skylos entry-point table.
+  - Red state, recorded honestly: the previously absent `episodic.cli` package
+    and the dead `stilyagi` console script are the failing condition; there
+    was no committed failing test to observe, because the command surface was
+    probed in `/tmp` before the tests were written. The first committed state
+    is therefore green.
+  - Evidence: the focused CLI unit and snapshot suite (17 tests, 4 snapshots),
+    the CLI BDD scenarios (6), and the REST BDD scenarios (9) pass together —
+    32 passed. `uv run episodic qa evaluations list --help` exits 0 and lists
+    the wire-value choices `pedante, chrono, anthem` and
+    `compliant, non_compliant, not_applicable, errored`. A missing episode id
+    exits 2, an unknown filter value exits 2, an error envelope exits 1, an
+    unreachable API exits 3, and a `429 rate_limited` exits 4.
+  - Gate sweep 1 (scrutineer, exclusive, sequential, seven gates): red at
+    `check-fmt` (one plan table needed realignment), `typecheck` (`ty` lost the
+    non-`None` narrowing inside a conditional expression, plus two redundant
+    casts) and `lint` (four Pylint `C1804` truthiness comparisons and one
+    `R0913`). Repairs: `mdtablefix --in-place` on the plan, `str()` conversion
+    before choosing the terminator, casts removed, comparisons simplified, and
+    `list_evaluations` given a frozen `ListOptions` parameter object so the
+    helper stays within four arguments.
+  - Gate sweep 2: red at `df12-python-lints` — 40 `C9102` asserts without
+    failure messages and one `R9108` large inline literal in
+    `tests/test_qa_cli.py`. Repairs: a message on every assert, and the query
+    parameter expectation became a syrupy snapshot.
+  - Gate sweep 3: red at `df12-future-annotations` — `C9112` on seven
+    redundant `from __future__ import annotations` lines; removed (the
+    repository targets CPython 3.14, where PEP 649 defers annotations anyway).
+    The step module keeps its import because that lint stage excludes step
+    modules.
+  - Gate sweep 4: red at `ambrleaks` — 12 `[snapshot-uuid]` findings in
+    `tests/__snapshots__/test_qa_cli.ambr`. Repairs: the three page payloads
+    pass through `tests.snapshot_redaction.redact_snapshot_uuids`, matching
+    `test_qa_artefact_serializers.py`, and the snapshot was regenerated with
+    `<uuid>` placeholders. The redaction is safe here because the rendering
+    contracts are structural — row order is still pinned by evaluator, status,
+    finding count, and timestamp.
+  - Gate sweep 5: red at the Skylos dead-code gate — `CliApplication.run`
+    looked unused because its caller is in the same package. Repair: a
+    `type = "method"` entry-point rule naming
+    `episodic.cli.entrypoint.main` as the verified caller.
+  - Gate sweep 6 (scrutineer, exclusive, sequential, seven gates): **all
+    green** — check-fmt, markdownlint, nixie, typecheck, lint (every stage:
+    Hecate, Ruff, Pylint `10.00/10`, df12 `10.00/10`, C9112, ambrleaks,
+    Skylos, duplication gate with 30 reasoned exceptions), check-migrations,
+    and test: 1930 passed, 3 skipped, 67 snapshots. Logs
+    `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m5-repair5.out`.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of
@@ -1310,6 +1369,45 @@ Stop and escalate when any of these is reached.
   Date/Author: 2026-10-31, implementation agent. **Deviation status: none** —
   the deferral follows the approved milestone split; `EP-M6` now explicitly
   owes the two route descriptions.
+- Decision: `main` lives in `episodic/cli/entrypoint.py`, and
+  `episodic/cli/__init__.py` only re-exports it, rather than defining `main` in
+  `__init__.py` as the milestone file list first proposed. Rationale: the
+  repository enables Ruff's `non-empty-init-module` rule, which rejects
+  implementation code in an `__init__.py`; a module docstring plus
+  `from episodic.cli.entrypoint import main` and `__all__` is the permitted
+  form. The console-script target remains the documented `episodic.cli:main`.
+  Date/Author: 2026-10-31, implementation agent. **Deviation status: none** —
+  the entry point and `[project.scripts]` target are exactly as specified; only
+  the module holding the function body changed.
+- Decision: the CLI behavioural scenarios live in their own
+  `tests/features/qa_cli_retrieval.feature` and
+  `tests/steps/test_qa_cli_steps.py`, with a shared harness in
+  `tests/steps/qa_cli_support.py`, rather than extending the existing QA
+  artefact retrieval feature and step module. Rationale:
+  `tests/steps/test_qa_artefact_retrieval_steps.py` already stood at 364 lines,
+  so six more scenarios and their steps would breach the repository's 400-line
+  file limit. `QaCliContext` composes `QaRetrievalContext` as a component and
+  the Background steps delegate to the same seed helpers, so no seeding logic
+  is duplicated. Date/Author: 2026-10-31, implementation agent. **Deviation
+  status: none** — coverage and the trace link are unchanged.
+- Decision: `episodic/cli/qa.py` imports `uuid` at runtime although it appears
+  only in an annotation, and carries a reasoned
+  `ruff: ignore[typing-only-standard-library-import]`. Rationale: cyclopts
+  resolves a command function's annotations when the function is registered, so
+  a `TYPE_CHECKING`-only import raises `NameError: name 'uuid' is not defined`
+  while the application is constructed; the enum choice helpers are imported
+  for the same reason. Ruff's advice is right in general and wrong for this
+  registration path, so the ignore names the reason. Date/Author: 2026-10-31,
+  implementation agent. **Deviation status: none**.
+- Decision: `--evaluator` and `--compliance-status` pass explicit `choices=`
+  built from the enum values instead of relying on cyclopts' default rendering
+  of an enum annotation. Rationale: with a bare enum annotation cyclopts
+  kebab-cases the member *names*, so `--help` offered `non-compliant` and
+  `not-applicable` while the wire contract uses `non_compliant` and
+  `not_applicable`; passing the exact values both documents the API vocabulary
+  and keeps coercion to the enum. Date/Author: 2026-10-31, implementation
+  agent. **Deviation status: none** — this aligns the CLI with the documented
+  contract rather than changing it.
 
 ## Outcomes & retrospective
 
@@ -1519,7 +1617,7 @@ RM-2.2.7-a  -> TDD-DATA -> EP-M1 -> tests/test_qa_artefact_domain.py::test_block
 RM-2.2.7-a  -> TDD-DATA -> EP-M2 -> tests/canonical_storage/test_qa_artefacts.py::test_evaluation_round_trip
 RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_records_pedante_result
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)
-RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_artefact_retrieval.feature (CLI scenarios)
+RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_cli_retrieval.feature (CLI scenarios)
 ADR-001(open item) -> EP-M6 -> docs/adr/adr-024-qa-artefact-persistence-contract.md
 TDD-DATA(deviation, accepted 2026-08-23) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
 ```
@@ -2222,17 +2320,33 @@ fenced blocks.
 - Requirements and gaps: `RM-2.2.7-b` (CLI half), `TDD-CLIENT`,
   `LEM-CLI-RENDERING`.
 - Files added or changed:
-  - `episodic/cli/__init__.py` — `main()`; the only module that writes to
+  - `episodic/cli/__init__.py` — re-exports `main` for the
+    `episodic.cli:main` console-script target. The repository's
+    `non-empty-init-module` rule forbids an implementation here, so the
+    function itself lives in `entrypoint.py`.
+  - `episodic/cli/entrypoint.py` — `main()`; the only module that writes to
     standard output or exits.
   - `episodic/cli/app.py` — the `cyclopts.App` and global options.
   - `episodic/cli/qa.py` — the `qa evaluations list` command.
   - `episodic/cli/client.py` — a thin `httpx` client and error translation.
   - `episodic/cli/rendering.py` — pure table and JSON renderers.
+  - `tests/test_qa_cli.py` and `tests/__snapshots__/test_qa_cli.ambr` — the
+    renderer snapshots and the stubbed-HTTP command tests.
+  - `tests/features/qa_cli_retrieval.feature`,
+    `tests/steps/test_qa_cli_steps.py`, and
+    `tests/steps/qa_cli_support.py` — the CLI scenarios. They live in their own
+    feature and step module because
+    `tests/steps/test_qa_artefact_retrieval_steps.py` was already 364 lines,
+    and the 400-line module limit applies to test modules too.
   - `pyproject.toml` — replace the dead `stilyagi` script with `episodic`,
     move `cyclopts` from the `dev` group into `[project.dependencies]`, and add
-    a `[[tool.skylos.dead_code.entrypoints]]` rule for `episodic.cli.main`
-    (reached only through `[project.scripts]`) and for the `cyclopts`
-    decorator-registered command functions. `scripts/` is outside
+    a `[[tool.skylos.dead_code.entrypoints]]` rule for
+    `episodic.cli.entrypoint.main` (reached only through `[project.scripts]`)
+    and for the `cyclopts` decorator-registered callables
+    (`episodic.cli.app.build_app.launcher` and
+    `episodic.cli.qa.register.list_evaluations`), plus a `type = "method"`
+    rule for `episodic.cli.app.CliApplication.run`, whose caller is
+    `episodic.cli.entrypoint.main`. `scripts/` is outside
     `SKYLOS_PRODUCTION_TARGETS`, so `scripts/local_k8s.py` is not a precedent
     that these are safe.
 - Acceptance evidence: the CLI and behavioural suites pass, the CLI scenarios
@@ -2241,6 +2355,7 @@ fenced blocks.
 
   ```bash
   uv run pytest tests/test_qa_cli.py \
+      tests/steps/test_qa_cli_steps.py \
       tests/steps/test_qa_artefact_retrieval_steps.py -q
   ```
 
@@ -2884,7 +2999,7 @@ each one mirrors: `episodic/canonical/storage/generation_runs.py` is 358 lines,
 | `episodic/canonical/qa_artefact_service.py`                  | 150–200       | none expected                                                                                                                |
 | `episodic/api/resources/qa_artefacts.py`                     | 200–280       | see below                                                                                                                    |
 | `episodic/api/episode_access.py`                             | 60–90         | new shared helper                                                                                                            |
-| `episodic/cli/*` (5 modules)                                 | 350–500 total | see the pre-authorized escalation                                                                                            |
+| `episodic/cli/*` (6 modules)                                 | 350–500 total | see the pre-authorized escalation                                                                                            |
 
 Two notes that change the work rather than describing it:
 
