@@ -448,11 +448,11 @@ Stop and escalate when any of these is reached.
     `91d8a681` plus the working-tree repair: `nixie`, `typecheck`, `lint`,
     `check-migrations`, and `test` passed — 1839 passed, 3 skipped, 57
     snapshots — while `check-fmt` and `markdownlint` failed on this plan's own
-    prose (`mdtablefix` wanted a reflow, and the spelling gate rejected
-    `serialise`). Both were repaired, `mdtablefix --in-place` reflowed the file,
-    and both gates were re-run green. `make typecheck` also emitted two
-    `possibly-missing-submodule` warnings on the new test module's `sa.event`
-    access; the module now imports `from sqlalchemy import event`, and
+    prose (`mdtablefix` wanted a reflow, and the spelling gate rejected an
+    `-ise` spelling of *serialize*). Both were repaired, `mdtablefix --in-place`
+    reflowed the file, and both gates were re-run green. `make typecheck` also
+    emitted two `possibly-missing-submodule` warnings on the new test module's
+    `sa.event` access; the module now imports `from sqlalchemy import event`, and
     typecheck is warning-free. Logs `/tmp/<gate>-episodic-ep-m2-round2-<slug>-8.out`
     and `-9.out` for the two re-runs.
   - Round-2 repair committed as `1ebadbc2`.
@@ -474,6 +474,13 @@ Stop and escalate when any of these is reached.
       status.
 - [ ] EP-M5 First-party CLI retrieval surface.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
+  - Operator-requested early edit (2026-10-31): the design document's
+    `Quality Assurance Stack` section now carries the ER diagram of
+    `QA_EVALUATION` and `QA_FINDING`, with a screen-reader lead-in and a
+    `Figure 6` caption. `make nixie`, `make check-fmt`, and
+    `make markdownlint` pass. The same sweep repaired a spelling violation the
+    plan itself carried (an `-ise` spelling of *serialize*), which the
+    spelling gate rejected.
 
 ## Surprises & discoveries
 

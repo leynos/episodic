@@ -403,6 +403,45 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Automatic gating and review task escalation remain available for workflows
   that require human intervention after repeated failures.
 
+The diagram below summarizes the durable QA artefact records and how they
+attach to a canonical episode and its generation run.
+
+For screen readers: the following entity-relationship diagram shows QA
+evaluations belonging to a canonical episode, optionally correlating with a
+generation run, and containing ordered QA findings.
+
+```mermaid
+erDiagram
+    CANONICAL_EPISODE ||--o{ QA_EVALUATION : has
+    GENERATION_RUN o|--o{ QA_EVALUATION : correlates
+    QA_EVALUATION ||--o{ QA_FINDING : contains
+
+    CANONICAL_EPISODE {
+        uuid id PK
+    }
+    GENERATION_RUN {
+        uuid id PK
+    }
+    QA_EVALUATION {
+        uuid id PK
+        uuid episode_id FK
+        uuid generation_run_id FK
+        enum evaluator
+        enum compliance_status
+        int finding_count
+        int compliance_policy_version
+    }
+    QA_FINDING {
+        uuid id PK
+        uuid evaluation_id FK
+        int ordinal
+        boolean is_blocking
+    }
+```
+
+_Figure 6: Durable QA artefact records and their relationship to canonical
+episodes and generation runs._
+
 ### Editorial Approval Service
 
 - Implements the configurable approval state machine with stage service-level
