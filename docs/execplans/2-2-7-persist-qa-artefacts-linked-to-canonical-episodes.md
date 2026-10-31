@@ -216,7 +216,12 @@ Stop and escalate when any of these is reached.
     tree (`check-fmt`, `markdownlint`, `nixie`, `typecheck`, `lint` with Skylos
     and the duplication gate, `test`: 1726 passed, 3 skipped, 55 snapshots).
     `EP-M0` closes at `e3f1a6db`.
-- [ ] EP-M1 QA artefact domain model, compliance policy, and ports.
+- [x] EP-M1 QA artefact domain model, compliance policy, and ports.
+      **Closed at `d5414374`** after five CodeRabbit CLI rounds (3, 3, 3, 1,
+      then 2 duplicate trivial findings) and a final green six-gate sweep on
+      the closing tree (`check-fmt`, `markdownlint`, `nixie`, `typecheck`,
+      `lint` with Skylos and the duplication gate, `test`: 1804 passed, 3
+      skipped, 55 snapshots).
   - Red: `tests/test_qa_artefact_domain.py` aborted at collection with
     `ModuleNotFoundError: No module named 'episodic.canonical.qa_artefacts'`.
   - Green: added `episodic/canonical/qa_artefacts.py` and
