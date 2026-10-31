@@ -594,6 +594,13 @@ Stop and escalate when any of these is reached.
     its 30 reasoned exceptions), check-migrations, and test: 1906 passed, 3
     skipped, 63 snapshots. Logs
     `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m4-4.out`.
+  - Atomic refactor commit (per the milestone's file list): ownership now
+    resolves through `episodic/api/episode_access.py:read_owned_episode`.
+    `episode_tei.py` replaced `_has_accessible_draft` with the shared call plus
+    its existing generated-draft predicate, and the QA resources replaced
+    `_is_episode_owner`, so the launcher-run rule exists once. Focused TEI and
+    QA suites: 39 passed, 5 snapshots
+    (`/tmp/test-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-refactor-targeted.out`).
 - [ ] EP-M5 First-party CLI retrieval surface.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's

@@ -6,6 +6,7 @@ import typing as typ
 
 import falcon
 
+from episodic.api.episode_access import read_owned_episode
 from episodic.api.errors import http_error
 from episodic.api.helpers import parse_uuid
 from episodic.api.serializers import serialize_tei_envelope
@@ -16,7 +17,7 @@ if typ.TYPE_CHECKING:
     import uuid
 
     from episodic.api.types import UowFactory
-    from episodic.canonical.domain import CanonicalEpisode, GenerationRun
+    from episodic.canonical.domain import CanonicalEpisode
     from episodic.observability import TracerPort
 
 _JSON_MEDIA_TYPE = "application/json"
@@ -83,25 +84,13 @@ class EpisodeTeiResource:
                 span.set_attribute("outcome", "rejected")
                 span.set_attribute("failure_category", "invalid_input")
                 raise
-            async with self._uow_factory() as uow:
-                episode = await uow.episodes.get(parsed_episode_id)
-                run = (
-                    None
-                    if episode is None or episode.last_generation_run_id is None
-                    else await uow.generation_runs.get_run(
-                        episode.last_generation_run_id
-                    )
-                )
             actor = principal_id(req)
-            if actor is None:
+            async with self._uow_factory() as uow:
+                episode = await read_owned_episode(uow, parsed_episode_id, actor)
+            if episode is None or not _has_generated_draft(episode):
                 span.set_attribute("outcome", "not_found")
                 span.set_attribute("failure_category", "episode.not_found")
                 raise _tei_not_found(parsed_episode_id)
-            if not _has_accessible_draft(episode, run, actor):
-                span.set_attribute("outcome", "not_found")
-                span.set_attribute("failure_category", "episode.not_found")
-                raise _tei_not_found(parsed_episode_id)
-            episode = typ.cast("CanonicalEpisode", episode)
             try:
                 media_type = negotiate_tei_media_type(req.accept)
             except falcon.HTTPNotAcceptable:
@@ -160,20 +149,6 @@ def _has_generated_draft(episode: CanonicalEpisode) -> bool:
         episode.last_generation_run_id is not None
         and episode.tei_content_hash is not None
         and episode.qa_status is not None
-    )
-
-
-def _has_accessible_draft(
-    episode: CanonicalEpisode | None,
-    run: GenerationRun | None,
-    actor: str,
-) -> bool:
-    """Return whether the requested actor can retrieve this generated draft."""
-    return (
-        episode is not None
-        and _has_generated_draft(episode)
-        and run is not None
-        and run.actor == actor
     )
 
 

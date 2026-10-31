@@ -10,6 +10,7 @@ import typing as typ
 
 import falcon
 
+from episodic.api.episode_access import read_owned_episode
 from episodic.api.errors import http_error
 from episodic.api.helpers import parse_enum_param, parse_pagination, parse_uuid
 from episodic.api.serializers import (
@@ -26,25 +27,8 @@ from episodic.canonical.qa_artefacts import QaComplianceStatus, QaEvaluator
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import uuid
 
     from episodic.api.types import UowFactory
-    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
-
-
-async def _is_episode_owner(
-    uow: CanonicalUnitOfWork,
-    episode_id: uuid.UUID,
-    actor: str | None,
-) -> bool:
-    """Return whether the actor's launcher run produced this episode."""
-    if actor is None:
-        return False
-    episode = await uow.episodes.get(episode_id)
-    if episode is None or episode.last_generation_run_id is None:
-        return False
-    run = await uow.generation_runs.get_run(episode.last_generation_run_id)
-    return run is not None and run.actor == actor
 
 
 def _evaluation_not_found(
@@ -99,7 +83,12 @@ class EpisodeQaEvaluationsResource:
             QaComplianceStatus,
         )
         async with self._uow_factory() as uow:
-            if not await _is_episode_owner(uow, parsed_episode_id, principal_id(req)):
+            episode = await read_owned_episode(
+                uow,
+                parsed_episode_id,
+                principal_id(req),
+            )
+            if episode is None:
                 raise _evaluation_not_found({"episode_id": str(parsed_episode_id)})
             summaries, total = await list_qa_evaluations(
                 uow,
@@ -155,8 +144,12 @@ class QaEvaluationResource:
             details = {"evaluation_id": str(parsed_evaluation_id)}
             if evaluation is None:
                 raise _evaluation_not_found(details)
-            episode_id = evaluation.summary_record.episode_id
-            if not await _is_episode_owner(uow, episode_id, principal_id(req)):
+            episode = await read_owned_episode(
+                uow,
+                evaluation.summary_record.episode_id,
+                principal_id(req),
+            )
+            if episode is None:
                 raise _evaluation_not_found(details)
         resp.media = serialize_qa_evaluation(evaluation)
         resp.status = falcon.HTTP_200
