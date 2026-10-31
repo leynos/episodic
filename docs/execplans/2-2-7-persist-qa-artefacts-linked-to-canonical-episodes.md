@@ -342,7 +342,7 @@ Stop and escalate when any of these is reached.
     the module's own idiom, and the consolidation restores headroom below the
     400-line ceiling. Both tables preserve every case and its field-specific
     `ValueError` match; 54 focused tests collect, the same number as before.
-- [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
+- [x] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
   - Red/Green: the four planned test modules now pass — 33 focused tests across
     `test_qa_artefacts.py`, `test_qa_artefact_replay.py`,
@@ -468,7 +468,14 @@ Stop and escalate when any of these is reached.
     of a clean review. EP-M2's round-2 findings are all resolved and its gates
     are green at `1ebadbc2`; the independent assessment is carried by the hosted
     review at PR handoff.
-- [ ] EP-M3 Recording and query application services, plus evaluator-result
+  - Review obligation resolved later: the allowance recovered, and the EP-M3
+    round-2 review at `8bc818a6` ran over the whole committed branch diff
+    (`origin/main` @ `a78273d3` .. `8bc818a6`), so it covered every EP-M2 path
+    as well as EP-M3. It completed with 0 findings across 46 files, which
+    discharges EP-M2's outstanding local milestone review. The earlier
+    `rate_limit` record above remains accurate for the time it was written.
+    Log `/tmp/coderabbit-ep-m3-review-round2-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md.log`.
+- [x] EP-M3 Recording and query application services, plus evaluator-result
       mapping for Pedante and Chrono.
   - Red/Green: the acceptance command first failed collection with
     `ModuleNotFoundError: No module named 'episodic.canonical.qa_artefact_service'`,
@@ -486,14 +493,51 @@ Stop and escalate when any of these is reached.
     outlived their named reader and are deleted — the schema version, the
     policy version, and the `qa_artefacts` accessor are now production
     reachable. Seven new named exceptions cover the EP-M3 symbols whose readers
-    arrive in EP-M4 and EP-M5, each naming the still-open milestone and the
-    commit that deletes it.
+    arrive later, each naming the still-open consumer and the commit that
+    deletes it: the two query functions name EP-M4's REST retrieval, and the
+    five recording-chain symbols name the QA-gated run path of roadmap item
+    `4.4.1`, because EP-M4 and EP-M5 are retrieval-only.
   - Gate repairs before sweep 1: Ruff's `TC` rules moved the annotation-only
     `datetime` and `ChronoRuntimeEstimate` imports into type-checking blocks,
     the five planned signatures whose argument counts mirror the domain field
     surface carry the repository's `# ruff: ignore[too-many-arguments]` form
     (not `# noqa`), and `_summary_record` gained the `Returns` section the
     docstring rule requires.
+  - Milestone CodeRabbit CLI review round 1 (`coderabbit 0.9.2`, exit 0,
+    `review_completed`, no rate limit) returned three low findings across 46
+    files, plus one deviation found while preparing the repair. All four were
+    upheld and repaired:
+    - F1 (upheld, repaired): the import-purity probe did not cover the new
+      `episodic.canonical.qa_artefact_recording` module, so a reintroduced
+      orchestration dependency in that projection would pass unnoticed. The
+      module is added to `_PURE_MODULES` after a fresh-interpreter probe
+      reported `langgraph False httpx False`.
+    - F2 (upheld, repaired): `tests/test_qa_artefact_recording_properties.py`
+      built its oracle from the production `_BLOCKING_SUPPORT_LEVELS`, which
+      makes `INV-COMPLIANCE-BLOCKING` unable to detect a wrong production set.
+      The documented set now lives once in `tests/fixtures/qa_artefact_builders.py`
+      as `DOCUMENTED_BLOCKING_LEVELS`; the domain module keeps the exact
+      equality test against production, and both suites share that independent
+      oracle.
+    - F3 (upheld, repaired): the Skylos reasons for the recording chain named
+      EP-M4 and EP-M5 as the first callers, but those surfaces are
+      retrieval-only. The five reasons now cite the developers' guide policy
+      for retaining deferred implementation and name roadmap item `4.4.1`.
+    - F4 (self-identified, repaired): the `AGENTS.md` link to that policy
+      pushed the line past 80 columns. It now uses a reference definition.
+  - Review-repair commit `8bc818a6`; focused runs on the repaired tree:
+    `tests/test_qa_artefact_domain.py`,
+    `tests/test_qa_artefact_recording_properties.py`, and
+    `tests/test_qa_import_purity.py` pass — 63 passed.
+  - Milestone gate sweep at `8bc818a6` (scrutineer, exclusive, sequential,
+    seven gates): **all green** — check-fmt, markdownlint, nixie (unsandboxed),
+    typecheck, lint (Pylint `10.00/10`, Skylos clean, duplication gate 30
+    reasoned exceptions), check-migrations, and test: 1881 passed, 3 skipped,
+    58 snapshots. Logs `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md.out`.
+  - Milestone CodeRabbit CLI review round 2 at `8bc818a6` over
+    `origin/main...HEAD`: exit 0, `review_completed`, 46 files, **0 findings**.
+    No round-1 concern was re-raised. The milestone review obligation is
+    discharged and `EP-M3` is complete.
 - [ ] EP-M4 REST retrieval endpoints filtered by evaluator and compliance
       status.
 - [ ] EP-M5 First-party CLI retrieval surface.
@@ -720,6 +764,13 @@ Stop and escalate when any of these is reached.
   `alembic/env.py` calls it. Impact: reproduce the Makefile target list when
   investigating a finding; a narrower scan invents dead code and invites a
   whitelist entry for live code.
+- Observation (execution, 2026-10-31): `make skylos-allow` (and the underlying
+  `skylos whitelist SYMBOL --reason`) **appends** an entry; it does not replace
+  an existing one for the same symbol. Evidence: re-running it for `record`
+  printed `Added 'record' to whitelist.documented` and left two `"record" =`
+  keys in `pyproject.toml`, which is invalid TOML. Impact: correct a reason by
+  editing the existing entry in place, or restore the file and re-add; verify
+  with `grep -c '^"symbol" =' pyproject.toml` that the key count is one.
 
 ## Decision log
 
