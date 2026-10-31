@@ -670,6 +670,22 @@ Stop and escalate when any of these is reached.
     reasoned exceptions), check-migrations, and test: 1907 passed, 3 skipped,
     63 snapshots. Logs
     `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m4-review2-repair2.out`.
+  - Review-repair commit `e92c8fa3`.
+  - Milestone CLI review round 3 at `e92c8fa3` (`coderabbit 0.9.2`, exit 0,
+    `review_completed`, 17/17 changed paths over `330050f7..e92c8fa3`, no rate
+    limit): one finding, upheld and repaired. The plan still asserted the
+    superseded unauthenticated-404 contract in four places — the "Where things
+    are today" authorization bullet, the `EP-M4` conformance check, the
+    `HTTP contract (EP-M4)` section (which also instructed ADR 024 to record
+    that divergence), and the `EP-M5` CLI contract. All four now state the
+    401-from-middleware / 404-for-an-authenticated-non-owner split recorded in
+    the Decision log. The review confirmed the round-2 repairs correct and
+    complete, with no new concern.
+  - Round-3 repair evidence: the finding changed only this plan, so the
+    applicable Markdown gates were re-run — `make check-fmt`,
+    `make markdownlint`, and `make nixie` all pass.
+  - Milestone CLI review round 4 is requested over `330050f7..HEAD` to confirm
+    the repaired contract text and close the milestone.
 - [ ] EP-M5 First-party CLI retrieval surface.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
@@ -1394,12 +1410,13 @@ The HTTP surface lives in `episodic/api/`:
   `app.set_error_serializer(serialize_http_error)` — not RFC 9457
   `application/problem+json`.
 - Authorization is coarse: `AuthorizationMiddleware` (in
-  `episodic/api/authorization.py`) sets `req.context.principal_id` for `/v1/*`
-  requests, and resources then enforce **ownership**. The precedent for
-  episode-scoped reads is `episodic/api/resources/episode_tei.py`, whose
-  `_has_accessible_draft` requires `run.actor == actor` for the episode's
-  `last_generation_run_id`, and which returns not-found — not `401` — when
-  `principal_id(req)` is `None`.
+  `episodic/api/authorization.py`) completes a `401 unauthorized` response for a
+  `/v1/*` request with no credential before any resource runs; otherwise it
+  sets `req.context.principal_id`. Resources then enforce **ownership**. The
+  precedent for episode-scoped reads is
+  `episodic/api/resources/episode_tei.py`, whose `_has_accessible_draft`
+  requires `run.actor == actor` for the episode's `last_generation_run_id` and
+  reports not-found for an authenticated principal that does not own it.
 - No `decimal.Decimal` value is serialized anywhere in `episodic/`, so no JSON
   handler for it exists. Falcon's default media handler would raise `TypeError`.
 
@@ -2186,9 +2203,10 @@ fenced blocks.
   ```
 
 - Conformance check: pagination bounds match `TUI-API`; the error envelope is
-  `{code, message, details}`; a foreign principal receives 404 with code
-  `qa_evaluation_not_found`, matching `episode_tei.py`'s
-  `episode_tei_not_found` convention.
+  `{code, message, details}`; an unauthenticated request receives `401`
+  `unauthorized` from `AuthorizationMiddleware` before dispatch, and only an
+  authenticated non-owner receives 404 with code `qa_evaluation_not_found`,
+  matching `episode_tei.py`'s `episode_tei_not_found` convention.
 - Recovery: remove the route registration; the resources become unreachable.
 - Remaining gaps: CLI, documentation.
 - Compatibility decision: new endpoints under `/v1`; no existing route changes.
@@ -2797,13 +2815,11 @@ episode, resolve its `last_generation_run_id`, and require
 generation run, or belongs to another principal all return `404` with code
 `qa_evaluation_not_found` — never `403`, which would leak existence.
 
-Note a deliberate divergence from `docs/episodic-tui-api-design.md`: an
-*unauthenticated* request also receives `404`, because `principal_id(req)` is
-`None` and the existing `episode_tei.py` precedent returns not-found in that
-case rather than `401 unauthorized`. This plan follows the code, not the
-document, so the two episode-scoped read surfaces behave alike. Record the
-divergence in ADR 024's *Outstanding decisions* and raise `401` handling as a
-separate item rather than fixing it here.
+A request with no credential never reaches the resource:
+`AuthorizationMiddleware` completes a `401 unauthorized` response first, which
+is the same contract `episode_tei.py` has. Only an authenticated principal that
+does not own the episode receives the `404` above, so the two episode-scoped
+read surfaces still behave alike and neither leaks existence.
 
 An unknown `evaluator` or `compliance_status` value returns `400` with code
 `validation_error` and `details.field` naming the offending parameter, which is
@@ -2829,10 +2845,10 @@ Exit codes: `0` success; `1` the API returned an error envelope (print
 `message` to standard error, prefixed with the HTTP status); `2` usage error
 (left to `cyclopts`); `3` the API was unreachable or timed out; `4` the API
 returned `429 rate_limited` (print the `Retry-After` value if present, so a
-throttled operator is not told "unknown error"). Because an unauthenticated
-request receives `404`, a `404` response with no `EPISODIC_API_TOKEN` set must
-add the hint "no API token configured; set EPISODIC_API_TOKEN or pass --token"
-— otherwise the commonest setup mistake reads as "that episode does not exist".
+throttled operator is not told "unknown error"). A `401 unauthorized` response
+with no `EPISODIC_API_TOKEN` set must add the hint "no API token configured;
+set EPISODIC_API_TOKEN or pass --token", so the commonest setup mistake names
+the credential rather than reading as a bare authorization failure.
 
 `--format table` prints a fixed-width table with columns `EVALUATOR`, `STATUS`,
 `FINDINGS`, `EVALUATED AT`, `ID`, followed by a summary line
