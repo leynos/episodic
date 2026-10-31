@@ -102,6 +102,7 @@ def finding(
 def summary(
     *,
     evaluation_id: uuid.UUID = EVALUATION_ID,
+    episode_id: uuid.UUID = EPISODE_ID,
     evaluator: QaEvaluator = QaEvaluator.PEDANTE,
     evaluator_version: str = "pedante-1.0.0",
     artefact_schema_version: int = QA_ARTEFACT_SCHEMA_VERSION,
@@ -114,6 +115,7 @@ def summary(
     rubric_score: decimal.Decimal | None = None,
     runtime_estimate_seconds: int | None = None,
     evaluator_metadata: JsonMapping | None = None,
+    created_at: dt.datetime | None = None,
 ) -> QaEvaluationSummary:
     """Return a valid evaluation summary whose fields callers may override.
 
@@ -121,6 +123,8 @@ def summary(
     ----------
     evaluation_id : uuid.UUID
         Identifier to give the evaluation.
+    episode_id : uuid.UUID
+        Canonical episode the evaluation applies to.
     evaluator : QaEvaluator
         Evaluator that produced the artefact.
     evaluator_version : str
@@ -145,6 +149,8 @@ def summary(
         Optional runtime estimate.
     evaluator_metadata : JsonMapping | None
         Evaluator-specific payload; ``None`` becomes an empty mapping.
+    created_at : dt.datetime | None
+        Optional storage time; ``None`` leaves the artefact unrecorded.
 
     Returns
     -------
@@ -153,7 +159,7 @@ def summary(
     """
     return QaEvaluationSummary(
         id=evaluation_id,
-        episode_id=EPISODE_ID,
+        episode_id=episode_id,
         evaluator=evaluator,
         evaluator_version=evaluator_version,
         artefact_schema_version=artefact_schema_version,
@@ -166,4 +172,5 @@ def summary(
         rubric_score=rubric_score,
         runtime_estimate_seconds=runtime_estimate_seconds,
         evaluator_metadata={} if evaluator_metadata is None else evaluator_metadata,
+        created_at=created_at,
     )

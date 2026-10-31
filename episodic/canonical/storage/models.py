@@ -30,6 +30,9 @@ from .models_base import (
     IDEMPOTENCY_STATE,
     INGESTION_STATUS,
     INTAKE_STATE,
+    QA_COMPLIANCE_STATUS,
+    QA_EVALUATOR,
+    QA_FINDING_SEVERITY,
     QA_STATUS,
     QUALITY_MODE,
     REFERENCE_BINDING_TARGET_KIND,
@@ -42,6 +45,7 @@ from .models_base import (
     Base,
 )
 from .profile_models import EpisodeTemplateRecord, SeriesProfileRecord
+from .qa_artefact_models import QaEvaluationRecord, QaFindingRecord
 from .reference_models import (
     ReferenceBindingRecord,
     ReferenceDocumentRecord,
@@ -63,6 +67,9 @@ __all__ = (
     "IDEMPOTENCY_STATE",
     "INGESTION_STATUS",
     "INTAKE_STATE",
+    "QA_COMPLIANCE_STATUS",
+    "QA_EVALUATOR",
+    "QA_FINDING_SEVERITY",
     "QA_STATUS",
     "QUALITY_MODE",
     "REFERENCE_BINDING_TARGET_KIND",
@@ -86,6 +93,8 @@ __all__ = (
     "MeteringCounterEventRecord",
     "MeteringCounterRecord",
     "PricingSnapshotRecord",
+    "QaEvaluationRecord",
+    "QaFindingRecord",
     "ReferenceBindingRecord",
     "ReferenceDocumentRecord",
     "ReferenceDocumentRevisionRecord",

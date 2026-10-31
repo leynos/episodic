@@ -18,6 +18,11 @@ from episodic.canonical.domain import (
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.idempotency import IdempotencyState
 from episodic.canonical.ingestion_sources import AttachmentKind
+from episodic.canonical.qa_artefacts import (
+    QaComplianceStatus,
+    QaEvaluator,
+    QaFindingSeverity,
+)
 from episodic.canonical.uploads import UploadState
 from episodic.sqlalchemy_base import Base as Base
 
@@ -99,5 +104,20 @@ REVIEW_CHECKPOINT_STATUS = sa.Enum(
 REVIEW_CHECKPOINT_ACTION = sa.Enum(
     CheckpointAction,
     name="review_checkpoint_action",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+QA_EVALUATOR = sa.Enum(
+    QaEvaluator,
+    name="qa_evaluator",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+QA_COMPLIANCE_STATUS = sa.Enum(
+    QaComplianceStatus,
+    name="qa_compliance_status",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+QA_FINDING_SEVERITY = sa.Enum(
+    QaFindingSeverity,
+    name="qa_finding_severity",
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )

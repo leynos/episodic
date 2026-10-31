@@ -344,6 +344,58 @@ Stop and escalate when any of these is reached.
     `ValueError` match; 54 focused tests collect, the same number as before.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
+  - Red/Green: the four planned test modules now pass — 33 focused tests across
+    `test_qa_artefacts.py`, `test_qa_artefact_replay.py`,
+    `test_qa_artefact_constraints.py`, and `test_qa_artefact_properties.py`.
+    The first run failed three ways (supersession flush ordering, whole-table
+    counts under a per-function schema reset, and a sequence not guaranteed to
+    replay); all three are recorded under `Surprises & discoveries`.
+  - Acceptance evidence so far: `uv run pytest tests/canonical_storage -q`
+    reports `125 passed` with 2 snapshots
+    (`/tmp/pytest-canonical-storage-ep-m2-<slug>.out`); the drift check exits 0
+    (`/tmp/check-migrations-ep-m2-<slug>.out`, plus a direct
+    `python -m episodic.canonical.storage.migration_check` run that reported
+    `EXIT=0`), and `alembic heads` reports only `20261031_000014`.
+  - Non-vacuity: each constraint rejection is paired with a satisfying witness
+    that proves the statement would otherwise succeed; the filter property
+    compares the page and total against an independent Python set oracle; the
+    pagination property forces two evaluations onto one `evaluated_at` so the
+    `id` tiebreaker is always exercised; and the finding-order property
+    relocates a middle row in the heap before reading.
+  - Gate repairs after sweep 1: `make lint` stopped at Pylint `R0913` on
+    `make_evaluation`, which now carries the repository's reasoned
+    `# pylint: disable-next=too-many-arguments` alongside its Ruff ignore. The
+    new migration head broke three legacy pricing-migration assertions; that
+    module now pins the pricing revision instead of `head` (see
+    `Decision log`), and its 16 tests plus 2 snapshots pass unchanged. The
+    third `make test` failure was a fixture-setup timeout in
+    `tests/test_runtime_object_store_wiring.py`, which passes alone in 6.7s and
+    is recorded as host contention. Sweep 1 was red on `lint` and `test`; the
+    other five gates were green.
+  - Sweep 2 (after the gate repairs): `make test` passed — 1837 passed, 3
+    skipped, 55 snapshots — and `make check-migrations` remained clean.
+    `make check-fmt` failed only on a paragraph rewrap in this plan (fixed with
+    `make fmt`). `make lint` then stopped at df12 Pylint `R9108` on the two
+    inline-literal observability assertions in
+    `tests/canonical_storage/test_qa_artefacts.py`. Both now compare against
+    syrupy snapshots: the counters through `RecordingMetrics.as_snapshot()`,
+    and the log events through a list whose episode identifier is redacted.
+    `ambrleaks` rejects a UUID even in a deterministic snapshot, so the
+    identifier is asserted separately instead. Skylos then reported the three
+    migration downgrade helpers, which join the existing Alembic downgrade
+    entry-point rule (Alembic calls them when rolling a revision back), and the
+    `qa_artefacts` protocol attribute, which takes a deferred-implementation
+    exception naming `EP-M3` as its first production reader. Targeted runs on
+    the repaired tree: plain and df12 Pylint `10.00/10`, future annotations
+    `10.00/10`, `ambrleaks` exit 0, Skylos exit 0, duplication gate exit 0 with
+    its 30 reasoned exceptions.
+  - Sweep 3 (scrutineer, exclusive, sequential, seven gates): **all green** —
+    check-fmt 1s, markdownlint 12s, nixie 1s, typecheck 1s, lint 86s (all eight
+    sub-stages, including the four that had never run), check-migrations 10s,
+    test 312s. The suite reported 1837 passed, 3 skipped, and 57 snapshots,
+    the two added ones being this milestone's observability snapshots. Logs
+    `/tmp/<gate>-episodic-ep-m2-<slug>-3.out`.
+  - Pending: the milestone CodeRabbit CLI review, then the atomic commit.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
       mapping for Pedante and Chrono.
 - [ ] EP-M4 REST retrieval endpoints filtered by evaluator and compliance
@@ -496,6 +548,48 @@ Stop and escalate when any of these is reached.
   still-open consumer, a direct test, and a deletion condition — and the six
   `make skylos-allow` reasons cite it. The policy is general: `EP-M3`'s
   recording entry points use the same route.
+- Observation (execution, 2026-10-31): SQLAlchemy's unit of work emits a
+  flush's pending inserts **before** its orphan deletes, so replacing the
+  findings of a stored `ERRORED` artefact in one flush collided on
+  `uq_qa_findings_evaluation_ordinal` — ordinal 0 of the replacement met
+  ordinal 0 of the row it replaced. Evidence: three failing cases in the first
+  `EP-M2` run (`test_errored_artefact_is_superseded_in_place` parametrizations
+  plus one Hypothesis example), each reporting that constraint. Impact:
+  `_supersede` now clears the collection and flushes the deletes, then assigns
+  the replacements and flushes the inserts; both phases stay inside the
+  caller's transaction, so a later failure rolls them back together.
+- Observation (execution, 2026-10-31): the migrated py-pglite schema is reset
+  per test **function**, not per Hypothesis example. Evidence: the replay
+  property test asserted one evaluation row per `(episode_id, key)` pair from
+  whole-table counts and failed as soon as a second example ran. Impact:
+  property tests scope row counts to the identifiers their example created;
+  `count_artefacts_for` in `tests/canonical_storage/_qa_artefact_support.py`
+  does this for the replay invariant.
+- Observation (execution, 2026-10-31): the installed Hypothesis no longer
+  accepts `st.recursive(..., max_depth=...)`. Evidence: collection failed with
+  `TypeError: recursive() got an unexpected keyword argument 'max_depth'`.
+  Impact: the JSONB strategies use explicit bounded shapes instead
+  (`_JSON_CONTAINERS`, `_JSON_OBJECTS`), which also states the depth-2 domain
+  the column contract promises.
+- Observation (execution, 2026-10-31):
+  `alembic.autogenerate.compare_metadata` compares tables, columns, indexes,
+  and reflectable constraints, but not `CHECK` constraints. Evidence:
+  `make check-migrations` exits 0 with the three evaluation checks and the
+  ordinal check in place, and would also exit 0 without them. Impact: `EP-M2`'s
+  acceptance evidence includes
+  `tests/canonical_storage/test_qa_artefact_constraints.py`, whose Core inserts
+  bypass the domain constructors and pair every rejection with a satisfying
+  witness.
+- Observation (execution, 2026-10-31): migrating to `head` is a shared
+  assumption in pre-existing tests. The first `EP-M2` sweep failed three legacy
+  assertions in `tests/test_pricing_snapshot_constraint_migration.py` because
+  that module both asserts the current head revision and snapshots the offline
+  SQL for `head`. Evidence: `/tmp/test-episodic-ep-m2-<slug>.out` — two failed
+  syrupy snapshots and one assertion comparing `20261031_000014` against
+  `20261010_000013`. Impact: the module now pins
+  `_PRICING_REVISION = "20261010_000013"` instead of `head`, so the pricing
+  contract no longer changes when a later milestone adds a revision. The
+  snapshots were unchanged, which proves the pinned range emits identical SQL.
 
 ## Decision log
 
@@ -751,6 +845,74 @@ Stop and escalate when any of these is reached.
   match, so rejection coverage is unchanged. Date/Author: 2026-10-31,
   implementation agent. **Deviation status: accepted** — the change is
   test-structure only and touches no production behaviour.
+- Decision: the QA artefact migration is
+  `alembic/versions/20261031_000014_add_qa_artefact_tables.py`, with
+  `revision = "20261031_000014"` and `down_revision = "20261010_000013"`.
+  Rationale: the milestone entry asks for the filename and revision to be
+  re-dated to the day the migration is written, and `alembic heads` reports
+  this revision as the only head. Date/Author: 2026-10-31, implementation
+  agent. **Deviation status: none** — the re-dating is what the plan requires.
+- Decision: supersession replaces findings in two flushes — delete, then
+  insert — rather than assigning a fresh collection. Rationale: see the
+  flush-ordering observation above; the single-flush form cannot satisfy the
+  ordinal uniqueness constraint while both generations are pending.
+  Date/Author: 2026-10-31, implementation agent. **Deviation status: none** —
+  the stored artefact after supersession is unchanged; only the statement order
+  differs.
+- Decision: the `qa_evaluation_replayed` counter labels the status stored
+  before supersession, not the incoming one. Rationale: the metric answers
+  "which stored verdict was replayed", and `_supersede` overwrites
+  `record.compliance_status` before the counter would read it. Date/Author:
+  2026-10-31, implementation agent. **Deviation status: none** — this is the
+  meaning the milestone's bounded-cardinality metric contract gives the label.
+- Decision: the constraint tests insert through SQLAlchemy Core
+  (`sa.insert(model).values(...)`) rather than raw SQL text. Rationale: Core
+  keeps typed binds for the UUID, enum, and `NUMERIC` columns while still
+  bypassing `__post_init__`, which is the boundary the test must cross; raw
+  text would restate three type casts and could fail for reasons unrelated to
+  the constraint under test. Date/Author: 2026-10-31, implementation agent.
+  **Deviation status: none** — test implementation only.
+- Decision: `QaEvaluationListRequest` leaves the Skylos
+  documented-exception list, and the `QA_ARTEFACT_SCHEMA_VERSION` reason now
+  names `EP-M3`'s recording service as the still-open consumer. Rationale:
+  `EP-M2`'s `list_evaluations` is the production caller the first exception was
+  waiting for, while the constant has no production reader until the recording
+  service stamps it; the developers' guide's deferred-implementation policy
+  requires the reason to describe the actual remaining consumer rather than the
+  delivering milestone. Date/Author: 2026-10-31, implementation agent.
+  **Deviation status: none** — `pyproject.toml` bookkeeping the lint gate
+  requires.
+- Decision: `tests/test_pricing_snapshot_constraint_migration.py` pins
+  `_PRICING_REVISION = "20261010_000013"` instead of migrating to `head` and
+  snapshots the offline SQL for that explicit range. Rationale: the module
+  asserts a pricing-specific constraint rename and its rollback behaviour;
+  targeting `head` made every later migration change those assertions and their
+  snapshots, which is what the new QA artefact revision did. The pinned range
+  emits byte-identical SQL to the previous snapshot, so the pricing contract is
+  unchanged while the test becomes independent of the chain's length.
+  Date/Author: 2026-10-31, implementation agent. **Deviation status: none** —
+  the test's subject is the pricing migration, and the plan adds no pricing
+  behaviour.
+- Decision: the observability test snapshots the recorded metrics and a
+  log-event list whose `episode_id` is replaced by `"<episode>"`; the real
+  identifier is asserted on each event separately. Rationale: df12 Pylint
+  `R9108` requires a snapshot for an assertion against a large inline literal,
+  while `ambrleaks` rejects any UUID inside a snapshot, even the deterministic
+  `uuid.UUID(int=7)` the test records against. Redaction satisfies both gates
+  without weakening the check: the snapshot still proves the message, level,
+  and bounded labels, and the separate assertion proves the identifier reached
+  the log. Date/Author: 2026-10-31, implementation agent. **Deviation status:
+  none** — test structure only.
+- Decision: the three Alembic downgrade helpers join the existing
+  `alembic.versions.*._drop_*` function entry-point rule, and the
+  `qa_artefacts` protocol attribute takes a documented deferred-implementation
+  exception. Rationale: Alembic resolves `downgrade()` by name at runtime, so
+  the helpers have a real dynamic caller and belong in the entry-point rule
+  that already documents that boundary; the protocol attribute has no
+  production reader until `EP-M3` adds the recording and query services, which
+  is exactly the deferred-implementation case. Date/Author: 2026-10-31,
+  implementation agent. **Deviation status: none** — the reasons name the
+  verified caller and the deleting commit.
 
 ## Outcomes & retrospective
 
@@ -1560,9 +1722,10 @@ fenced blocks.
     `__aenter__` and document it in the class docstring's `Attributes`.
   - `episodic/canonical/unit_of_work_protocols.py` — declare
     `qa_artefacts: QaArtefactRepository`.
-  - `alembic/versions/20261015_000014_add_qa_artefact_tables.py` — handwritten
-    migration with `down_revision = "20261010_000013"`. Re-date the filename
-    and `revision` to the day it is written, and re-check `alembic heads`.
+  - `alembic/versions/20261031_000014_add_qa_artefact_tables.py` — handwritten
+    migration with `down_revision = "20261010_000013"`. The filename and
+    `revision` are dated to the day it was written; `alembic heads` reports it
+    as the only head.
 - Acceptance evidence: `uv run pytest tests/canonical_storage -q` passes and
   `make check-migrations` exits 0. `EV-M2-storage`.
 - Conformance check: the ORM models must match the migration, or
@@ -2314,7 +2477,7 @@ each one mirrors: `episodic/canonical/storage/generation_runs.py` is 358 lines,
 | `episodic/canonical/storage/qa_artefact_mappers.py`          | 90–130        | none expected                                                                                                                |
 | `episodic/canonical/storage/qa_artefact_storage_runtime.py`  | 50–60         | none expected                                                                                                                |
 | `episodic/canonical/storage/qa_artefacts.py`                 | 350–450       | split reads into `qa_artefact_queries.py` (get, list, `_evaluation_filters`, count), leaving the savepoint write path behind |
-| `alembic/versions/20261015_000014_add_qa_artefact_tables.py` | 180–230       | none expected                                                                                                                |
+| `alembic/versions/20261031_000014_add_qa_artefact_tables.py` | 180–230       | none expected                                                                                                                |
 | `episodic/canonical/qa_artefact_recording.py`                | 250–320       | split per evaluator once Bromide or Anthem land                                                                              |
 | `episodic/canonical/qa_artefact_service.py`                  | 150–200       | none expected                                                                                                                |
 | `episodic/api/resources/qa_artefacts.py`                     | 200–280       | see below                                                                                                                    |

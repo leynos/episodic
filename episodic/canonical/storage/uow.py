@@ -42,6 +42,11 @@ from .generation_run_storage_runtime import (  # ruff: ignore[typing-only-first-
 )
 from .generation_runs import SqlAlchemyGenerationRunStore
 from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
+from .qa_artefact_storage_runtime import (
+    QaArtefactStorageRuntime,
+    qa_artefact_storage_runtime,
+)
+from .qa_artefacts import SqlAlchemyQaArtefactStore
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
@@ -81,6 +86,9 @@ class UnitOfWorkRuntime:
         Optional tracing sink forwarded to cost storage.
     generation_run_runtime : GenerationRunStorageRuntime | None
         Optional generation-run storage providers.
+    qa_artefact_runtime : QaArtefactStorageRuntime | None
+        Optional QA artefact storage providers. When omitted, the adapter
+        derives a bundle from ``metrics``.
     value_metrics : ValueMetricsPort | None
         Optional scalar-metrics sink, used by adapters that report gauges.
         `metrics` alone is insufficient: `MetricsPort` has no `observe_value`.
@@ -90,6 +98,7 @@ class UnitOfWorkRuntime:
     monotonic_clock: MonotonicClockPort | None = None
     tracer: TracerPort | None = None
     generation_run_runtime: GenerationRunStorageRuntime | None = None
+    qa_artefact_runtime: QaArtefactStorageRuntime | None = None
     value_metrics: ValueMetricsPort | None = None
 
 
@@ -135,6 +144,8 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Composite port for durable generation runs: the run repository, the
         append-only event log, and the review-checkpoint store, bound to the
         same session.
+    qa_artefacts : SqlAlchemyQaArtefactStore
+        Repository for durable QA artefacts linked to canonical episodes.
     cost_ledger : SqlAlchemyCostLedgerStore
         Cost ledger adapter bound to the same session.
     """
@@ -199,6 +210,13 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
                 self._session,
                 runtime=self._runtime.generation_run_runtime,
                 metrics=self._runtime.value_metrics,
+            ),
+        )
+        self.qa_artefacts = SqlAlchemyQaArtefactStore(
+            self._session,
+            runtime=qa_artefact_storage_runtime(
+                self._runtime.qa_artefact_runtime,
+                metrics=self._runtime.metrics,
             ),
         )
         self.cost_ledger = SqlAlchemyCostLedgerStore(

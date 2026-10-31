@@ -1,0 +1,47 @@
+# serializer version: 1
+# name: test_recording_emits_bounded_metrics_and_safe_log
+  dict({
+    'counters': list([
+      dict({
+        'labels': dict({
+          'compliance_status': 'compliant',
+          'evaluator': 'pedante',
+        }),
+        'name': 'qa_evaluation_recorded',
+      }),
+      dict({
+        'labels': dict({
+          'evaluator': 'pedante',
+          'stored_status': 'compliant',
+        }),
+        'name': 'qa_evaluation_replayed',
+      }),
+    ]),
+    'latencies': list([
+    ]),
+  })
+# ---
+# name: test_recording_emits_bounded_metrics_and_safe_log.1
+  list([
+    tuple(
+      'info',
+      'sql_qa_artefact_store.record_evaluation',
+      dict({
+        'episode_id': '<episode>',
+        'evaluator': 'pedante',
+        'replayed': False,
+        'superseded': False,
+      }),
+    ),
+    tuple(
+      'info',
+      'sql_qa_artefact_store.record_evaluation',
+      dict({
+        'episode_id': '<episode>',
+        'evaluator': 'pedante',
+        'replayed': True,
+        'superseded': False,
+      }),
+    ),
+  ])
+# ---
