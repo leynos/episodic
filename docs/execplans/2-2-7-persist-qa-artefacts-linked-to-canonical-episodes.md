@@ -455,7 +455,19 @@ Stop and escalate when any of these is reached.
     access; the module now imports `from sqlalchemy import event`, and
     typecheck is warning-free. Logs `/tmp/<gate>-episodic-ep-m2-round2-<slug>-8.out`
     and `-9.out` for the two re-runs.
-  - Pending: review round 3 and the atomic commit.
+  - Round-2 repair committed as `1ebadbc2`.
+  - Review round 3 is **blocked, not clean**: `coderabbit 0.9.1` returned
+    `errorType: "rate_limit"`, `isProUser: true`, `waitTime: "1 minute"`,
+    `onDemandReviewAvailable: false`, with the notice "You've used all 10
+    included reviews currently available." No review content, findings, or
+    completion record was produced; 0 of 21 changed paths were reviewed
+    (`/tmp/coderabbit-ep-m2-review-round3-<slug>.log`). The 1-minute advice is
+    not a transient throttle — the monthly allowance is exhausted — so a retry
+    would fail the same way, and enabling usage-based reviews is a billing
+    decision for the operator, not the implementation. Nothing here is evidence
+    of a clean review. EP-M2's round-2 findings are all resolved and its gates
+    are green at `1ebadbc2`; the independent assessment is carried by the hosted
+    review at PR handoff.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
       mapping for Pedante and Chrono.
 - [ ] EP-M4 REST retrieval endpoints filtered by evaluator and compliance
