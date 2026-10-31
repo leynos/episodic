@@ -18,11 +18,28 @@ from episodic.canonical.qa_artefacts import (
     QaFinding,
     QaFindingSeverity,
 )
+from episodic.qa.pedante.types import SupportLevel
 
 if typ.TYPE_CHECKING:
     import decimal
 
     from episodic.canonical.domain_enums import JsonMapping
+
+# Authored from the Pedante taxonomy and the recorded compliance policy. It is
+# deliberately not derived from the production `_BLOCKING_SUPPORT_LEVELS`; the
+# exact-equality test in `tests/test_qa_artefact_domain.py` turns the pair into
+# a transcription check, and the recording properties use this set as their
+# oracle so a wrong production set cannot satisfy them.
+DOCUMENTED_BLOCKING_LEVELS = frozenset({
+    SupportLevel.CITATION_ABSENT,
+    SupportLevel.MISQUOTATION,
+    SupportLevel.MISINTERPRETED_CLAIM,
+    SupportLevel.FABRICATED_CLAIM,
+    SupportLevel.INFERENCE_NOT_SUPPORTED,
+    SupportLevel.INACCURATE_REINTERPRETATION,
+    SupportLevel.INFERENCE_SUPPORTED_WITH_IRRELEVANT_SOURCES,
+    SupportLevel.CONTRADICTORY_CLAIMS_IN_DOCUMENT,
+})
 
 EPISODE_ID = uuid.UUID("0192f9d0-0000-7000-8000-00000000e901")
 EVALUATION_ID = uuid.UUID("0192f9d0-0000-7000-8000-00000000e902")

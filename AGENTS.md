@@ -103,7 +103,7 @@
 
     with the verified caller in the reason. A symbol that a completed item
     delivered ahead of its named consumer has no caller to verify: see
-    [retaining deferred implementation](docs/developers-guide.md), which
+    [retaining deferred implementation][deferred-implementation], which
     requires a directly tested behaviour, the still-open consumer, and the
     condition that deletes the entry.
     The lint pipeline ends with the blocking nose duplication gate, which
@@ -244,6 +244,7 @@ directory:
 - [Python typing](.rules/python-typing.md) - Type annotation best practices.
 
 [python-exceptions]: .rules/python-exception-design-raising-handling-and-logging.md
+[deferred-implementation]: docs/developers-guide.md#retaining-deferred-implementation
 
 Additional docs:
 

@@ -3,9 +3,10 @@
 Discharges the obligations the ExecPlan assigns to this module: ``INV-BLOCKING-
 SET``, ``INV-ENUM-TAXONOMY``, the domain half of ``INV-TIMEZONE``, and every
 ``__post_init__`` rejection that is not the rubric-score storage contract. The
-blocking set is written out here rather than read from the production module,
-because ``INV-COMPLIANCE-BLOCKING`` inherits the set from the code under test
-and cannot detect a wrong one on its own. Rubric-score precision is covered by
+blocking set is authored in ``tests/fixtures/qa_artefact_builders.py`` rather
+than read from the production module, because ``INV-COMPLIANCE-BLOCKING``
+inherits the set from the code under test and cannot detect a wrong one on its
+own. Rubric-score precision is covered by
 ``tests/test_qa_artefact_rubric_score.py``.
 """
 
@@ -33,6 +34,7 @@ from episodic.canonical.qa_artefacts import (
 from episodic.qa.pedante import ClaimKind, FindingSeverity, PedanteFinding, SupportLevel
 from episodic.qa.pedante.types import _BLOCKING_SUPPORT_LEVELS
 from tests.fixtures.qa_artefact_builders import (
+    DOCUMENTED_BLOCKING_LEVELS,
     EVALUATED_AT,
     FINDING_ID,
     OTHER_EVALUATION_ID,
@@ -43,20 +45,6 @@ from tests.fixtures.qa_artefact_builders import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-# Authored from the Pedante taxonomy and the recorded compliance policy. It is
-# deliberately not derived from `_BLOCKING_SUPPORT_LEVELS`; the exact-equality
-# test below turns the pair into a transcription check.
-_DOCUMENTED_BLOCKING_LEVELS = frozenset({
-    SupportLevel.CITATION_ABSENT,
-    SupportLevel.MISQUOTATION,
-    SupportLevel.MISINTERPRETED_CLAIM,
-    SupportLevel.FABRICATED_CLAIM,
-    SupportLevel.INFERENCE_NOT_SUPPORTED,
-    SupportLevel.INACCURATE_REINTERPRETATION,
-    SupportLevel.INFERENCE_SUPPORTED_WITH_IRRELEVANT_SOURCES,
-    SupportLevel.CONTRADICTORY_CLAIMS_IN_DOCUMENT,
-})
 
 _DOCUMENTED_EVALUATORS = {
     "pedante",
@@ -97,23 +85,23 @@ def test_blocking_flag_follows_the_documented_policy(
 ) -> None:
     """Every taxonomy member blocks exactly when the policy says it does."""
     assert _pedante_finding(support_level).is_blocking is (
-        support_level in _DOCUMENTED_BLOCKING_LEVELS
+        support_level in DOCUMENTED_BLOCKING_LEVELS
     ), f"{support_level.value} disagrees with the documented blocking policy"
 
 
 def test_documented_blocking_set_matches_the_production_set() -> None:
     """The independently authored set has not drifted from production."""
-    assert _DOCUMENTED_BLOCKING_LEVELS == _BLOCKING_SUPPORT_LEVELS, (
+    assert DOCUMENTED_BLOCKING_LEVELS == _BLOCKING_SUPPORT_LEVELS, (
         "the test's independent blocking set and the production set have drifted"
     )
-    assert len(_DOCUMENTED_BLOCKING_LEVELS) == 8, (
+    assert len(DOCUMENTED_BLOCKING_LEVELS) == 8, (
         "the documented blocking set changed size; re-check the policy"
     )
 
 
 def test_documented_blocking_set_is_a_strict_subset_of_the_taxonomy() -> None:
     """A set equal to the taxonomy would make every finding blocking."""
-    assert set(SupportLevel) > _DOCUMENTED_BLOCKING_LEVELS, (
+    assert set(SupportLevel) > DOCUMENTED_BLOCKING_LEVELS, (
         "a blocking set equal to the whole taxonomy would make every finding "
         "blocking and the membership test vacuous"
     )

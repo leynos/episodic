@@ -19,12 +19,12 @@ from episodic.canonical.qa_artefacts import (
     QaFindingSeverity,
 )
 from episodic.qa.pedante.types import (
-    _BLOCKING_SUPPORT_LEVELS,
     ClaimKind,
     FindingSeverity,
     PedanteFinding,
     SupportLevel,
 )
+from tests.fixtures.qa_artefact_builders import DOCUMENTED_BLOCKING_LEVELS
 from tests.fixtures.qa_artefact_recording_builders import (
     EPISODE_ID,
     EVALUATED_AT,
@@ -160,7 +160,7 @@ def test_only_the_documented_blocking_levels_make_a_result_non_compliant(
     ]
     expected = (
         QaComplianceStatus.NON_COMPLIANT
-        if any(level in _BLOCKING_SUPPORT_LEVELS for level in support_levels)
+        if any(level in DOCUMENTED_BLOCKING_LEVELS for level in support_levels)
         else QaComplianceStatus.COMPLIANT
     )
 
