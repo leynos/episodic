@@ -27,6 +27,7 @@ from episodic.canonical.qa_artefacts import (
     QaEvaluation,
     QaEvaluationSummary,
     QaEvaluator,
+    QaFinding,
     QaFindingSeverity,
 )
 from episodic.qa.pedante import ClaimKind, FindingSeverity, PedanteFinding, SupportLevel
@@ -285,6 +286,22 @@ def test_finding_rejects_a_negative_ordinal() -> None:
 
 
 # --- evaluation invariants --------------------------------------------------
+
+
+def test_evaluation_rejects_a_mutable_findings_sequence() -> None:
+    """A list would let the caller change a frozen evaluation afterwards."""
+    mutable = typ.cast("tuple[QaFinding, ...]", [finding()])
+
+    with pytest.raises(TypeError, match="findings"):
+        QaEvaluation(summary_record=summary(finding_count=1), findings=mutable)
+
+
+def test_evaluation_rejects_entries_that_are_not_findings() -> None:
+    """An arbitrary object has none of the attributes later reads rely on."""
+    entries = typ.cast("tuple[QaFinding, ...]", (object(),))
+
+    with pytest.raises(TypeError, match="findings"):
+        QaEvaluation(summary_record=summary(finding_count=1), findings=entries)
 
 
 def test_evaluation_rejects_a_finding_count_that_disagrees() -> None:

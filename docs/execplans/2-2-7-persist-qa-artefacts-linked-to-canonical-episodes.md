@@ -314,7 +314,20 @@ Stop and escalate when any of these is reached.
     tests), then 78 focused tests passed. The two added validator concerns
     pushed `qa_artefacts.py` past 400 lines, so the validators moved to
     `qa_artefact_validation.py`, registered in the same Hecate `domain_ports`
-    group and the same Skylos entry-point rule.
+    group and the same Skylos entry-point rule. Committed as `e112a302` after
+    a green sweep.
+  - Review round 4 (`e112a302`, same CLI and scope, exit 0,
+    `review_completed`, 11/11 changed paths, no rate limit) returned one minor
+    finding: `QaEvaluation` accepted any sequence for `findings`, so a caller
+    that passed a list could clear it after construction, leaving a frozen
+    evaluation whose empty findings contradicted its own `finding_count`.
+    Upheld and repaired: only a tuple of `QaFinding` objects is accepted, and
+    the checks moved into `_validate_findings_shape` and
+    `_validate_findings_against_summary` when the added branch pushed
+    `__post_init__` past the McCabe limit. Both helpers join the Skylos
+    canonical-validator entry-point rule. Red was observed first (a list was
+    accepted; a non-finding raised `AttributeError`), then 80 focused tests
+    passed.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
@@ -1823,14 +1836,14 @@ a read returns exactly what construction accepted); an empty
 `evaluator_version`; an empty `idempotency_key`; a naive `evaluated_at`; an
 `artefact_schema_version` or `compliance_policy_version` that is not an exact
 positive integer; a `finding_count` that disagrees with `len(findings)` on
-`QaEvaluation`; ordinals that are not `0..n-1` in order; a finding whose
-`evaluation_id` differs from `summary_record.id`; two findings sharing an `id`;
-a blank finding `code`; and any string or collection exceeding the bounds
-above. The bounds are not decoration — `summary`, `subject_id`, `subject_text`,
-`remediation`, `citations`, and `details` all originate in model output, and
-`generation_runs` already bounds its own string columns. A stored version that
-is newer than the running release is a separate check made by the reader, not
-by construction.
+`QaEvaluation`; a `findings` value that is not a tuple of `QaFinding` objects;
+ordinals that are not `0..n-1` in order; a finding whose `evaluation_id`
+differs from `summary_record.id`; two findings sharing an `id`; a blank finding
+`code`; and any string or collection exceeding the bounds above. The bounds are
+not decoration — `summary`, `subject_id`, `subject_text`, `remediation`,
+`citations`, and `details` all originate in model output, and `generation_runs`
+already bounds its own string columns. A stored version that is newer than the
+running release is a separate check made by the reader, not by construction.
 
 ### `episodic/canonical/qa_artefact_ports.py` (EP-M1)
 

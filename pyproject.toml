@@ -626,6 +626,8 @@ full_name = [
     "episodic.canonical.domain_validation._require_value",
     "episodic.canonical.domain_validation._validate_draft_without_qa_metadata",
     "episodic.canonical.qa_artefacts._validate_citations",
+    "episodic.canonical.qa_artefacts._validate_findings_shape",
+    "episodic.canonical.qa_artefacts._validate_findings_against_summary",
     "episodic.canonical.qa_artefact_validation._validate_non_negative_integer",
     "episodic.canonical.qa_artefact_validation._validate_optional_non_negative_integer",
     "episodic.canonical.qa_artefact_validation._validate_positive_integer",

@@ -279,6 +279,43 @@ class QaEvaluationSummary:
         _copy_json_mapping(self, "evaluator_metadata")
 
 
+def _validate_findings_shape(findings: tuple[QaFinding, ...]) -> None:
+    """Require an immutable, bounded findings sequence."""
+    # A mutable sequence would let the caller change a frozen evaluation
+    # after these checks had passed, so only a tuple is accepted.
+    if not isinstance(findings, tuple):
+        msg = "findings must be a tuple of QaFinding values."
+        raise TypeError(msg)
+    if len(findings) > MAX_FINDINGS_PER_EVALUATION:
+        msg = f"findings must contain at most {MAX_FINDINGS_PER_EVALUATION} entries."
+        raise ValueError(msg)
+
+
+def _validate_findings_against_summary(
+    findings: tuple[QaFinding, ...],
+    summary_record: QaEvaluationSummary,
+) -> None:
+    """Require findings that belong to, and are ordered for, their summary."""
+    if summary_record.finding_count != len(findings):
+        msg = "summary_record.finding_count must equal the number of findings."
+        raise ValueError(msg)
+    seen_ids: set[uuid.UUID] = set()
+    for expected_ordinal, finding in enumerate(findings):
+        if not isinstance(finding, QaFinding):
+            msg = "findings must be a tuple of QaFinding values."
+            raise TypeError(msg)
+        if finding.evaluation_id != summary_record.id:
+            msg = "every finding's evaluation_id must equal summary_record.id."
+            raise ValueError(msg)
+        if finding.id in seen_ids:
+            msg = "findings must carry distinct ids."
+            raise ValueError(msg)
+        seen_ids.add(finding.id)
+        if finding.ordinal != expected_ordinal:
+            msg = "findings must carry consecutive ordinals starting at zero."
+            raise ValueError(msg)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class QaEvaluation:
     """One recorded evaluator invocation together with its findings.
@@ -300,23 +337,5 @@ class QaEvaluation:
 
     def __post_init__(self) -> None:
         """Validate that findings are bounded, owned, distinct, and ordered."""
-        if len(self.findings) > MAX_FINDINGS_PER_EVALUATION:
-            msg = (
-                f"findings must contain at most {MAX_FINDINGS_PER_EVALUATION} entries."
-            )
-            raise ValueError(msg)
-        if self.summary_record.finding_count != len(self.findings):
-            msg = "summary_record.finding_count must equal the number of findings."
-            raise ValueError(msg)
-        seen_ids: set[uuid.UUID] = set()
-        for expected_ordinal, finding in enumerate(self.findings):
-            if finding.evaluation_id != self.summary_record.id:
-                msg = "every finding's evaluation_id must equal summary_record.id."
-                raise ValueError(msg)
-            if finding.id in seen_ids:
-                msg = "findings must carry distinct ids."
-                raise ValueError(msg)
-            seen_ids.add(finding.id)
-            if finding.ordinal != expected_ordinal:
-                msg = "findings must carry consecutive ordinals starting at zero."
-                raise ValueError(msg)
+        _validate_findings_shape(self.findings)
+        _validate_findings_against_summary(self.findings, self.summary_record)
