@@ -538,7 +538,7 @@ Stop and escalate when any of these is reached.
     `origin/main...HEAD`: exit 0, `review_completed`, 46 files, **0 findings**.
     No round-1 concern was re-raised. The milestone review obligation is
     discharged and `EP-M3` is complete.
-- [ ] EP-M4 REST retrieval endpoints filtered by evaluator and compliance
+- [x] EP-M4 REST retrieval endpoints filtered by evaluator and compliance
       status.
   - Red: the focused acceptance command failed collection with
     `ImportError: cannot import name 'serialize_qa_evaluation' from
@@ -684,8 +684,11 @@ Stop and escalate when any of these is reached.
   - Round-3 repair evidence: the finding changed only this plan, so the
     applicable Markdown gates were re-run — `make check-fmt`,
     `make markdownlint`, and `make nixie` all pass.
-  - Milestone CLI review round 4 is requested over `330050f7..HEAD` to confirm
-    the repaired contract text and close the milestone.
+  - Review-repair commit `b5095167`.
+  - Milestone CLI review round 4 at `b5095167` (`coderabbit 0.9.2`, exit 0,
+    `review_completed`, 17/17 changed paths over `330050f7..b5095167`, no rate
+    limit): **0 findings**. The milestone review obligation is discharged and
+    `EP-M4` is complete.
 - [ ] EP-M5 First-party CLI retrieval surface.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
