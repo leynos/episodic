@@ -31,6 +31,13 @@ import enum
 
 from episodic.llm import LLMProviderOperation, LLMTokenBudget, LLMUsage
 
+# The claim-centric contract ADR 001 fixes: each finding carries a claim
+# identifier and kind, a support level, a severity, cited source identifiers,
+# and remediation guidance. Bump this when that shape changes — not when a
+# prompt, model, or provider changes, which the artefact's provider metadata
+# already distinguishes.
+PEDANTE_CONTRACT_VERSION: str = "1"
+
 
 def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
     """Reject blank or whitespace-only string fields on a dataclass instance."""

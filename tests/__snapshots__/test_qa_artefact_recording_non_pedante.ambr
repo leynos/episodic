@@ -1,0 +1,10 @@
+# serializer version: 1
+# name: test_chrono_estimate_becomes_a_not_applicable_artefact
+  dict({
+    'estimator_name': 'chrono-naive-word-count',
+    'estimator_version': '1',
+    'input_character_count': 4200,
+    'spoken_word_count': 1500,
+    'words_per_minute': 150,
+  })
+# ---

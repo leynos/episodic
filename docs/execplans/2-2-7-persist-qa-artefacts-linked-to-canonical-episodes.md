@@ -470,6 +470,30 @@ Stop and escalate when any of these is reached.
     review at PR handoff.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
       mapping for Pedante and Chrono.
+  - Red/Green: the acceptance command first failed collection with
+    `ModuleNotFoundError: No module named 'episodic.canonical.qa_artefact_service'`,
+    then passed 41 focused tests after the two modules landed
+    (`/tmp/pytest-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m3-green.out`).
+    The suite is split by concern so no module approaches the 400-line cap:
+    Pedante projection, Chrono and failure projections, idempotency key,
+    generative invariants, and the service.
+  - Delivered: `qa_artefact_recording` holds the compliance predicate, the
+    documented key format, and one total projection per evaluator outcome;
+    `qa_artefact_service` composes into a caller's unit of work
+    (`record_qa_evaluation`) and owns one for the self-committing
+    `QaEvaluationRecorder`; `PEDANTE_CONTRACT_VERSION` is `"1"`.
+  - Skylos: the three EP-M1 and EP-M2 deferred-implementation exceptions had
+    outlived their named reader and are deleted — the schema version, the
+    policy version, and the `qa_artefacts` accessor are now production
+    reachable. Seven new named exceptions cover the EP-M3 symbols whose readers
+    arrive in EP-M4 and EP-M5, each naming the still-open milestone and the
+    commit that deletes it.
+  - Gate repairs before sweep 1: Ruff's `TC` rules moved the annotation-only
+    `datetime` and `ChronoRuntimeEstimate` imports into type-checking blocks,
+    the five planned signatures whose argument counts mirror the domain field
+    surface carry the repository's `# ruff: ignore[too-many-arguments]` form
+    (not `# noqa`), and `_summary_record` gained the `Returns` section the
+    docstring rule requires.
 - [ ] EP-M4 REST retrieval endpoints filtered by evaluator and compliance
       status.
 - [ ] EP-M5 First-party CLI retrieval surface.
@@ -669,6 +693,33 @@ Stop and escalate when any of these is reached.
   `_PRICING_REVISION = "20261010_000013"` instead of `head`, so the pricing
   contract no longer changes when a later milestone adds a revision. The
   snapshots were unchanged, which proves the pinned range emits identical SQL.
+- Observation (execution, 2026-10-31): this repository's Ruff configuration
+  requires the `# ruff: ignore[rule]` suppression form and reports every
+  `# noqa:` comment under the `noqa-comments` rule. Evidence: the `EP-M3`
+  projection module first used `# noqa: PLR0913`, and `uv run ruff check`
+  reported five `noqa-comments` errors with `[*]` fixes; `ruff check --fix`
+  rewrote them to `# ruff: ignore[too-many-arguments]`, after which the file
+  passes and the suppression still applies (removing the directive makes all
+  five `PLR0913` findings return). Impact: write the `ruff: ignore` form
+  directly. An `--isolated` run does not honour it, so reproduce a suppression
+  question with the project configuration rather than `--isolated`.
+- Observation (execution, 2026-10-31): Skylos's
+  `[tool.skylos.whitelist.documented]` matches a method by its **bare** name,
+  not by `Class.method`. Evidence: adding a `QaEvaluationRecorder.record` key
+  left the method's finding unchanged, while a `record` key suppressed it;
+  `grep -rn "def record(" episodic` shows the method is the only production
+  symbol so named. Impact: method exceptions must use the bare name, and the
+  reason must name the owning class so a reviewer can tell which method the
+  entry covers. A second production method of the same name would silently
+  share the exemption.
+- Observation (execution, 2026-10-31): Skylos dead-code results depend on the
+  scanned target set, not only on the code. Evidence: scanning `episodic` alone
+  reports `configure_database_url` in
+  `episodic/canonical/storage/alembic_helpers.py` as unused, while the gate's
+  `alembic episodic openai_test_types.py` target set does not, because
+  `alembic/env.py` calls it. Impact: reproduce the Makefile target list when
+  investigating a finding; a narrower scan invents dead code and invites a
+  whitelist entry for live code.
 
 ## Decision log
 
@@ -1016,6 +1067,16 @@ Stop and escalate when any of these is reached.
   `constraint_name(err) != _IDEMPOTENCY_CONSTRAINT` branch. Date/Author:
   2026-10-31, implementation agent. **Deviation status: none** — test
   implementation only; the production contract is unchanged.
+- Decision: the five `EP-M3` projection and key signatures keep the flat
+  keyword-argument shape pinned under "Interfaces and dependencies", and carry
+  a local `# ruff: ignore[too-many-arguments]` instead of collapsing their
+  shared arguments into a context object. Rationale: every argument names a
+  distinct documented column or policy input, so a parameter object would move
+  the public interface away from the approved contract without removing any
+  dependency; the alternative was an unapproved API change. The suppression is
+  per-signature and the rule still fires anywhere else. Date/Author:
+  2026-10-31, implementation agent. **Deviation status: none** — approved
+  interface honoured; the ignore is the repository's sanctioned escape hatch.
 
 ## Outcomes & retrospective
 
