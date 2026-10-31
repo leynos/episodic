@@ -11,9 +11,6 @@ import datetime as dt
 import typing as typ
 import uuid
 
-import httpx
-
-from episodic.api import create_app
 from episodic.canonical.domain import EpisodeTeiUpdate
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.qa_artefact_recording import qa_idempotency_key
@@ -36,6 +33,7 @@ from episodic.qa.pedante.types import (
     PedanteEvaluationResult,
     SupportLevel,
 )
+from tests.fixtures.api import api_async_client
 from tests.fixtures.generation_run_api import (
     create_ready_ingestion_job,
     generation_payload,
@@ -47,8 +45,6 @@ from tests.fixtures.qa_artefact_recording_builders import (
 )
 
 if typ.TYPE_CHECKING:
-    from httpx._transports.asgi import _ASGIApp
-
     from episodic.api.dependencies import ApiDependencies
     from episodic.canonical.qa_artefact_service import QaEvaluationOutcome
 
@@ -124,11 +120,7 @@ async def create_generated_episode(
     key_prefix: str = "qa-retrieval",
 ) -> QaEpisodeFixture:
     """Create an owned episode with a generated TEI draft."""
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
+    async with api_async_client(dependencies) as client:
         job_id = await create_ready_ingestion_job(
             client,
             headers=PRINCIPAL_A,

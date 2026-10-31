@@ -65,6 +65,16 @@ class EpisodeQaEvaluationsResource:
     ) -> None:
         """Return one page of the episode's QA evaluations.
 
+        Parameters
+        ----------
+        req : falcon.Request
+            Request carrying the optional evaluator and compliance-status
+            filters and the pagination.
+        resp : falcon.Response
+            Response populated with the page envelope.
+        episode_id : str
+            Episode UUID from the route path.
+
         Raises
         ------
         falcon.HTTPBadRequest
@@ -129,6 +139,15 @@ class QaEvaluationResource:
         evaluation_id: str,
     ) -> None:
         """Return one evaluation's summary and ordered findings.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Request identifying the calling principal.
+        resp : falcon.Response
+            Response populated with the evaluation and its findings.
+        evaluation_id : str
+            Evaluation UUID from the route path.
 
         Raises
         ------

@@ -637,6 +637,39 @@ Stop and escalate when any of these is reached.
     green** — check-fmt, markdownlint, nixie, typecheck, lint (all nine
     stages), check-migrations, and test: 1907 passed, 3 skipped, 63 snapshots.
     Logs `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m4-review1-2.out`.
+  - Review-repair commit `5a0cc9e0`.
+  - Milestone CLI review round 2 at `5a0cc9e0` (`coderabbit 0.9.2`, exit 0,
+    `review_completed`, 16/16 changed paths over `330050f7..5a0cc9e0`, no rate
+    limit): three findings, none duplicate. Dispositions:
+    1. (upheld, repaired) Both QA `on_get` docstrings documented only
+       `Raises`. They now carry NumPy `Parameters` sections naming `req`,
+       `resp`, and the route identifier, matching
+       `EpisodeTeiResource.on_get`.
+    2. (upheld, repaired) The ASGI client construction was triplicated across
+       the seed module, the support module, and `tests/test_qa_artefact_api.py`.
+       `tests/fixtures/api.py` already built the same client for its async
+       fixture, so that module now exposes `api_async_client()` as the shared
+       async context manager; the fixture delegates to it and all three
+       QA-retrieval sites use it. The wider pattern (26 remaining occurrences
+       across 15 test modules) predates this milestone and is left alone; the
+       new helper is the reuse point for later work.
+    3. (not a milestone defect; deferred by plan) Neither new GET route is
+       described outside `docs/execplans/`. `EP-M4`'s recorded remaining gap is
+       "CLI, documentation", and the plan assigns route and roadmap
+       documentation to `EP-M6`, so the finding is carried there rather than
+       repaired here.
+  - Round-2 repair evidence: focused API, serializer, BDD, and TEI suites pass
+    together (40 passed, 5 snapshots;
+    `/tmp/test-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m4-review2-repair.out`).
+  - Round-2 repair gate sweep 1: red at `check-fmt`, because the new
+    Decision-log bullet needed a paragraph reflow; `make fmt` applied it and a
+    standalone `make check-fmt` then passed.
+  - Round-2 repair gate sweep 2 (scrutineer, exclusive, sequential, seven
+    gates): **all green** — check-fmt, markdownlint, nixie, typecheck, lint
+    (all nine stages, Pylint `10.00/10`, Skylos clean, duplication gate at 30
+    reasoned exceptions), check-migrations, and test: 1907 passed, 3 skipped,
+    63 snapshots. Logs
+    `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-ep-m4-review2-repair2.out`.
 - [ ] EP-M5 First-party CLI retrieval surface.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
@@ -1249,6 +1282,15 @@ Stop and escalate when any of these is reached.
   implementation agent. **Deviation status: proposed-accepted** — a
   documentation-level correction to an inaccurate conformance sentence, with
   the security property unchanged; recorded here for the reviewer.
+- Decision: the two new QA retrieval routes are documented in `EP-M6`, not
+  `EP-M4`. Rationale: `EP-M4`'s recorded remaining gaps name "CLI,
+  documentation", and the plan already assigns the users' guide, component
+  architecture, and roadmap completion to `EP-M6`. The milestone CLI review
+  raised the missing route documentation; acting on it inside `EP-M4` would
+  either duplicate or pre-empt the documentation milestone's scope.
+  Date/Author: 2026-10-31, implementation agent. **Deviation status: none** —
+  the deferral follows the approved milestone split; `EP-M6` now explicitly
+  owes the two route descriptions.
 
 ## Outcomes & retrospective
 
@@ -2231,7 +2273,12 @@ fenced blocks.
     `episodic/qa/pedante/`.
   - `docs/users-guide.md` — extend *Quality & Compliance* with the retrieval
     behaviour, and add the CLI command with a worked example under *Getting
-    Started*.
+    Started*. Name both REST routes explicitly: `GET
+    /v1/episodes/{episode_id}/qa-evaluations` (filters and pagination) and `GET
+    /v1/qa-evaluations/{evaluation_id}` (summary plus ordered findings), with
+    the 404-for-foreign-principal and 401-without-credentials outcomes. The
+    `EP-M4` milestone review raised this omission; it is owed here by the
+    Decision log.
   - `docs/contents.md` — index both new ADRs.
   - `docs/roadmap.md` — mark `2.2.7` `[x]` and record the delivered outcome in
     the same style as the neighbouring completed items.

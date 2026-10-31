@@ -9,10 +9,7 @@ behavioural steps call synchronously.
 import dataclasses as dc
 import typing as typ
 
-import httpx
-
-from episodic.api import create_app
-from tests.fixtures.api import build_api_dependencies
+from tests.fixtures.api import api_async_client, build_api_dependencies
 from tests.fixtures.generation_run_api import (
     HeaderPrincipalAuthorization,
     RecordingLauncher,
@@ -33,7 +30,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from httpx._transports.asgi import _ASGIApp
+    import httpx
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.api.dependencies import ApiDependencies
@@ -84,14 +81,8 @@ class QaRetrievalContext:
     ) -> httpx.Response:
         """Issue one GET request against the scenario's ASGI application."""
         dependencies = require(self.dependencies, "QA retrieval dependencies")
-        transport = httpx.ASGITransport(
-            app=typ.cast("_ASGIApp", create_app(dependencies))
-        )
         request_headers = PRINCIPAL_A if headers is None else headers
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with api_async_client(dependencies) as client:
             return await client.get(path, headers=request_headers, params=params)
 
 

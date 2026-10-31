@@ -4,14 +4,12 @@ The REST API is retrieval-only, so each test seeds artefacts through the same
 recording service the launcher will call, then exercises the HTTP contract.
 """
 
-import contextlib
 import typing as typ
 import uuid
 
-import httpx
 import pytest
 
-from episodic.api import create_app
+from tests.fixtures.api import api_async_client
 from tests.steps.qa_artefact_retrieval_seed import (
     ANTHEM_EVALUATION_ID,
     PRINCIPAL_A,
@@ -24,25 +22,10 @@ from tests.steps.qa_artefact_retrieval_seed import (
 from tests.steps.qa_artefact_retrieval_support import build_qa_dependencies
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
-    from httpx._transports.asgi import _ASGIApp
+    import httpx
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.api.dependencies import ApiDependencies
-
-
-@contextlib.asynccontextmanager
-async def _qa_client(
-    dependencies: ApiDependencies,
-) -> cabc.AsyncIterator[httpx.AsyncClient]:
-    """Yield an ASGI client bound to the QA retrieval application."""
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
-        yield client
 
 
 async def _seed(dependencies: ApiDependencies) -> QaEpisodeFixture:
@@ -69,7 +52,7 @@ async def test_list_returns_every_evaluation_newest_first(
 ) -> None:
     """The unfiltered listing carries the page envelope and newest-first order."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         response = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
@@ -95,7 +78,7 @@ async def test_list_filters_by_evaluator_and_compliance_status(
 ) -> None:
     """Either filter narrows the page and its unpaged total together."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         endpoint = f"/v1/episodes/{episode.episode_id}/qa-evaluations"
         pedante = await client.get(
@@ -129,7 +112,7 @@ async def test_list_paginates_and_echoes_the_requested_page(
 ) -> None:
     """A limit and offset select one page while the total stays unpaged."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         response = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
@@ -151,7 +134,7 @@ async def test_list_rejects_out_of_range_pagination(
 ) -> None:
     """Pagination bounds are enforced before any query runs."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         response = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
@@ -179,7 +162,7 @@ async def test_list_rejects_unknown_enum_filters(
 ) -> None:
     """An unknown enum value names its offending parameter."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         response = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
@@ -200,7 +183,7 @@ async def test_detail_returns_findings_in_emitted_order(
 ) -> None:
     """The detail representation is the summary plus ordered findings."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         listing = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
@@ -232,7 +215,7 @@ async def test_list_hides_foreign_and_unauthenticated_callers(
 ) -> None:
     """The listing is absent to a foreign principal and denied without one."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         endpoint = f"/v1/episodes/{episode.episode_id}/qa-evaluations"
         cross_principal = await client.get(endpoint, headers=PRINCIPAL_B)
@@ -251,7 +234,7 @@ async def test_detail_hides_foreign_and_unauthenticated_callers(
 ) -> None:
     """The detail route applies its own ownership check, not just the listing."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         listing = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
@@ -276,7 +259,7 @@ async def test_unknown_evaluation_identifier_is_not_found(
     """A missing evaluation is indistinguishable from one owned elsewhere."""
     dependencies = build_qa_dependencies(session_factory)
     missing_id = uuid.uuid4()
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         response = await client.get(
             f"/v1/qa-evaluations/{missing_id}",
             headers=PRINCIPAL_A,
@@ -294,7 +277,7 @@ async def test_successful_anthem_retry_supersedes_the_failure(
 ) -> None:
     """A later success replaces the errored artefact and keeps its identifier."""
     dependencies = build_qa_dependencies(session_factory)
-    async with _qa_client(dependencies) as client:
+    async with api_async_client(dependencies) as client:
         episode = await _seed(dependencies)
         await record_anthem_success(dependencies, episode)
         listing = await client.get(
