@@ -230,59 +230,41 @@ def test_summary_copies_nested_evaluator_metadata() -> None:
 # --- finding rejections -----------------------------------------------------
 
 
-@pytest.mark.parametrize("code", ["", "   "])
-def test_finding_rejects_a_blank_code(code: str) -> None:
-    """Consumers filter on ``code``, so a blank one is unusable."""
-    with pytest.raises(ValueError, match="code"):
-        finding(code=code)
-
-
-def test_finding_rejects_an_overlong_code() -> None:
-    """A finding code longer than the bound is model output and is rejected."""
-    with pytest.raises(ValueError, match="code"):
-        finding(code="c" * (MAX_CODE_CHARS + 1))
-
-
-def test_finding_rejects_an_overlong_subject_id() -> None:
-    """The subject identifier is evaluator output, so it carries a bound too."""
-    with pytest.raises(ValueError, match="subject_id"):
-        finding(subject_id="s" * (MAX_SUBJECT_ID_CHARS + 1))
-
-
-def test_finding_rejects_an_overlong_summary() -> None:
-    """A finding summary past the bound would overflow its column."""
-    with pytest.raises(ValueError, match="summary"):
-        finding(summary="s" * (MAX_SUMMARY_CHARS + 1))
-
-
-def test_finding_rejects_an_overlong_remediation() -> None:
-    """A remediation hint past the bound is rejected."""
-    with pytest.raises(ValueError, match="remediation"):
-        finding(remediation="r" * (MAX_REMEDIATION_CHARS + 1))
-
-
-def test_finding_rejects_overlong_subject_text() -> None:
-    """The quoted subject text is bounded because a model produces it."""
-    with pytest.raises(ValueError, match="subject_text"):
-        finding(subject_text="t" * (MAX_SUBJECT_TEXT_CHARS + 1))
-
-
-def test_finding_rejects_too_many_citations() -> None:
-    """The citation count is bounded to keep one finding's payload small."""
-    with pytest.raises(ValueError, match="citations"):
-        finding(citations=tuple(f"src-{index}" for index in range(MAX_CITATIONS + 1)))
-
-
-def test_finding_rejects_an_overlong_citation() -> None:
-    """One citation longer than the bound is rejected."""
-    with pytest.raises(ValueError, match="citations"):
-        finding(citations=("c" * (MAX_CITATION_CHARS + 1),))
-
-
-def test_finding_rejects_a_negative_ordinal() -> None:
-    """Ordinals index findings within an evaluation and cannot be negative."""
-    with pytest.raises(ValueError, match="ordinal"):
-        finding(ordinal=-1)
+@pytest.mark.parametrize(
+    ("field_name", "build"),
+    [
+        # A blank code is unusable because consumers filter on it.
+        ("code", lambda: finding(code="")),
+        ("code", lambda: finding(code="   ")),
+        # Everything below is a value just past its documented bound.
+        ("code", lambda: finding(code="c" * (MAX_CODE_CHARS + 1))),
+        ("subject_id", lambda: finding(subject_id="s" * (MAX_SUBJECT_ID_CHARS + 1))),
+        ("summary", lambda: finding(summary="s" * (MAX_SUMMARY_CHARS + 1))),
+        (
+            "remediation",
+            lambda: finding(remediation="r" * (MAX_REMEDIATION_CHARS + 1)),
+        ),
+        (
+            "subject_text",
+            lambda: finding(subject_text="t" * (MAX_SUBJECT_TEXT_CHARS + 1)),
+        ),
+        (
+            "citations",
+            lambda: finding(
+                citations=tuple(f"src-{index}" for index in range(MAX_CITATIONS + 1))
+            ),
+        ),
+        ("citations", lambda: finding(citations=("c" * (MAX_CITATION_CHARS + 1),))),
+        ("ordinal", lambda: finding(ordinal=-1)),
+    ],
+)
+def test_finding_rejects_invalid_field_values(
+    field_name: str,
+    build: cabc.Callable[[], QaFinding],
+) -> None:
+    """Each documented bound rejects a value just past it."""
+    with pytest.raises(ValueError, match=field_name):
+        build()
 
 
 # --- evaluation invariants --------------------------------------------------
@@ -326,22 +308,15 @@ def test_evaluation_rejects_duplicate_finding_ids() -> None:
         QaEvaluation(summary_record=summary(finding_count=2), findings=findings)
 
 
-def test_evaluation_rejects_out_of_order_ordinals() -> None:
-    """Reordered findings would be persisted with a misleading ordinal."""
+@pytest.mark.parametrize(("first_ordinal", "second_ordinal"), [(1, 0), (0, 2)])
+def test_evaluation_rejects_non_consecutive_ordinals(
+    first_ordinal: int,
+    second_ordinal: int,
+) -> None:
+    """Reordered or gapped findings would persist a misleading position."""
     findings = (
-        finding(finding_id=FINDING_ID, ordinal=1),
-        finding(finding_id=OTHER_FINDING_ID, ordinal=0),
-    )
-
-    with pytest.raises(ValueError, match="ordinal"):
-        QaEvaluation(summary_record=summary(finding_count=2), findings=findings)
-
-
-def test_evaluation_rejects_a_skipped_ordinal() -> None:
-    """A gap in the ordinals would silently lose a finding's position."""
-    findings = (
-        finding(finding_id=FINDING_ID, ordinal=0),
-        finding(finding_id=OTHER_FINDING_ID, ordinal=2),
+        finding(finding_id=FINDING_ID, ordinal=first_ordinal),
+        finding(finding_id=OTHER_FINDING_ID, ordinal=second_ordinal),
     )
 
     with pytest.raises(ValueError, match="ordinal"):

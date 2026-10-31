@@ -327,7 +327,16 @@ Stop and escalate when any of these is reached.
     `__post_init__` past the McCabe limit. Both helpers join the Skylos
     canonical-validator entry-point rule. Red was observed first (a list was
     accepted; a non-finding raised `AttributeError`), then 80 focused tests
-    passed.
+    passed. Committed as `adac50e9` after a green sweep.
+  - Review round 5 (`adac50e9`, same CLI and scope, exit 0,
+    `review_completed`, 11/11 changed paths, no rate limit) returned two
+    trivial findings that duplicate one another: the nine `QaFinding`
+    rejection tests and the two ordinal-rejection tests repeated one shape and
+    should use `@pytest.mark.parametrize`, as the summary rejections already
+    do. Adopted — the finding matches the repository's duplication guidance and
+    the module's own idiom, and the consolidation restores headroom below the
+    400-line ceiling. Both tables preserve every case and its field-specific
+    `ValueError` match; 54 focused tests collect, the same number as before.
 - [ ] EP-M2 PostgreSQL persistence adapter, Alembic migration, unit-of-work
       registration, and store observability.
 - [ ] EP-M3 Recording and query application services, plus evaluator-result
@@ -728,6 +737,15 @@ Stop and escalate when any of these is reached.
   Date/Author: 2026-10-30, implementation agent. **Deviation status: accepted**
   — the reviewer's concern is tracked at its planned location rather than
   dropped.
+- Decision: the `QaFinding` bound-rejection tests and the ordinal-rejection
+  tests are `@pytest.mark.parametrize` tables rather than one function per
+  bound. Rationale: each function repeated the identical arrange-and-assert
+  shape, the file already used a table for the summary rejections, and the
+  module sits close to the 400-line ceiling that this plan records as a
+  constraint. The table keeps every case and its field-specific `ValueError`
+  match, so rejection coverage is unchanged. Date/Author: 2026-10-31,
+  implementation agent. **Deviation status: accepted** — the change is
+  test-structure only and touches no production behaviour.
 
 ## Outcomes & retrospective
 
