@@ -6,8 +6,8 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
-`EP-M0`–`EP-M6` delivered 2026-11-01, with all seven gates green at `c1d9ad61`
-and every upheld milestone-review finding repaired.
+`EP-M0`–`EP-M6` delivered 2026-11-01, with every gate green at the rebased head
+`314b0fde` and every upheld milestone-review finding repaired.
 
 ## Purpose / big picture
 
@@ -978,7 +978,8 @@ Stop and escalate when any of these is reached.
     snapshots, 30 warnings, 267.59 s); logs `...-r10repair.out`. The round-11
     repair then changed production code, so the same seven gates were re-run at
     `c1d9ad61` and exit 0 with test at 1944 passed, 3 skipped, 67 snapshots,
-    465.83 s (logs `...-r11repair.out`). That head is the delivered code.
+    465.83 s (logs `...-r11repair.out`). That head carried the delivered code
+    until the rebase onto `origin/main` recorded below.
   - Documentation-only follow-up: the commits after `c1d9ad61` change only
     documentation, so the Markdown gates were re-run for them — at `93263b26`
     and `d02ec502` — and exit 0 (`129 files left unchanged`, spelling
@@ -986,9 +987,34 @@ Stop and escalate when any of these is reached.
     `...-finaldocs2.out` and `...-finaldocs3.out`). The Python, migration, and
     test evidence above therefore belongs to `c1d9ad61` and is unaffected by
     them.
+  - Rebase onto the PR target (2026-11-01, requested after delivery). The
+    branch was replayed from the exclusive boundary `baa4d21a` onto
+    `origin/main` `a78273d3`, which had advanced three dependency-bump commits
+    that touch only `.github/`. All 50 commits replayed with identical patches
+    (`git range-diff` reports every pair as `=`), no conflict occurred, and the
+    target-only workflow files are byte-identical to the target. Weave was
+    bypassed for the replay with `-c core.attributesFile=/dev/null`: the host's
+    global attributes file selects `merge=weave` for `*.py`, which the estate
+    baseline treats as unreconciled ambient activation rather than repository
+    consent for an unattended multi-commit rebase. The rebased head `314b0fde`
+    is gate-clean on a clean tree — check-fmt, typecheck (`ty 0.0.32`), lint
+    (Hecate, Ruff, Pylint 10.00/10, df12 lints, ambrleaks, Skylos, duplication
+    gate with 30 reasoned exceptions), test (1944 passed, 3 skipped, 67
+    snapshots, 240.39 s), markdownlint and nixie all exit 0 (logs
+    `...-rebase.out`) — and the branch was force-pushed with lease bound to
+    `28f1ad4f`.
 
 ## Surprises & discoveries
 
+- Observation: this host still carries a user-wide attributes block —
+  `*.rs`, `*.py`, `*.ts`, and `*.tsx` all `merge=weave` — in
+  `${XDG_CONFIG_HOME:-~/.config}/git/attributes`, so `git check-attr merge`
+  reports `weave` for every Python path even though no repository file opts in.
+  The estate baseline says that block should have been removed. For the
+  unattended rebase this was handled with the command-scoped
+  `-c core.attributesFile=/dev/null` override, not by editing the user's
+  configuration, and the environment finding is recorded here rather than
+  repaired.
 - Observation: Hecate classifies a module by the **first** configured group
   whose prefix contains it, not the longest or most specific prefix. Evidence:
   `.venv/lib/python3.14/site-packages/hecate/policy.py`, `first_matching_group`
@@ -1751,12 +1777,14 @@ REST API and a first-party CLI.
   was verified against source and repaired in its own commit; round 9 completed
   with none; and round 12 reviewed this closing record and is answered by the
   corrections in it.
-- The delivered code is attested by the full seven-gate sweep at `c1d9ad61`,
+- The delivered code is attested by the sweep at the rebased head `314b0fde`,
   which is green with a clean tree: check-fmt, markdownlint (including the
   en-GB-oxendict spelling gate), nixie, typecheck, lint (Pylint 10.00/10,
-  duplication gate with 30 reasoned exceptions), check-migrations, and 1944
-  passing tests with 67 snapshots. The earlier sweep at `14b882a8` is green on
-  the same gates with 1943 tests.
+  duplication gate with 30 reasoned exceptions), and 1944 passing tests with 67
+  snapshots. The earlier seven-gate sweeps at `14b882a8` (1943 tests) and
+  `c1d9ad61` (1944 tests) are green on the same gates plus `check-migrations`;
+  the rebase changed no tracked file relative to those heads, and every patch
+  replayed identically.
 - Every later commit that carries this record changes documentation only and is
   re-gated for the Markdown gates before publication.
 
