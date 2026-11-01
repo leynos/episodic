@@ -8,6 +8,7 @@ inspect status codes themselves.
 
 import dataclasses as dc
 import enum
+import ipaddress
 import os
 import typing as typ
 import urllib.parse
@@ -94,12 +95,13 @@ class CliRuntime:
         timeout: float,
     ) -> None:
         """Resolve the global arguments against the environment."""
+        resolved_token = _first_present(token, os.environ.get(TOKEN_ENV))
+        resolved_url = (
+            _first_present(base_url, os.environ.get(BASE_URL_ENV)) or DEFAULT_BASE_URL
+        )
         self.options = ClientOptions(
-            base_url=_validated_base_url(
-                _first_present(base_url, os.environ.get(BASE_URL_ENV))
-                or DEFAULT_BASE_URL
-            ),
-            token=_first_present(token, os.environ.get(TOKEN_ENV)),
+            base_url=_validated_base_url(resolved_url, token=resolved_token),
+            token=resolved_token,
             timeout=timeout,
         )
 
@@ -112,8 +114,8 @@ def _first_present(*values: str | None) -> str | None:
     return None
 
 
-def _validated_base_url(base_url: str) -> str:
-    """Return ``base_url`` after checking it names an HTTP(S) host.
+def _validated_base_url(base_url: str, *, token: str | None) -> str:
+    """Return ``base_url`` after checking it is a usable API root.
 
     ``httpx`` raises plain ``ValueError`` for a URL with no scheme, and its
     transport layer can raise ``httpx.InvalidURL`` later, so rejecting the
@@ -124,6 +126,8 @@ def _validated_base_url(base_url: str) -> str:
     ----------
     base_url : str
         API root resolved from ``--base-url`` or the environment.
+    token : str | None
+        Bearer credential the same invocation configured, if any.
 
     Returns
     -------
@@ -133,20 +137,56 @@ def _validated_base_url(base_url: str) -> str:
     Raises
     ------
     InvalidConfigError
-        If the URL has no HTTP(S) scheme or names no host.
+        If the URL has no HTTP(S) scheme, names no host, carries a query
+        string or fragment, or would send ``token`` over plain HTTP to a
+        non-loopback host.
     """
     try:
         parsed = urllib.parse.urlsplit(base_url)
     except ValueError as error:
         invalid = f"Invalid Episodic API URL {base_url}: {error}"
         raise InvalidConfigError(invalid) from error
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+    host = parsed.hostname
+    if parsed.scheme not in {"http", "https"} or not host:
         invalid = (
             f"Invalid Episodic API URL {base_url}: "
             "expected an http or https URL with a host"
         )
         raise InvalidConfigError(invalid)
+    if parsed.query or parsed.fragment:
+        invalid = (
+            f"Invalid Episodic API URL {base_url}: remove the query string and fragment"
+        )
+        raise InvalidConfigError(invalid)
+    if _sends_credential_in_clear(scheme=parsed.scheme, host=host, token=token):
+        insecure = (
+            f"Refusing to send a bearer token over plain HTTP to {parsed.netloc}: "
+            "use an https URL or connect over loopback"
+        )
+        raise InvalidConfigError(insecure)
     return base_url
+
+
+def _sends_credential_in_clear(
+    *,
+    scheme: str,
+    host: str,
+    token: str | None,
+) -> bool:
+    """Return whether ``token`` would travel over unencrypted off-host HTTP."""
+    if token is None or scheme != "http":
+        return False
+    return not _is_loopback(host)
+
+
+def _is_loopback(host: str) -> bool:
+    """Return whether ``host`` names this machine."""
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 @dc.dataclass(frozen=True, slots=True)

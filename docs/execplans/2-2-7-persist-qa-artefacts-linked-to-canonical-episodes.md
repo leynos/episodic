@@ -766,6 +766,28 @@ Stop and escalate when any of these is reached.
     `test_unexpected_success_body_is_an_error` and
     `test_malformed_base_url_is_a_usage_error`; the file passes with 19 tests
     and 4 snapshots.
+  - Review-repair commit `08d2eca6`.
+  - Milestone CLI review round 2 at `08d2eca6` (`coderabbit 0.9.2`, exit 0,
+    `review_completed`, 15 path-touches over `1edf224f..08d2eca6`, no rate
+    limit): three findings (one duplicated pair), all upheld and repaired.
+    1. `_validated_base_url` accepted a remote `http://` endpoint, so a
+       configured bearer token would cross the network in clear text. It now
+       refuses that combination while keeping the documented loopback HTTP
+       default and allowing any `https://` endpoint.
+    2. The same helper accepted a base URL with a query string or fragment,
+       which made the appended resource path part of the query. Both are now
+       rejected.
+  - Round-2 repair evidence: the CLI unit tests pass with 22 tests and 4
+    snapshots; the environment-default test now uses `https://` endpoints,
+    which is what the new guard requires for a credentialled remote.
+  - Gate sweep 7 (round-2 repair) found `tests/test_qa_cli.py` at 460 lines,
+    over the 400-line module ceiling, so the suite moved into three modules
+    without changing coverage: `tests/test_qa_cli.py` (9 tests: rendering and
+    request shaping), `tests/test_qa_cli_errors.py` (13 tests: exit codes and
+    base-URL validation), and `tests/qa_cli_fixtures.py` (payloads, the
+    stubbed transport helper, and the autouse environment-isolation fixture
+    both modules import). `make check-fmt` also caught one paragraph in this
+    plan that `mdtablefix --wrap` reflowed.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of
@@ -1444,6 +1466,34 @@ Stop and escalate when any of these is reached.
   code a mistyped option already earns. Date/Author: 2026-10-31, implementation
   agent. **Deviation status: none** — the exit-code contract is unchanged; 2
   already covers usage errors.
+- Decision: refuse to send a bearer token over plain HTTP to a non-loopback
+  host. Rationale: the plan fixes the local-development default as
+  `http://127.0.0.1:8000`, but it never sanctions sending a credential to a
+  remote host unencrypted, and the CLI now accepts a base URL from the
+  environment, where a misconfiguration is easy. Loopback and every `https://`
+  endpoint stay allowed, so the documented default is unaffected; the refusal
+  is a usage error with a message naming the reason. Date/Author: 2026-10-31,
+  implementation agent. **Deviation status: none** — an added safety check on a
+  path the plan did not previously constrain.
+- Decision: reject a base URL that carries a query string or fragment.
+  Rationale: the client concatenates `base_url.rstrip("/")` with the resource
+  path, so `https://api.example.test?source=cli` would place
+  `/v1/episodes/.../qa-evaluations` inside the query and silently request the
+  wrong resource. Rejecting the shape at option resolution is simpler than
+  rebuilding the URL from parts, and no supported deployment uses a base URL
+  with a query. Date/Author: 2026-10-31, implementation agent. **Deviation
+  status: none**.
+- Decision: split the CLI unit tests into `tests/test_qa_cli.py` (rendering and
+  request shaping), `tests/test_qa_cli_errors.py` (exit codes and base-URL
+  validation), and a shared `tests/qa_cli_fixtures.py`. Rationale: the repairs
+  pushed the single module to 460 lines, and Pylint's `C0302` enforces the
+  repository's 400-line ceiling on test modules too. The shared module holds
+  the canned page, the stubbed transport, and the autouse environment-isolation
+  fixture, so the split adds no duplicated setup; both test modules import the
+  fixture explicitly with a reasoned `ruff: ignore[unused-import]` because
+  pytest discovers it by name rather than through a reference. Date/Author:
+  2026-10-31, implementation agent. **Deviation status: none** — coverage and
+  test names are unchanged.
 
 ## Outcomes & retrospective
 
@@ -2366,8 +2416,11 @@ fenced blocks.
   - `episodic/cli/qa.py` — the `qa evaluations list` command.
   - `episodic/cli/client.py` — a thin `httpx` client and error translation.
   - `episodic/cli/rendering.py` — pure table and JSON renderers.
-  - `tests/test_qa_cli.py` and `tests/__snapshots__/test_qa_cli.ambr` — the
-    renderer snapshots and the stubbed-HTTP command tests.
+  - `tests/test_qa_cli.py`, `tests/test_qa_cli_errors.py`,
+    `tests/qa_cli_fixtures.py`, and `tests/__snapshots__/test_qa_cli.ambr` —
+    the renderer snapshots and stubbed-HTTP happy-path tests, the exit-code
+    and base-URL validation tests, and the payloads and transport helper the
+    two test modules share.
   - `tests/features/qa_cli_retrieval.feature`,
     `tests/steps/test_qa_cli_steps.py`, and
     `tests/steps/qa_cli_support.py` — the CLI scenarios. They live in their own
@@ -2390,7 +2443,7 @@ fenced blocks.
   `EV-M5-cli`.
 
   ```bash
-  uv run pytest tests/test_qa_cli.py \
+  uv run pytest tests/test_qa_cli.py tests/test_qa_cli_errors.py \
       tests/steps/test_qa_cli_steps.py \
       tests/steps/test_qa_artefact_retrieval_steps.py -q
   ```
@@ -2991,18 +3044,22 @@ episodic [--base-url URL] [--token TOKEN] [--timeout SECONDS] qa evaluations lis
 ```
 
 `--base-url` defaults to the `EPISODIC_API_URL` environment variable, then to
-`http://127.0.0.1:8000`. `--token` defaults to `EPISODIC_API_TOKEN`; it is sent
-as `Authorization: Bearer <token>`. Never echo the token, and never place it in
-a rendered table.
+`http://127.0.0.1:8000`. It must name an `http` or `https` URL with a host and
+no query string or fragment: a query string would displace the resource path
+the client appends. `--token` defaults to `EPISODIC_API_TOKEN`; it is sent as
+`Authorization: Bearer <token>`. Never echo the token, and never place it in a
+rendered table. A bearer token is refused over plain HTTP unless the host is
+loopback, so a remote operator cannot put the credential on the wire in clear.
 
 Exit codes: `0` success; `1` the API returned an error envelope (print
-`message` to standard error, prefixed with the HTTP status); `2` usage error
-(left to `cyclopts`); `3` the API was unreachable or timed out; `4` the API
-returned `429 rate_limited` (print the `Retry-After` value if present, so a
-throttled operator is not told "unknown error"). A `401 unauthorized` response
-with no `EPISODIC_API_TOKEN` set must add the hint "no API token configured;
-set EPISODIC_API_TOKEN or pass --token", so the commonest setup mistake names
-the credential rather than reading as a bare authorization failure.
+`message` to standard error, prefixed with the HTTP status); `2` usage error,
+including a base URL the client cannot use (left to `cyclopts` for argument
+errors); `3` the API was unreachable or timed out; `4` the API returned
+`429 rate_limited` (print the `Retry-After` value if present, so a throttled
+operator is not told "unknown error"). A `401 unauthorized` response with no
+`EPISODIC_API_TOKEN` set must add the hint "no API token configured; set
+EPISODIC_API_TOKEN or pass --token", so the commonest setup mistake names the
+credential rather than reading as a bare authorization failure.
 
 `--format table` prints a fixed-width table with columns `EVALUATOR`, `STATUS`,
 `FINDINGS`, `EVALUATED AT`, `ID`, followed by a summary line
