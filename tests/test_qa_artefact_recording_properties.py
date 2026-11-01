@@ -12,6 +12,7 @@ from hypothesis import given, settings
 
 from episodic.canonical.qa_artefact_compliance import compliance_status_for_pedante
 from episodic.canonical.qa_artefact_recording import (
+    QaEvaluationTarget,
     evaluation_from_pedante,
 )
 from episodic.canonical.qa_artefacts import (
@@ -32,6 +33,11 @@ from tests.fixtures.qa_artefact_recording_builders import (
     pedante_result,
 )
 
+_TARGET = QaEvaluationTarget(
+    episode_id=EPISODE_ID,
+    tei_content_hash=TEI_CONTENT_HASH,
+    evaluated_at=EVALUATED_AT,
+)
 _IDENTIFIER = st.from_regex(r"[A-Za-z0-9_-]{1,24}", fullmatch=True)
 _BLANK = st.text(min_size=1, max_size=40).filter(lambda value: bool(value.strip()))
 _NON_ASCII_PROSE = st.sampled_from([
@@ -66,12 +72,7 @@ def test_compliance_status_tracks_blocking_findings(
     findings: list[PedanteFinding],
 ) -> None:
     """A mapped evaluation is non-compliant exactly when a finding blocks."""
-    evaluation = evaluation_from_pedante(
-        pedante_result(*findings),
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=EVALUATED_AT,
-    )
+    evaluation = evaluation_from_pedante(pedante_result(*findings), target=_TARGET)
     has_blocking = any(finding.is_blocking for finding in evaluation.findings)
     hypothesis.event("blocking present" if has_blocking else "no blocking finding")
 
@@ -84,12 +85,7 @@ def test_compliance_status_tracks_blocking_findings(
 @given(findings=st.lists(_pedante_findings(), max_size=8))
 def test_projection_preserves_every_field(findings: list[PedanteFinding]) -> None:
     """Every field the projection claims to carry arrives unchanged."""
-    evaluation = evaluation_from_pedante(
-        pedante_result(*findings),
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=EVALUATED_AT,
-    )
+    evaluation = evaluation_from_pedante(pedante_result(*findings), target=_TARGET)
     if any(not finding.cited_source_ids for finding in findings):
         hypothesis.event("finding without citations")
     if any(len(finding.cited_source_ids) == 3 for finding in findings):

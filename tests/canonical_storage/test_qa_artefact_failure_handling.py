@@ -27,6 +27,7 @@ from episodic.canonical.storage import (
     qa_artefacts,
 )
 from tests.canonical_storage._qa_artefact_support import (
+    EvaluationOptions,
     create_episode,
     make_evaluation,
 )
@@ -35,6 +36,8 @@ from tests.canonical_storage._workflow_checkpoint_support import RecordingMetric
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.canonical.qa_artefacts import QaEvaluation
+
     type SessionFactory = async_sessionmaker[AsyncSession]
 else:
     type SessionFactory = object
@@ -42,30 +45,32 @@ else:
 REPLAYED_AT = dt.datetime(2026, 10, 31, 10, 0, tzinfo=dt.UTC)
 
 
-@pytest.mark.asyncio
-async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
-    session_factory: SessionFactory,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A rejected supersession is bounded, reported, and rolled back alone."""
-    episode_id = await create_episode(session_factory)
+def _supersession_pair(
+    episode_id: uuid.UUID,
+) -> tuple[QaEvaluation, QaEvaluation]:
+    """Return an errored artefact and the compliant replacement for it."""
     first = make_evaluation(
         episode_id,
         idempotency_key="supersede-failure",
-        compliance_status=QaComplianceStatus.ERRORED,
-        severities=(QaFindingSeverity.LOW,),
+        options=EvaluationOptions(
+            compliance_status=QaComplianceStatus.ERRORED,
+            severities=(QaFindingSeverity.LOW,),
+        ),
     )
     incoming = make_evaluation(
         episode_id,
         idempotency_key="supersede-failure",
-        compliance_status=QaComplianceStatus.COMPLIANT,
-        severities=(QaFindingSeverity.HIGH,),
-        evaluated_at=REPLAYED_AT,
+        options=EvaluationOptions(
+            compliance_status=QaComplianceStatus.COMPLIANT,
+            severities=(QaFindingSeverity.HIGH,),
+            evaluated_at=REPLAYED_AT,
+        ),
     )
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        stored = await uow.qa_artefacts.record_evaluation(first)
-        await uow.commit()
+    return first, incoming
 
+
+def _reject_replacement_ordinals(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the next replacement write a finding ordinal the schema rejects."""
     real_finding_to_record = qa_artefacts.finding_to_record
 
     def reject_replacement_findings(
@@ -78,6 +83,21 @@ async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
         record.ordinal = -1
         return record
 
+    monkeypatch.setattr(qa_artefacts, "finding_to_record", reject_replacement_findings)
+
+
+@pytest.mark.asyncio
+async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
+    session_factory: SessionFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejected supersession is bounded, reported, and rolled back alone."""
+    episode_id = await create_episode(session_factory)
+    first, incoming = _supersession_pair(episode_id)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        stored = await uow.qa_artefacts.record_evaluation(first)
+        await uow.commit()
+
     metrics = RecordingMetrics()
     runtime = QaArtefactStorageRuntime(
         clock=lambda: REPLAYED_AT,
@@ -85,11 +105,7 @@ async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
         metrics=metrics,
     )
     async with session_factory() as session:
-        monkeypatch.setattr(
-            qa_artefacts,
-            "finding_to_record",
-            reject_replacement_findings,
-        )
+        _reject_replacement_ordinals(monkeypatch)
         store = SqlAlchemyQaArtefactStore(session, runtime=runtime)
         with pytest.raises(IntegrityError):
             await store.record_evaluation(incoming)
@@ -174,15 +190,19 @@ async def test_replay_lookup_locks_the_stored_row_against_supersession(
     errored = make_evaluation(
         episode_id,
         idempotency_key="locked-replay",
-        compliance_status=QaComplianceStatus.ERRORED,
-        severities=(QaFindingSeverity.LOW,),
+        options=EvaluationOptions(
+            compliance_status=QaComplianceStatus.ERRORED,
+            severities=(QaFindingSeverity.LOW,),
+        ),
     )
     incoming = make_evaluation(
         episode_id,
         idempotency_key="locked-replay",
-        compliance_status=QaComplianceStatus.COMPLIANT,
-        severities=(QaFindingSeverity.HIGH,),
-        evaluated_at=REPLAYED_AT,
+        options=EvaluationOptions(
+            compliance_status=QaComplianceStatus.COMPLIANT,
+            severities=(QaFindingSeverity.HIGH,),
+            evaluated_at=REPLAYED_AT,
+        ),
     )
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.qa_artefacts.record_evaluation(errored)

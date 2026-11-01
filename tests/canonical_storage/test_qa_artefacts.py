@@ -29,6 +29,7 @@ from episodic.canonical.storage import (
     qa_artefacts,
 )
 from tests.canonical_storage._qa_artefact_support import (
+    EvaluationOptions,
     count_rows,
     create_episode,
     create_ingestion_job,
@@ -52,12 +53,14 @@ async def test_evaluation_round_trip(
     evaluation = make_evaluation(
         episode_id,
         idempotency_key="round-trip",
-        severities=(
-            QaFindingSeverity.LOW,
-            QaFindingSeverity.HIGH,
-            QaFindingSeverity.MEDIUM,
+        options=EvaluationOptions(
+            severities=(
+                QaFindingSeverity.LOW,
+                QaFindingSeverity.HIGH,
+                QaFindingSeverity.MEDIUM,
+            ),
+            created_at=NOW,
         ),
-        created_at=NOW,
     )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -109,7 +112,7 @@ async def test_evaluation_round_trip_preserves_the_instant(
     evaluation = make_evaluation(
         episode_id,
         idempotency_key="timezone",
-        evaluated_at=evaluated_at,
+        options=EvaluationOptions(evaluated_at=evaluated_at),
     )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -139,7 +142,9 @@ async def test_listed_finding_count_agrees_with_stored_findings(
     evaluation = make_evaluation(
         episode_id,
         idempotency_key=f"count-{finding_count}",
-        severities=(QaFindingSeverity.LOW,) * finding_count,
+        options=EvaluationOptions(
+            severities=(QaFindingSeverity.LOW,) * finding_count,
+        ),
     )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -177,7 +182,11 @@ async def test_deleting_episode_cascades_evaluations_and_findings(
             ("second", (QaFindingSeverity.LOW, QaFindingSeverity.MEDIUM)),
         ):
             await uow.qa_artefacts.record_evaluation(
-                make_evaluation(episode_id, idempotency_key=key, severities=severities)
+                make_evaluation(
+                    episode_id,
+                    idempotency_key=key,
+                    options=EvaluationOptions(severities=severities),
+                )
             )
         await uow.commit()
 
@@ -228,8 +237,10 @@ async def test_deleting_generation_run_keeps_evaluation(
             make_evaluation(
                 episode_id,
                 idempotency_key="run-link",
-                severities=(QaFindingSeverity.LOW,),
-                generation_run_id=run_id,
+                options=EvaluationOptions(
+                    severities=(QaFindingSeverity.LOW,),
+                    generation_run_id=run_id,
+                ),
             )
         )
         await uow.commit()
@@ -280,12 +291,12 @@ async def test_recording_emits_bounded_metrics_and_safe_log(
     first = make_evaluation(
         episode_id,
         idempotency_key="observed",
-        severities=(QaFindingSeverity.LOW,),
+        options=EvaluationOptions(severities=(QaFindingSeverity.LOW,)),
     )
     replay = make_evaluation(
         episode_id,
         idempotency_key="observed",
-        severities=(QaFindingSeverity.HIGH,),
+        options=EvaluationOptions(severities=(QaFindingSeverity.HIGH,)),
     )
 
     async with SqlAlchemyUnitOfWork(session_factory, runtime=runtime) as uow:

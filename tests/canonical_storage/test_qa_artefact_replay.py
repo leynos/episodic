@@ -28,6 +28,7 @@ from episodic.canonical.storage import (
 )
 from episodic.canonical.storage.integrity_helpers import constraint_name
 from tests.canonical_storage._qa_artefact_support import (
+    EvaluationOptions,
     count_artefacts_for,
     count_rows,
     create_episode,
@@ -69,13 +70,15 @@ async def test_replay_returns_the_first_recording(
     first = make_evaluation(
         episode_id,
         idempotency_key="replay",
-        severities=(QaFindingSeverity.LOW,),
+        options=EvaluationOptions(severities=(QaFindingSeverity.LOW,)),
     )
     repeat = make_evaluation(
         episode_id,
         idempotency_key="replay",
-        severities=(QaFindingSeverity.HIGH, QaFindingSeverity.HIGH),
-        evaluated_at=REPLAYED_AT,
+        options=EvaluationOptions(
+            severities=(QaFindingSeverity.HIGH, QaFindingSeverity.HIGH),
+            evaluated_at=REPLAYED_AT,
+        ),
     )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -125,15 +128,19 @@ async def test_errored_artefact_is_superseded_in_place(
     first = make_evaluation(
         episode_id,
         idempotency_key="supersede",
-        compliance_status=stored_status,
-        severities=(QaFindingSeverity.LOW,),
+        options=EvaluationOptions(
+            compliance_status=stored_status,
+            severities=(QaFindingSeverity.LOW,),
+        ),
     )
     incoming = make_evaluation(
         episode_id,
         idempotency_key="supersede",
-        compliance_status=incoming_status,
-        severities=(QaFindingSeverity.HIGH, QaFindingSeverity.HIGH),
-        evaluated_at=REPLAYED_AT,
+        options=EvaluationOptions(
+            compliance_status=incoming_status,
+            severities=(QaFindingSeverity.HIGH, QaFindingSeverity.HIGH),
+            evaluated_at=REPLAYED_AT,
+        ),
     )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -186,7 +193,7 @@ async def test_non_idempotency_violation_is_not_treated_as_replay(
     orphan = make_evaluation(
         uuid.uuid7(),
         idempotency_key="orphan",
-        severities=(QaFindingSeverity.LOW,),
+        options=EvaluationOptions(severities=(QaFindingSeverity.LOW,)),
     )
     metrics = RecordingMetrics()
     async with session_factory() as session:
@@ -253,8 +260,10 @@ async def test_replaying_keys_never_multiplies_artefacts(
         evaluation = make_evaluation(
             episode_ids[episode_index],
             idempotency_key=key,
-            compliance_status=status,
-            severities=(QaFindingSeverity.LOW,),
+            options=EvaluationOptions(
+                compliance_status=status,
+                severities=(QaFindingSeverity.LOW,),
+            ),
         )
         async with SqlAlchemyUnitOfWork(factory) as uow:
             stored = await uow.qa_artefacts.record_evaluation(evaluation)

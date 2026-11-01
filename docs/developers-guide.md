@@ -1783,6 +1783,11 @@ Maintainer rules:
 - No evaluator populates `rubric_score` yet, and `errored` has no production
   producer in this slice. Both are reachable through the recording functions
   and are covered by tests that construct them directly.
+- Pass the target to a projection as one `QaEvaluationTarget`, never as its
+  component fields. Every projection needs the same episode, content hash,
+  instant, optional run id, and UUID factory, so the bundle keeps a new target
+  field a one-place change. `qa_idempotency_key` likewise takes
+  `QaIdempotencyKeyInputs`: exactly the five fields that compose the key.
 - Extending the `qa_evaluator` enum is a two-deploy operation, because
   PostgreSQL cannot add an enum value and use it in the same transaction. Add
   the value in a migration, then use it in a later release.

@@ -5,6 +5,8 @@ turns the answer into either a page payload or one of the CLI's typed errors,
 so status-code policy stays in one place.
 """
 
+import typing as typ
+
 import httpx
 
 from episodic.cli.errors import MISSING_TOKEN_HINT, ApiError, RateLimitedError
@@ -38,19 +40,37 @@ def decode_page(
         that is not a page envelope.
     RateLimitedError
         If the API throttled the request.
-    """
+    """  # ruff: ignore[docstring-extraneous-exception]  # _successful_page() and _raise_api_error() raise them.
     payload = _decode(response)
     status = response.status_code
     if response.is_success:
-        match payload.get("items"):
-            case list():
-                return payload
-            case _:
-                unexpected = f"{status} the API returned an unexpected response body"
-                raise ApiError(unexpected)
+        return _successful_page(payload, status)
+    return _raise_api_error(response, payload, token_configured=token_configured)
 
+
+def _successful_page(
+    payload: dict[str, object],
+    status: int,
+) -> dict[str, object]:
+    """Return a page envelope, or refuse a successful body that is not one."""
+    match payload.get("items"):
+        case list():
+            return payload
+        case _:
+            unexpected = f"{status} the API returned an unexpected response body"
+            raise ApiError(unexpected)
+
+
+def _raise_api_error(
+    response: httpx.Response,
+    payload: dict[str, object],
+    *,
+    token_configured: bool,
+) -> typ.NoReturn:
+    """Raise the CLI error that matches the response's status and body."""
     code = _as_text(payload.get("code")) or "unknown_error"
     message = _as_text(payload.get("message")) or response.reason_phrase
+    status = response.status_code
     if status == httpx.codes.TOO_MANY_REQUESTS or code == "rate_limited":
         raise RateLimitedError(
             _throttled_message(status, message, response.headers.get("Retry-After"))

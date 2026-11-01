@@ -16,7 +16,10 @@ import typing as typ
 import pytest
 
 from episodic.canonical.qa_artefact_compliance import compliance_status_for_pedante
-from episodic.canonical.qa_artefact_recording import evaluation_from_pedante
+from episodic.canonical.qa_artefact_recording import (
+    QaEvaluationTarget,
+    evaluation_from_pedante,
+)
 from episodic.canonical.qa_artefacts import (
     MAX_SUMMARY_CHARS,
     QA_ARTEFACT_SCHEMA_VERSION,
@@ -52,16 +55,23 @@ def _fixed_identifiers() -> uuid.UUID:
     return EVALUATION_ID
 
 
+_TARGET = QaEvaluationTarget(
+    episode_id=EPISODE_ID,
+    tei_content_hash=TEI_CONTENT_HASH,
+    evaluated_at=EVALUATED_AT,
+    generation_run_id=GENERATION_RUN_ID,
+    uuid_factory=_fixed_identifiers,
+)
+_DEFAULT_TARGET = QaEvaluationTarget(
+    episode_id=EPISODE_ID,
+    tei_content_hash=TEI_CONTENT_HASH,
+    evaluated_at=EVALUATED_AT,
+)
+
+
 def _pedante_evaluation(*findings: PedanteFinding) -> QaEvaluation:
     """Map the supplied Pedante findings with deterministic identifiers."""
-    return evaluation_from_pedante(
-        pedante_result(*findings),
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=EVALUATED_AT,
-        generation_run_id=GENERATION_RUN_ID,
-        uuid_factory=_fixed_identifiers,
-    )
+    return evaluation_from_pedante(pedante_result(*findings), target=_TARGET)
 
 
 def test_records_pedante_result() -> None:
@@ -244,12 +254,7 @@ def test_pedante_findings_keep_their_emission_order() -> None:
 def test_pedante_metadata_carries_the_provider_response() -> None:
     """Provider correlation fields are recorded without token usage."""
     result = pedante_result(model="anthropic/x", provider_response_id="resp-9")
-    evaluation = evaluation_from_pedante(
-        result,
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=EVALUATED_AT,
-    )
+    evaluation = evaluation_from_pedante(result, target=_DEFAULT_TARGET)
 
     assert evaluation.summary_record.evaluator_metadata == {
         "model": "anthropic/x",
@@ -266,9 +271,4 @@ def test_oversized_result_is_refused_rather_than_truncated() -> None:
     result = pedante_result(summary="x" * (MAX_SUMMARY_CHARS + 1))
 
     with pytest.raises(ValueError, match="summary"):
-        evaluation_from_pedante(
-            result,
-            episode_id=EPISODE_ID,
-            tei_content_hash=TEI_CONTENT_HASH,
-            evaluated_at=EVALUATED_AT,
-        )
+        evaluation_from_pedante(result, target=_DEFAULT_TARGET)

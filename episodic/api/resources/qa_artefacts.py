@@ -6,6 +6,7 @@ reported as absent rather than forbidden, so the response cannot confirm that
 it exists.
 """
 
+import dataclasses as dc
 import typing as typ
 
 import falcon
@@ -29,8 +30,12 @@ from episodic.observability import NoopTracer
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import uuid
 
     from episodic.api.types import UowFactory
+    from episodic.canonical.pagination import Pagination
+    from episodic.canonical.qa_artefacts import QaEvaluation, QaEvaluationSummary
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.observability import SpanHandle, TracerPort
 
 
@@ -81,6 +86,141 @@ def _unsupported_schema(
             },
         ),
     )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ListQuery:
+    """Parsed identifier, page, and filters for one listing request."""
+
+    episode_id: uuid.UUID
+    page: Pagination
+    evaluator: QaEvaluator | None
+    compliance_status: QaComplianceStatus | None
+
+
+def _parse_list_query(req: falcon.Request, episode_id: str) -> _ListQuery:
+    """Parse and validate the listing request's identifier, page, and filters."""
+    parsed_episode_id = parse_uuid(episode_id, "episode_id")
+    page = parse_pagination(req)
+    evaluator = parse_enum_param(req, "evaluator", QaEvaluator)
+    compliance_status = parse_enum_param(
+        req,
+        "compliance_status",
+        QaComplianceStatus,
+    )
+    return _ListQuery(
+        episode_id=parsed_episode_id,
+        page=page,
+        evaluator=evaluator,
+        compliance_status=compliance_status,
+    )
+
+
+async def _read_list_page(
+    uow: CanonicalUnitOfWork,
+    query: _ListQuery,
+    req: falcon.Request,
+) -> tuple[list[QaEvaluationSummary], int]:
+    """Return the caller's page of evaluations, mapping schema failures."""
+    episode = await read_owned_episode(
+        uow,
+        query.episode_id,
+        principal_id(req),
+    )
+    if episode is None:
+        raise _evaluation_not_found({"episode_id": str(query.episode_id)})
+    try:
+        return await list_qa_evaluations(
+            uow,
+            QaEvaluationListRequest(
+                episode_id=query.episode_id,
+                pagination=query.page,
+                evaluator=query.evaluator,
+                compliance_status=query.compliance_status,
+            ),
+        )
+    except UnsupportedQaArtefactSchemaError as error:
+        # The caller already owns the episode, so naming the schema
+        # failure reveals nothing it could not learn from the rows.
+        raise _unsupported_schema(error) from error
+
+
+def _list_payload(
+    summaries: cabc.Sequence[QaEvaluationSummary],
+    page: Pagination,
+    total: int,
+) -> dict[str, object]:
+    """Build the listing page envelope."""
+    return {
+        "items": [serialize_qa_evaluation_summary(summary) for summary in summaries],
+        "limit": page.limit,
+        "offset": page.offset,
+        "total": total,
+    }
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _EvaluationRead:
+    """Request state shared by the detail resource's read helpers."""
+
+    uow: CanonicalUnitOfWork
+    req: falcon.Request
+    span: SpanHandle
+    details: dict[str, str]
+
+    async def owns(self, episode_id: uuid.UUID) -> bool:
+        """Return whether the caller's principal owns ``episode_id``."""
+        episode = await read_owned_episode(
+            self.uow,
+            episode_id,
+            principal_id(self.req),
+        )
+        return episode is not None
+
+    async def require_episode(self, episode_id: uuid.UUID) -> None:
+        """Refuse the read when the caller does not own ``episode_id``."""
+        if not await self.owns(episode_id):
+            _record_not_found(self.span, "evaluation.not_found")
+            raise _evaluation_not_found(self.details)
+
+
+async def _read_evaluation(
+    uow: CanonicalUnitOfWork,
+    evaluation_id: uuid.UUID,
+    req: falcon.Request,
+    span: SpanHandle,
+) -> QaEvaluation:
+    """Return the caller's evaluation, marking the span on each refusal."""
+    read = _EvaluationRead(
+        uow=uow,
+        req=req,
+        span=span,
+        details={"evaluation_id": str(evaluation_id)},
+    )
+    evaluation = await _load_evaluation(read, evaluation_id)
+    await read.require_episode(evaluation.summary_record.episode_id)
+    return evaluation
+
+
+async def _load_evaluation(
+    read: _EvaluationRead,
+    evaluation_id: uuid.UUID,
+) -> QaEvaluation:
+    """Load one evaluation, refusing an unreadable or absent row."""
+    try:
+        evaluation = await get_qa_evaluation(read.uow, evaluation_id)
+    except UnsupportedQaArtefactSchemaError as error:
+        # The row is unreadable, but its episode still decides
+        # whether this caller may learn that it exists.
+        if not await read.owns(error.episode_id):
+            _record_not_found(read.span, "evaluation.not_found")
+            raise _evaluation_not_found(read.details) from error
+        _record_rejection(read.span, "qa_artefact_schema_unsupported")
+        raise _unsupported_schema(error) from error
+    if evaluation is None:
+        _record_not_found(read.span, "evaluation.not_found")
+        raise _evaluation_not_found(read.details)
+    return evaluation
 
 
 class EpisodeQaEvaluationsResource:
@@ -138,50 +278,21 @@ class EpisodeQaEvaluationsResource:
             attributes={"operation": "qa_evaluations.list"},
         ) as span:
             try:
-                parsed_episode_id = parse_uuid(episode_id, "episode_id")
-                page = parse_pagination(req)
-                evaluator = parse_enum_param(req, "evaluator", QaEvaluator)
-                compliance_status = parse_enum_param(
-                    req,
-                    "compliance_status",
-                    QaComplianceStatus,
-                )
+                query = _parse_list_query(req, episode_id)
             except falcon.HTTPError:
                 _record_rejection(span, "invalid_input")
                 raise
             span.set_attribute("pagination", "offset")
             async with self._uow_factory() as uow:
-                episode = await read_owned_episode(
-                    uow,
-                    parsed_episode_id,
-                    principal_id(req),
-                )
-                if episode is None:
-                    _record_not_found(span, "episode.not_found")
-                    raise _evaluation_not_found({"episode_id": str(parsed_episode_id)})
                 try:
-                    summaries, total = await list_qa_evaluations(
-                        uow,
-                        QaEvaluationListRequest(
-                            episode_id=parsed_episode_id,
-                            pagination=page,
-                            evaluator=evaluator,
-                            compliance_status=compliance_status,
-                        ),
-                    )
-                except UnsupportedQaArtefactSchemaError as error:
-                    # The caller already owns the episode, so naming the schema
-                    # failure reveals nothing it could not learn from the rows.
+                    summaries, total = await _read_list_page(uow, query, req)
+                except falcon.HTTPNotFound:
+                    _record_not_found(span, "episode.not_found")
+                    raise
+                except falcon.HTTPUnprocessableEntity:
                     _record_rejection(span, "qa_artefact_schema_unsupported")
-                    raise _unsupported_schema(error) from error
-            resp.media = {
-                "items": [
-                    serialize_qa_evaluation_summary(summary) for summary in summaries
-                ],
-                "limit": page.limit,
-                "offset": page.offset,
-                "total": total,
-            }
+                    raise
+            resp.media = _list_payload(summaries, query.page, total)
             resp.status = falcon.HTTP_200
             span.set_attribute("outcome", "success")
 
@@ -243,34 +354,13 @@ class QaEvaluationResource:
             except falcon.HTTPError:
                 _record_rejection(span, "invalid_input")
                 raise
-            details = {"evaluation_id": str(parsed_evaluation_id)}
             async with self._uow_factory() as uow:
-                try:
-                    evaluation = await get_qa_evaluation(uow, parsed_evaluation_id)
-                except UnsupportedQaArtefactSchemaError as error:
-                    # The row is unreadable, but its episode still decides
-                    # whether this caller may learn that it exists.
-                    episode = await read_owned_episode(
-                        uow,
-                        error.episode_id,
-                        principal_id(req),
-                    )
-                    if episode is None:
-                        _record_not_found(span, "evaluation.not_found")
-                        raise _evaluation_not_found(details) from error
-                    _record_rejection(span, "qa_artefact_schema_unsupported")
-                    raise _unsupported_schema(error) from error
-                if evaluation is None:
-                    _record_not_found(span, "evaluation.not_found")
-                    raise _evaluation_not_found(details)
-                episode = await read_owned_episode(
+                evaluation = await _read_evaluation(
                     uow,
-                    evaluation.summary_record.episode_id,
-                    principal_id(req),
+                    parsed_evaluation_id,
+                    req,
+                    span,
                 )
-                if episode is None:
-                    _record_not_found(span, "evaluation.not_found")
-                    raise _evaluation_not_found(details)
             resp.media = serialize_qa_evaluation(evaluation)
             resp.status = falcon.HTTP_200
             span.set_attribute("outcome", "success")

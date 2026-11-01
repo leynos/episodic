@@ -12,6 +12,8 @@ import typing as typ
 import pytest
 
 from episodic.canonical.qa_artefact_recording import (
+    QaEvaluationTarget,
+    QaIdempotencyKeyInputs,
     evaluation_from_pedante,
     qa_idempotency_key,
 )
@@ -42,11 +44,13 @@ class _KeyInputs:
     def derive(self) -> str:
         """Return the key these inputs produce."""
         return qa_idempotency_key(
-            evaluator=self.evaluator,
-            evaluator_version=self.evaluator_version,
-            compliance_policy_version=self.compliance_policy_version,
-            tei_content_hash=self.tei_content_hash,
-            generation_run_id=self.generation_run_id,
+            QaIdempotencyKeyInputs(
+                evaluator=self.evaluator,
+                evaluator_version=self.evaluator_version,
+                compliance_policy_version=self.compliance_policy_version,
+                tei_content_hash=self.tei_content_hash,
+                generation_run_id=self.generation_run_id,
+            )
         )
 
 
@@ -59,11 +63,13 @@ def _key_reading_at(evaluated_at: dt.datetime) -> str:
     """Record one identical outcome as if the clock read ``evaluated_at``."""
     evaluation = evaluation_from_pedante(
         pedante_result(),
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=evaluated_at,
-        generation_run_id=GENERATION_RUN_ID,
-        uuid_factory=_fixed_identifiers,
+        target=QaEvaluationTarget(
+            episode_id=EPISODE_ID,
+            tei_content_hash=TEI_CONTENT_HASH,
+            evaluated_at=evaluated_at,
+            generation_run_id=GENERATION_RUN_ID,
+            uuid_factory=_fixed_identifiers,
+        ),
     )
     return evaluation.summary_record.idempotency_key
 
@@ -71,18 +77,22 @@ def _key_reading_at(evaluated_at: dt.datetime) -> str:
 def test_key_uses_the_documented_format() -> None:
     """The idempotency key spells out every input it depends on."""
     with_run = qa_idempotency_key(
-        evaluator=QaEvaluator.PEDANTE,
-        evaluator_version="1",
-        compliance_policy_version=2,
-        tei_content_hash="abc123",
-        generation_run_id=GENERATION_RUN_ID,
+        QaIdempotencyKeyInputs(
+            evaluator=QaEvaluator.PEDANTE,
+            evaluator_version="1",
+            compliance_policy_version=2,
+            tei_content_hash="abc123",
+            generation_run_id=GENERATION_RUN_ID,
+        )
     )
     without_run = qa_idempotency_key(
-        evaluator=QaEvaluator.CHRONO,
-        evaluator_version="3",
-        compliance_policy_version=1,
-        tei_content_hash="abc123",
-        generation_run_id=None,
+        QaIdempotencyKeyInputs(
+            evaluator=QaEvaluator.CHRONO,
+            evaluator_version="3",
+            compliance_policy_version=1,
+            tei_content_hash="abc123",
+            generation_run_id=None,
+        )
     )
 
     assert with_run == (f"qa:pedante:v1:policy:2:tei:abc123:run:{GENERATION_RUN_ID}"), (

@@ -22,6 +22,8 @@ from episodic.qa.chrono import ChronoRuntimeEstimate
 from episodic.qa.pedante.types import PedanteEvaluationResult
 
 from .qa_artefact_recording import (
+    QaEvaluationTarget,
+    QaEvaluatorFailure,
     UuidFactory,
     evaluation_from_chrono,
     evaluation_from_failure,
@@ -30,7 +32,7 @@ from .qa_artefact_recording import (
 
 if typ.TYPE_CHECKING:
     from .qa_artefact_ports import QaEvaluationListRequest
-    from .qa_artefacts import QaEvaluation, QaEvaluationSummary, QaEvaluator
+    from .qa_artefacts import QaEvaluation, QaEvaluationSummary
     from .unit_of_work_protocols import CanonicalUnitOfWork
 
 type Clock = cabc.Callable[[], dt.datetime]
@@ -39,28 +41,6 @@ type Clock = cabc.Callable[[], dt.datetime]
 def _utc_now() -> dt.datetime:
     """Return the current timezone-aware UTC timestamp."""
     return dt.datetime.now(dt.UTC)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class QaEvaluatorFailure:
-    """An evaluator invocation that produced no result.
-
-    Attributes
-    ----------
-    evaluator : QaEvaluator
-        Evaluator that failed.
-    evaluator_version : str
-        Version of the contract the evaluator attempted.
-    error_category : str
-        Bounded category, safe to aggregate, describing why it failed.
-    summary : str
-        Human-readable account of the failure.
-    """
-
-    evaluator: QaEvaluator
-    evaluator_version: str
-    error_category: str
-    summary: str
 
 
 type QaEvaluationOutcome = (
@@ -103,37 +83,20 @@ class QaEvaluationRecordingRequest:
 
 def _evaluation_for(request: QaEvaluationRecordingRequest) -> QaEvaluation:
     """Map a request's outcome onto the artefact to persist."""
+    target = QaEvaluationTarget(
+        episode_id=request.episode_id,
+        tei_content_hash=request.tei_content_hash,
+        evaluated_at=request.evaluated_at,
+        generation_run_id=request.generation_run_id,
+        uuid_factory=request.uuid_factory,
+    )
     match request.outcome:
         case QaEvaluatorFailure() as failure:
-            return evaluation_from_failure(
-                failure.evaluator,
-                episode_id=request.episode_id,
-                evaluator_version=failure.evaluator_version,
-                tei_content_hash=request.tei_content_hash,
-                error_category=failure.error_category,
-                summary=failure.summary,
-                evaluated_at=request.evaluated_at,
-                generation_run_id=request.generation_run_id,
-                uuid_factory=request.uuid_factory,
-            )
+            return evaluation_from_failure(failure, target=target)
         case ChronoRuntimeEstimate() as estimate:
-            return evaluation_from_chrono(
-                estimate,
-                episode_id=request.episode_id,
-                tei_content_hash=request.tei_content_hash,
-                evaluated_at=request.evaluated_at,
-                generation_run_id=request.generation_run_id,
-                uuid_factory=request.uuid_factory,
-            )
+            return evaluation_from_chrono(estimate, target=target)
         case PedanteEvaluationResult() as result:
-            return evaluation_from_pedante(
-                result,
-                episode_id=request.episode_id,
-                tei_content_hash=request.tei_content_hash,
-                evaluated_at=request.evaluated_at,
-                generation_run_id=request.generation_run_id,
-                uuid_factory=request.uuid_factory,
-            )
+            return evaluation_from_pedante(result, target=target)
         case _:
             outcome_type = type(request.outcome).__name__
             msg = f"Unsupported QA evaluation outcome: {outcome_type}."

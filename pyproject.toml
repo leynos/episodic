@@ -622,6 +622,7 @@ reason = "Falcon supplies these required middleware callback parameters although
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
+    "episodic.api.app._generation_run_operation",
     "episodic.api.app._generation_route_operation",
     "episodic.api.app._response_outcome",
     "episodic.canonical.adapters.generation_runs._event_page_minimum_seq",
@@ -642,7 +643,13 @@ full_name = [
     "episodic.canonical.domain_validation._require_positive_integer",
     "episodic.canonical.domain_validation._require_value",
     "episodic.canonical.domain_validation._validate_draft_without_qa_metadata",
+    "episodic.canonical.qa_artefacts._validate_citation",
+    "episodic.canonical.qa_artefacts._validate_citation_sequence",
     "episodic.canonical.qa_artefacts._validate_citations",
+    "episodic.canonical.qa_artefacts._validate_finding_count",
+    "episodic.canonical.qa_artefacts._validate_finding_distinctness",
+    "episodic.canonical.qa_artefacts._validate_finding_ordinal",
+    "episodic.canonical.qa_artefacts._validate_finding_ownership",
     "episodic.canonical.qa_artefacts._validate_findings_shape",
     "episodic.canonical.qa_artefacts._validate_findings_against_summary",
     "episodic.canonical.qa_artefact_validation._validate_non_negative_integer",

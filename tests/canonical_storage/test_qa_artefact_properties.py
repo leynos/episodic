@@ -30,6 +30,7 @@ from episodic.canonical.qa_artefacts import (
 )
 from episodic.canonical.storage import QaFindingRecord, SqlAlchemyUnitOfWork
 from tests.canonical_storage._qa_artefact_support import (
+    EvaluationOptions,
     create_episode,
     make_evaluation,
 )
@@ -93,16 +94,44 @@ async def _store_corpus(
                 make_evaluation(
                     episode_id,
                     idempotency_key=f"key-{index}",
-                    evaluator=evaluator,
-                    compliance_status=status,
-                    evaluated_at=EVALUATED_AT + dt.timedelta(seconds=offset),
-                    severities=(QaFindingSeverity.LOW,),
+                    options=EvaluationOptions(
+                        evaluator=evaluator,
+                        compliance_status=status,
+                        evaluated_at=EVALUATED_AT + dt.timedelta(seconds=offset),
+                        severities=(QaFindingSeverity.LOW,),
+                    ),
                 )
             )
             for index, (evaluator, status, offset) in enumerate(specs)
         ]
         await uow.commit()
     return stored
+
+
+def _matching_evaluation_ids(
+    stored: list[QaEvaluation],
+    *,
+    evaluator: QaEvaluator | None,
+    status: QaComplianceStatus | None,
+) -> set[uuid.UUID]:
+    """Return the stored ids that match every supplied predicate."""
+    return {
+        item.summary_record.id
+        for item in stored
+        if (evaluator is None or item.summary_record.evaluator is evaluator)
+        and (status is None or item.summary_record.compliance_status is status)
+    }
+
+
+def _record_filter_combination(
+    evaluator: QaEvaluator | None,
+    status: QaComplianceStatus | None,
+) -> None:
+    """Emit the event naming the predicates the example applied."""
+    if evaluator is not None and status is not None:
+        event("both filters applied")
+    elif evaluator is not None or status is not None:
+        event("one filter applied")
 
 
 @given(severities=_SEVERITIES)
@@ -118,7 +147,7 @@ async def test_findings_read_back_in_emission_order(
     evaluation = make_evaluation(
         episode_id,
         idempotency_key="order",
-        severities=tuple(severities),
+        options=EvaluationOptions(severities=tuple(severities)),
     )
     async with SqlAlchemyUnitOfWork(factory) as uow:
         await uow.qa_artefacts.record_evaluation(evaluation)
@@ -184,16 +213,12 @@ async def test_listing_applies_every_filter_and_counts_the_same_set(
             )
         )
 
-    expected = {
-        item.summary_record.id
-        for item in stored
-        if (evaluator is None or item.summary_record.evaluator is evaluator)
-        and (status is None or item.summary_record.compliance_status is status)
-    }
-    if evaluator is not None and status is not None:
-        event("both filters applied")
-    elif evaluator is not None or status is not None:
-        event("one filter applied")
+    expected = _matching_evaluation_ids(
+        stored,
+        evaluator=evaluator,
+        status=status,
+    )
+    _record_filter_combination(evaluator, status)
     assert {summary.id for summary in summaries} == expected, (
         "the page should contain exactly the evaluations matching every predicate"
     )

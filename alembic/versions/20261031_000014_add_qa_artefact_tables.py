@@ -1,5 +1,7 @@
 """Add durable QA artefact and finding tables."""
 
+import typing as typ
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -68,10 +70,9 @@ def _drop_enums() -> None:
     )
 
 
-def _create_qa_evaluations_table() -> None:
-    """Create recorded evaluator invocations."""
-    op.create_table(
-        "qa_evaluations",
+def _qa_evaluation_columns() -> tuple[sa.Column[typ.Any], ...]:
+    """Return the qa_evaluations columns in creation order."""
+    return (
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
             "episode_id",
@@ -126,6 +127,12 @@ def _create_qa_evaluations_table() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
+    )
+
+
+def _qa_evaluation_constraints() -> tuple[sa.Constraint, ...]:
+    """Return the qa_evaluations constraints in creation order."""
+    return (
         sa.UniqueConstraint(
             "episode_id",
             "idempotency_key",
@@ -144,6 +151,10 @@ def _create_qa_evaluations_table() -> None:
             name="ck_qa_evaluations_finding_count_non_negative",
         ),
     )
+
+
+def _create_qa_evaluations_indexes() -> None:
+    """Create the qa_evaluations indexes."""
     op.create_index(
         "ix_qa_evaluations_episode_evaluated_at",
         "qa_evaluations",
@@ -163,6 +174,16 @@ def _create_qa_evaluations_table() -> None:
         ["generation_run_id"],
         postgresql_where=sa.text("generation_run_id IS NOT NULL"),
     )
+
+
+def _create_qa_evaluations_table() -> None:
+    """Create recorded evaluator invocations."""
+    op.create_table(
+        "qa_evaluations",
+        *_qa_evaluation_columns(),
+        *_qa_evaluation_constraints(),
+    )
+    _create_qa_evaluations_indexes()
 
 
 def _drop_qa_evaluations_table() -> None:

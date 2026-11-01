@@ -133,13 +133,36 @@ def _validated_base_url(base_url: str, *, token: str | None) -> str:
         If the URL has no HTTP(S) scheme, names no host, carries embedded
         credentials, contains a ``?`` or ``#`` marker even with nothing after
         it, or would send ``token`` over plain HTTP to a non-loopback host.
-    """
+    """  # ruff: ignore[docstring-extraneous-exception]  # The guard helpers raise it.
+    parsed = _parse_base_url(base_url)
+    host = parsed.hostname
+    _reject_embedded_credentials(parsed, host)
+    shown = _shown_url(parsed)
+    _require_http_scheme_and_host(parsed, shown)
+    _reject_query_or_fragment(base_url, shown)
+    _reject_cleartext_credentials(parsed, token)
+    return base_url
+
+
+def _parse_base_url(base_url: str) -> urllib.parse.SplitResult:
+    """Split ``base_url``, reporting a malformed URL as a configuration error."""
     try:
-        parsed = urllib.parse.urlsplit(base_url)
+        return urllib.parse.urlsplit(base_url)
     except ValueError as error:
         invalid = f"Invalid Episodic API URL: {error}"
         raise InvalidConfigError(invalid) from error
-    host = parsed.hostname
+
+
+def _shown_url(parsed: urllib.parse.SplitResult) -> str:
+    """Return the URL without its query or fragment, which may hold a secret."""
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+
+
+def _reject_embedded_credentials(
+    parsed: urllib.parse.SplitResult,
+    host: str | None,
+) -> None:
+    """Refuse a URL that embeds credentials instead of accepting ``--token``."""
     if parsed.username is not None or parsed.password is not None:
         # The URL itself must not appear here: it is the thing carrying the
         # credential, and this message is written to standard error.
@@ -148,15 +171,23 @@ def _validated_base_url(base_url: str, *, token: str | None) -> str:
             "remove the embedded credentials and pass --token"
         )
         raise InvalidConfigError(credentials)
-    # Echo only the part of the URL that never carries a secret: a query
-    # string can hold an API key, and these messages reach standard error.
-    shown = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
-    if parsed.scheme not in {"http", "https"} or not host:
+
+
+def _require_http_scheme_and_host(
+    parsed: urllib.parse.SplitResult,
+    shown: str,
+) -> None:
+    """Refuse a URL that is not an http(s) root naming a host."""
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         invalid = (
             f"Invalid Episodic API URL {shown}: "
             "expected an http or https URL with a host"
         )
         raise InvalidConfigError(invalid)
+
+
+def _reject_query_or_fragment(base_url: str, shown: str) -> None:
+    """Refuse a base URL carrying a query string or fragment marker."""
     # Test the raw string, not the parsed parts: ``urlsplit`` reports an empty
     # query for a trailing "?", yet appending the resource path to that base
     # URL still sends the request to "/" with the path in the query.
@@ -165,13 +196,22 @@ def _validated_base_url(base_url: str, *, token: str | None) -> str:
             f"Invalid Episodic API URL {shown}: remove the query string and fragment"
         )
         raise InvalidConfigError(invalid)
-    if _sends_credential_in_clear(scheme=parsed.scheme, host=host, token=token):
+
+
+def _reject_cleartext_credentials(
+    parsed: urllib.parse.SplitResult,
+    token: str | None,
+) -> None:
+    """Refuse to send a bearer token over plain HTTP to a remote host."""
+    host = parsed.hostname
+    if host is not None and _sends_credential_in_clear(
+        scheme=parsed.scheme, host=host, token=token
+    ):
         insecure = (
             f"Refusing to send a bearer token over plain HTTP to {parsed.netloc}: "
             "use an https URL or connect over loopback"
         )
         raise InvalidConfigError(insecure)
-    return base_url
 
 
 def _sends_credential_in_clear(

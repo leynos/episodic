@@ -63,22 +63,30 @@ logger = get_logger(__name__)
 _GENERATION_REQUEST_TOTAL = "generation_api_request_total"
 _GENERATION_REQUEST_LATENCY = "generation_api_request_latency_ms"
 
+_PATH_OPERATIONS = (
+    ("/v1/ingestion-jobs/", "/generation-runs", "generation_run.command"),
+    ("/v1/episodes/", "/tei", "episode_tei.read"),
+    ("/v1/episodes/", "/qa-evaluations", "qa_evaluations.list"),
+)
+_GENERATION_RUN_PREFIX = "/v1/generation-runs/"
+_QA_EVALUATION_PREFIX = "/v1/qa-evaluations/"
+
+
+def _generation_run_operation(path: str) -> str:
+    """Return the operation for a generation-run path."""
+    if path.endswith("/events"):
+        return "generation_run.events.list"
+    return "generation_run.read"
+
 
 def _generation_route_operation(path: str) -> str | None:
     """Return a bounded operation name for an instrumented API path."""
-    if path.startswith("/v1/ingestion-jobs/") and path.endswith("/generation-runs"):
-        return "generation_run.command"
-    if path.startswith("/v1/generation-runs/"):
-        return (
-            "generation_run.events.list"
-            if path.endswith("/events")
-            else "generation_run.read"
-        )
-    if path.startswith("/v1/episodes/") and path.endswith("/tei"):
-        return "episode_tei.read"
-    if path.startswith("/v1/episodes/") and path.endswith("/qa-evaluations"):
-        return "qa_evaluations.list"
-    if path.startswith("/v1/qa-evaluations/"):
+    for prefix, suffix, operation in _PATH_OPERATIONS:
+        if path.startswith(prefix) and path.endswith(suffix):
+            return operation
+    if path.startswith(_GENERATION_RUN_PREFIX):
+        return _generation_run_operation(path)
+    if path.startswith(_QA_EVALUATION_PREFIX):
         return "qa_evaluation.read"
     return None
 

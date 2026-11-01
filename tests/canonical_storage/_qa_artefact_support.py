@@ -6,6 +6,7 @@ suites need a new episode per example, so identifiers are never module-level
 constants here.
 """
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -168,26 +169,12 @@ async def create_ingestion_job(
     return job.id
 
 
-# pylint: disable-next=too-many-arguments  # mirrors the evaluation's field surface
-def make_evaluation(  # ruff: ignore[too-many-arguments]  # One keyword per artefact field keeps call sites readable.
-    episode_id: uuid.UUID,
-    *,
-    idempotency_key: str,
-    compliance_status: QaComplianceStatus = QaComplianceStatus.COMPLIANT,
-    evaluator: QaEvaluator = QaEvaluator.PEDANTE,
-    evaluated_at: dt.datetime = EVALUATED_AT,
-    severities: tuple[QaFindingSeverity, ...] = (),
-    generation_run_id: uuid.UUID | None = None,
-    created_at: dt.datetime | None = None,
-) -> QaEvaluation:
-    """Return a valid evaluation with one finding per supplied severity.
+@dc.dataclass(frozen=True, slots=True)
+class EvaluationOptions:
+    """Optional field values for a composed evaluation.
 
-    Parameters
+    Attributes
     ----------
-    episode_id : uuid.UUID
-        Episode the evaluation is recorded against.
-    idempotency_key : str
-        Key that makes a repeated recording replay this artefact.
     compliance_status : QaComplianceStatus
         Verdict to record.
     evaluator : QaEvaluator
@@ -200,6 +187,38 @@ def make_evaluation(  # ruff: ignore[too-many-arguments]  # One keyword per arte
         Optional launcher run that triggered the evaluation.
     created_at : dt.datetime | None
         Optional storage time, so a round trip can compare whole artefacts.
+    """
+
+    compliance_status: QaComplianceStatus = QaComplianceStatus.COMPLIANT
+    evaluator: QaEvaluator = QaEvaluator.PEDANTE
+    evaluated_at: dt.datetime = EVALUATED_AT
+    severities: tuple[QaFindingSeverity, ...] = ()
+    generation_run_id: uuid.UUID | None = None
+    created_at: dt.datetime | None = None
+
+
+# Sharing one instance is safe because the dataclass is frozen, and it keeps the
+# call expression out of the signature so a default cannot look like a mutable
+# default to the linters.
+_DEFAULT_EVALUATION_OPTIONS = EvaluationOptions()
+
+
+def make_evaluation(
+    episode_id: uuid.UUID,
+    *,
+    idempotency_key: str,
+    options: EvaluationOptions = _DEFAULT_EVALUATION_OPTIONS,
+) -> QaEvaluation:
+    """Return a valid evaluation with one finding per requested severity.
+
+    Parameters
+    ----------
+    episode_id : uuid.UUID
+        Episode the evaluation is recorded against.
+    idempotency_key : str
+        Key that makes a repeated recording replay this artefact.
+    options : EvaluationOptions
+        Optional field values; the defaults match a compliant Pedante run.
 
     Returns
     -------
@@ -216,22 +235,22 @@ def make_evaluation(  # ruff: ignore[too-many-arguments]  # One keyword per arte
             code=f"code-{ordinal}",
             summary=f"Finding {ordinal}.",
         )
-        for ordinal, severity in enumerate(severities)
+        for ordinal, severity in enumerate(options.severities)
     )
     return QaEvaluation(
         summary_record=QaEvaluationSummary(
             id=evaluation_id,
             episode_id=episode_id,
-            evaluator=evaluator,
+            evaluator=options.evaluator,
             evaluator_version="pedante-1.0.0",
             artefact_schema_version=QA_ARTEFACT_SCHEMA_VERSION,
             compliance_policy_version=QA_COMPLIANCE_POLICY_VERSION,
-            compliance_status=compliance_status,
-            evaluated_at=evaluated_at,
+            compliance_status=options.compliance_status,
+            evaluated_at=options.evaluated_at,
             idempotency_key=idempotency_key,
             finding_count=len(findings),
-            generation_run_id=generation_run_id,
-            created_at=created_at,
+            generation_run_id=options.generation_run_id,
+            created_at=options.created_at,
         ),
         findings=findings,
     )

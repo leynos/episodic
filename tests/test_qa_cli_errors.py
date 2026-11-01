@@ -5,6 +5,8 @@ an error envelope, a transport failure, or a throttle. Rendering and request
 shaping live in ``tests/test_qa_cli.py``.
 """
 
+import dataclasses as dc
+
 import httpx
 import pytest
 
@@ -20,6 +22,12 @@ from tests.qa_cli_fixtures import (
 pytestmark = pytest.mark.usefixtures("clean_environment")
 
 _CONNECTION_REFUSED = "connection refused"
+_UNAUTHORIZED: dict[str, object] = {
+    "code": "unauthorized",
+    "message": "Authorization is required.",
+}
+_EMBEDDED_CREDENTIAL = "-".join(("not", "a", "real", "credential"))
+_QUERY_SECRET = "-".join(("not", "a", "real", "key"))
 
 
 def test_missing_episode_is_a_usage_error(
@@ -72,39 +80,96 @@ def test_error_envelope_maps_to_exit_one(
     assert "404 QA evaluation not found." in captured.err, captured.err
 
 
-def test_unauthenticated_response_names_the_missing_token(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Without a configured token, a 401 explains how to supply one."""
-    transport, _ = canned(
-        {"code": "unauthorized", "message": "Authorization is required."},
-        status=401,
-    )
+@dc.dataclass(frozen=True, slots=True)
+class _RejectionCase:
+    """One rejected invocation and the output it must produce."""
 
-    exit_code = main(list_arguments(), transport=transport)
+    arguments: list[str]
+    response: tuple[dict[str, object], int]
+    expected_exit_code: int
+    is_config_error: bool
+    expected_fragment: str | None
+    forbidden_fragment: str | None
+    rejects_before_dispatch: bool
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        _RejectionCase(
+            list_arguments(),
+            (_UNAUTHORIZED, 401),
+            1,
+            is_config_error=False,
+            expected_fragment="EPISODIC_API_TOKEN",
+            forbidden_fragment=None,
+            rejects_before_dispatch=False,
+        ),
+        _RejectionCase(
+            ["--token", "rejected", *list_arguments()],
+            (_UNAUTHORIZED, 401),
+            1,
+            is_config_error=False,
+            expected_fragment=None,
+            forbidden_fragment="EPISODIC_API_TOKEN",
+            rejects_before_dispatch=False,
+        ),
+        _RejectionCase(
+            [
+                "--base-url",
+                f"https://scribe:{_EMBEDDED_CREDENTIAL}@api.example.test",
+                *list_arguments(),
+            ],
+            (PAGE, 200),
+            2,
+            is_config_error=True,
+            expected_fragment="remove the embedded credentials",
+            forbidden_fragment=_EMBEDDED_CREDENTIAL,
+            rejects_before_dispatch=True,
+        ),
+        _RejectionCase(
+            [
+                "--base-url",
+                f"https://api.example.test?apikey={_QUERY_SECRET}",
+                *list_arguments(),
+            ],
+            (PAGE, 200),
+            2,
+            is_config_error=True,
+            expected_fragment="remove the query string and fragment",
+            forbidden_fragment=_QUERY_SECRET,
+            rejects_before_dispatch=True,
+        ),
+    ],
+    ids=[
+        "unauthenticated",
+        "configured-token",
+        "embedded-credentials",
+        "query-string-secret",
+    ],
+)
+def test_rejected_invocation_does_not_echo_secrets(
+    capsys: pytest.CaptureFixture[str],
+    case: _RejectionCase,
+) -> None:
+    """A rejected invocation reports its reason without echoing a secret."""
+    payload, status = case.response
+    transport, recorded = canned(payload, status=status)
+
+    exit_code = main(case.arguments, transport=transport)
 
     captured = capsys.readouterr()
-    assert exit_code == 1, captured.err
-    assert "EPISODIC_API_TOKEN" in captured.err, captured.err
-
-
-def test_configured_token_suppresses_the_missing_token_hint(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A rejected but present token is not reported as missing."""
-    transport, _ = canned(
-        {"code": "unauthorized", "message": "Authorization is required."},
-        status=401,
-    )
-
-    exit_code = main(
-        ["--token", "rejected", *list_arguments()],
-        transport=transport,
-    )
-
-    captured = capsys.readouterr()
-    assert exit_code == 1, captured.err
-    assert "EPISODIC_API_TOKEN" not in captured.err, captured.err
+    if case.is_config_error:
+        expected = InvalidConfigError.exit_code
+        assert exit_code == expected == case.expected_exit_code, captured.err
+    else:
+        assert exit_code == case.expected_exit_code, captured.err
+    if case.rejects_before_dispatch:
+        assert recorded.seen == [], recorded.seen
+    if case.expected_fragment is not None:
+        assert case.expected_fragment in captured.err, captured.err
+    if case.forbidden_fragment is not None:
+        assert case.forbidden_fragment not in captured.err, captured.err
 
 
 @pytest.mark.parametrize(
@@ -257,52 +322,6 @@ def test_unusable_timeout_is_a_usage_error(
     assert exit_code == InvalidConfigError.exit_code == 2, captured.err
     assert recorded.seen == [], recorded.seen
     assert "positive, finite number of seconds" in captured.err, captured.err
-
-
-def test_base_url_with_embedded_credentials_is_rejected(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A password in the URL is refused and never echoed back."""
-    transport, recorded = canned(PAGE)
-    embedded = "-".join(("not", "a", "real", "credential"))
-
-    exit_code = main(
-        [
-            "--base-url",
-            f"https://scribe:{embedded}@api.example.test",
-            *list_arguments(),
-        ],
-        transport=transport,
-    )
-
-    captured = capsys.readouterr()
-    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
-    assert recorded.seen == [], recorded.seen
-    assert "remove the embedded credentials" in captured.err, captured.err
-    assert embedded not in captured.err, captured.err
-
-
-def test_base_url_query_string_is_not_echoed(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A query string can carry a secret, so the message omits it."""
-    transport, recorded = canned(PAGE)
-    marker = "-".join(("not", "a", "real", "key"))
-
-    exit_code = main(
-        [
-            "--base-url",
-            f"https://api.example.test?apikey={marker}",
-            *list_arguments(),
-        ],
-        transport=transport,
-    )
-
-    captured = capsys.readouterr()
-    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
-    assert recorded.seen == [], recorded.seen
-    assert "remove the query string and fragment" in captured.err, captured.err
-    assert marker not in captured.err, captured.err
 
 
 def test_remote_https_base_url_with_token_is_allowed() -> None:

@@ -84,21 +84,31 @@ class QaFindingSeverity(enum.StrEnum):
     CRITICAL = "critical"
 
 
-def _validate_citations(citations: tuple[str, ...]) -> None:
-    """Require a bounded tuple of bounded citation strings."""
+def _validate_citation_sequence(citations: tuple[str, ...]) -> None:
+    """Require a tuple holding at most MAX_CITATIONS entries."""
     if not isinstance(citations, tuple):
         msg = "citations must be a tuple of strings."
         raise TypeError(msg)
     if len(citations) > MAX_CITATIONS:
         msg = f"citations must contain at most {MAX_CITATIONS} entries."
         raise ValueError(msg)
+
+
+def _validate_citation(citation: str) -> None:
+    """Require one citation string within MAX_CITATION_CHARS."""
+    if not isinstance(citation, str):
+        msg = "citations must contain only strings."
+        raise TypeError(msg)
+    if len(citation) > MAX_CITATION_CHARS:
+        msg = f"citations entries must be at most {MAX_CITATION_CHARS} characters."
+        raise ValueError(msg)
+
+
+def _validate_citations(citations: tuple[str, ...]) -> None:
+    """Require a bounded tuple of bounded citation strings."""
+    _validate_citation_sequence(citations)
     for citation in citations:
-        if not isinstance(citation, str):
-            msg = "citations must contain only strings."
-            raise TypeError(msg)
-        if len(citation) > MAX_CITATION_CHARS:
-            msg = f"citations entries must be at most {MAX_CITATION_CHARS} characters."
-            raise ValueError(msg)
+        _validate_citation(citation)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -291,29 +301,58 @@ def _validate_findings_shape(findings: tuple[QaFinding, ...]) -> None:
         raise ValueError(msg)
 
 
+def _validate_finding_count(
+    findings: tuple[QaFinding, ...],
+    summary_record: QaEvaluationSummary,
+) -> None:
+    """Require the declared finding count to match the findings."""
+    if summary_record.finding_count != len(findings):
+        msg = "summary_record.finding_count must equal the number of findings."
+        raise ValueError(msg)
+
+
+def _validate_finding_ownership(
+    finding: QaFinding,
+    summary_record: QaEvaluationSummary,
+) -> None:
+    """Require the finding to belong to *summary_record*."""
+    if finding.evaluation_id != summary_record.id:
+        msg = "every finding's evaluation_id must equal summary_record.id."
+        raise ValueError(msg)
+
+
+def _validate_finding_distinctness(
+    finding: QaFinding,
+    seen_ids: set[uuid.UUID],
+) -> None:
+    """Require an unseen id, then record it."""
+    if finding.id in seen_ids:
+        msg = "findings must carry distinct ids."
+        raise ValueError(msg)
+    seen_ids.add(finding.id)
+
+
+def _validate_finding_ordinal(finding: QaFinding, expected_ordinal: int) -> None:
+    """Require the finding's ordinal to match its position."""
+    if finding.ordinal != expected_ordinal:
+        msg = "findings must carry consecutive ordinals starting at zero."
+        raise ValueError(msg)
+
+
 def _validate_findings_against_summary(
     findings: tuple[QaFinding, ...],
     summary_record: QaEvaluationSummary,
 ) -> None:
     """Require findings that belong to, and are ordered for, their summary."""
-    if summary_record.finding_count != len(findings):
-        msg = "summary_record.finding_count must equal the number of findings."
-        raise ValueError(msg)
+    _validate_finding_count(findings, summary_record)
     seen_ids: set[uuid.UUID] = set()
     for expected_ordinal, finding in enumerate(findings):
         if not isinstance(finding, QaFinding):
             msg = "findings must be a tuple of QaFinding values."
             raise TypeError(msg)
-        if finding.evaluation_id != summary_record.id:
-            msg = "every finding's evaluation_id must equal summary_record.id."
-            raise ValueError(msg)
-        if finding.id in seen_ids:
-            msg = "findings must carry distinct ids."
-            raise ValueError(msg)
-        seen_ids.add(finding.id)
-        if finding.ordinal != expected_ordinal:
-            msg = "findings must carry consecutive ordinals starting at zero."
-            raise ValueError(msg)
+        _validate_finding_ownership(finding, summary_record)
+        _validate_finding_distinctness(finding, seen_ids)
+        _validate_finding_ordinal(finding, expected_ordinal)
 
 
 @dc.dataclass(frozen=True, slots=True)

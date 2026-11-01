@@ -5,8 +5,8 @@ mutate, so the identifiers and builders live here rather than in either test
 module.
 """
 
+import dataclasses as dc
 import datetime as dt
-import typing as typ
 import uuid
 
 from episodic.canonical.qa_artefacts import (
@@ -19,11 +19,6 @@ from episodic.canonical.qa_artefacts import (
     QaFindingSeverity,
 )
 from episodic.qa.pedante.types import SupportLevel
-
-if typ.TYPE_CHECKING:
-    import decimal
-
-    from episodic.canonical.domain_enums import JsonMapping
 
 # Authored from the Pedante taxonomy and the recorded compliance policy. It is
 # deliberately not derived from the production `_BLOCKING_SUPPORT_LEVELS`; the
@@ -49,149 +44,73 @@ OTHER_EVALUATION_ID = uuid.UUID("0192f9d0-0000-7000-8000-00000000e905")
 EVALUATED_AT = dt.datetime(2026, 10, 29, 12, 0, 0, tzinfo=dt.UTC)
 
 
-# pylint: disable-next=too-many-arguments  # mirrors QaFinding's field surface
-def finding(
-    *,
-    finding_id: uuid.UUID = FINDING_ID,
-    evaluation_id: uuid.UUID = EVALUATION_ID,
-    ordinal: int = 0,
-    severity: QaFindingSeverity = QaFindingSeverity.LOW,
-    code: str = "citation_absent",
-    summary: str = "Claim is unsupported.",
-    remediation: str = "",
-    subject_id: str = "",
-    subject_text: str = "",
-    is_blocking: bool = False,
-    citations: tuple[str, ...] = (),
-    details: JsonMapping | None = None,
-) -> QaFinding:
-    """Return a valid finding whose fields callers may override.
+_DEFAULT_FINDING = QaFinding(
+    id=FINDING_ID,
+    evaluation_id=EVALUATION_ID,
+    ordinal=0,
+    severity=QaFindingSeverity.LOW,
+    code="citation_absent",
+    summary="Claim is unsupported.",
+)
+
+
+def finding(**overrides: object) -> QaFinding:
+    """Return a valid finding with model fields overridden by name.
+
+    ``finding_id`` overrides the model's ``id`` field, and ``details=None``
+    selects the default empty mapping.
 
     Parameters
     ----------
-    finding_id : uuid.UUID
-        Identifier to give the finding.
-    evaluation_id : uuid.UUID
-        Identifier of the evaluation the finding claims to belong to.
-    ordinal : int
-        Position of the finding within its evaluation.
-    severity : QaFindingSeverity
-        Severity to record.
-    code : str
-        Machine-readable finding code.
-    summary : str
-        Human-readable description of the problem.
-    remediation : str
-        Optional suggested remedy.
-    subject_id : str
-        Optional identifier of the claim, sentence, or segment assessed.
-    subject_text : str
-        Optional quoted subject text.
-    is_blocking : bool
-        Whether the finding blocks the episode from advancing.
-    citations : tuple[str, ...]
-        Source identifiers supporting the finding.
-    details : JsonMapping | None
-        Evaluator-specific payload; ``None`` becomes an empty mapping.
+    **overrides
+        ``QaFinding`` field names whose values replace the defaults.
 
     Returns
     -------
     QaFinding
-        The constructed finding.
+        A new finding built from the defaults and the overrides.
     """
-    return QaFinding(
-        id=finding_id,
-        evaluation_id=evaluation_id,
-        ordinal=ordinal,
-        severity=severity,
-        code=code,
-        summary=summary,
-        remediation=remediation,
-        subject_id=subject_id,
-        subject_text=subject_text,
-        is_blocking=is_blocking,
-        citations=citations,
-        details={} if details is None else details,
-    )
+    changes = dict(overrides)
+    if "finding_id" in changes:
+        changes["id"] = changes.pop("finding_id")
+    if changes.get("details") is None:
+        changes.pop("details", None)
+    return dc.replace(_DEFAULT_FINDING, **changes)
 
 
-# pylint: disable-next=too-many-arguments  # mirrors the summary's field surface
-def summary(
-    *,
-    evaluation_id: uuid.UUID = EVALUATION_ID,
-    episode_id: uuid.UUID = EPISODE_ID,
-    evaluator: QaEvaluator = QaEvaluator.PEDANTE,
-    evaluator_version: str = "pedante-1.0.0",
-    artefact_schema_version: int = QA_ARTEFACT_SCHEMA_VERSION,
-    compliance_policy_version: int = QA_COMPLIANCE_POLICY_VERSION,
-    compliance_status: QaComplianceStatus = QaComplianceStatus.COMPLIANT,
-    evaluated_at: dt.datetime = EVALUATED_AT,
-    idempotency_key: str = "pedante:episode:1",
-    finding_count: int = 0,
-    generation_run_id: uuid.UUID | None = None,
-    summary: str = "",
-    rubric_score: decimal.Decimal | None = None,
-    runtime_estimate_seconds: int | None = None,
-    evaluator_metadata: JsonMapping | None = None,
-    created_at: dt.datetime | None = None,
-) -> QaEvaluationSummary:
-    """Return a valid evaluation summary whose fields callers may override.
+_DEFAULT_SUMMARY = QaEvaluationSummary(
+    id=EVALUATION_ID,
+    episode_id=EPISODE_ID,
+    evaluator=QaEvaluator.PEDANTE,
+    evaluator_version="pedante-1.0.0",
+    artefact_schema_version=QA_ARTEFACT_SCHEMA_VERSION,
+    compliance_policy_version=QA_COMPLIANCE_POLICY_VERSION,
+    compliance_status=QaComplianceStatus.COMPLIANT,
+    evaluated_at=EVALUATED_AT,
+    idempotency_key="pedante:episode:1",
+    finding_count=0,
+)
+
+
+def summary(**overrides: object) -> QaEvaluationSummary:
+    """Return a valid summary with model fields overridden by name.
+
+    ``evaluation_id`` overrides the model's ``id`` field, and
+    ``evaluator_metadata=None`` selects the default empty mapping.
 
     Parameters
     ----------
-    evaluation_id : uuid.UUID
-        Identifier to give the evaluation.
-    episode_id : uuid.UUID
-        Canonical episode the evaluation applies to.
-    evaluator : QaEvaluator
-        Evaluator that produced the artefact.
-    evaluator_version : str
-        Version of the evaluator's contract.
-    artefact_schema_version : int
-        Payload schema version to record.
-    compliance_policy_version : int
-        Compliance policy version to record.
-    compliance_status : QaComplianceStatus
-        Verdict to record.
-    evaluated_at : dt.datetime
-        Timezone-aware instant at which the evaluator ran.
-    idempotency_key : str
-        Key that makes a repeated recording replay this artefact.
-    finding_count : int
-        Number of findings the evaluation claims to carry.
-    generation_run_id : uuid.UUID | None
-        Optional launcher run that triggered the evaluation.
-    summary : str
-        Optional human-readable verdict.
-    rubric_score : decimal.Decimal | None
-        Optional unit-interval score.
-    runtime_estimate_seconds : int | None
-        Optional runtime estimate.
-    evaluator_metadata : JsonMapping | None
-        Evaluator-specific payload; ``None`` becomes an empty mapping.
-    created_at : dt.datetime | None
-        Optional storage time; ``None`` leaves the artefact unrecorded.
+    **overrides
+        ``QaEvaluationSummary`` field names whose values replace the defaults.
 
     Returns
     -------
     QaEvaluationSummary
-        The constructed summary, with current policy versions stamped.
+        A new summary built from the defaults and the overrides.
     """
-    return QaEvaluationSummary(
-        id=evaluation_id,
-        episode_id=episode_id,
-        evaluator=evaluator,
-        evaluator_version=evaluator_version,
-        artefact_schema_version=artefact_schema_version,
-        compliance_policy_version=compliance_policy_version,
-        compliance_status=compliance_status,
-        evaluated_at=evaluated_at,
-        idempotency_key=idempotency_key,
-        finding_count=finding_count,
-        generation_run_id=generation_run_id,
-        summary=summary,
-        rubric_score=rubric_score,
-        runtime_estimate_seconds=runtime_estimate_seconds,
-        evaluator_metadata={} if evaluator_metadata is None else evaluator_metadata,
-        created_at=created_at,
-    )
+    changes = dict(overrides)
+    if "evaluation_id" in changes:
+        changes["id"] = changes.pop("evaluation_id")
+    if changes.get("evaluator_metadata") is None:
+        changes.pop("evaluator_metadata", None)
+    return dc.replace(_DEFAULT_SUMMARY, **changes)

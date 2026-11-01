@@ -7,7 +7,7 @@ printing it, which keeps standard output owned by :mod:`episodic.cli`.
 """
 
 import typing as typ
-import uuid  # ruff: ignore[typing-only-standard-library-import]  # cyclopts resolves command annotations when registering.
+import uuid
 
 import cyclopts
 
@@ -21,6 +21,37 @@ type OutputFormat = typ.Literal["table", "json"]
 # choices, so each filter states them explicitly.
 _EVALUATOR_CHOICES = tuple(member.value for member in QaEvaluator)
 _COMPLIANCE_CHOICES = tuple(member.value for member in QaComplianceStatus)
+
+type _EpisodeArgument = typ.Annotated[
+    uuid.UUID,
+    cyclopts.Parameter(help="Identifier of the episode to inspect."),
+]
+type _EvaluatorOption = typ.Annotated[
+    QaEvaluator | None,
+    cyclopts.Parameter(
+        choices=_EVALUATOR_CHOICES,
+        help="Only report this evaluator's artefacts.",
+    ),
+]
+type _ComplianceStatusOption = typ.Annotated[
+    QaComplianceStatus | None,
+    cyclopts.Parameter(
+        choices=_COMPLIANCE_CHOICES,
+        help="Only report this compliance status.",
+    ),
+]
+type _LimitOption = typ.Annotated[
+    int | None,
+    cyclopts.Parameter(help="Maximum number of evaluations to list."),
+]
+type _OffsetOption = typ.Annotated[
+    int | None,
+    cyclopts.Parameter(help="Number of evaluations to skip."),
+]
+type _OutputFormatOption = typ.Annotated[
+    OutputFormat,
+    cyclopts.Parameter(name="--format", help="Output format."),
+]
 
 
 def register(parent: cyclopts.App, runtime: CliRuntime) -> None:
@@ -42,37 +73,13 @@ def register(parent: cyclopts.App, runtime: CliRuntime) -> None:
     @evaluations_app.command(name="list")
     # pylint: disable-next=too-many-arguments  # Every parameter is a documented CLI option.
     def list_evaluations(  # ruff: ignore[too-many-arguments]  # Every parameter is a documented CLI option.
-        episode: typ.Annotated[
-            uuid.UUID,
-            cyclopts.Parameter(help="Identifier of the episode to inspect."),
-        ],
+        episode: _EpisodeArgument,
         *,
-        evaluator: typ.Annotated[
-            QaEvaluator | None,
-            cyclopts.Parameter(
-                choices=_EVALUATOR_CHOICES,
-                help="Only report this evaluator's artefacts.",
-            ),
-        ] = None,
-        compliance_status: typ.Annotated[
-            QaComplianceStatus | None,
-            cyclopts.Parameter(
-                choices=_COMPLIANCE_CHOICES,
-                help="Only report this compliance status.",
-            ),
-        ] = None,
-        limit: typ.Annotated[
-            int | None,
-            cyclopts.Parameter(help="Maximum number of evaluations to list."),
-        ] = None,
-        offset: typ.Annotated[
-            int | None,
-            cyclopts.Parameter(help="Number of evaluations to skip."),
-        ] = None,
-        output_format: typ.Annotated[
-            OutputFormat,
-            cyclopts.Parameter(name="--format", help="Output format."),
-        ] = "table",
+        evaluator: _EvaluatorOption = None,
+        compliance_status: _ComplianceStatusOption = None,
+        limit: _LimitOption = None,
+        offset: _OffsetOption = None,
+        output_format: _OutputFormatOption = "table",
     ) -> str:
         """List the QA evaluations recorded for an episode.
 

@@ -9,6 +9,8 @@ archive yet still be superseded by a later success. These cases pin both, while
 import typing as typ
 
 from episodic.canonical.qa_artefact_recording import (
+    QaEvaluationTarget,
+    QaEvaluatorFailure,
     evaluation_from_chrono,
     evaluation_from_failure,
 )
@@ -22,10 +24,24 @@ from tests.fixtures.qa_artefact_recording_builders import (
     GENERATION_RUN_ID,
     TEI_CONTENT_HASH,
     chrono_estimate,
+    chrono_metadata,
 )
 
 if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
+
+
+_TARGET = QaEvaluationTarget(
+    episode_id=EPISODE_ID,
+    tei_content_hash=TEI_CONTENT_HASH,
+    evaluated_at=EVALUATED_AT,
+)
+_RUN_TARGET = QaEvaluationTarget(
+    episode_id=EPISODE_ID,
+    tei_content_hash=TEI_CONTENT_HASH,
+    evaluated_at=EVALUATED_AT,
+    generation_run_id=GENERATION_RUN_ID,
+)
 
 
 def test_chrono_estimate_becomes_a_not_applicable_artefact(
@@ -34,12 +50,7 @@ def test_chrono_estimate_becomes_a_not_applicable_artefact(
     """Chrono renders no compliance verdict, so its artefact says so."""
     estimate = chrono_estimate()
 
-    evaluation = evaluation_from_chrono(
-        estimate,
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=EVALUATED_AT,
-    )
+    evaluation = evaluation_from_chrono(estimate, target=_TARGET)
 
     assert evaluation.summary_record.evaluator is QaEvaluator.CHRONO, (
         "a Chrono estimate should map to the Chrono evaluator"
@@ -65,16 +76,12 @@ def test_chrono_estimate_becomes_a_not_applicable_artefact(
 def test_chrono_version_changes_the_key() -> None:
     """A new estimator version starts a new artefact rather than a replay."""
     first = evaluation_from_chrono(
-        chrono_estimate(estimator_version="1"),
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=EVALUATED_AT,
+        chrono_estimate(metadata=chrono_metadata(estimator_version="1")),
+        target=_TARGET,
     )
     second = evaluation_from_chrono(
-        chrono_estimate(estimator_version="2"),
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=EVALUATED_AT,
+        chrono_estimate(metadata=chrono_metadata(estimator_version="2")),
+        target=_TARGET,
     )
 
     assert (
@@ -85,14 +92,13 @@ def test_chrono_version_changes_the_key() -> None:
 def test_failure_becomes_an_errored_artefact() -> None:
     """A failed invocation is recorded so a later success can supersede it."""
     evaluation = evaluation_from_failure(
-        QaEvaluator.ANTHEM,
-        episode_id=EPISODE_ID,
-        evaluator_version="4",
-        tei_content_hash=TEI_CONTENT_HASH,
-        error_category="provider_timeout",
-        summary="Anthem did not answer before the deadline.",
-        evaluated_at=EVALUATED_AT,
-        generation_run_id=GENERATION_RUN_ID,
+        QaEvaluatorFailure(
+            evaluator=QaEvaluator.ANTHEM,
+            evaluator_version="4",
+            error_category="provider_timeout",
+            summary="Anthem did not answer before the deadline.",
+        ),
+        target=_RUN_TARGET,
     )
 
     assert evaluation.summary_record.evaluator is QaEvaluator.ANTHEM, (
@@ -116,19 +122,17 @@ def test_failure_becomes_an_errored_artefact() -> None:
 def test_a_retry_reuses_the_failed_evaluations_key() -> None:
     """Recording a success after a failure supersedes rather than replays."""
     failure = evaluation_from_failure(
-        QaEvaluator.CHRONO,
-        episode_id=EPISODE_ID,
-        evaluator_version="1",
-        tei_content_hash=TEI_CONTENT_HASH,
-        error_category="invalid_tei",
-        summary="Chrono could not parse the script.",
-        evaluated_at=EVALUATED_AT,
+        QaEvaluatorFailure(
+            evaluator=QaEvaluator.CHRONO,
+            evaluator_version="1",
+            error_category="invalid_tei",
+            summary="Chrono could not parse the script.",
+        ),
+        target=_TARGET,
     )
     success = evaluation_from_chrono(
-        chrono_estimate(estimator_version="1"),
-        episode_id=EPISODE_ID,
-        tei_content_hash=TEI_CONTENT_HASH,
-        evaluated_at=EVALUATED_AT,
+        chrono_estimate(metadata=chrono_metadata(estimator_version="1")),
+        target=_TARGET,
     )
 
     assert (

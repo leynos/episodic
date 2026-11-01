@@ -79,27 +79,23 @@ def _finding_values(
     }
 
 
-async def _reject(
+async def _persist(
     session_factory: async_sessionmaker[AsyncSession],
     model: type[QaEvaluationRecord] | type[QaFindingRecord],
     values: dict[str, object],
+    *,
+    should_accept: bool,
 ) -> None:
-    """Assert the database rejects ``values`` and leave no transaction open."""
+    """Insert ``values`` and assert the database accepts or rejects them."""
     async with session_factory() as session:
+        insert = sa.insert(model).values(**values)
+        if should_accept:
+            await session.execute(insert)
+            await session.commit()
+            return
         with pytest.raises(IntegrityError):
-            await session.execute(sa.insert(model).values(**values))
+            await session.execute(insert)
         await session.rollback()
-
-
-async def _accept(
-    session_factory: async_sessionmaker[AsyncSession],
-    model: type[QaEvaluationRecord] | type[QaFindingRecord],
-    values: dict[str, object],
-) -> None:
-    """Assert the database accepts ``values``."""
-    async with session_factory() as session:
-        await session.execute(sa.insert(model).values(**values))
-        await session.commit()
 
 
 @pytest.mark.parametrize(
@@ -132,15 +128,17 @@ async def test_evaluation_checks_reject_out_of_range_values(
     """Each evaluation CHECK rejects its violating value and accepts a witness."""
     episode_id = await create_episode(session_factory)
 
-    await _reject(
+    await _persist(
         session_factory,
         QaEvaluationRecord,
         _evaluation_values(episode_id, idempotency_key="rejected", **rejected),
+        should_accept=False,
     )
-    await _accept(
+    await _persist(
         session_factory,
         QaEvaluationRecord,
         _evaluation_values(episode_id, idempotency_key="witness", **witness),
+        should_accept=True,
     )
     async with session_factory() as session:
         assert await count_rows(session, QaEvaluationRecord) == 1, (
@@ -159,17 +157,24 @@ async def test_finding_check_rejects_negative_ordinal(
         idempotency_key="ordinal",
         finding_count=1,
     )
-    await _accept(session_factory, QaEvaluationRecord, evaluation)
+    await _persist(
+        session_factory,
+        QaEvaluationRecord,
+        evaluation,
+        should_accept=True,
+    )
 
-    await _reject(
+    await _persist(
         session_factory,
         QaFindingRecord,
         _finding_values(evaluation["id"], ordinal=-1),
+        should_accept=False,
     )
-    await _accept(
+    await _persist(
         session_factory,
         QaFindingRecord,
         _finding_values(evaluation["id"], ordinal=0),
+        should_accept=True,
     )
     async with session_factory() as session:
         assert await count_rows(session, QaFindingRecord) == 1, (
@@ -183,17 +188,19 @@ async def test_evaluation_foreign_key_rejects_unknown_episode(
 ) -> None:
     """An evaluation must reference a stored canonical episode."""
     missing_episode_id = uuid.uuid7()
-    await _reject(
+    await _persist(
         session_factory,
         QaEvaluationRecord,
         _evaluation_values(missing_episode_id, idempotency_key="orphan"),
+        should_accept=False,
     )
 
     episode_id = await create_episode(session_factory)
-    await _accept(
+    await _persist(
         session_factory,
         QaEvaluationRecord,
         _evaluation_values(episode_id, idempotency_key="linked"),
+        should_accept=True,
     )
     async with session_factory() as session:
         assert await count_rows(session, QaEvaluationRecord) == 1, (

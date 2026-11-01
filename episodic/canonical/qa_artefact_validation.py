@@ -77,12 +77,8 @@ def _validate_aware_datetime(value: dt.datetime, field_name: str) -> None:
         raise ValueError(msg)
 
 
-def _normalize_rubric_score(
-    score: decimal.Decimal | None,
-) -> decimal.Decimal | None:
-    """Return *score* at the stored precision, rejecting unusable values."""
-    if score is None:
-        return None
+def _require_decimal_score(score: object) -> None:
+    """Require a finite decimal.Decimal score."""
     if not isinstance(score, decimal.Decimal):
         msg = "rubric_score must be a decimal.Decimal."
         raise TypeError(msg)
@@ -91,19 +87,38 @@ def _normalize_rubric_score(
         # past the interval check below and later fail an ordering comparison.
         msg = "rubric_score must be a finite decimal."
         raise ValueError(msg)
+
+
+def _rounded_unit_score(score: decimal.Decimal) -> decimal.Decimal:
+    """Round *score* half-to-even at the stored four-decimal precision."""
     try:
         with decimal.localcontext(_QUANTIZE_CONTEXT):
-            rounded = score.quantize(
+            return score.quantize(
                 _RUBRIC_QUANTUM,
                 rounding=decimal.ROUND_HALF_EVEN,
             )
     except decimal.InvalidOperation as exc:
         msg = "rubric_score must be representable at four decimal places."
         raise ValueError(msg) from exc
+
+
+def _require_unit_interval(rounded: decimal.Decimal) -> None:
+    """Require *rounded* to lie within the stored unit interval."""
     if rounded < 0 or rounded > 1:
         msg = (
             "rubric_score must lie within [0, 1] after rounding to four decimal places."
         )
         raise ValueError(msg)
+
+
+def _normalize_rubric_score(
+    score: decimal.Decimal | None,
+) -> decimal.Decimal | None:
+    """Return *score* at the stored precision, rejecting unusable values."""
+    if score is None:
+        return None
+    _require_decimal_score(score)
+    rounded = _rounded_unit_score(score)
+    _require_unit_interval(rounded)
     # A rounded negative zero compares equal to zero but serializes as -0.0.
     return rounded.copy_abs() if rounded.is_zero() else rounded

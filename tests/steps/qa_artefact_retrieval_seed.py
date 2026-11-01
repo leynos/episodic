@@ -13,7 +13,10 @@ import uuid
 
 from episodic.canonical.domain import EpisodeTeiUpdate
 from episodic.canonical.generation_quality import QaStatus
-from episodic.canonical.qa_artefact_recording import qa_idempotency_key
+from episodic.canonical.qa_artefact_recording import (
+    QaIdempotencyKeyInputs,
+    qa_idempotency_key,
+)
 from episodic.canonical.qa_artefact_service import (
     QaEvaluationRecordingRequest,
     QaEvaluatorFailure,
@@ -196,11 +199,35 @@ def _pedante_outcome() -> PedanteEvaluationResult:
     )
 
 
-async def _record(
+_PEDANTE_SLOT = _EvaluationSlot(
+    evaluated_at=PEDANTE_EVALUATED_AT,
+    outcome=_pedante_outcome(),
+    evaluation_id=PEDANTE_EVALUATION_ID,
+)
+
+_CHRONO_SLOT = _EvaluationSlot(
+    evaluated_at=CHRONO_EVALUATED_AT,
+    outcome=chrono_estimate(),
+    evaluation_id=CHRONO_EVALUATION_ID,
+)
+
+_ANTHEM_FAILURE_SLOT = _EvaluationSlot(
+    evaluated_at=ANTHEM_EVALUATED_AT,
+    outcome=QaEvaluatorFailure(
+        evaluator=QaEvaluator.ANTHEM,
+        evaluator_version=ANTHEM_EVALUATOR_VERSION,
+        error_category=ANTHEM_ERROR_CATEGORY,
+        summary="Anthem did not respond before the deadline.",
+    ),
+    evaluation_id=ANTHEM_EVALUATION_ID,
+)
+
+
+async def _record_id(
     dependencies: ApiDependencies,
     episode: QaEpisodeFixture,
     slot: _EvaluationSlot,
-) -> QaEvaluation:
+) -> uuid.UUID:
     """Record the outcome assigned to one evaluation slot."""
     async with dependencies.uow_factory() as uow:
         recorded = await record_qa_evaluation(
@@ -215,7 +242,7 @@ async def _record(
             ),
         )
         await uow.commit()
-    return recorded
+    return recorded.summary_record.id
 
 
 async def record_pedante_evaluation(
@@ -223,16 +250,7 @@ async def record_pedante_evaluation(
     episode: QaEpisodeFixture,
 ) -> uuid.UUID:
     """Record the background Pedante evaluation and return its identifier."""
-    recorded = await _record(
-        dependencies,
-        episode,
-        _EvaluationSlot(
-            evaluated_at=PEDANTE_EVALUATED_AT,
-            outcome=_pedante_outcome(),
-            evaluation_id=PEDANTE_EVALUATION_ID,
-        ),
-    )
-    return recorded.summary_record.id
+    return await _record_id(dependencies, episode, _PEDANTE_SLOT)
 
 
 async def record_chrono_evaluation(
@@ -240,16 +258,7 @@ async def record_chrono_evaluation(
     episode: QaEpisodeFixture,
 ) -> uuid.UUID:
     """Record the background Chrono estimate and return its identifier."""
-    recorded = await _record(
-        dependencies,
-        episode,
-        _EvaluationSlot(
-            evaluated_at=CHRONO_EVALUATED_AT,
-            outcome=chrono_estimate(),
-            evaluation_id=CHRONO_EVALUATION_ID,
-        ),
-    )
-    return recorded.summary_record.id
+    return await _record_id(dependencies, episode, _CHRONO_SLOT)
 
 
 async def record_anthem_failure(
@@ -257,21 +266,7 @@ async def record_anthem_failure(
     episode: QaEpisodeFixture,
 ) -> uuid.UUID:
     """Record the background Anthem failure and return its identifier."""
-    recorded = await _record(
-        dependencies,
-        episode,
-        _EvaluationSlot(
-            evaluated_at=ANTHEM_EVALUATED_AT,
-            outcome=QaEvaluatorFailure(
-                evaluator=QaEvaluator.ANTHEM,
-                evaluator_version=ANTHEM_EVALUATOR_VERSION,
-                error_category=ANTHEM_ERROR_CATEGORY,
-                summary="Anthem did not respond before the deadline.",
-            ),
-            evaluation_id=ANTHEM_EVALUATION_ID,
-        ),
-    )
-    return recorded.summary_record.id
+    return await _record_id(dependencies, episode, _ANTHEM_FAILURE_SLOT)
 
 
 async def record_anthem_success(
@@ -289,11 +284,13 @@ async def record_anthem_success(
         compliance_status=QaComplianceStatus.COMPLIANT,
         evaluated_at=ANTHEM_SUCCESS_EVALUATED_AT,
         idempotency_key=qa_idempotency_key(
-            evaluator=QaEvaluator.ANTHEM,
-            evaluator_version=ANTHEM_EVALUATOR_VERSION,
-            compliance_policy_version=QA_COMPLIANCE_POLICY_VERSION,
-            tei_content_hash=episode.tei_content_hash,
-            generation_run_id=episode.generation_run_id,
+            QaIdempotencyKeyInputs(
+                evaluator=QaEvaluator.ANTHEM,
+                evaluator_version=ANTHEM_EVALUATOR_VERSION,
+                compliance_policy_version=QA_COMPLIANCE_POLICY_VERSION,
+                tei_content_hash=episode.tei_content_hash,
+                generation_run_id=episode.generation_run_id,
+            )
         ),
         finding_count=0,
         generation_run_id=episode.generation_run_id,
