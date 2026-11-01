@@ -174,6 +174,8 @@ or delivery planning.
   - reference repository documentation plan.
 - [Series profile and episode template models](execplans/2-2-6-series-profile-and-episode-template-models.md)
   - profile and template model plan.
+- [Persist QA artefacts linked to canonical episodes](execplans/2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md)
+  - QA artefact persistence and retrieval plan.
 - [REST endpoints for reference documents](execplans/2-2-7-rest-endpoints-for-reference-documents.md)
   - reference document API plan.
 - [Generate show notes from template expansions](execplans/2-3-1-generate-show-notes-from-template-expansions.md)

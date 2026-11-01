@@ -1049,6 +1049,23 @@ Stop and escalate when any of these is reached.
       repairs, before they were committed, exposed the two defects that commit
       fixes — an mdtablefix reflow and a Pylint C1803 — while its test gate had
       already passed 1945 tests against the same production code.
+  - Post-delivery CodeRabbit CLI review round 14 at `6227264a` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 79 changed paths reviewed, no rate
+    limit), four minor findings, adjudicated as follows:
+    - F1 (upheld, repaired): `docs/contents.md` did not index this ExecPlan. It
+      now lists it under `execplans/`, before the `2.2.7` REST-endpoints entry.
+    - F2 and F3 (partly upheld, repaired): the prerequisite list said ADR 018
+      discharges ADR 001's closing item. ADR 018 is the reference-binding
+      versioning record and does not mention that item; ADR 024 records itself
+      as the follow-on, so the reference now says ADR 024. The same finding
+      asked for the colliding ADR 015 documents to be renumbered. Rejected as
+      out of scope: the collision predates this branch — the three `adr-015-*`
+      files landed on `main` in June 2026 — and the path this plan cites
+      resolves.
+    - F4 (upheld, repaired): `INV-BLOCKING-SET` claimed the blocking set is
+      "documented in ADR 001", while its own non-vacuity note recorded that
+      ADR 001 does not enumerate it. The invariant now names the Pedante
+      taxonomy and the recorded compliance policy as its provenance.
 
 ## Surprises & discoveries
 
@@ -1838,10 +1855,10 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Thirteen review
-  rounds ran in total: rounds 6, 7, 8, 10, 11, and 13 each raised a finding
-  that was verified against source and repaired in its own commit; round 9
-  completed with none; and round 12 reviewed this closing record and is
+  and a CodeRabbit CLI review of the committed milestone diff. Fourteen review
+  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, and 14 each raised at least
+  one finding that was verified against source and repaired in its own commit;
+  round 9 completed with none; and round 12 reviewed this closing record and is
   answered by the corrections in it. Round 13's five minor findings included
   the one production repair after the rebase: `record_evaluation` now flushes a
   caller's pending state outside its failure handler, so a caller-owned
@@ -2025,7 +2042,7 @@ Repository documents that are prerequisites, not optional reading:
 - `docs/adr-001-pedante-evaluator-contract.md` — in particular its closing
   item: "If evaluator results are persisted or exposed through an external API,
   record any versioning or compatibility guarantees in a follow-on ADR." ADR
-  018 discharges this.
+  024 discharges this.
 - `docs/adr/adr-006-chrono-spoken-text-semantics.md`,
   `docs/adr/adr-009-source-to-script-rest-vertical-slice.md`,
   `docs/adr/adr-014-hexagonal-architecture-enforcement.md`,
@@ -2094,7 +2111,9 @@ resets per test *function*, not per example.
 ### Invariants and lemmas
 
 **INV-BLOCKING-SET.** The set of `SupportLevel` members treated as blocking is
-exactly the set documented in ADR 001.
+exactly the set defined by the Pedante taxonomy together with the recorded
+compliance policy. ADR 001 names the taxonomy but does not enumerate the
+blocking subset.
 
 - Method: parameterized test over all 13 `SupportLevel` members, comparing
   `PedanteFinding.is_blocking` against an **independently written literal set**
