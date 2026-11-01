@@ -2,7 +2,7 @@
 
 ``test_generation_run_lease_reclamation.py`` pins *which* runs are eligible as
 a finite state partition, and ``test_generation_run_lease_transitions.py``
-pins one hand-written ordered backlog. Neither generalizes the batch contract:
+pins one handwritten ordered backlog. Neither generalizes the batch contract:
 that a call returns the leading ``(lease_expires_at, id)`` slice of the
 eligible runs, that repeated calls drain the backlog without repeating or
 skipping a run, and that the call after the backlog empties reclaims nothing.
