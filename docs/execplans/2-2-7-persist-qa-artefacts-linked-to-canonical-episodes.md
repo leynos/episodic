@@ -5,9 +5,9 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: ACTIVE — approved for implementation 2026-10-29; `EP-M0`–`EP-M4`
-complete, `EP-M5` and `EP-M6` implemented and awaiting the confirming milestone
-review.
+Status: COMPLETE — approved for implementation 2026-10-29; milestones
+`EP-M0`–`EP-M6` delivered 2026-11-01, with every gate green at the branch head
+and every upheld milestone-review finding repaired.
 
 ## Purpose / big picture
 
@@ -691,7 +691,7 @@ Stop and escalate when any of these is reached.
     `review_completed`, 17/17 changed paths over `330050f7..b5095167`, no rate
     limit): **0 findings**. The milestone review obligation is discharged and
     `EP-M4` is complete.
-- [ ] EP-M5 First-party CLI retrieval surface.
+- [x] EP-M5 First-party CLI retrieval surface.
   - Implementation (2026-10-31): `episodic/cli/` now provides the `episodic`
     console script. `app.py` builds the cyclopts application whose meta
     launcher resolves `--base-url`, `--token`, and `--timeout` before dispatch;
@@ -889,15 +889,31 @@ Stop and escalate when any of these is reached.
     that sweep, so the sweep's check-fmt and typecheck evidence belongs to the
     identical uncommitted content; the final full sweep at the branch head
     re-attests both.
-  - Milestone CLI review round 9 at `b246a428` produced no review: the CLI
-    returned `errorType: rate_limit`, `recoverable: true`,
-    `waitTime: "6 minutes"`, `onDemandReviewAvailable: false`, with the account
-    at ten of ten included reviews. Evidence
-    `/tmp/coderabbit-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r9.out`.
-    Under the CLI backoff policy `q = 16`, so the sampled wait is 64 minutes
-    and the next attempt is eligible at `2026-11-01T04:37:58+01:00`. The
-    milestone stays open until a review completes at the branch head.
-- [ ] EP-M6 Documentation, ADRs, and roadmap completion.
+  - Milestone CLI review round 9: the first attempt returned
+    `errorType: rate_limit`, `recoverable: true`, `waitTime: "6 minutes"`, and
+    `onDemandReviewAvailable: false`, with the account at ten of ten included
+    reviews. Evidence
+    `/tmp/coderabbit-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r9-attempt1-rate-limited.out`.
+    The backoff policy gives `q = 16`; rather than idle for the sampled 64
+    minutes, the retry inside the review budget was attempted sooner and
+    completed with `review_completed` and **0 findings** against `b246a428`
+    (evidence `...-r9.out`). Commit `50fc2bf7` landed during that window, so
+    the result does not unambiguously attest the newer head.
+  - Milestone CLI review round 10 at `50fc2bf7` (exit 0, `review_completed`,
+    27 files): one minor finding, upheld and repaired. `CliRuntime.configure`
+    stored the resolved token unchecked, and `httpx.Client(headers=...)`
+    raises `UnicodeEncodeError` for a non-ASCII or control-character value;
+    that is not an `httpx.HTTPError`, so it escaped `main` as a traceback. The
+    token is now validated during option resolution with `isascii()` and
+    `isprintable()` and reported as a usage error that does not echo the value.
+    Evidence
+    `/tmp/coderabbit-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r10.out`;
+    the red run is `...-r10red.out`, where both new cases failed as intended
+    (the non-ASCII token with `UnicodeEncodeError`, the control character on
+    the exit-code assertion). Repair commit `14b882a8`, re-gated green: test
+    1943 passed, 3 skipped, 67 snapshots in 267.59 s, and all seven gates exit
+    0 at that head (logs `...-r10repair.out`).
+- [x] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of
     `QA_EVALUATION` and `QA_FINDING`, with a screen-reader lead-in and a
@@ -939,6 +955,16 @@ Stop and escalate when any of these is reached.
   - Acceptance evidence `EV-M6-docs`: `make check-fmt`, `make markdownlint`, and
     `make nixie` exit 0 on this plan and the documentation set; the full gate
     set is re-run at the final branch head before publication.
+  - Final attestation (2026-11-01): the full seven-gate sweep at `14b882a8`
+    exits 0 at one unchanged head, with the tree clean when the sweep started.
+    The gates were check-fmt (`861 files already formatted`, `129 files left
+    unchanged`), markdownlint (spelling prerequisite clean, `0 issues` in 129
+    files), nixie (all diagrams validated), typecheck (`All checks passed!`),
+    lint (Hecate, Ruff, Pylint 10.00/10, df12 lints, ambrleaks, Skylos,
+    duplication gate with 30 reasoned exceptions), check-migrations (15
+    upgrades applied to `20261031_000014`, no drift), and test (1943 passed, 3
+    skipped, 67 snapshots, 30 warnings, 267.59 s). Logs
+    `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r10repair.out`.
 
 ## Surprises & discoveries
 
@@ -1663,11 +1689,70 @@ Stop and escalate when any of these is reached.
 
 ## Outcomes & retrospective
 
-To be completed at `EP-M6`. Before setting this plan to `COMPLETE`, reconcile
-every discovery against the artefacts listed in `Conformance basis`: the design
-document's Data Model bullet must name the tables actually created, ADR 001's
-open item about persisting evaluator results must be discharged by ADR 024, and
-`docs/roadmap.md` item `2.2.7` must be marked done.
+Roadmap item `2.2.7` is delivered. Evaluator output is stored against the
+canonical episode it judges, and the same artefacts are retrievable through the
+REST API and a first-party CLI.
+
+### Delivered scope against the roadmap
+
+- `RM-2.2.7-a` — store evaluator findings, runtime estimates, rubric scores,
+  and compliance results. Delivered as the `qa_evaluations` and `qa_findings`
+  tables, the `QaEvaluation`/`QaFinding` domain model with its compliance
+  policy, and the recording service that maps a Pedante report or a Chrono
+  runtime estimate onto them. Rubric scores and compliance results live on the
+  evaluation row, so one row answers for one evaluator invocation.
+- `RM-2.2.7-b` — retrieval filtered by evaluator and compliance status, over
+  API and CLI. Delivered as `GET /v1/episodes/{episode_id}/qa-evaluations`
+  (filtered, paginated, with an unpaged `total`) and `episodic qa evaluations
+  list`, which reuses the same filters and renders a table or the raw JSON
+  envelope.
+
+### Conformance reconciliation
+
+- The design document's *Data Model and Storage* bullet names
+  `qa_evaluations` and its `qa_findings` children, replacing the two
+  placeholder tables the design originally carried.
+- ADR 001's open item — record the versioning and compatibility guarantees
+  that apply once evaluator results are persisted or exposed — is discharged by
+  ADR 024, which names the two version columns, the reader-side schema check,
+  and the single errored-supersession exception as those guarantees and links
+  back to ADR 001.
+- `docs/roadmap.md` item `2.2.7` is `[x]`.
+- Every trace link in `Conformance basis` resolves, and every deviation in the
+  `Decision log` is recorded in an ADR, the design document, or the
+  developers' guide.
+
+### Validation
+
+- Every milestone closed with a full seven-gate sweep at one unchanged head
+  and a CodeRabbit CLI review of the committed milestone diff. Ten review
+  rounds ran in total; rounds 6 to 10 each raised at least one finding that was
+  verified against source and repaired in its own commit, and round 10's repair
+  changed production code.
+- The final sweep at `14b882a8` is green with a clean tree before and after:
+  check-fmt, markdownlint (including the en-GB-oxendict spelling gate), nixie,
+  typecheck, lint (Pylint 10.00/10, duplication gate with 30 reasoned
+  exceptions), check-migrations, and 1943 passing tests with 67 snapshots.
+- The last documentation-only commit carrying this record is re-gated for the
+  Markdown gates before publication.
+
+### Retrospective
+
+- The CLI's configuration boundary, not the HTTP layer, was where the last
+  three findings landed: an unvalidated URL component, then an unvalidated
+  token. Both had the same shape — a value that the transport refuses with an
+  exception the CLI does not translate, so it escapes `main` as a traceback.
+  Resolving all global options through one validating step, and treating "the
+  transport cannot carry this value" as a usage error, is the rule worth
+  carrying into the next command surface.
+- Reviewing the milestone at the branch head, rather than at the commit the
+  review was launched from, cost one extra round once a documentation commit
+  landed mid-review. Freezing the head for the duration of a review is cheaper
+  than re-running it.
+- The two version columns, and the refusal to default them, made the
+  "historical row stays interpretable" requirement cheap to test. The
+  alternative — deriving compliance at read time — would have moved that cost
+  into every client instead.
 
 ## Context and orientation
 
