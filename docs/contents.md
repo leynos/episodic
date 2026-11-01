@@ -129,6 +129,13 @@ or delivery planning.
     stores compose rather than inherit.
 - [ADR 025: Central logging port](adr/adr-025-central-logging-port.md)
   - logging ownership, backend boundary, and direct-call enforcement.
+- [ADR 026: QA artefact persistence
+  contract](adr/adr-026-qa-artefact-persistence-contract.md)
+  - durable evaluation and finding records, versioning, immutability, and
+    retention.
+- [ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md)
+  - the CLI as a REST client, its enforced import boundary, and its output and
+    exit-code policy.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 

@@ -1672,7 +1672,7 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 
 ### Pedante package structure
 
-- `episodic/qa/pedante.py` contains `PedanteEvaluator`, typed request/result
+- `episodic/qa/pedante/` contains `PedanteEvaluator`, typed request/result
   objects, and strict response parsing for evaluator output.
 - `episodic/qa/langgraph.py` contains the in-process LangGraph path for the
   Pedante evaluate-and-route flow.
@@ -1726,6 +1726,61 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   and Verus are Rust verification tools and are not applicable to this Python
   module.
 
+### QA artefact persistence
+
+Durable QA records live in the canonical package, not in `episodic/qa/`,
+because the recording module knows both the evaluator result and the canonical
+episode. See
+[ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md).
+
+- `episodic/canonical/qa_artefacts.py` defines `QaEvaluationSummary`,
+  `QaEvaluation`, `QaFinding`, the `QaEvaluator`, `QaComplianceStatus`, and
+  `QaFindingSeverity` enums, the payload size bounds, and the construction-time
+  validation.
+- `episodic/canonical/qa_artefact_ports.py` defines `QaEvaluationListRequest`
+  and the `QaArtefactRepository` protocol.
+- `episodic/canonical/qa_artefact_validation.py` holds the construction-time
+  invariant checks.
+- `episodic/canonical/qa_artefact_errors.py` defines the errors a reader raises
+  when a stored row cannot be interpreted.
+- `episodic/canonical/qa_artefact_recording.py` projects Pedante and Chrono
+  results onto artefacts, including the compliance policy.
+- `episodic/canonical/qa_artefact_service.py` is the application service that
+  records and reads evaluations through the unit of work.
+- `episodic/canonical/storage/` holds the SQLAlchemy models, the mappers, and
+  the repository adapter.
+
+Maintainer rules:
+
+- `artefact_schema_version` versions the payload shape: `evaluator_metadata`,
+  `QaFinding.details`, and the vocabulary of `QaFinding.code`. Adding an
+  optional key does not bump it; changing a key's meaning, removing a key, or
+  changing the code vocabulary does. A mapper carries the stored value through
+  and never substitutes the module default. `summary_from_record` raises
+  `UnsupportedQaArtefactSchemaError` when the stored version is newer than
+  `QA_ARTEFACT_SCHEMA_VERSION`, and both API resources turn that into a `422`
+  envelope with code `qa_artefact_schema_unsupported`; the detail resource
+  applies the episode ownership check first, so an unreadable row owned
+  elsewhere is still a `404`.
+- `compliance_policy_version` versions the decision rule that produced
+  `compliance_status` and `QaFinding.is_blocking`. Changing the blocking
+  severity set, or any evaluator's outcome-to-status mapping, obliges a bump
+  and leaves historical rows as statements about the older policy.
+- Stored rows are never rewritten by a version bump. The single exception is an
+  `errored` artefact, which a later successful recording under the same
+  idempotency key supersedes in place, keeping its identifier.
+- Do not store `LLMUsage` on an artefact. Correlate to the cost ledger through
+  `generation_run_id` plus `evaluator_metadata["provider_response_id"]`.
+- Quantize `rubric_score` to four decimal places with `ROUND_HALF_EVEN` on
+  construction, and serialize it as a JSON number; the API cannot serialize a
+  `decimal.Decimal`.
+- No evaluator populates `rubric_score` yet, and `errored` has no production
+  producer in this slice. Both are reachable through the recording functions
+  and are covered by tests that construct them directly.
+- Extending the `qa_evaluator` enum is a two-deploy operation, because
+  PostgreSQL cannot add an enum value and use it in the same transaction. Add
+  the value in a migration, then use it in a later release.
+
 ### Testing the evaluator
 
 - Unit tests live in `tests/test_pedante.py`.
@@ -1748,6 +1803,86 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py`.
 - Chrono behavioural tests do not launch Vidai Mock because Chrono has no
   inference-service boundary in roadmap item `2.2.6`.
+- QA artefact tests are split by concern: `tests/test_qa_artefact_domain.py`
+  for construction and bounds, `tests/test_qa_artefact_recording.py` and
+  `tests/test_qa_artefact_recording_non_pedante.py` for the projections,
+  `tests/test_qa_artefact_recording_properties.py` for the generative
+  statements, `tests/test_qa_artefact_rubric_score.py` for the four-decimal
+  contract, `tests/test_qa_artefact_idempotency_key.py` for the key,
+  `tests/test_qa_artefact_service.py` for the repository against PGlite, and
+  `tests/test_qa_artefact_serializers.py` and `tests/test_qa_artefact_api.py`
+  for the HTTP representation. The behavioural scenario lives in
+  `tests/features/qa_artefact_retrieval.feature` with steps in
+  `tests/steps/test_qa_artefact_retrieval_steps.py`.
+- Snapshot output that carries incidental identifiers passes through
+  `tests.snapshot_redaction.redact_snapshot_uuids` so the `ambrleaks` gate does
+  not treat a fixture UUID as a leak. The QA artefact serializers and the CLI
+  renderers both use it; the structural contract is still pinned by row order,
+  status, counts, and timestamps.
+
+## Command-line interface
+
+The `episodic` console script is a REST client of the HTTP API, not a second
+database client. See
+[ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md).
+
+### Package layout
+
+- `episodic/cli/entrypoint.py` defines `main`; it is the only module that
+  writes to standard output or chooses an exit status.
+- `episodic/cli/app.py` builds the `cyclopts.App`, declares the global options,
+  and owns the `CliApplication` launcher.
+- `episodic/cli/qa.py` declares the `qa evaluations list` command.
+- `episodic/cli/client.py` holds the `httpx` client, the resolved
+  `ClientOptions`, and the translation from HTTP outcomes to `CliError`
+  subclasses.
+- `episodic/cli/rendering.py` holds the pure table and JSON renderers.
+- `episodic/cli/__init__.py` re-exports `main` and nothing else.
+
+### CLI maintainer rules
+
+- The CLI may import its own modules and `domain_ports` only. The Hecate group
+  `cli` enforces this, so an import of `episodic.api` or a canonical service
+  fails `make check-architecture`.
+- Keep renderers pure functions from a parsed payload to a string. They must
+  not print, exit, or read the environment; that is what makes them
+  snapshottable.
+- Declare a command as a typed function and register it on the application.
+  `cyclopts` resolves annotations at registration time, so a type used only in
+  an annotation still needs a runtime import; `episodic/cli/qa.py` carries a
+  reasoned lint ignore for `uuid` for exactly this reason.
+- Pass explicit `choices=` for enum-valued options, built from the wire values,
+  so help output shows `non_compliant` rather than the kebab-cased member name.
+- Translate every failure into a `CliError` subclass with the documented exit
+  code; nothing may escape `main` as a traceback. Validate configuration while
+  the global options resolve, because `httpx` raises `InvalidURL` outside the
+  `HTTPError` hierarchy and a schemeless URL raises plain `ValueError`.
+- The top-level noun structure is provisional until roadmap item `4.6.1` adds
+  a second command group.
+
+### Adding a command
+
+1. Declare a typed function whose parameters are the command's options, with
+   NumPy-style docstrings.
+2. Register it on the `qa` sub-application in `episodic/cli/qa.py`.
+3. Return a rendered string from a pure renderer, or a structured value the
+   entry point can render.
+4. Cover it with a unit test that stubs `httpx` with `httpx.MockTransport`, and
+   a behavioural scenario that runs the real Falcon application in process.
+
+### Testing the CLI
+
+- `tests/test_qa_cli.py` covers rendering and request shaping;
+  `tests/test_qa_cli_errors.py` covers exit codes and base-URL validation.
+- `tests/qa_cli_fixtures.py` holds the canned payloads, the stubbed transport,
+  and the autouse environment-isolation fixture both test modules import.
+- `tests/features/qa_cli_retrieval.feature`, `tests/steps/test_qa_cli_steps.py`,
+  and `tests/steps/qa_cli_support.py` drive the genuine command against the
+  genuine Falcon application. The harness bridges `httpx.MockTransport` to the
+  ASGI app and runs the synchronous command in a worker thread on the
+  scenario's event loop.
+- `tests/__snapshots__/test_qa_cli.ambr` pins the table, JSON envelope, empty
+  page, and query-parameter contract.
 
 ## Content generation services
 
