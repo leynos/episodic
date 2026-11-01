@@ -154,10 +154,23 @@ def _create_qa_evaluations_table() -> None:
         "qa_evaluations",
         ["episode_id", "evaluator", sa.text("evaluated_at DESC"), sa.text("id DESC")],
     )
+    # ``generation_runs`` deletes null this column, and the existing indexes
+    # all lead with ``episode_id``, so without a partial index a purge scans
+    # the whole table once per deleted run.
+    op.create_index(
+        "ix_qa_evaluations_generation_run_id",
+        "qa_evaluations",
+        ["generation_run_id"],
+        postgresql_where=sa.text("generation_run_id IS NOT NULL"),
+    )
 
 
 def _drop_qa_evaluations_table() -> None:
     """Drop recorded evaluator invocations."""
+    op.drop_index(
+        "ix_qa_evaluations_generation_run_id",
+        table_name="qa_evaluations",
+    )
     op.drop_index(
         "ix_qa_evaluations_episode_evaluator_evaluated_at",
         table_name="qa_evaluations",

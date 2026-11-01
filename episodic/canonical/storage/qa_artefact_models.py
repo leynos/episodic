@@ -70,6 +70,16 @@ class QaEvaluationRecord(Base):
             sa.desc("evaluated_at"),
             sa.desc("id"),
         ),
+        # The generation-run foreign key is ``ON DELETE SET NULL``, so purging
+        # run history nulls every reference to each deleted run. PostgreSQL
+        # indexes no referencing column automatically; the partial index keeps
+        # that update off a sequential scan while staying small for the common
+        # case of evaluations with no correlated run.
+        sa.Index(
+            "ix_qa_evaluations_generation_run_id",
+            "generation_run_id",
+            postgresql_where=sa.text("generation_run_id IS NOT NULL"),
+        ),
     )
 
     id: orm.Mapped[uuid.UUID] = orm.mapped_column(

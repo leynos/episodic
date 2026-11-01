@@ -152,8 +152,11 @@ Evaluations and findings are retained for the life of the canonical episode.
 The episode foreign key is `ON DELETE CASCADE`, so deleting an episode removes
 its QA history with it. The generation-run foreign key is `ON DELETE SET NULL`,
 so purging run history leaves the evaluation attached to its episode but no
-longer correlated with a run. No background job prunes QA artefacts; a future
-retention policy is a separate decision.
+longer correlated with a run. That foreign key carries a partial index over
+non-null values, because PostgreSQL indexes no referencing column on its own
+and the evaluation indexes all lead with `episode_id`; without it a purge would
+scan the whole table once per deleted run. No background job prunes QA
+artefacts; a future retention policy is a separate decision.
 
 ### Enum extension is a two-deploy operation
 

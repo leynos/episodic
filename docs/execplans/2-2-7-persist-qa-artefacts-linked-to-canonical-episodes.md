@@ -7,7 +7,7 @@ be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
 `EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
-finding through round 18 repaired and each repair gate-swept before the next
+finding through round 19 repaired and each repair gate-swept before the next
 round.
 
 ## Purpose / big picture
@@ -1179,6 +1179,25 @@ Stop and escalate when any of these is reached.
     now counts the seeded findings before widening them, because
     `AsyncSession.execute` is typed to return the generic `Result`, which
     declares no `rowcount`.
+  - Gate evidence on the round-18-repair follow-up, pinned at `b3c174eb`, clean
+    tree, with `git rev-parse HEAD` and `git status --short` unchanged before
+    gate 1, after every gate, and after the CodeRabbit run: `check-fmt` (ruff
+    865 files, mdtablefix 129 unchanged), `typecheck` (`ty 0.0.32`, clean),
+    `lint` with all nine stages green (Hecate, Ruff, Pylint 10.00/10, both df12
+    lint passes, ambrleaks, Skylos, nose duplication gate with 30 reasoned
+    exceptions), `markdownlint` (129 files, 0 issues), `nixie`, and `make test`
+    — 1950 passed, 3 skipped, 30 warnings, 269.67 s, 67 snapshots.
+  - Post-delivery CodeRabbit CLI review round 19 at `b3c174eb` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 83 reviewed paths, no rate limit). One
+    `trivial` finding, upheld and repaired: `qa_evaluations.generation_run_id`
+    is a foreign key with `ON DELETE SET NULL`, and PostgreSQL indexes no
+    referencing column, so purging run history scanned the whole table once
+    per deleted run. The partial index
+    `ix_qa_evaluations_generation_run_id` is now created in the migration,
+    declared in `QaEvaluationRecord.__table_args__`, and dropped by the
+    downgrade, and ADR 024 states the rationale. Because this is the first
+    migration change since the round-13 sweep, the repair is re-swept with
+    `check-migrations` included.
 
 ## Surprises & discoveries
 
@@ -2011,19 +2030,26 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Eighteen review
-  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, 14, 15, 16, 17, and 18 each
-  raised at least one finding that was verified against source and repaired in
-  its own commit; round 9 completed with none; and round 12 reviewed this
-  closing record and is answered by the corrections in it. Round 17's single
-  minor finding was a test-isolation defect: the finding-ceiling test shared
-  one identifier across every synthetic finding, so a loosened match would let
-  the duplicate-id rejection satisfy it. Round 18's single minor finding was an
-  ordering defect in the storage read path, where findings were validated
-  before the schema version was checked. Round 13's five minor findings
-  included the one production repair after the rebase: `record_evaluation` now
-  flushes a caller's pending state outside its failure handler, so a
-  caller-owned constraint violation is not counted as a QA recording failure.
+  and a CodeRabbit CLI review of the committed milestone diff. Nineteen review
+  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, 14, 15, 16, 17, 18, and 19
+  each raised at least one finding that was verified against source and
+  repaired in its own commit; round 9 completed with none; and round 12
+  reviewed this closing record and is answered by the corrections in it. Round
+  17's single minor finding was a test-isolation defect: the finding-ceiling
+  test shared one identifier across every synthetic finding, so a loosened
+  match would let the duplicate-id rejection satisfy it. Round 18's single
+  minor finding was an ordering defect in the storage read path, where findings
+  were validated before the schema version was checked. Round 19's single
+  trivial finding observed that the generation-run foreign key had no index:
+  PostgreSQL indexes no referencing column, every evaluation index leads with
+  `episode_id`, and the column nulls on run-history purge, so a purge scanned
+  the whole table once per deleted run. The partial index
+  `ix_qa_evaluations_generation_run_id` now covers the non-null values in the
+  migration, the model, and the downgrade, and ADR 024's retention posture
+  records why. Round 13's five minor findings included the one production
+  repair after the rebase: `record_evaluation` now flushes a caller's pending
+  state outside its failure handler, so a caller-owned constraint violation is
+  not counted as a QA recording failure.
 - The delivered code is attested by the sweeps at `a54223c7` (1949 tests),
   `0c4c566e` (1950 tests), and `da811759` (1950 tests), the heads that carry
   the round-15, round-16, and round-17 repairs, all green with a clean tree on
@@ -2033,11 +2059,12 @@ REST API and a first-party CLI.
   exceptions), and 67 snapshots.
 - The migration gate ran `check-migrations` at `d2a53f1c`, the head that
   carries round 13's repairs, whose sweep covered all seven gates and passed
-  1945 tests with 67 snapshots; no migration changed after it. The earlier
-  sweeps at the rebased head `314b0fde` (1944 tests), and at `14b882a8` (1943
-  tests) and `c1d9ad61` (1944 tests) on the same gates plus `check-migrations`,
-  are green; the rebase changed no tracked file relative to those heads, and
-  every patch replayed identically.
+  1945 tests with 67 snapshots. Round 19 is the first change to the migration
+  after that head, so its repair sweep re-runs `check-migrations` alongside the
+  six deterministic gates. The earlier sweeps at the rebased head `314b0fde`
+  (1944 tests), and at `14b882a8` (1943 tests) and `c1d9ad61` (1944 tests) on
+  the same gates plus `check-migrations`, are green; the rebase changed no
+  tracked file relative to those heads, and every patch replayed identically.
 - Every later commit that carries this record is gate-swept at its own head
   before publication. The round-17 and round-18 repair commits each change code
   alongside this record, so each is swept on all six deterministic gates rather
