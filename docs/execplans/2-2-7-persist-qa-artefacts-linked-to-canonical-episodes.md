@@ -6,8 +6,8 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
-`EP-M0`–`EP-M6` delivered 2026-11-01, with every gate green at the rebased head
-`314b0fde` and every upheld milestone-review finding repaired.
+`EP-M0`–`EP-M6` delivered 2026-11-01, with every gate green at `d2a53f1c` and
+every upheld milestone-review finding repaired.
 
 ## Purpose / big picture
 
@@ -1038,6 +1038,17 @@ Stop and escalate when any of these is reached.
       `test_caller_owned_constraint_failure_is_not_counted_as_a_qa_failure`
       failed on the spurious counter when the pre-flush was removed, and passes
       with it restored.
+    - Round-13 repair gate evidence: `d2a53f1c` is gate-clean on a clean tree —
+      check-fmt (861 files formatted, 129 Markdown files unchanged), markdownlint
+      (spelling prerequisite clean, `0 issues` in 129 files), nixie (all
+      diagrams validated), typecheck (`ty 0.0.32`), lint (Hecate, Ruff, Pylint
+      10.00/10, df12 lints, ambrleaks, Skylos, nose duplication gate with 30
+      reasoned exceptions), check-migrations (15 upgrades applied to
+      `20261031_000014`, no drift), and test (1945 passed, 3 skipped, 67
+      snapshots, 241.08 s); logs `...-r13b.out`. An earlier sweep of the same
+      repairs, before they were committed, exposed the two defects that commit
+      fixes — an mdtablefix reflow and a Pylint C1803 — while its test gate had
+      already passed 1945 tests against the same production code.
 
 ## Surprises & discoveries
 
@@ -1835,14 +1846,16 @@ REST API and a first-party CLI.
   the one production repair after the rebase: `record_evaluation` now flushes a
   caller's pending state outside its failure handler, so a caller-owned
   constraint violation is not counted as a QA recording failure.
-- The delivered code is attested by the sweep at the rebased head `314b0fde`,
-  which is green with a clean tree: check-fmt, markdownlint (including the
-  en-GB-oxendict spelling gate), nixie, typecheck, lint (Pylint 10.00/10,
-  duplication gate with 30 reasoned exceptions), and 1944 passing tests with 67
-  snapshots. The earlier seven-gate sweeps at `14b882a8` (1943 tests) and
-  `c1d9ad61` (1944 tests) are green on the same gates plus `check-migrations`;
-  the rebase changed no tracked file relative to those heads, and every patch
-  replayed identically.
+- The delivered code is attested by the sweep at `d2a53f1c`, the head that
+  carries round 13's repairs, which is green with a clean tree on all seven
+  gates: check-fmt, markdownlint (including the en-GB-oxendict spelling gate),
+  nixie, typecheck, lint (Pylint 10.00/10, df12 lints, ambrleaks, Skylos, and
+  the duplication gate with 30 reasoned exceptions), check-migrations, and 1945
+  passing tests with 67 snapshots. The earlier sweeps at the rebased head
+  `314b0fde` (1944 tests), and at `14b882a8` (1943 tests) and `c1d9ad61` (1944
+  tests) on the same gates plus `check-migrations`, are green; the rebase
+  changed no tracked file relative to those heads, and every patch replayed
+  identically.
 - Every later commit that carries this record changes documentation only and is
   re-gated for the Markdown gates before publication.
 
