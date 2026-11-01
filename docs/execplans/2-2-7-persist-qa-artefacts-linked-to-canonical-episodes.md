@@ -7,7 +7,7 @@ be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
 `EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
-finding through round 21 repaired and each repair gate-swept before the next
+finding through round 22 repaired and each repair gate-swept before the next
 round.
 
 ## Purpose / big picture
@@ -1241,6 +1241,36 @@ Stop and escalate when any of these is reached.
     The `trivial` finding recorded the budget outcome the pre-authorized
     escalation demanded and the plan had omitted; the new Decision log entry
     carries the measured figures and the rationale for not splitting.
+  - Post-delivery CodeRabbit CLI review round 22 at `11a6b471` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 83 reviewed paths, no rate limit). Two
+    findings — one `trivial`, one `minor` — made the same recommendation at two
+    severities, so they were adjudicated once. The autouse `clean_environment`
+    fixture lived in `tests/qa_cli_fixtures.py` and reached the two CLI unit
+    test modules only because each imported it by name for its autouse side
+    effect; every such import therefore carried a
+    `ruff: ignore[unused-import]` suppression plus a prose comment. Upheld and
+    repaired: the fixture now lives in `tests/conftest.py`, where the suite's
+    cross-cutting fixtures live, is no longer autouse, and is applied by
+    `pytestmark = pytest.mark.usefixtures("clean_environment")` in
+    `tests/test_qa_cli.py` and `tests/test_qa_cli_errors.py`. Both suppressions
+    are gone and the isolation both modules receive is unchanged. The two
+    modules' `pytest` imports were adjusted — one moved from the
+    `TYPE_CHECKING` block to a runtime import for the `pytestmark` — and the
+    now-unused `pytest` import and `CLI_ENVIRONMENT_VARIABLES` constant were
+    removed from the payload module.
+  - Gate evidence on the round-22 repair, commit `7ec3a656`: the sweep ran
+    sequentially against the working tree that carries exactly the content of
+    that commit, with `HEAD` at `11a6b471` and `git status --short` listing the
+    same four files before gate 1 and after the last gate, so the pin is the
+    parent plus this fixed diff. All four Python gates passed: `check-fmt` (ruff
+    865 files, mdtablefix 129 unchanged), `typecheck` (`ty 0.0.32`, clean),
+    `lint` with every stage green (Hecate, Ruff, Pylint 10.00/10, both df12 lint
+    passes, ambrleaks, Skylos, nose duplication gate with 30 reasoned
+    exceptions), and `make test` — 1950 passed, 3 skipped, 30 warnings,
+    318.71 s, 67 snapshots. `markdownlint`, `nixie`, and `check-migrations` were
+    not re-run because the change surface is four Python test files; the parent
+    `11a6b471` carries the documentation gates and `3e13bf0a` the migration
+    gate.
 
 ## Surprises & discoveries
 
@@ -2088,8 +2118,8 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Twenty-one
-  review rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–21 each raised at
+  and a CodeRabbit CLI review of the committed milestone diff. Twenty-two
+  review rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–22 each raised at
   least one finding that was verified against source and repaired in its own
   commit; round 9 completed with none; and round 12 reviewed this closing
   record and is answered by the corrections in it. Round 17's single minor
@@ -2119,11 +2149,16 @@ REST API and a first-party CLI.
   CLI modules, 893 net production lines, and 83 changed paths breach both the
   6-module and 500-line trigger and the 50-file Tolerances cap, so the Decision
   log now carries the measured figures and the rationale for keeping the
-  bootstrap in `2.2.7` rather than splitting it into `2.2.8`. Round 13's five
-  minor findings included the one production repair after the rebase:
-  `record_evaluation` now flushes a caller's pending state outside its failure
-  handler, so a caller-owned constraint violation is not counted as a QA
-  recording failure.
+  bootstrap in `2.2.7` rather than splitting it into `2.2.8`. Round 22's two
+  findings were one recommendation at two severities: the autouse
+  `clean_environment` fixture reached its consumers only through imports that
+  each needed an unused-import suppression. It now lives in `tests/conftest.py`
+  as a non-autouse fixture that both CLI unit test modules apply through
+  `pytestmark`, so the isolation is claimed where it is used instead of being
+  implied by an import. Round 13's five minor findings included the one
+  production repair after the rebase: `record_evaluation` now flushes a
+  caller's pending state outside its failure handler, so a caller-owned
+  constraint violation is not counted as a QA recording failure.
 - The delivered code is attested by the sweeps at `a54223c7` (1949 tests),
   `0c4c566e`, `da811759`, and `b3c174eb` (1950 tests each), the heads that
   carry the round-15 through round-18 repairs and their follow-up, all green
@@ -2131,7 +2166,11 @@ REST API and a first-party CLI.
   (including the en-GB-oxendict spelling gate), nixie, typecheck, lint (Pylint
   10.00/10, df12 lints, ambrleaks, Skylos, and the duplication gate with 30
   reasoned exceptions), and 67 snapshots. The head that carries the round-19
-  index repair, `3e13bf0a`, is green on those six plus `check-migrations`.
+  index repair, `3e13bf0a`, is green on those six plus `check-migrations`. The
+  Python-only round-22 repair at `7ec3a656` is attested by `check-fmt`,
+  `typecheck`, `lint`, and `make test` (1950 passed, 67 snapshots) against that
+  commit's exact content on top of `11a6b471`, which carries the documentation
+  gates.
 - The migration gate ran `check-migrations` at `d2a53f1c`, the head that
   carries round 13's repairs, whose sweep covered all seven gates and passed
   1945 tests with 67 snapshots, and again at `3e13bf0a`, which adds the
