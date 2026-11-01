@@ -787,7 +787,28 @@ Stop and escalate when any of these is reached.
     base-URL validation), and `tests/qa_cli_fixtures.py` (payloads, the
     stubbed transport helper, and the autouse environment-isolation fixture
     both modules import). `make check-fmt` also caught one paragraph in this
-    plan that `mdtablefix --wrap` reflowed.
+    plan that `mdtablefix --wrap` reflowed. Re-gated green at `1816df1a`:
+    check-fmt, markdownlint, nixie, typecheck, lint (all stages, including the
+    duplication gate), and test (1935 passed, 3 skipped).
+  - Milestone CLI review round 3 at `1816df1a` (`coderabbit 0.9.2`, exit 0,
+    `review_completed`, 16/16 expected paths over `1edf224f..1816df1a`, no rate
+    limit): four findings, all upheld and repaired.
+    1. A base URL carrying embedded `user:pass@` credentials was accepted, and
+       the credential would then be echoed into `InvalidConfigError` and
+       `ApiUnavailableError` messages. Userinfo is now rejected before any
+       message that names the URL, and the rejection names only the host.
+    2. `_items` and `_total` in `rendering.py`, and `_decode` and `_as_text` in
+       `client.py`, decomposed untyped payloads with `isinstance`; both pairs
+       now use structural pattern matching, per `.rules/python-typing.md`.
+    3. `_invoke` in the BDD harness now records that `redirect_stdout` and
+       `redirect_stderr` are process-global, and so shared with the in-process
+       ASGI application.
+    4. Oxendict spelling: the harness comment and helper name now read
+       `neutralizes` and `_neutralized_environment`.
+  - Round-3 repair evidence:
+    `test_base_url_with_embedded_credentials_is_rejected`
+    was added, asserting the credential never reaches standard error; the CLI
+    suites pass with 23 unit tests, 6 scenarios, and 4 snapshots.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of
@@ -1483,6 +1504,15 @@ Stop and escalate when any of these is reached.
   rebuilding the URL from parts, and no supported deployment uses a base URL
   with a query. Date/Author: 2026-10-31, implementation agent. **Deviation
   status: none**.
+- Decision: reject a base URL that carries embedded `user:pass@` credentials,
+  and never name the URL in that particular error message. Rationale: the CLI
+  echoes the base URL in its configuration and transport errors, so a password
+  placed in `--base-url` or `EPISODIC_API_URL` would be written to standard
+  error and captured by terminals and CI logs; `httpx` would also turn the
+  userinfo into a Basic credential that competes with the bearer token. The
+  rejection names the host and points at `--token`, so the message stays
+  actionable without repeating the secret. Date/Author: 2026-10-31,
+  implementation agent. **Deviation status: none**.
 - Decision: split the CLI unit tests into `tests/test_qa_cli.py` (rendering and
   request shaping), `tests/test_qa_cli_errors.py` (exit codes and base-URL
   validation), and a shared `tests/qa_cli_fixtures.py`. Rationale: the repairs
@@ -3044,9 +3074,10 @@ episodic [--base-url URL] [--token TOKEN] [--timeout SECONDS] qa evaluations lis
 ```
 
 `--base-url` defaults to the `EPISODIC_API_URL` environment variable, then to
-`http://127.0.0.1:8000`. It must name an `http` or `https` URL with a host and
-no query string or fragment: a query string would displace the resource path
-the client appends. `--token` defaults to `EPISODIC_API_TOKEN`; it is sent as
+`http://127.0.0.1:8000`. It must name an `http` or `https` URL with a host,
+without embedded credentials (pass `--token` instead), and without a query
+string or fragment: a query string would displace the resource path the client
+appends. `--token` defaults to `EPISODIC_API_TOKEN`; it is sent as
 `Authorization: Bearer <token>`. Never echo the token, and never place it in a
 rendered table. A bearer token is refused over plain HTTP unless the host is
 loopback, so a remote operator cannot put the credential on the wire in clear.

@@ -37,7 +37,7 @@ if typ.TYPE_CHECKING:
 OWNER_TOKEN = PRINCIPAL_A["Authorization"].removeprefix("Bearer ")
 FOREIGN_TOKEN = PRINCIPAL_B["Authorization"].removeprefix("Bearer ")
 
-# Empty values count as unset, so this neutralises an operator's own settings
+# Empty values count as unset, so this neutralizes an operator's own settings
 # without depending on the environment in which the suite runs.
 _NEUTRAL_ENVIRONMENT = {"EPISODIC_API_URL": "", "EPISODIC_API_TOKEN": ""}
 
@@ -115,6 +115,10 @@ def bridge_transport(
 
 def _invoke(argv: list[str], transport: httpx.BaseTransport) -> tuple[int, str, str]:
     """Run the CLI with captured output in the calling thread."""
+    # These redirects replace the process-wide streams, so the ASGI application
+    # served from the scenario loop shares them: anything it printed while the
+    # command ran would be captured as CLI output. The application does not
+    # write to standard output, which is what keeps this capture accurate.
     stdout, stderr = io.StringIO(), io.StringIO()
     with (
         contextlib.redirect_stdout(stdout),
@@ -124,7 +128,7 @@ def _invoke(argv: list[str], transport: httpx.BaseTransport) -> tuple[int, str, 
     return exit_code, stdout.getvalue(), stderr.getvalue()
 
 
-def _neutralised_environment() -> contextlib.AbstractContextManager[None]:
+def _neutralized_environment() -> contextlib.AbstractContextManager[None]:
     """Return a context manager that clears the operator's API settings."""
     return mock.patch.dict(os.environ, _NEUTRAL_ENVIRONMENT)
 
@@ -173,7 +177,7 @@ def list_evaluations(context: QaCliContext, options: ListOptions) -> None:
             bridge_transport(dependencies, loop),
         )
 
-    with _neutralised_environment():
+    with _neutralized_environment():
         exit_code, stdout, stderr = context.retrieval.runner.run(drive())
     context.exit_code = exit_code
     context.stdout = stdout

@@ -192,6 +192,29 @@ def test_base_url_query_string_is_a_usage_error(
     assert "remove the query string and fragment" in captured.err, captured.err
 
 
+def test_base_url_with_embedded_credentials_is_rejected(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A password in the URL is refused and never echoed back."""
+    transport, recorded = canned(PAGE)
+    embedded = "-".join(("not", "a", "real", "credential"))
+
+    exit_code = main(
+        [
+            "--base-url",
+            f"https://scribe:{embedded}@api.example.test",
+            *list_arguments(),
+        ],
+        transport=transport,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
+    assert recorded.seen == [], recorded.seen
+    assert "remove the embedded credentials" in captured.err, captured.err
+    assert embedded not in captured.err, captured.err
+
+
 def test_remote_plain_http_base_url_with_token_is_rejected(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

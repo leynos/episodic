@@ -137,16 +137,24 @@ def _validated_base_url(base_url: str, *, token: str | None) -> str:
     Raises
     ------
     InvalidConfigError
-        If the URL has no HTTP(S) scheme, names no host, carries a query
-        string or fragment, or would send ``token`` over plain HTTP to a
-        non-loopback host.
+        If the URL has no HTTP(S) scheme, names no host, carries embedded
+        credentials, carries a query string or fragment, or would send
+        ``token`` over plain HTTP to a non-loopback host.
     """
     try:
         parsed = urllib.parse.urlsplit(base_url)
     except ValueError as error:
-        invalid = f"Invalid Episodic API URL {base_url}: {error}"
+        invalid = f"Invalid Episodic API URL: {error}"
         raise InvalidConfigError(invalid) from error
     host = parsed.hostname
+    if parsed.username is not None or parsed.password is not None:
+        # The URL itself must not appear here: it is the thing carrying the
+        # credential, and this message is written to standard error.
+        credentials = (
+            f"Invalid Episodic API URL for host {host or 'unknown'}: "
+            "remove the embedded credentials and pass --token"
+        )
+        raise InvalidConfigError(credentials)
     if parsed.scheme not in {"http", "https"} or not host:
         invalid = (
             f"Invalid Episodic API URL {base_url}: "
@@ -337,12 +345,20 @@ def _decode(response: httpx.Response) -> dict[str, object]:
         payload = response.json()
     except ValueError:
         return {}
-    return payload if isinstance(payload, dict) else {}
+    match payload:
+        case dict() as body:
+            return body
+        case _:
+            return {}
 
 
 def _as_text(value: object) -> str | None:
     """Return a non-empty string value, or ``None``."""
-    return value if isinstance(value, str) and value else None
+    match value:
+        case str() as text if text:
+            return text
+        case _:
+            return None
 
 
 def _throttled_message(status: int, message: str, retry_after: str | None) -> str:

@@ -77,23 +77,27 @@ def render_json(payload: cabc.Mapping[str, object]) -> str:
 
 def _items(payload: cabc.Mapping[str, object]) -> list[cabc.Mapping[str, object]]:
     """Return the envelope's page items, ignoring a malformed value."""
-    value = payload.get("items")
-    if not isinstance(value, list):
-        return []
-    return [
-        typ.cast("cabc.Mapping[str, object]", entry)
-        for entry in typ.cast("list[object]", value)
-        if isinstance(entry, dict)
-    ]
+    match payload.get("items"):
+        case list() as entries:
+            return [
+                typ.cast("cabc.Mapping[str, object]", entry)
+                for entry in typ.cast("list[object]", entries)
+                if isinstance(entry, dict)
+            ]
+        case _:
+            return []
 
 
 def _total(payload: cabc.Mapping[str, object], fallback: int) -> int:
     """Return the envelope's unpaged total, falling back to the page length."""
-    value = payload.get("total")
-    # ``bool`` is an ``int`` subclass, but a boolean total is not a count.
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    return fallback
+    match payload.get("total"):
+        # ``bool`` is an ``int`` subclass, but a boolean total is not a count.
+        case bool():
+            return fallback
+        case int() as total:
+            return total
+        case _:
+            return fallback
 
 
 def _table_row(item: cabc.Mapping[str, object]) -> tuple[str, ...]:
