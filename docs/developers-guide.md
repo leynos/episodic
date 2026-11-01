@@ -2098,10 +2098,12 @@ The store emits four series:
   retry storm where callers keep re-submitting a response that was resolved
   earlier.
 
-All four are emitted after the store's flush or compare-and-set has run but
-before the caller commits, so they describe accepted work in the current
-transaction rather than durable commit outcomes. A later rollback is not
-reflected in these counters.
+Creation and resolution metrics are emitted after the insert or compare-and-set
+has run but before the caller commits, so they describe accepted work in the
+current transaction rather than durable commit outcomes. The terminal-conflict
+counter is not tied to a write: it also records domain-precondition refusals,
+which happen before any write is attempted. A later rollback is not reflected
+in these counters.
 
 ### No-QA launcher and TEI retrieval
 
