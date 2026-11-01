@@ -671,6 +671,16 @@ Stop and escalate rather than improvising when any of these is reached.
       alone cannot say which checkpoint was refused, and the shared helper
       would go untested if only the counter were pinned.
 
+- [x] (2026-11-01) Assessment `EP-ASSESS-2.6.2-r2-ae24f827` of the repaired
+      head returned one remaining documentation defect: the developers' guide
+      had been corrected, but the port docstring and the mixin docstring still
+      told callers to drain until an empty tuple, and all three still claimed a
+      full batch proves more work exists. A backlog of exactly `limit` runs
+      produces a full final batch, and the post-lock recheck can shrink a batch
+      without emptying the queue, so neither end of the count is conclusive.
+      All three now carry the same lower-bound wording (D-22). Documentation
+      only: no behaviour changed and no scheduler consumes the guidance.
+
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
 
@@ -1612,6 +1622,26 @@ Append further observations here as work proceeds.
   became an em dash, and the file was re-checked for further double hyphens in
   prose — there are none.
 
+- **D-22. The batch count is a lower bound, not a completion signal.**
+  Stage D's "re-invoke until an empty tuple returns" and Stage E's
+  "`len(result) == limit`" tell a caller whether a backlog remains. Both are
+  wrong, and the hosted assessment of `ae24f827` caught the contradiction
+  against the guide text this round already corrected.
+
+  A full batch does not prove more work: a backlog of exactly `limit` eligible
+  runs produces a full final batch. A short or empty batch does not prove
+  exhaustion either, because the post-lock `_drop_checkpointed_candidates`
+  recheck removes candidates selected under the statement's snapshot when a
+  reviewer's checkpoint committed while the statement waited for the run lock.
+  The count is therefore a lower bound in both directions, and no caller may
+  treat it as terminal.
+
+  Corrected in the port docstring, the mixin docstring, and the developers'
+  guide, in the same wording, so the three cannot drift into disagreement
+  again. The stage text below keeps its original instruction with a superseded
+  marker rather than being rewritten, because D-11 already relies on the plan's
+  stage text as a record of what was required at the time. (2026-11-01)
+
 Append further decisions here, including any decision to escalate.
 
 ## Outcomes & retrospective
@@ -2474,8 +2504,10 @@ async def fail_expired_leases(
    `updated_at`, and the event's `occurred_at`, so one call does not end up
    with two different "nows"; orders by `(lease_expires_at, id)` so a backlog
    drains oldest-first deterministically; returns the runs *post-transition*;
-   raises `ValueError` for non-positive `limit`; and requires callers draining
-   a backlog to re-invoke until an empty tuple returns.
+   raises `ValueError` for non-positive `limit`; and ~~requires callers
+   draining a backlog to re-invoke until an empty tuple returns~~ —
+   **superseded by D-22**: the returned count is a lower bound, not a
+   completion signal.
 2. Implement in both adapters. In memory this is necessarily a no-op returning
    `()`, because `GenerationRun` has no lease field — record that in the
    docstring so the shared suite does not certify the no-op as equivalence.
@@ -2501,7 +2533,8 @@ async def fail_expired_leases(
    to drive from an ad-hoc script against production. Add the method alongside,
    with a short invocation snippet or a `python -m` entry point mirroring
    `migration_check.py`, and say plainly that nothing schedules it yet and how
-   to tell a backlog remains (`len(result) == limit`).
+   to tell a backlog remains (~~`len(result) == limit`~~ — **superseded by
+   D-22**: a full batch only means more work may remain).
 
 ### Stage E — documentation and reconciliation
 

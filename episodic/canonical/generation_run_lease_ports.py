@@ -71,9 +71,10 @@ class GenerationRunLeaseReclamationPort(typ.Protocol):
             a caller already used to decide that a backlog exists.
         limit : int
             Maximum number of runs to reclaim in this call. Must be positive.
-            A call that returns exactly ``limit`` runs has more work waiting, so
-            a caller draining a backlog re-invokes until an empty tuple comes
-            back.
+            A full batch means more eligible runs may remain; a short or empty
+            batch does not establish that the backlog is exhausted, because the
+            post-lock checkpoint recheck can remove selected candidates. Do not
+            use the returned count alone as a completion signal.
 
         Returns
         -------

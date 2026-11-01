@@ -157,9 +157,11 @@ class GenerationRunLeaseReclamationMixin(_MixinBase):
             ``run.failed`` event's ``occurred_at``, so one call never records
             two different "nows".
         limit : int
-            Maximum number of runs to reclaim in this call. Must be positive;
-            a call returning exactly ``limit`` runs has more work waiting, so a
-            caller draining a backlog re-invokes until an empty tuple returns.
+            Maximum number of runs to reclaim in this call. Must be positive.
+            A full batch means more eligible runs may remain; a short or empty
+            batch does not establish that the backlog is exhausted, because the
+            post-lock checkpoint recheck can remove selected candidates. Do not
+            use the returned count alone as a completion signal.
 
         Returns
         -------

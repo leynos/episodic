@@ -2359,19 +2359,19 @@ early fails a run out from under work that could have finished, which is the
 outcome fencing prevents.
 
 Each call reclaims at most `limit` runs, oldest expiry first, and returns the
-runs it moved. A call returning exactly `limit` runs has more work waiting, so
-drain a backlog by re-invoking. A shorter or empty result does not prove the
-backlog is empty: a run selected under the statement's snapshot can be dropped
-by the post-lock checkpoint recheck when a reviewer's checkpoint committed
-while the statement waited for the run lock, which shrinks the batch without
-ending the queue. Treat the returned count as a lower bound, not a completion
-signal. The call appends each `run.failed` event and its terminal update in one
-transaction and writes one instant, `now`, to the event's `occurred_at`,
-`ended_at`, and `updated_at`. A non-positive `limit` raises `ValueError`. Both
-adapters expose the method: the SQL adapter reclaims, while the in-memory
-adapter necessarily returns `()` because `GenerationRun` carries no lease field
-— its emptiness is a divergence, not a contract, so a shared suite must not
-treat agreement between the two as evidence.
+runs it moved. A full batch means more eligible runs may remain, but it does
+not prove that any do: it can be the last batch of a backlog that held exactly
+`limit` runs. A short or empty batch does not establish exhaustion either,
+because a run selected under the statement's snapshot can be dropped by the
+post-lock checkpoint recheck when a reviewer's checkpoint committed while the
+statement waited for the run lock. Treat the returned count as a lower bound,
+not a completion signal. The call appends each `run.failed` event and its
+terminal update in one transaction and writes one instant, `now`, to the event's
+`occurred_at`, `ended_at`, and `updated_at`. A non-positive `limit` raises
+`ValueError`. Both adapters expose the method: the SQL adapter reclaims, while
+the in-memory adapter necessarily returns `()` because `GenerationRun` carries
+no lease field — its emptiness is a divergence, not a contract, so a shared
+suite must not treat agreement between the two as evidence.
 
 Nothing schedules this method yet. No reaper, worker, or cron entry invokes it,
 so during this slice it runs only when an operator or test calls it, and a
