@@ -7,7 +7,7 @@ be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
 `EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
-finding through round 23 repaired and each repair gate-swept before the next
+finding through round 24 repaired and each repair gate-swept before the next
 round.
 
 ## Purpose / big picture
@@ -1282,6 +1282,30 @@ Stop and escalate when any of these is reached.
     small, and the *Performance* criterion counts three indexes and says what
     the third covers. Fixed at `4465ae9f`; the documentation gates were run
     against a copy of that file verified byte-identical to the candidate.
+  - Post-delivery CodeRabbit CLI review round 24 at `d82b3b3f` (`coderabbit`
+    0.9.2). One `trivial` finding, upheld: QA-artefact retrieval was the only
+    instrumented API family the composition root did not observe. The
+    generation-run, event-listing, and TEI routes each had a bounded operation
+    name, a span, and route metrics; the two QA routes had none, so an operator
+    could not tell a QA request apart from an unrouted one. Fixed at
+    `38065557`: `_generation_route_operation` maps both QA paths, both
+    resources accept the composition root's tracer, and each opens a span
+    carrying only operation, outcome, pagination mode, and a stable failure
+    category. `tests/test_qa_artefact_observability.py` pins the rejected,
+    not-found, and success exits against a recording tracer and a recording
+    metrics sink, and the developers' guide names both spans and the QA route
+    metrics.
+  - Gate evidence on the round-24 repair, commit `38065557`: the sweep ran
+    sequentially against the working tree carrying exactly that commit's
+    content with `HEAD` at `d82b3b3f`, whose four changed paths were identical
+    before gate 1 and after gate 6. All six deterministic gates passed:
+    `check-fmt` (ruff 866 files, mdtablefix 129 unchanged), `typecheck`
+    (`ty 0.0.32`, clean), `lint` (Hecate, Ruff, Pylint 10.00/10, both df12 lint
+    passes, ambrleaks, Skylos, nose duplication gate with 30 reasoned
+    exceptions), `markdownlint` (129 files, 0 issues), `nixie`, and `make test`
+    — 1953 passed, 3 skipped, 30 warnings, 358.54 s, 67 snapshots.
+    `check-migrations` was not re-run because the change surface touches no
+    migration; `3e13bf0a` carries that gate for the schema as delivered.
 
 ## Surprises & discoveries
 
@@ -2129,8 +2153,8 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Twenty-three
-  review rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–23 each raised at
+  and a CodeRabbit CLI review of the committed milestone diff. Twenty-four
+  review rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–24 each raised at
   least one finding that was verified against source and repaired in its own
   commit; round 9 completed with none; and round 12 reviewed this closing
   record and is answered by the corrections in it. Round 17's single minor
@@ -2170,10 +2194,15 @@ REST API and a first-party CLI.
   staleness in this plan: the *Database schema (EP-M2)* block still created two
   indexes and both it and the *Performance* criterion still said two, so the
   plan's own conformance check sent a reader to a schema that omits round 19's
-  partial index. Round 13's five minor findings included the one production
-  repair after the rebase: `record_evaluation` now flushes a caller's pending
-  state outside its failure handler, so a caller-owned constraint violation is
-  not counted as a QA recording failure.
+  partial index. Round 24's single trivial finding was the observability gap
+  left by the QA routes: they were the only instrumented API family with no
+  bounded operation name, no span, and no route metric, so a QA request and an
+  unrouted request looked alike in both streams. Both QA paths now carry the
+  same bounded coverage as the generation routes, asserted by
+  `tests/test_qa_artefact_observability.py`. Round 13's five minor findings
+  included the one production repair after the rebase: `record_evaluation` now
+  flushes a caller's pending state outside its failure handler, so a
+  caller-owned constraint violation is not counted as a QA recording failure.
 - The delivered code is attested by the sweeps at `a54223c7` (1949 tests),
   `0c4c566e`, `da811759`, and `b3c174eb` (1950 tests each), the heads that
   carry the round-15 through round-18 repairs and their follow-up, all green
@@ -2186,7 +2215,11 @@ REST API and a first-party CLI.
   `typecheck`, `lint`, and `make test` (1950 passed, 67 snapshots) against that
   commit's exact content on top of `11a6b471`, which carries the documentation
   gates. The documentation-only round-23 correction at `4465ae9f` is attested by
-  `check-fmt`, `markdownlint` (129 files, 0 issues), and `nixie`.
+  `check-fmt`, `markdownlint` (129 files, 0 issues), and `nixie`. The round-24
+  observability repair at `38065557` is attested by all six deterministic gates
+  on its exact content: `check-fmt`, `typecheck`, `lint`, `markdownlint`,
+  `nixie`, and `make test` with 1953 passed, 3 skipped, 67 snapshots, and 30
+  warnings in 358.54 s.
 - The migration gate ran `check-migrations` at `d2a53f1c`, the head that
   carries round 13's repairs, whose sweep covered all seven gates and passed
   1945 tests with 67 snapshots, and again at `3e13bf0a`, which adds the
