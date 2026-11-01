@@ -18,6 +18,7 @@ from episodic.api.serializers import (
     serialize_qa_evaluation_summary,
 )
 from episodic.api.source_idempotency import principal_id
+from episodic.canonical.qa_artefact_errors import UnsupportedQaArtefactSchemaError
 from episodic.canonical.qa_artefact_ports import QaEvaluationListRequest
 from episodic.canonical.qa_artefact_service import (
     get_qa_evaluation,
@@ -41,6 +42,29 @@ def _evaluation_not_found(
             falcon.HTTPNotFound(description="QA evaluation not found."),
             code="qa_evaluation_not_found",
             details=dict(details),
+        ),
+    )
+
+
+def _unsupported_schema(
+    error: UnsupportedQaArtefactSchemaError,
+) -> falcon.HTTPUnprocessableEntity:
+    """Build the response for a row written by a newer release."""
+    return typ.cast(
+        "falcon.HTTPUnprocessableEntity",
+        http_error(
+            falcon.HTTPUnprocessableEntity(
+                description=(
+                    "The QA artefact was recorded with a schema this release "
+                    "cannot read."
+                ),
+            ),
+            code="qa_artefact_schema_unsupported",
+            details={
+                "evaluation_id": str(error.evaluation_id),
+                "artefact_schema_version": error.stored_version,
+                "supported_artefact_schema_version": error.supported_version,
+            },
         ),
     )
 
@@ -83,7 +107,10 @@ class EpisodeQaEvaluationsResource:
         falcon.HTTPNotFound
             If the episode is absent or its launcher run belongs to another
             principal.
-        """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # The errors come from parse_uuid(), parse_pagination(), parse_enum_param(), and _evaluation_not_found(), which the docstring describes as one contract.
+        falcon.HTTPUnprocessableEntity
+            If a stored row records a payload shape newer than this release
+            reads.
+        """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # The errors come from parse_uuid(), parse_pagination(), parse_enum_param(), _evaluation_not_found(), and _unsupported_schema(), which the docstring describes as one contract.
         parsed_episode_id = parse_uuid(episode_id, "episode_id")
         page = parse_pagination(req)
         evaluator = parse_enum_param(req, "evaluator", QaEvaluator)
@@ -100,15 +127,20 @@ class EpisodeQaEvaluationsResource:
             )
             if episode is None:
                 raise _evaluation_not_found({"episode_id": str(parsed_episode_id)})
-            summaries, total = await list_qa_evaluations(
-                uow,
-                QaEvaluationListRequest(
-                    episode_id=parsed_episode_id,
-                    pagination=page,
-                    evaluator=evaluator,
-                    compliance_status=compliance_status,
-                ),
-            )
+            try:
+                summaries, total = await list_qa_evaluations(
+                    uow,
+                    QaEvaluationListRequest(
+                        episode_id=parsed_episode_id,
+                        pagination=page,
+                        evaluator=evaluator,
+                        compliance_status=compliance_status,
+                    ),
+                )
+            except UnsupportedQaArtefactSchemaError as error:
+                # The caller already owns the episode, so naming the schema
+                # failure reveals nothing it could not learn from the rows.
+                raise _unsupported_schema(error) from error
         resp.media = {
             "items": [
                 serialize_qa_evaluation_summary(summary) for summary in summaries
@@ -156,11 +188,26 @@ class QaEvaluationResource:
         falcon.HTTPNotFound
             If the evaluation is absent or its episode's launcher run belongs
             to another principal.
-        """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # parse_uuid() and _evaluation_not_found() raise the documented errors.
+        falcon.HTTPUnprocessableEntity
+            If the stored row records a payload shape newer than this release
+            reads, and the caller owns its episode.
+        """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # parse_uuid(), _evaluation_not_found(), and _unsupported_schema() raise the documented errors.
         parsed_evaluation_id = parse_uuid(evaluation_id, "evaluation_id")
+        details = {"evaluation_id": str(parsed_evaluation_id)}
         async with self._uow_factory() as uow:
-            evaluation = await get_qa_evaluation(uow, parsed_evaluation_id)
-            details = {"evaluation_id": str(parsed_evaluation_id)}
+            try:
+                evaluation = await get_qa_evaluation(uow, parsed_evaluation_id)
+            except UnsupportedQaArtefactSchemaError as error:
+                # The row is unreadable, but its episode still decides whether
+                # this caller may learn that it exists.
+                episode = await read_owned_episode(
+                    uow,
+                    error.episode_id,
+                    principal_id(req),
+                )
+                if episode is None:
+                    raise _evaluation_not_found(details) from error
+                raise _unsupported_schema(error) from error
             if evaluation is None:
                 raise _evaluation_not_found(details)
             episode = await read_owned_episode(

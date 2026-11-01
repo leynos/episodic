@@ -1060,6 +1060,20 @@ Stop and escalate when any of these is reached.
   credential is presented, and reserve 404 `qa_evaluation_not_found` for an
   authenticated principal that does not own the episode, so the two conditions
   stay distinguishable. The test asserts both branches separately.
+- Observation (execution, 2026-11-01): the versioning rule that a reader must
+  fail loudly on `artefact_schema_version > QA_ARTEFACT_SCHEMA_VERSION` was
+  specified here and recorded as arriving with the `EP-M2` mapper and the
+  `EP-M4` endpoint, but no code, test, or gate exercised it. Evidence:
+  `grep -rn "schema_unsupported" episodic tests` matched nothing, and both the
+  ADR and the developers' guide would have described behaviour that did not
+  exist. Impact: `episodic/canonical/qa_artefact_errors.py` now defines
+  `UnsupportedQaArtefactSchemaError`, `summary_from_record` raises it, and both
+  API resources answer `422 qa_artefact_schema_unsupported`; the detail route
+  applies the episode ownership check first so an unreadable row owned
+  elsewhere stays a `404`. Two API tests raise a seeded row's stored version
+  and assert both branches. Lesson: a rule recorded as "arrives in milestone X"
+  needs a gate-visible test in X, because a plan sentence is not evidence that
+  it shipped.
 
 ## Decision log
 

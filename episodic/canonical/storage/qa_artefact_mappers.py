@@ -2,7 +2,13 @@
 
 import typing as typ
 
-from episodic.canonical.qa_artefacts import QaEvaluation, QaEvaluationSummary, QaFinding
+from episodic.canonical.qa_artefact_errors import UnsupportedQaArtefactSchemaError
+from episodic.canonical.qa_artefacts import (
+    QA_ARTEFACT_SCHEMA_VERSION,
+    QaEvaluation,
+    QaEvaluationSummary,
+    QaFinding,
+)
 
 from .qa_artefact_models import QaEvaluationRecord, QaFindingRecord
 
@@ -23,7 +29,19 @@ def summary_from_record(record: QaEvaluationRecord) -> QaEvaluationSummary:
     -------
     QaEvaluationSummary
         The domain summary, with the row's stored versions and verdict.
+
+    Raises
+    ------
+    UnsupportedQaArtefactSchemaError
+        If the row records a payload shape newer than this release reads.
     """
+    if record.artefact_schema_version > QA_ARTEFACT_SCHEMA_VERSION:
+        raise UnsupportedQaArtefactSchemaError(
+            evaluation_id=record.id,
+            episode_id=record.episode_id,
+            stored_version=record.artefact_schema_version,
+            supported_version=QA_ARTEFACT_SCHEMA_VERSION,
+        )
     return QaEvaluationSummary(
         id=record.id,
         episode_id=record.episode_id,

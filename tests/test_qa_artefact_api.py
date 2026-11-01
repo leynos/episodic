@@ -8,7 +8,10 @@ import typing as typ
 import uuid
 
 import pytest
+from sqlalchemy import update
 
+from episodic.canonical.qa_artefacts import QA_ARTEFACT_SCHEMA_VERSION
+from episodic.canonical.storage.qa_artefact_models import QaEvaluationRecord
 from tests.fixtures.api import api_async_client
 from tests.steps.qa_artefact_retrieval_seed import (
     ANTHEM_EVALUATION_ID,
@@ -44,6 +47,20 @@ def _items(response: httpx.Response) -> list[dict[str, object]]:
 def _envelope(response: httpx.Response) -> dict[str, object]:
     """Return an error response's envelope."""
     return typ.cast("dict[str, object]", response.json())
+
+
+async def _pretend_a_newer_release_wrote_the_row(
+    session_factory: async_sessionmaker[AsyncSession],
+    evaluation_id: str,
+) -> None:
+    """Raise the stored schema version past what this release reads."""
+    async with session_factory() as session:
+        await session.execute(
+            update(QaEvaluationRecord)
+            .where(QaEvaluationRecord.id == uuid.UUID(evaluation_id))
+            .values(artefact_schema_version=QA_ARTEFACT_SCHEMA_VERSION + 1)
+        )
+        await session.commit()
 
 
 @pytest.mark.asyncio
@@ -298,3 +315,73 @@ async def test_successful_anthem_retry_supersedes_the_failure(
     assert items[0]["finding_count"] == 0, items
     assert detail_payload["compliance_status"] == "compliant", detail_payload
     assert detail_payload["findings"] == [], detail_payload
+
+
+@pytest.mark.asyncio
+async def test_unsupported_schema_version_is_rejected(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A row written by a newer release fails loudly on either route."""
+    dependencies = build_qa_dependencies(session_factory)
+    async with api_async_client(dependencies) as client:
+        episode = await _seed(dependencies)
+        seeded = await client.get(
+            f"/v1/episodes/{episode.episode_id}/qa-evaluations",
+            headers=PRINCIPAL_A,
+            params={"evaluator": "pedante"},
+        )
+        evaluation_id = typ.cast("str", _items(seeded)[0]["id"])
+        await _pretend_a_newer_release_wrote_the_row(
+            session_factory,
+            evaluation_id,
+        )
+        listed = await client.get(
+            f"/v1/episodes/{episode.episode_id}/qa-evaluations",
+            headers=PRINCIPAL_A,
+        )
+        detailed = await client.get(
+            f"/v1/qa-evaluations/{evaluation_id}",
+            headers=PRINCIPAL_A,
+        )
+
+    for response in (listed, detailed):
+        envelope = _envelope(response)
+        details = typ.cast("dict[str, object]", envelope["details"])
+        assert response.status_code == 422, response.text
+        assert envelope["code"] == "qa_artefact_schema_unsupported", envelope
+        assert details["evaluation_id"] == evaluation_id, envelope
+        assert details["artefact_schema_version"] == (QA_ARTEFACT_SCHEMA_VERSION + 1), (
+            envelope
+        )
+        assert details["supported_artefact_schema_version"] == (
+            QA_ARTEFACT_SCHEMA_VERSION
+        ), envelope
+
+
+@pytest.mark.asyncio
+async def test_unsupported_schema_version_stays_hidden_from_foreign_callers(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """An unreadable row owned elsewhere is still reported as absent."""
+    dependencies = build_qa_dependencies(session_factory)
+    async with api_async_client(dependencies) as client:
+        episode = await _seed(dependencies)
+        seeded = await client.get(
+            f"/v1/episodes/{episode.episode_id}/qa-evaluations",
+            headers=PRINCIPAL_A,
+            params={"evaluator": "pedante"},
+        )
+        evaluation_id = typ.cast("str", _items(seeded)[0]["id"])
+        await _pretend_a_newer_release_wrote_the_row(
+            session_factory,
+            evaluation_id,
+        )
+        foreign = await client.get(
+            f"/v1/qa-evaluations/{evaluation_id}",
+            headers=PRINCIPAL_B,
+        )
+
+    envelope = _envelope(foreign)
+    assert foreign.status_code == 404, foreign.text
+    assert envelope["code"] == "qa_evaluation_not_found", envelope
+    assert envelope["details"] == {"evaluation_id": evaluation_id}, envelope
