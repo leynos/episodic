@@ -2031,8 +2031,14 @@ The port surface is intentionally split:
   UUID providers, with production defaults and deterministic injection
   available to tests. `CanonicalUnitOfWork.generation_runs` no longer exposes
   this port — see `GenerationRunPort` below.
-- `GenerationCheckpointPort` creates checkpoints and records reviewer
-  responses through the `Checkpoint.respond(...)` domain transition.
+- `GenerationCheckpointPort` creates checkpoints, reads them back, and records
+  reviewer responses through the `Checkpoint.respond(...)` domain transition.
+  `get_checkpoint` returns `None` for an unknown identifier, whereas
+  `list_checkpoints` raises `RunNotFound` for an unknown run and returns that
+  run's checkpoints in `(created_at, id)` order, oldest first. The listing
+  takes an optional `status` filter plus `limit`/`offset` paging, and rejects a
+  negative bound with `ValueError`. Both reads run inside the adapter's
+  `no_autoflush` boundary, so a caller may read while holding unflushed work.
 - `GenerationRunLeaseReclamationPort` declares `fail_expired_leases`, which
   fails runs abandoned by a worker holding an expired execution lease. It is
   the only sub-port that reads two tables: a run is eligible only when no

@@ -1332,6 +1332,7 @@ classDiagram
         <<interface>>
         +create_checkpoint(Checkpoint checkpoint)
         +get_checkpoint(UUID checkpoint_id)
+        +list_checkpoints(UUID run_id, CheckpointStatus status, int limit, int offset)
         +respond_to_checkpoint(UUID checkpoint_id, CheckpointAction action)
     }
 
