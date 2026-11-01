@@ -618,6 +618,58 @@ Stop and escalate rather than improvising when any of these is reached.
       compare partial-index predicates, so two literals fail open — but the
       suggested `pg_indexes` comparison is worth having on its own and is now
       `tests/canonical_storage/test_expired_lease_index_definition.py`.
+      (Superseded by the next entry: with that comparison in place the two
+      literals fail closed, so the revision now freezes them.)
+
+- [x] (2026-11-01) Repairs following the formal hosted review: 5 inline
+      findings, one Testing pre-merge error, one Developer Documentation
+      warning, and one Observability warning.
+      - The Testing error's four gaps are now behavioural tests. The post-lock
+        lease recheck is reached by replacing the selection statement with the
+        result the stale snapshot would have produced
+        (`test_post_lock_recheck_spares_a_run_that_gained_a_checkpoint`), and
+        the same test carries an unaffected control run that *is* reclaimed,
+        so a recheck that dropped everything could not pass. The metrics sink
+        assertions now pin label sets: `{"status": "responded"}` on a
+        resolution, and `{}` on the gauge, the creation counter, and the
+        conflict counter. The migration's `responded` CHECK and the `RESTRICT`
+        foreign key are exercised through the database, with a positive
+        counterpart for the CHECK so the test shows the constraint
+        discriminates. A JSON array holding a non-string option is asserted to
+        raise the documented `TypeError` when read back.
+      - The logging gap is closed by
+        `review_checkpoint_refusals.refuse_already_terminal`, shared by the
+        domain-precondition and lost-race routes so the event is written once,
+        plus a duplicate-key event in `_insert_record`. `review_checkpoints.py`
+        is at 393 lines, under the Pylint cap.
+      - The revision now freezes its index name and predicate, and the
+        `generation_run_schema` docstring says so.
+      - Documentation gained the commit-before-backfill rule and
+        `autocommit_block` in ADR-024; worker-stop/fencing guidance and the
+        short-batch caveat beside the reclamation example; the explicit
+        clean-exit/no-implicit-commit rule for the unit of work; and the
+        Table 2 and interface reconciliation (`resolved_values`,
+        `ValueMetricsPort`, `status` label).
+      - Tracer spans and latency metrics are declined for this slice and
+        recorded in `Residual gaps`, owned by roadmap `2.6.5`: no production
+        caller exercises either operation yet.
+
+- [x] (2026-11-01) Three corrections found while closing the review round. The
+      new constraint tests pushed `test_review_checkpoints.py` past the
+      400-line Pylint cap, so the four database-enforced cases moved to
+      `tests/canonical_storage/test_review_checkpoint_constraints.py`; the
+      module split keeps each file's responsibility legible instead of
+      compressing tests to fit. The developers' guide claimed event appends
+      were **not** fenced after reclamation, which is false:
+      `update_run_status` and `append_event` both resolve the run through
+      `_require_mutable_run(lock=True)`, which raises `RunAlreadyTerminal`. The
+      paragraph now says the writes are rejected and that the cost of early
+      reclamation is a run failed out from under work it could have finished,
+      which is why fencing still comes first. Finally, the domain-precondition
+      refusal now has its own log assertion
+      (`test_domain_rejection_logs_the_refusal_event`): the metric counter
+      alone cannot say which checkpoint was refused, and the shared helper
+      would go untested if only the counter were pinned.
 
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
@@ -2085,6 +2137,16 @@ uv run pytest \
   marker and excluded from `make test`. That is a separate slice; it is named
   here so the gap is visible rather than assumed closed.
 - **`FOR UPDATE SKIP LOCKED` semantics are unverified**, for the same reason.
+- **The new SQL operations carry no tracer spans or latency metrics.** The
+  checkpoint store emits the bounded counters in Table 2 plus structured
+  transition logs, and each reclamation call logs one summary event; none of
+  them opens a span or times itself. `SqlAlchemyWorkflowCheckpointStore` is the
+  local precedent for latency metrics and `MonotonicClockPort`, so this is a
+  scope decision rather than an oversight: a span needs an owner that actually
+  runs the operation, and in this slice no production path creates checkpoints
+  or invokes reclamation. Instrumenting the pair belongs with the scheduler and
+  stuck-run detection in roadmap 2.6.5, where those operations acquire callers
+  worth tracing.
 - **Behavioural equivalence holds only under a single writer per run.** The
   in-memory adapter serializes with an in-process `asyncio.Lock` that no
   cross-connection adapter can reproduce.
@@ -2290,12 +2352,11 @@ violation.
    - `checkpoint_to_record` — writes `created_at` **explicitly**; the column's
      `server_default` must not win, or the entity returned by
      `create_checkpoint` disagrees with the persisted row.
-   - `apply_checkpoint_to_record(record, checkpoint) -> None` — copies mutable
-     fields onto an already-attached record in place. Without it the transition
-     methods cannot persist: `checkpoint_to_record` manufactures a *new*
-     record, and `session.add()` would raise on the primary key. The three
-     transition methods must route through this rather than mutating inline,
-     which is exactly the drift INV-CKPT-1 guards against.
+   - ~~`apply_checkpoint_to_record(record, checkpoint) -> None`~~ — **superseded
+     by D-16.** The compare-and-set statement writes column values; it never
+     loads and mutates a record, so this function has no correct caller. The
+     third export is `resolved_values`, which names the columns a resolution
+     writes once, for both the statement and the returned entity.
 5. **Adapter.** Add `episodic/canonical/storage/review_checkpoints.py` with
    `SqlAlchemyReviewCheckpointStore(session, *, runtime=None, metrics=None)`.
    It must:
@@ -2320,8 +2381,8 @@ violation.
      events as the in-memory mixin" would wrongly give both adapters the same
      prefix.
    - Increment the metrics in `Interfaces and dependencies` through the
-     existing `MetricsPort`, as `SqlAlchemyWorkflowCheckpointStore` already
-     does.
+     existing `ValueMetricsPort`, as `SqlAlchemyWorkflowCheckpointStore`
+     already does.
    - `flush()` but never `commit()`.
 6. **Compose.** Add
    `episodic/canonical/storage/generation_run_port_adapter.py` with
@@ -3247,11 +3308,12 @@ In `episodic/canonical/storage/review_checkpoint_mappers.py`:
 ```python
 def checkpoint_from_record(record: ReviewCheckpointRecord) -> Checkpoint: ...
 def checkpoint_to_record(checkpoint: Checkpoint) -> ReviewCheckpointRecord: ...
-def apply_checkpoint_to_record(
-    record: ReviewCheckpointRecord,
-    checkpoint: Checkpoint,
-) -> None: ...
+def resolved_values(checkpoint: Checkpoint) -> dict[str, object]: ...
 ```
+
+`resolved_values` replaces the originally planned `apply_checkpoint_to_record`;
+D-16 records why the compare-and-set statement takes a column mapping instead
+of mutating the loaded record.
 
 In `episodic/canonical/storage/review_checkpoints.py`:
 
@@ -3264,7 +3326,7 @@ class SqlAlchemyReviewCheckpointStore:
         session: AsyncSession,
         *,
         runtime: GenerationRunStorageRuntime | None = None,
-        metrics: MetricsPort | None = None,
+        metrics: ValueMetricsPort | None = None,
     ) -> None: ...
 ```
 
@@ -3287,15 +3349,19 @@ In `episodic/canonical/unit_of_work_protocols.py`:
 generation_runs: GenerationRunPort
 ```
 
-Metrics to emit through the existing `MetricsPort`, following
+Metrics to emit through `ValueMetricsPort`, following
 `SqlAlchemyWorkflowCheckpointStore` and the launcher:
 
-| Metric                                      | Detects                                               |
-| ------------------------------------------- | ----------------------------------------------------- |
-| `review_checkpoint_created_total`           | Checkpoints created                                   |
-| `review_checkpoint_resolved_total{action}`  | Loss — created without a matching terminal transition |
-| `review_checkpoint_open_gauge`              | Stuck reviews, before a reviewer complains            |
-| `review_checkpoint_terminal_conflict_total` | Two reviewers racing, or a client retry storm         |
+| Metric                                      | Detects                                       |
+| ------------------------------------------- | --------------------------------------------- |
+| `review_checkpoint_created_total`           | Checkpoints created                           |
+| `review_checkpoint_resolved_total{status}`  | Terminations by resulting status              |
+| `review_checkpoint_open_gauge`              | Stuck reviews, before a reviewer complains    |
+| `review_checkpoint_terminal_conflict_total` | Two reviewers racing, or a client retry storm |
+
+The resolution label is `status`, carrying the terminal `CheckpointStatus` the
+checkpoint reached, not `action`: `CheckpointAction` is the reviewer's choice,
+and a timed-out or cancelled checkpoint has none.
 
 Table 2: Metrics emitted by the review-checkpoint store.
 

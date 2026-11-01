@@ -22,7 +22,7 @@ from episodic.canonical.domain import (
     CheckpointStatus,
 )
 from episodic.canonical.generation_run_errors import CheckpointAlreadyTerminal
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage import SqlAlchemyUnitOfWork, review_checkpoint_refusals
 from episodic.canonical.storage.review_checkpoint_models import ReviewCheckpointRecord
 from episodic.canonical.storage.review_checkpoints import (
     SqlAlchemyReviewCheckpointStore,
@@ -87,9 +87,17 @@ class _RecordingValueMetrics:
         """Return counter names in emission order."""
         return [name for name, _ in self.counters]
 
+    def counter_labels(self, name: str) -> list[dict[str, str]]:
+        """Return one counter's label sets in emission order."""
+        return [labels for metric, labels in self.counters if metric == name]
+
     def value_series(self, name: str) -> list[float]:
         """Return one metric's observed values in emission order."""
         return [value for metric, value, _ in self.values if metric == name]
+
+    def value_labels(self, name: str) -> list[dict[str, str]]:
+        """Return one observed metric's label sets in emission order."""
+        return [labels for metric, _, labels in self.values if metric == name]
 
 
 def _approval() -> CheckpointResponse:
@@ -156,6 +164,15 @@ async def test_open_gauge_reports_the_global_backlog(
     assert metrics.value_series(_METRIC_OPEN) == [1.0, 2.0, 1.0], (
         "the gauge must count every run's open checkpoints, not the last run's"
     )
+    assert metrics.value_labels(_METRIC_OPEN) == [{}, {}, {}], (
+        "the gauge is global, so any label would scope it to one run"
+    )
+    assert metrics.counter_labels(_METRIC_CREATED) == [{}, {}], (
+        "creation is counted without labels; it has no terminal status yet"
+    )
+    assert metrics.counter_labels(_METRIC_RESOLVED) == [{"status": "responded"}], (
+        "a resolution is labelled by the terminal status it reached"
+    )
 
 
 @pytest.mark.asyncio
@@ -182,6 +199,9 @@ async def test_domain_rejection_counts_as_a_terminal_conflict(
 
     assert metrics.counter_names().count(_METRIC_TERMINAL_CONFLICT) == 1, (
         "an ordinary terminal rejection is a retry storm and must be counted"
+    )
+    assert metrics.counter_labels(_METRIC_TERMINAL_CONFLICT) == [{}], (
+        "the conflict counter aggregates both refusal routes, so it is unlabelled"
     )
 
 
@@ -213,6 +233,9 @@ async def test_lost_compare_and_set_counts_as_a_terminal_conflict(
 
     assert metrics.counter_names().count(_METRIC_TERMINAL_CONFLICT) == 1, (
         "the conditional-update conflict route must keep counting"
+    )
+    assert metrics.counter_labels(_METRIC_TERMINAL_CONFLICT) == [{}], (
+        "the lost compare-and-set route shares the unlabelled counter"
     )
 
 
@@ -259,3 +282,50 @@ async def test_gauge_count_is_skipped_without_a_metrics_sink(
         f"an unwatched gauge must not cost a query, but ran: {without_sink}"
     )
     assert with_sink != [], "a configured sink must still receive the open gauge"
+
+
+@pytest.mark.asyncio
+async def test_domain_rejection_logs_the_refusal_event(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The domain-precondition refusal emits the same warning a lost race does.
+
+    The counter alone cannot be triaged -- it says a retry storm happened but
+    not which checkpoint or run. Both refusal routes share one emitter, so this
+    asserts the domain route's event name and payload rather than trusting that
+    the shared helper is reached.
+    """
+    committed = await commit_run_and_checkpoint(session_factory)
+    events: list[tuple[str, str, dict[str, object]]] = []
+
+    def record_event(level: str, message: str, **fields: object) -> None:
+        events.append((level, message, fields))
+
+    monkeypatch.setattr(review_checkpoint_refusals, "_log_event", record_event)
+
+    async with session_factory() as session:
+        store = SqlAlchemyReviewCheckpointStore(session)
+        await store.respond_to_checkpoint(
+            committed.checkpoint_id,
+            response=_approval(),
+        )
+        await session.commit()
+        events.clear()
+        with pytest.raises(CheckpointAlreadyTerminal):
+            await store.respond_to_checkpoint(
+                committed.checkpoint_id,
+                response=_approval(),
+            )
+        await session.rollback()
+
+    assert [event[1] for event in events] == [
+        "sql_review_checkpoint_store.respond_checkpoint_already_terminal"
+    ], f"the refusal must be logged, not only counted: {events!r}"
+    assert events[0][0] == "warning", "a refusal is a warning-level event"
+    assert events[0][2]["checkpoint_id"] == str(committed.checkpoint_id), (
+        "the event must name the refused checkpoint so it can be triaged"
+    )
+    assert events[0][2]["status"] == "responded", (
+        "the event must report the terminal status the row already held"
+    )

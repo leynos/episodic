@@ -5,18 +5,20 @@ downgrade costs query time rather than data.
 
 The index is partial on ``status = 'running'``: a run holds an execution lease
 only while it is running, so the predicate keeps the index small as terminal
-runs accumulate without bound. ``GENERATION_RUN_EXPIRED_LEASE_PREDICATE_SQL`` is
-imported rather than spelled out here because ``GenerationRunRecord`` mirrors
-this index and the two declarations must not drift.
+runs accumulate without bound.
+
+The name and predicate are spelled out here rather than imported from
+``generation_run_schema``. A revision records the schema as it was applied, so
+editing the ORM declaration must not rewrite history. Guarding the duplication
+is instead the job of
+``tests/canonical_storage/test_expired_lease_index_definition.py``, which reads
+the deployed index back from PostgreSQL and fails when it no longer matches
+that declaration.
 """
 
 import sqlalchemy as sa
 
 from alembic import op
-from episodic.canonical.storage.generation_run_schema import (
-    GENERATION_RUN_EXPIRED_LEASE_INDEX,
-    GENERATION_RUN_EXPIRED_LEASE_PREDICATE_SQL,
-)
 
 revision = "20261020_000015"
 down_revision = "20261020_000014"
@@ -27,16 +29,16 @@ depends_on = None
 def upgrade() -> None:
     """Create the expired-lease partial index."""
     op.create_index(
-        GENERATION_RUN_EXPIRED_LEASE_INDEX,
+        "ix_generation_runs_expired_lease",
         "generation_runs",
         ["lease_expires_at"],
-        postgresql_where=sa.text(GENERATION_RUN_EXPIRED_LEASE_PREDICATE_SQL),
+        postgresql_where=sa.text("status = 'running'"),
     )
 
 
 def downgrade() -> None:
     """Drop the expired-lease partial index."""
     op.drop_index(
-        GENERATION_RUN_EXPIRED_LEASE_INDEX,
+        "ix_generation_runs_expired_lease",
         table_name="generation_runs",
     )

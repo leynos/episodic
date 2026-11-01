@@ -205,12 +205,14 @@ class GenerationRunLeaseReclamationMixin(_MixinBase):
         committed while the statement was waiting; without the recheck such a
         run would be failed while it was suspended awaiting review. The recheck
         preserves the selection order and may return fewer than ``limit`` runs,
-        which the port permits. **No test in this repository can observe the
-        recheck**: under ``py-pglite`` AXIOM-3 serializes every session, so no
-        lock wait ever occurs and the two checks cannot disagree.
+        which the port permits.
 
-        The extra round trip is paid even when nothing changed, for the same
-        reason: no test can flag the window this exists to close.
+        Under ``py-pglite`` AXIOM-3 serializes every session, so no lock wait
+        ever occurs and the two checks cannot disagree on their own.
+        ``test_post_lock_recheck_spares_a_run_that_gained_a_checkpoint``
+        reaches the recheck by replacing the selection with the statement the
+        stale snapshot would have produced, which is the only deterministic
+        way to observe it here.
 
         Returns
         -------

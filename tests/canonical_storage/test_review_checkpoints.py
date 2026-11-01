@@ -13,8 +13,6 @@ import typing as typ
 import uuid
 
 import pytest
-import sqlalchemy as sa
-from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import (
     Checkpoint,
@@ -301,19 +299,3 @@ async def test_uncommitted_staged_add_warns_before_it_is_discarded(
         "canonical_unit_of_work.closed_with_uncommitted_changes"
     ], "closing with a staged add must warn, not discard work silently"
     assert events[0][0] == "warning", "the uncommitted-work event must be a warning"
-
-
-@pytest.mark.asyncio
-async def test_options_must_be_a_json_array(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """A scalar written into options is rejected by the CHECK constraint."""
-    committed = await support.commit_run_and_checkpoint(session_factory)
-    statement = sa.text(
-        "UPDATE review_checkpoints SET options = '\"approve\"'::jsonb "
-        "WHERE id = :checkpoint_id"
-    )
-
-    with pytest.raises(IntegrityError, match="ck_review_checkpoints_options_array"):
-        async with session_factory() as session, session.begin():
-            await session.execute(statement, {"checkpoint_id": committed.checkpoint_id})

@@ -1,10 +1,13 @@
 """Shared schema constants for durable generation-run storage.
 
 The expired-lease index is declared twice: once in the Alembic migration that
-creates it and once in ``GenerationRunRecord.__table_args__``. Both import the
-values below rather than repeating a literal, so the SQL predicate cannot drift
-from the value the ORM mirrors -- drift that ``make check-migrations`` would not
-catch, because Alembic's autogenerate does not compare partial-index predicates.
+creates it and once in ``GenerationRunRecord.__table_args__``. The migration
+keeps its own literals, because a revision records the schema as it was
+applied. These are the values the ORM mirrors, and
+``tests/canonical_storage/test_expired_lease_index_definition.py`` compares
+them with the deployed index so the pair cannot drift -- drift that
+``make check-migrations`` would not catch, because Alembic's autogenerate does
+not compare partial-index predicates.
 """
 
 from episodic.canonical.domain import GenerationRunStatus

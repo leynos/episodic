@@ -17,13 +17,18 @@ import dataclasses as dc
 import typing as typ
 
 import pytest
+import sqlalchemy as sa
 
 from episodic.canonical.domain import (
     GenerationEvent,
     GenerationRun,
     GenerationRunStatus,
 )
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage import (
+    SqlAlchemyUnitOfWork,
+    generation_run_lease_reclamation,
+)
+from episodic.canonical.storage.generation_run_models import GenerationRunRecord
 from tests.canonical_storage._generation_run_lease_support import (
     EXPIRED_LEASE,
     FUTURE_LEASE,
@@ -31,6 +36,7 @@ from tests.canonical_storage._generation_run_lease_support import (
     LEASE_ERROR_MESSAGE,
     checkpoint_for,
     claim_run,
+    claimed_expired_run,
     create_runs,
     end_run,
     reclaim,
@@ -214,6 +220,62 @@ def _assert_reclaimed(
     assert run.error_message == LEASE_ERROR_MESSAGE, f"{name}: {run.error_message}"
     assert run.current_node is None, f"{name}: node {run.current_node!r}"
     assert run.ended_at == NOW, f"{name}: ended_at {run.ended_at!r}"
+
+
+@pytest.mark.asyncio
+async def test_post_lock_recheck_spares_a_run_that_gained_a_checkpoint(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A candidate that gains a checkpoint after selection is not failed.
+
+    ``py-pglite`` serializes every session, so the selection statement never
+    waits on a run-row lock and the recheck is unreachable through the ordinary
+    predicate. Recording the run after a checkpoint committed, then replacing
+    the selection with a statement that still names it, is the deterministic
+    stand-in for the stale snapshot: only the recheck can see the difference.
+    """
+    spared = await claimed_expired_run(session_factory)
+    reclaimed_control = await claimed_expired_run(session_factory)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.generation_runs.create_checkpoint(checkpoint_for(spared.id))
+        await uow.commit()
+
+    selection_calls: list[int] = []
+
+    def _stale_selection(
+        *,
+        now: dt.datetime,
+        limit: int,
+    ) -> sa.Select[tuple[GenerationRunRecord]]:
+        """Return both runs as the pre-checkpoint snapshot would have."""
+        del now
+        selection_calls.append(limit)
+        return sa.select(GenerationRunRecord).where(
+            GenerationRunRecord.id.in_((spared.id, reclaimed_control.id))
+        )
+
+    monkeypatch.setattr(
+        generation_run_lease_reclamation,
+        "expired_lease_candidates",
+        _stale_selection,
+    )
+
+    reclaimed = await reclaim(session_factory)
+
+    assert selection_calls == [100], (
+        "the primitive must have used the stale selection, not its own predicate"
+    )
+    assert {run.id for run in reclaimed} == {reclaimed_control.id}, (
+        "only the run without an open checkpoint may be reclaimed"
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        observed = await uow.generation_runs.get_run(spared.id)
+        events = await uow.generation_runs.list_events(spared.id)
+    assert observed is not None, "the spared run must still be stored"
+    assert observed.status is GenerationRunStatus.RUNNING, observed.status
+    assert observed.ended_at is None, observed.ended_at
+    assert events == (), f"the spared run must not gain a failure event: {events!r}"
 
 
 @pytest.mark.parametrize("limit", [0, -1])

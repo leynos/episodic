@@ -1,13 +1,12 @@
 """PostgreSQL adapter for user-facing generation-run review checkpoints.
 
 Every state change routes through the domain transition on :class:`Checkpoint`
-and persists what it returned. The adapter owns no lifecycle rules: INV-CKPT-1
-exists because two implementations of one rule set drift.
+and persists what it returned; the adapter owns no lifecycle rules, because
+INV-CKPT-1 exists to stop two implementations of one rule set drifting.
 
-Transitions use compare-and-set, not ``SELECT ... FOR UPDATE`` (D-10, ADR-018);
-``status = 'created'`` is the control, and the harness's serialization makes
-its outcome sequential. Core ``UPDATE``s leave a stale session copy, so reads
-pass ``populate_existing``.
+Transitions use compare-and-set, not ``SELECT ... FOR UPDATE`` (D-10, ADR-018):
+``status = 'created'`` is the control. Core ``UPDATE``s leave a stale session
+copy, so reads pass ``populate_existing``.
 """
 
 import typing as typ
@@ -42,6 +41,7 @@ from .review_checkpoint_metrics import (
     record_terminal_conflict,
 )
 from .review_checkpoint_models import ReviewCheckpointRecord
+from .review_checkpoint_refusals import refuse_already_terminal
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -69,11 +69,10 @@ class SqlAlchemyReviewCheckpointStore:
     a reviewer's decision. Any other violation propagates as ``IntegrityError``,
     since a foreign-key or CHECK failure is a different fault.
 
-    Every terminal transition is one compare-and-set guarded by
-    ``status = 'created'`` rather than by a row lock, so a losing writer learns
-    it lost from `rowcount`, not from lock ordering. The named domain transition
-    runs first and its result is persisted, so the adapter reimplements no
-    lifecycle rule and a rejection leaves the row untouched. A transition raises
+    Each terminal transition is one compare-and-set guarded by
+    ``status = 'created'``, so a losing writer learns it lost from `rowcount`.
+    The domain transition runs first and its result is persisted, so the
+    adapter reimplements no lifecycle rule. A transition raises
     :class:`CheckpointNotFound` when no row holds the identifier, or
     :class:`CheckpointAlreadyTerminal` when another writer resolved it first.
     """
@@ -164,6 +163,12 @@ class SqlAlchemyReviewCheckpointStore:
         except IntegrityError as exc:
             if constraint_name(exc) != _CHECKPOINT_PKEY_CONSTRAINT:
                 raise
+            _log_event(
+                "warning",
+                "sql_review_checkpoint_store.create_checkpoint_duplicate",
+                checkpoint_id=str(checkpoint.id),
+                run_id=str(checkpoint.generation_run_id),
+            )
             raise CheckpointAlreadyExists(checkpoint.id) from exc
         return record
 
@@ -304,9 +309,9 @@ class SqlAlchemyReviewCheckpointStore:
         try:
             updated = transition(checkpoint_from_record(record))
         except CheckpointAlreadyTerminal:
-            # The domain-precondition route; `_raise_lost_race` counts the other.
+            # The domain-precondition route; `_raise_lost_race` reports the other.
             record_terminal_conflict(self._metrics)
-            raise
+            refuse_already_terminal(event, record, fields)
         result = await self._session.execute(
             sa
             .update(ReviewCheckpointRecord)
@@ -319,10 +324,10 @@ class SqlAlchemyReviewCheckpointStore:
             )
             .values(**resolved_values(updated))
         )
-        cursor_result = typ.cast("CursorResult[object]", result)
-        if cursor_result.rowcount != 1:
+        if typ.cast("CursorResult[object]", result).rowcount != 1:
             await self._raise_lost_race(checkpoint_id, event=event, fields=fields)
-        await self._refresh_resolved(record)
+        # Reconcile the session's copy with the row just written.
+        await self._session.refresh(record)
         record_checkpoint_resolved(
             self._metrics,
             updated.status,
@@ -337,10 +342,6 @@ class SqlAlchemyReviewCheckpointStore:
             **fields,
         )
         return updated
-
-    async def _refresh_resolved(self, record: ReviewCheckpointRecord) -> None:
-        """Reconcile the session's copy with the row just written."""
-        await self._session.refresh(record)
 
     async def _count_open(self) -> float:
         """Return the unresolved count across all runs; the gauge has no labels."""
@@ -366,14 +367,14 @@ class SqlAlchemyReviewCheckpointStore:
         The re-read is the point of the compare-and-set shape: `rowcount == 0`
         alone cannot say whether the row vanished or was already resolved.
         ``populate_existing`` makes it a re-read rather than an identity map hit
-        reporting a status the row never held.
+        reporting a status the row never held. A surviving row goes through the
+        shared refusal route, which reports the terminal conflict and raises
+        there.
 
         Raises
         ------
         CheckpointNotFound
             If the row is gone.
-        CheckpointAlreadyTerminal
-            If another writer resolved it first.
         """
         current = await self._session.get(
             ReviewCheckpointRecord,
@@ -389,12 +390,4 @@ class SqlAlchemyReviewCheckpointStore:
             )
             raise CheckpointNotFound(checkpoint_id)
         record_terminal_conflict(self._metrics)
-        _log_event(
-            "warning",
-            f"sql_review_checkpoint_store.{event}_already_terminal",
-            checkpoint_id=str(checkpoint_id),
-            run_id=str(current.generation_run_id),
-            status=current.status.value,
-            **fields,
-        )
-        raise CheckpointAlreadyTerminal(checkpoint_id)
+        refuse_already_terminal(event, current, fields)

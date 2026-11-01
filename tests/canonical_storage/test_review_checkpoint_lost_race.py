@@ -24,6 +24,7 @@ from episodic.canonical.domain import (
 from episodic.canonical.generation_run_errors import CheckpointAlreadyTerminal
 from episodic.canonical.storage import (
     SqlAlchemyReviewCheckpointStore,
+    review_checkpoint_refusals,
     review_checkpoints,
 )
 from episodic.canonical.storage.review_checkpoint_models import ReviewCheckpointRecord
@@ -46,7 +47,10 @@ def _capture_log_events(
     def record_event(level: str, message: str, **fields: object) -> None:
         events.append((level, message, fields))
 
+    # Both refusal routes report through the shared helper, so the refusal
+    # event would be missed if only the store module were patched.
     monkeypatch.setattr(review_checkpoints, "_log_event", record_event)
+    monkeypatch.setattr(review_checkpoint_refusals, "_log_event", record_event)
     return events
 
 

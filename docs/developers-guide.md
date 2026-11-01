@@ -1210,6 +1210,12 @@ The `SqlAlchemyUnitOfWork` manages transaction boundaries:
   same transaction.
 - When the context manager exits with an unhandled exception, the unit of work
   rolls back automatically.
+- When it exits cleanly, the unit of work does **not** commit. Pending writes
+  are discarded, and the close emits a structured
+  `canonical_unit_of_work.closed_with_uncommitted_changes` warning so the loss
+  is visible rather than silent. Call `commit()` explicitly before leaving the
+  context: the warning is a safety net, and it fires only after the changes are
+  already unrecoverable.
 
 Database-level constraints (unique slugs, foreign keys, and CHECK constraints
 such as the weight bound on source documents) are enforced by Postgres and raise
@@ -2339,17 +2345,33 @@ async with SqlAlchemyUnitOfWork(session_factory) as uow:
     await uow.commit()
 ```
 
+Reclaim only after the worker that held the lease can no longer finish its run.
+An expired lease shows that a worker stopped heartbeating; it does not show
+that the worker stopped running. A paused, partitioned, or restarted worker can
+resume after its lease lapsed and keep writing to the same run. Stop every
+worker that could still hold the run, or fence it so its later writes cannot
+land, before reclaiming. Once the run is `failed`, the store's mutating paths
+(`update_run_status` and `append_event`) resolve it through
+`_require_mutable_run`, which locks the row and raises `RunAlreadyTerminal`, so
+a resuming worker's later writes are rejected rather than corrupting the
+record. That is still not a substitute for stopping the worker: reclaiming too
+early fails a run out from under work that could have finished, which is the
+outcome fencing prevents.
+
 Each call reclaims at most `limit` runs, oldest expiry first, and returns the
 runs it moved. A call returning exactly `limit` runs has more work waiting, so
-drain a backlog by re-invoking until the returned tuple is empty; a call
-returning fewer than `limit` has reached the end. The call appends each
-`run.failed` event and its terminal update in one transaction and writes one
-instant, `now`, to the event's `occurred_at`, `ended_at`, and `updated_at`. A
-non-positive `limit` raises `ValueError`. Both adapters expose the method: the
-SQL adapter reclaims, while the in-memory adapter necessarily returns `()`
-because `GenerationRun` carries no lease field — its emptiness is a divergence,
-not a contract, so a shared suite must not treat agreement between the two as
-evidence.
+drain a backlog by re-invoking. A shorter or empty result does not prove the
+backlog is empty: a run selected under the statement's snapshot can be dropped
+by the post-lock checkpoint recheck when a reviewer's checkpoint committed
+while the statement waited for the run lock, which shrinks the batch without
+ending the queue. Treat the returned count as a lower bound, not a completion
+signal. The call appends each `run.failed` event and its terminal update in one
+transaction and writes one instant, `now`, to the event's `occurred_at`,
+`ended_at`, and `updated_at`. A non-positive `limit` raises `ValueError`. Both
+adapters expose the method: the SQL adapter reclaims, while the in-memory
+adapter necessarily returns `()` because `GenerationRun` carries no lease field
+— its emptiness is a divergence, not a contract, so a shared suite must not
+treat agreement between the two as evidence.
 
 Nothing schedules this method yet. No reaper, worker, or cron entry invokes it,
 so during this slice it runs only when an operator or test calls it, and a

@@ -125,9 +125,17 @@ well as a mixin would.
 - **Widening either enum later costs more than it looks.**
   `ALTER TYPE … ADD VALUE` *is* transactional on PostgreSQL 12 and later, so
   the upgrade runs inside an ordinary migration. But the new value cannot be
-  used in the same transaction that added it, so a widening plus a backfill
-  must be **two** migrations; and there is no `DROP VALUE`, so `downgrade()`
-  requires a four-statement type swap:
+  used until the transaction that added it commits, and that holds when an
+  operator upgrades straight to head as well as when revisions are applied one
+  at a time. The widening revision must therefore **commit before the backfill
+  revision runs**: a widening plus a backfill must be **two** migrations, each
+  with its own transaction and its own `downgrade()`. A single migration that
+  must both add the value and use it has to wrap the addition in Alembic's
+  `autocommit_block()`, which suspends the migration's transaction, applies the
+  value, and starts a new transaction afterwards; splitting the revisions is
+  still preferable, because it makes the boundary visible in the migration
+  graph. There is no `DROP VALUE`, so `downgrade()` requires a four-statement
+  type swap:
 
   ```sql
   CREATE TYPE review_checkpoint_status_new AS ENUM (...);
