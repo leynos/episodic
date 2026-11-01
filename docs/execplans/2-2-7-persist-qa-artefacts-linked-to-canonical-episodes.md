@@ -7,7 +7,7 @@ be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
 `EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
-finding through round 19 repaired and each repair gate-swept before the next
+finding through round 20 repaired and each repair gate-swept before the next
 round.
 
 ## Purpose / big picture
@@ -1198,6 +1198,31 @@ Stop and escalate when any of these is reached.
     downgrade, and ADR 024 states the rationale. Because this is the first
     migration change since the round-13 sweep, the repair is re-swept with
     `check-migrations` included.
+  - Gate evidence on the round-19 repair, pinned at `3e13bf0a`, seven targets
+    sequentially on a clean tree, with `git rev-parse HEAD` and
+    `git status --short` unchanged before gate 1, after every gate, and after
+    the CodeRabbit run: `check-fmt` (ruff 865 files, mdtablefix 129 unchanged),
+    `check-migrations` (16 upgrades applied through `20261031_000014`, empty
+    `compare_metadata` diff), `typecheck` (`ty 0.0.32`, clean), `lint` with all
+    stages green (Hecate, Ruff, Pylint 10.00/10, both df12 lint passes,
+    ambrleaks, Skylos, nose duplication gate with 30 reasoned exceptions),
+    `markdownlint` (129 files, 0 issues), `nixie`, and `make test` — 1950
+    passed, 3 skipped, 30 warnings, 251.50 s, 67 snapshots. The migration gate
+    is upgrade-only and `compare_metadata` excludes foreign-key constraints on
+    the three tables in its cycle warning, so it confirms the index appears in
+    the metadata diff but does not itself prove FK-constraint parity; the model
+    and migration declare the same `sa.Index`, which is what the comparison
+    covers.
+  - Post-delivery CodeRabbit CLI review round 20 at `3e13bf0a` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 83 reviewed paths, no rate limit). One
+    `minor` documentation finding, upheld and repaired: the deferred-
+    implementation example in `docs/developers-guide.md`, three passages of
+    this plan, and the six `[tool.skylos.whitelist.documented]` reasons in
+    `pyproject.toml` credited the LangGraph QA graph builders to roadmap items
+    `2.2.5` and `2.2.6`. `docs/roadmap.md` defines `2.2.5` as the unchecked
+    Caesura evaluator and `2.2.1` as Pedante, whose delivery commit
+    (`cdcf922e`) carries the plan for `2.2.1`. Every occurrence of the pairing
+    now reads `2.2.1` and `2.2.6`; unrelated `2.2.5` references are untouched.
 
 ## Surprises & discoveries
 
@@ -1348,7 +1373,7 @@ Stop and escalate when any of these is reached.
   rule was replaced by the documented temporary exceptions above, whose reasons
   state the absence of a caller, the owning roadmap item, and the condition
   that deletes them. Deleting the builders was rejected — they are the accepted
-  deliverable of completed roadmap items `2.2.5` and `2.2.6` — and wiring them
+  deliverable of completed roadmap items `2.2.1` and `2.2.6` — and wiring them
   is excluded by this plan's first constraint.
 - Observation (execution, 2026-10-30): the re-review accepted the correction to
   the reason text but kept one `major` finding, asking for the symbols to be
@@ -1624,7 +1649,7 @@ Stop and escalate when any of these is reached.
   for cases an entry-point rule cannot describe, and it carries the owner,
   tracking reference, and expiry condition that policy requires. Deleting the
   symbols was rejected because they are the accepted deliverable of completed
-  roadmap items `2.2.5` and `2.2.6`; wiring them is excluded by this plan's
+  roadmap items `2.2.1` and `2.2.6`; wiring them is excluded by this plan's
   first hard constraint. Because the guide had no policy for retaining
   delivered-but-unwired behaviour, this decision also adds one — *Retaining
   deferred implementation* in `docs/developers-guide.md` — and the six reasons
@@ -2030,41 +2055,48 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Nineteen review
-  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, 14, 15, 16, 17, 18, and 19
-  each raised at least one finding that was verified against source and
-  repaired in its own commit; round 9 completed with none; and round 12
-  reviewed this closing record and is answered by the corrections in it. Round
-  17's single minor finding was a test-isolation defect: the finding-ceiling
-  test shared one identifier across every synthetic finding, so a loosened
-  match would let the duplicate-id rejection satisfy it. Round 18's single
-  minor finding was an ordering defect in the storage read path, where findings
-  were validated before the schema version was checked. Round 19's single
-  trivial finding observed that the generation-run foreign key had no index:
-  PostgreSQL indexes no referencing column, every evaluation index leads with
-  `episode_id`, and the column nulls on run-history purge, so a purge scanned
-  the whole table once per deleted run. The partial index
-  `ix_qa_evaluations_generation_run_id` now covers the non-null values in the
-  migration, the model, and the downgrade, and ADR 024's retention posture
-  records why. Round 13's five minor findings included the one production
-  repair after the rebase: `record_evaluation` now flushes a caller's pending
-  state outside its failure handler, so a caller-owned constraint violation is
-  not counted as a QA recording failure.
+  and a CodeRabbit CLI review of the committed milestone diff. Twenty review
+  rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–20 each raised at least
+  one finding that was verified against source and repaired in its own commit;
+  round 9 completed with none; and round 12 reviewed this closing record and is
+  answered by the corrections in it. Round 17's single minor finding was a
+  test-isolation defect: the finding-ceiling test shared one identifier across
+  every synthetic finding, so a loosened match would let the duplicate-id
+  rejection satisfy it. Round 18's single minor finding was an ordering defect
+  in the storage read path, where findings were validated before the schema
+  version was checked. Round 19's single trivial finding observed that the
+  generation-run foreign key had no index: PostgreSQL indexes no referencing
+  column, every evaluation index leads with `episode_id`, and the column nulls
+  on run-history purge, so a purge scanned the whole table once per deleted
+  run. The partial index `ix_qa_evaluations_generation_run_id` now covers the
+  non-null values in the migration, the model, and the downgrade, and ADR 024's
+  retention posture records why. Round 20's single minor finding corrected the
+  deferred- implementation example: the developers' guide, this plan, and the
+  six Skylos whitelist reasons credited the LangGraph graph builders to roadmap
+  items `2.2.5` and `2.2.6`, but `2.2.5` is the unchecked Caesura evaluator;
+  the Pedante builder is `2.2.1`, as its delivery commit's plan shows, so every
+  occurrence of the pairing now reads `2.2.1` and `2.2.6`. Round 13's five
+  minor findings included the one production repair after the rebase:
+  `record_evaluation` now flushes a caller's pending state outside its failure
+  handler, so a caller-owned constraint violation is not counted as a QA
+  recording failure.
 - The delivered code is attested by the sweeps at `a54223c7` (1949 tests),
-  `0c4c566e` (1950 tests), and `da811759` (1950 tests), the heads that carry
-  the round-15, round-16, and round-17 repairs, all green with a clean tree on
-  all six deterministic gates: check-fmt, markdownlint (including the
-  en-GB-oxendict spelling gate), nixie, typecheck, lint (Pylint 10.00/10, df12
-  lints, ambrleaks, Skylos, and the duplication gate with 30 reasoned
-  exceptions), and 67 snapshots.
+  `0c4c566e`, `da811759`, and `b3c174eb` (1950 tests each), the heads that
+  carry the round-15 through round-18 repairs and their follow-up, all green
+  with a clean tree on all six deterministic gates: check-fmt, markdownlint
+  (including the en-GB-oxendict spelling gate), nixie, typecheck, lint (Pylint
+  10.00/10, df12 lints, ambrleaks, Skylos, and the duplication gate with 30
+  reasoned exceptions), and 67 snapshots. The head that carries the round-19
+  index repair, `3e13bf0a`, is green on those six plus `check-migrations`.
 - The migration gate ran `check-migrations` at `d2a53f1c`, the head that
   carries round 13's repairs, whose sweep covered all seven gates and passed
-  1945 tests with 67 snapshots. Round 19 is the first change to the migration
-  after that head, so its repair sweep re-runs `check-migrations` alongside the
-  six deterministic gates. The earlier sweeps at the rebased head `314b0fde`
-  (1944 tests), and at `14b882a8` (1943 tests) and `c1d9ad61` (1944 tests) on
-  the same gates plus `check-migrations`, are green; the rebase changed no
-  tracked file relative to those heads, and every patch replayed identically.
+  1945 tests with 67 snapshots, and again at `3e13bf0a`, which adds the
+  generation-run index: 16 upgrades applied through `20261031_000014` and an
+  empty `compare_metadata` diff. The earlier sweeps at the rebased head
+  `314b0fde` (1944 tests), and at `14b882a8` (1943 tests) and `c1d9ad61` (1944
+  tests) on the same gates plus `check-migrations`, are green; the rebase
+  changed no tracked file relative to those heads, and every patch replayed
+  identically.
 - Every later commit that carries this record is gate-swept at its own head
   before publication. The round-17 and round-18 repair commits each change code
   alongside this record, so each is swept on all six deterministic gates rather
@@ -4098,7 +4130,7 @@ objection is upheld. The rule is replaced by six named exceptions added with
 name roadmap item `4.4.1` as the owner, and state that the entries are deleted
 when that wiring lands. Both remedies the review proposed — delete the symbols,
 or add the runtime wiring — are inadmissible here: the symbols are the accepted
-deliverable of completed roadmap items `2.2.5` and `2.2.6`, and this plan's
+deliverable of completed roadmap items `2.2.1` and `2.2.6`, and this plan's
 first constraint forbids wiring evaluators into the generation-run path. The
 third finding was valid and is repaired: `_prefixes_overlap` now treats two
 groups sharing an identical Hecate prefix as a shadowing, not just dotted

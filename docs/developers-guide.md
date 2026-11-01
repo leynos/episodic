@@ -403,7 +403,7 @@ entries when the dynamic boundary disappears.
 
 A completed roadmap item sometimes delivers a symbol whose only consumer is a
 named, still-open roadmap item. The LangGraph QA graph builders and their node
-callbacks, delivered by roadmap items `2.2.5` and `2.2.6` and awaiting the
+callbacks, delivered by roadmap items `2.2.1` and `2.2.6` and awaiting the
 run-path wiring of item `4.4.1`, are the current example. Such a symbol has no
 caller at all, so an entry-point rule would assert a boundary that does not
 exist, and deleting it would discard accepted prior work. Keep it, and exempt
