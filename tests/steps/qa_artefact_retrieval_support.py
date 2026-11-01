@@ -10,7 +10,7 @@ import dataclasses as dc
 import typing as typ
 import uuid
 
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 
 from episodic.canonical.qa_artefacts import (
     MAX_CODE_CHARS,
@@ -143,18 +143,29 @@ async def pretend_a_newer_release_wrote_the_row(
     """
     evaluation = uuid.UUID(evaluation_id)
     async with session_factory() as session:
+        # Counting first keeps the setup assertion independent of
+        # ``Result.rowcount``, which SQLAlchemy only declares for cursor
+        # results rather than for the generic ``Result`` that
+        # ``AsyncSession.execute`` returns.
+        findings = await session.execute(
+            select(func.count())
+            .select_from(QaFindingRecord)
+            .where(QaFindingRecord.evaluation_id == evaluation)
+        )
+        assert findings.scalar_one(), (
+            "the seeded evaluation carries no findings to widen"
+        )
         await session.execute(
             update(QaEvaluationRecord)
             .where(QaEvaluationRecord.id == evaluation)
             .values(artefact_schema_version=QA_ARTEFACT_SCHEMA_VERSION + 1)
         )
-        widened = await session.execute(
+        await session.execute(
             update(QaFindingRecord)
             .where(QaFindingRecord.evaluation_id == evaluation)
             .values(code="x" * (MAX_CODE_CHARS + 1))
         )
         await session.commit()
-    assert widened.rowcount, "the seeded evaluation carries no findings to widen"
 
 
 def establish_generated_episode(context: QaRetrievalContext) -> None:

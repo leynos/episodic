@@ -1168,6 +1168,17 @@ Stop and escalate when any of these is reached.
     mapper now resolves the summary first, and the seeding helper widens a
     finding alongside the version bump so the ordering is what the test
     exercises.
+  - The first sweep on the round-18 repair was pinned at a head that the repair
+    was still being amended over, so it reported red on a superseded tree: `ty`
+    flagged `Result[Any].rowcount` on the widening helper, and Pylint flagged
+    the API test module at 406/400 lines. Both findings were real at that head
+    and are gone at `99c7cfa1`. The module split moved the schema-version
+    scenarios to `tests/test_qa_artefact_api_schema_version.py` and the shared
+    seeding, listing, and widening helpers to the retrieval support module, so
+    the three modules are now 287, 89, and 279 lines. The helper's setup guard
+    now counts the seeded findings before widening them, because
+    `AsyncSession.execute` is typed to return the generic `Result`, which
+    declares no `rowcount`.
 
 ## Surprises & discoveries
 
