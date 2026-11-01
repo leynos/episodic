@@ -75,15 +75,23 @@ def render_json(payload: cabc.Mapping[str, object]) -> str:
     return json.dumps(payload, indent=2) + "\n"
 
 
+def _as_mapping(entry: object) -> cabc.Mapping[str, object] | None:
+    """Return ``entry`` when it is a JSON object, otherwise ``None``."""
+    match entry:
+        case dict() as mapping:
+            return typ.cast("cabc.Mapping[str, object]", mapping)
+        case _:
+            return None
+
+
 def _items(payload: cabc.Mapping[str, object]) -> list[cabc.Mapping[str, object]]:
     """Return the envelope's page items, ignoring a malformed value."""
     match payload.get("items"):
         case list() as entries:
-            return [
-                typ.cast("cabc.Mapping[str, object]", entry)
-                for entry in typ.cast("list[object]", entries)
-                if isinstance(entry, dict)
-            ]
+            mappings = (
+                _as_mapping(entry) for entry in typ.cast("list[object]", entries)
+            )
+            return [mapping for mapping in mappings if mapping is not None]
         case _:
             return []
 

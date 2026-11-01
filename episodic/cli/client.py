@@ -155,15 +155,18 @@ def _validated_base_url(base_url: str, *, token: str | None) -> str:
             "remove the embedded credentials and pass --token"
         )
         raise InvalidConfigError(credentials)
+    # Echo only the part of the URL that never carries a secret: a query
+    # string can hold an API key, and these messages reach standard error.
+    shown = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
     if parsed.scheme not in {"http", "https"} or not host:
         invalid = (
-            f"Invalid Episodic API URL {base_url}: "
+            f"Invalid Episodic API URL {shown}: "
             "expected an http or https URL with a host"
         )
         raise InvalidConfigError(invalid)
     if parsed.query or parsed.fragment:
         invalid = (
-            f"Invalid Episodic API URL {base_url}: remove the query string and fragment"
+            f"Invalid Episodic API URL {shown}: remove the query string and fragment"
         )
         raise InvalidConfigError(invalid)
     if _sends_credential_in_clear(scheme=parsed.scheme, host=host, token=token):

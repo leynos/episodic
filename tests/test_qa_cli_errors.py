@@ -208,6 +208,29 @@ def test_base_url_with_embedded_credentials_is_rejected(
     assert embedded not in captured.err, captured.err
 
 
+def test_base_url_query_string_is_not_echoed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A query string can carry a secret, so the message omits it."""
+    transport, recorded = canned(PAGE)
+    marker = "-".join(("not", "a", "real", "key"))
+
+    exit_code = main(
+        [
+            "--base-url",
+            f"https://api.example.test?apikey={marker}",
+            *list_arguments(),
+        ],
+        transport=transport,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
+    assert recorded.seen == [], recorded.seen
+    assert "remove the query string and fragment" in captured.err, captured.err
+    assert marker not in captured.err, captured.err
+
+
 def test_remote_https_base_url_with_token_is_allowed() -> None:
     """HTTPS carries the credential, so a remote endpoint is permitted."""
     transport, recorded = canned(PAGE)
