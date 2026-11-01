@@ -159,6 +159,25 @@ def test_throttled_response_maps_to_exit_four(
     assert "retry after 30 seconds" in captured.err, captured.err
 
 
+def test_throttled_response_repeats_an_http_date_retry_after(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """RFC 9110 also allows an HTTP-date, which carries no seconds unit."""
+    retry_after = "Wed, 21 Oct 2015 07:28:00 GMT"
+    transport, _ = canned(
+        {"code": "rate_limited", "message": "Too many requests."},
+        status=429,
+        headers={"Retry-After": retry_after},
+    )
+
+    exit_code = main(list_arguments(), transport=transport)
+
+    captured = capsys.readouterr()
+    assert exit_code == 4, captured.err
+    assert f"retry after {retry_after}" in captured.err, captured.err
+    assert "GMT seconds" not in captured.err, captured.err
+
+
 def test_unexpected_success_body_is_an_error(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

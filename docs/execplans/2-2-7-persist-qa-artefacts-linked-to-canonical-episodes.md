@@ -913,6 +913,15 @@ Stop and escalate when any of these is reached.
     the exit-code assertion). Repair commit `14b882a8`, re-gated green: test
     1943 passed, 3 skipped, 67 snapshots in 267.59 s, and all seven gates exit
     0 at that head (logs `...-r10repair.out`).
+  - Milestone CLI review round 11 at `d02ec502` (exit 0, `review_completed`,
+    27 files): one minor finding, upheld and repaired. `_throttled_message`
+    appended `seconds` to every `Retry-After` value, but RFC 9110 also allows
+    an HTTP-date, so a gateway sending one produced
+    `retry after Wed, 21 Oct 2015 07:28:00 GMT seconds`. The unit is now
+    appended only to a digit-only value, and a date is repeated verbatim.
+    Evidence
+    `/tmp/coderabbit-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r11.out`;
+    the red run is `...-r11red.out` (the message carried `GMT seconds`).
 - [x] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of

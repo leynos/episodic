@@ -384,6 +384,10 @@ def _as_text(value: object) -> str | None:
 def _throttled_message(status: int, message: str, retry_after: str | None) -> str:
     """Compose a throttle message that names the retry delay when present."""
     text = f"{status} {message}"
-    if retry_after:
+    if not retry_after:
+        return text
+    if retry_after.isdigit():
         return f"{text} (retry after {retry_after} seconds)"
-    return text
+    # RFC 9110 allows an HTTP-date as well as a delay in seconds, and a
+    # "seconds" unit after a date would be a unit the server never sent.
+    return f"{text} (retry after {retry_after})"
