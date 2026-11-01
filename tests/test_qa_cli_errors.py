@@ -5,9 +5,8 @@ an error envelope, a transport failure, or a throttle. Rendering and request
 shaping live in ``tests/test_qa_cli.py``.
 """
 
-import typing as typ
-
 import httpx
+import pytest
 
 from episodic.cli import main
 from episodic.cli.client import ApiUnavailableError, InvalidConfigError
@@ -18,9 +17,6 @@ from tests.qa_cli_fixtures import (
     clean_environment,  # ruff: ignore[unused-import]  # An autouse fixture pytest needs in this module.
     list_arguments,
 )
-
-if typ.TYPE_CHECKING:
-    import pytest
 
 _CONNECTION_REFUSED = "connection refused"
 
@@ -158,38 +154,35 @@ def test_unexpected_success_body_is_an_error(
     assert "unexpected response body" in captured.err, captured.err
 
 
-def test_malformed_base_url_is_a_usage_error(
+@pytest.mark.parametrize(
+    ("global_options", "expected_fragment"),
+    [
+        (["--base-url", "not a url"], "Invalid Episodic API URL"),
+        (
+            ["--base-url", "https://api.example.test?source=cli"],
+            "remove the query string and fragment",
+        ),
+        (
+            ["--base-url", "http://api.example.test", "--token", "secret-token"],
+            "Refusing to send a bearer token",
+        ),
+    ],
+    ids=["malformed", "query-string", "token-over-remote-http"],
+)
+def test_unusable_base_url_is_a_usage_error(
     capsys: pytest.CaptureFixture[str],
+    global_options: list[str],
+    expected_fragment: str,
 ) -> None:
-    """An unusable base URL is reported without a traceback."""
+    """An unusable base URL is a usage error and sends no request."""
     transport, recorded = canned(PAGE)
 
-    exit_code = main(
-        ["--base-url", "not a url", *list_arguments()],
-        transport=transport,
-    )
+    exit_code = main([*global_options, *list_arguments()], transport=transport)
 
     captured = capsys.readouterr()
     assert exit_code == InvalidConfigError.exit_code == 2, captured.err
     assert recorded.seen == [], recorded.seen
-    assert "Invalid Episodic API URL" in captured.err, captured.err
-
-
-def test_base_url_query_string_is_a_usage_error(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A query string would swallow the resource path, so it is rejected."""
-    transport, recorded = canned(PAGE)
-
-    exit_code = main(
-        ["--base-url", "https://api.example.test?source=cli", *list_arguments()],
-        transport=transport,
-    )
-
-    captured = capsys.readouterr()
-    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
-    assert recorded.seen == [], recorded.seen
-    assert "remove the query string and fragment" in captured.err, captured.err
+    assert expected_fragment in captured.err, captured.err
 
 
 def test_base_url_with_embedded_credentials_is_rejected(
@@ -213,29 +206,6 @@ def test_base_url_with_embedded_credentials_is_rejected(
     assert recorded.seen == [], recorded.seen
     assert "remove the embedded credentials" in captured.err, captured.err
     assert embedded not in captured.err, captured.err
-
-
-def test_remote_plain_http_base_url_with_token_is_rejected(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A bearer token is never sent over plain HTTP to a remote host."""
-    transport, recorded = canned(PAGE)
-
-    exit_code = main(
-        [
-            "--base-url",
-            "http://api.example.test",
-            "--token",
-            "secret-token",
-            *list_arguments(),
-        ],
-        transport=transport,
-    )
-
-    captured = capsys.readouterr()
-    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
-    assert recorded.seen == [], recorded.seen
-    assert "Refusing to send a bearer token" in captured.err, captured.err
 
 
 def test_remote_https_base_url_with_token_is_allowed() -> None:
