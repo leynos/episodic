@@ -6,7 +6,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
-`EP-M0`–`EP-M6` delivered 2026-11-01, with every gate green at the branch head
+`EP-M0`–`EP-M6` delivered 2026-11-01, with all seven gates green at `c1d9ad61`
 and every upheld milestone-review finding repaired.
 
 ## Purpose / big picture
@@ -922,6 +922,9 @@ Stop and escalate when any of these is reached.
     Evidence
     `/tmp/coderabbit-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r11.out`;
     the red run is `...-r11red.out` (the message carried `GMT seconds`).
+    Repair commit `c1d9ad61`, re-gated green: test 1944 passed, 3 skipped, 67
+    snapshots in 465.83 s, and all seven gates exit 0 at that head (logs
+    `...-r11repair.out`).
 - [x] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of
@@ -964,22 +967,25 @@ Stop and escalate when any of these is reached.
   - Acceptance evidence `EV-M6-docs`: `make check-fmt`, `make markdownlint`, and
     `make nixie` exit 0 on this plan and the documentation set; the full gate
     set is re-run at the final branch head before publication.
-  - Final attestation (2026-11-01): the full seven-gate sweep at `14b882a8`
-    exits 0 at one unchanged head, with the tree clean when the sweep started.
-    The gates were check-fmt (`861 files already formatted`, `129 files left
-    unchanged`), markdownlint (spelling prerequisite clean, `0 issues` in 129
-    files), nixie (all diagrams validated), typecheck (`All checks passed!`),
-    lint (Hecate, Ruff, Pylint 10.00/10, df12 lints, ambrleaks, Skylos,
-    duplication gate with 30 reasoned exceptions), check-migrations (15
-    upgrades applied to `20261031_000014`, no drift), and test (1943 passed, 3
-    skipped, 67 snapshots, 30 warnings, 267.59 s). Logs
-    `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r10repair.out`.
-  - Documentation-only follow-up: `183a9e1c` and `93263b26` carry this record.
-    The Markdown gates exit 0 at `93263b26` — `make check-fmt` (`129 files
-    left unchanged`), `make markdownlint` (spelling prerequisite clean,
-    `0 issues`) and `make nixie` (all diagrams validated); logs
-    `...-finaldocs2.out`. No Python, migration, or test surface changed after
-    the sweep above, which still attests them.
+  - Attestation history (2026-11-01). The full seven-gate sweep at `14b882a8`
+    exits 0 at one unchanged head, with the tree clean when the sweep started:
+    check-fmt (`861 files already formatted`, `129 files left unchanged`),
+    markdownlint (spelling prerequisite clean, `0 issues` in 129 files), nixie
+    (all diagrams validated), typecheck (`All checks passed!`), lint (Hecate,
+    Ruff, Pylint 10.00/10, df12 lints, ambrleaks, Skylos, duplication gate with
+    30 reasoned exceptions), check-migrations (15 upgrades applied to
+    `20261031_000014`, no drift), and test (1943 passed, 3 skipped, 67
+    snapshots, 30 warnings, 267.59 s); logs `...-r10repair.out`. The round-11
+    repair then changed production code, so the same seven gates were re-run at
+    `c1d9ad61` and exit 0 with test at 1944 passed, 3 skipped, 67 snapshots,
+    465.83 s (logs `...-r11repair.out`). That head is the delivered code.
+  - Documentation-only follow-up: the commits after `c1d9ad61` change only
+    documentation, so the Markdown gates were re-run for them — at `93263b26`
+    and `d02ec502` — and exit 0 (`129 files left unchanged`, spelling
+    prerequisite clean and `0 issues`, all diagrams validated; logs
+    `...-finaldocs2.out` and `...-finaldocs3.out`). The Python, migration, and
+    test evidence above therefore belongs to `c1d9ad61` and is unaffected by
+    them.
 
 ## Surprises & discoveries
 
@@ -1740,16 +1746,19 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Ten review
-  rounds ran in total; rounds 6 to 10 each raised at least one finding that was
-  verified against source and repaired in its own commit, and round 10's repair
-  changed production code.
-- The final sweep at `14b882a8` is green with a clean tree before and after:
-  check-fmt, markdownlint (including the en-GB-oxendict spelling gate), nixie,
-  typecheck, lint (Pylint 10.00/10, duplication gate with 30 reasoned
-  exceptions), check-migrations, and 1943 passing tests with 67 snapshots.
-- The last documentation-only commit carrying this record is re-gated for the
-  Markdown gates before publication.
+  and a CodeRabbit CLI review of the committed milestone diff. Twelve review
+  rounds ran in total: rounds 6, 7, 8, 10, and 11 each raised a finding that
+  was verified against source and repaired in its own commit; round 9 completed
+  with none; and round 12 reviewed this closing record and is answered by the
+  corrections in it.
+- The delivered code is attested by the full seven-gate sweep at `c1d9ad61`,
+  which is green with a clean tree: check-fmt, markdownlint (including the
+  en-GB-oxendict spelling gate), nixie, typecheck, lint (Pylint 10.00/10,
+  duplication gate with 30 reasoned exceptions), check-migrations, and 1944
+  passing tests with 67 snapshots. The earlier sweep at `14b882a8` is green on
+  the same gates with 1943 tests.
+- Every later commit that carries this record changes documentation only and is
+  re-gated for the Markdown gates before publication.
 
 ### Retrospective
 
