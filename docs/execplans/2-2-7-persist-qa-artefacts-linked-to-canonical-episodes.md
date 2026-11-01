@@ -5,7 +5,9 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & Retrospective`, `Conformance Basis`, and `Verification Plan` must
 be kept up to date as work proceeds.
 
-Status: ACTIVE — approved for implementation 2026-10-29; `EP-M0` complete.
+Status: ACTIVE — approved for implementation 2026-10-29; `EP-M0`–`EP-M4`
+complete, `EP-M5` and `EP-M6` implemented and awaiting the confirming milestone
+review.
 
 ## Purpose / big picture
 
@@ -820,6 +822,81 @@ Stop and escalate when any of these is reached.
     eligible at `2026-11-01T00:51:25Z`. Recorded evidence:
     `/tmp/coderabbit-epm5-myQaj3Q0/`. The milestone stays open until a review
     completes.
+  - Rate-limit cooldown evidence: `/tmp/coderabbit-cooldown-round10.txt`
+    records a sampled 33-minute cooldown, and
+    `/tmp/coderabbit-cooldown-notice.txt` shows that sleep running down to
+    `2026-11-01T02:05`. The next review therefore started after that cooldown,
+    not at the 18-minute mark the earlier note predicted.
+  - Self-found gap, repaired at `886cc69e` (2026-11-01): reconciling the plan
+    and ADR 024 for `EP-M6` showed that no reader checked the stored
+    `artefact_schema_version`, although the plan's versioning semantics and
+    the ADR both require a loud failure. `UnsupportedQaArtefactSchemaError` is
+    now raised by the record mapper when a row is newer than this release
+    reads, and both retrieval routes answer `422
+    qa_artefact_schema_unsupported`; the detail route checks episode ownership
+    first, so a foreign caller still sees the ordinary 404. The same change
+    documented the persistence contract and the CLI boundary (ADR 024, ADR
+    025), updated the design document, both guides, `docs/contents.md`, and
+    the roadmap (`63203c7c`).
+  - Gate sweep 8 (schema and documentation commits, scrutineer, exclusive,
+    sequential, seven gates): **all green** — test 1938 passed, 3 skipped, 67
+    snapshots, 30 warnings in 254.16 s. Logs
+    `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md.out`.
+  - Milestone CLI review round 4 at `63203c7c` (`coderabbit 0.9.2`, exit 0,
+    `review_completed`, 27 reviewed files over `1edf224f..63203c7c`): one
+    finding, upheld and repaired. The malformed-URL, query-string, and
+    remote-plain-HTTP tests repeated one structure; they are now one
+    `@pytest.mark.parametrize` test, with the embedded-credentials test kept
+    separate because it also asserts the secret is not echoed. Evidence
+    `/tmp/coderabbit-epm6-ToCZYc/coderabbit-review.out`. Repair commit
+    `7e8f9890`.
+  - Milestone CLI review round 5 at `7e8f9890` (exit 0, `review_completed`):
+    one finding, upheld and repaired. ADR 025 said the `cyclopts` version "is
+    pinned", but the manifest declares the bounded range `>=4.25.2,<5`; the
+    ADR now says bounded. Evidence
+    `/tmp/coderabbit-epm6-PZn2pL/coderabbit-review.out`. Repair commit
+    `d1bf56e8`.
+  - Milestone CLI review round 6 at `d1bf56e8` (exit 0, `review_completed`):
+    two findings, both upheld and repaired.
+    1. (minor) `_validated_base_url` interpolated the whole base URL, so a
+       query string such as `?apikey=...` reached standard error. Every message
+       now echoes only scheme, authority, and path, applying the rule the
+       embedded-credentials branch already followed, and a regression test
+       proves the marker is absent from standard error.
+    2. (trivial) `rendering._items` filtered entries with `isinstance`; the
+       per-entry check is now the `_as_mapping` structural-`match` helper.
+    Evidence `/tmp/coderabbit-epm6-ZkoaBK/coderabbit-review.out`. Repair
+    commit `c305e9ce`, re-gated green: test 1939 passed, 3 skipped, 67
+    snapshots in 309.92 s (logs `...-r6repair.out`).
+  - Milestone CLI review round 7 at `c305e9ce` (exit 0, `review_completed`):
+    one finding, upheld and repaired. `urlsplit` reports an empty query for
+    `https://host?` and an empty fragment for `https://host#`, so a truthiness
+    check let both through, and appending the resource path put that path in
+    the query. The guard now tests the raw string for `?` and `#`; both bare
+    forms are parametrized cases that fail without the guard. Evidence
+    `/tmp/coderabbit-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r7.out`.
+    Repair commit `d9f9303e`, re-gated green: test 1941 passed, 3 skipped, 67
+    snapshots in 338.82 s (logs `...-r7repair.out`).
+  - Milestone CLI review round 8 at `d9f9303e` (exit 0, `review_completed`):
+    one finding, upheld and repaired. `_decode_page` decomposed the page
+    envelope with `isinstance(payload.get("items"), list)`; it now uses a
+    `match`, with the message held in a short local because a parenthesized
+    f-string collapses into an 88-column violation and a bare long message
+    argument trips `raise-vanilla-args`. Evidence
+    `/tmp/coderabbit-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r8.out`.
+    Repair commit `b246a428`, re-gated green: test 1941 passed, 3 skipped, 67
+    snapshots in 256.76 s (logs `...-r8repair.out`). The commit landed during
+    that sweep, so the sweep's check-fmt and typecheck evidence belongs to the
+    identical uncommitted content; the final full sweep at the branch head
+    re-attests both.
+  - Milestone CLI review round 9 at `b246a428` produced no review: the CLI
+    returned `errorType: rate_limit`, `recoverable: true`,
+    `waitTime: "6 minutes"`, `onDemandReviewAvailable: false`, with the account
+    at ten of ten included reviews. Evidence
+    `/tmp/coderabbit-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r9.out`.
+    Under the CLI backoff policy `q = 16`, so the sampled wait is 64 minutes
+    and the next attempt is eligible at `2026-11-01T04:37:58+01:00`. The
+    milestone stays open until a review completes at the branch head.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of
@@ -828,6 +905,40 @@ Stop and escalate when any of these is reached.
     `make markdownlint` pass. The same sweep repaired a spelling violation the
     plan itself carried (an `-ise` spelling of *serialize*), which the
     spelling gate rejected.
+  - Implementation (2026-11-01, commit `63203c7c`): ADR 024 records the
+    persistence contract — the unified table with a findings child, the
+    compliance taxonomy, both version columns and what each bump obliges, the
+    single errored-supersession exception, cost correlation rather than
+    duplication, the retention posture, the two-deploy note for extending the
+    evaluator enum, and the considered alternatives. ADR 025 records the CLI
+    boundary — REST client rather than database client, `cyclopts` as a bounded
+    runtime dependency, the dedicated Hecate group, authentication through
+    `--token` or the environment, the output and exit-code policy, and the
+    provisional noun structure. Both ADRs are indexed in `docs/contents.md`.
+    The design document's *Data Model and Storage* bullet now names
+    `qa_evaluations` and its `qa_findings` children and links ADR 024;
+    `docs/developers-guide.md` gains the QA-artefact persistence subsection and
+    a *Command-line interface* section; `docs/users-guide.md` names both
+    retrieval routes and gives a CLI worked example; `docs/roadmap.md` marks
+    `2.2.7` `[x]` with the delivered outcome in the neighbouring style.
+    ADR 024 also names ADR 001's follow-on obligation for versioning guarantees
+    as discharged.
+  - Conformance check, run against the tree at `b246a428` plus the
+    documentation repair above:
+    - Every deviation in `Decision log` is recorded in ADR 024, ADR 025, or the
+      design document; the qualitative deviations without an ADR home (the
+      rubric-quantization rule and the deferred-implementation retention rule)
+      are recorded in `docs/developers-guide.md`, which the milestones named.
+    - Every trace link in `Conformance basis` resolves: each listed test module,
+      feature file, ADR, and design-document section exists at the path given.
+    - ADR 001's open item — record versioning and compatibility guarantees in a
+      follow-on ADR if evaluator results are persisted or exposed — is
+      discharged by ADR 024, which now says so and links back.
+    - `docs/roadmap.md` item `2.2.7` is `[x]`, and the design document's *Data
+      Model and Storage* bullet names the tables actually created.
+  - Acceptance evidence `EV-M6-docs`: `make check-fmt`, `make markdownlint`, and
+    `make nixie` exit 0 on this plan and the documentation set; the full gate
+    set is re-run at the final branch head before publication.
 
 ## Surprises & discoveries
 
