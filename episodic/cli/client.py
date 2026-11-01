@@ -322,15 +322,15 @@ def _decode_page(
 ) -> dict[str, object]:
     """Return a successful payload or raise the matching CLI error."""
     payload = _decode(response)
-    if response.is_success:
-        if not isinstance(payload.get("items"), list):
-            unexpected = (
-                f"{response.status_code} the API returned an unexpected response body"
-            )
-            raise ApiError(unexpected)
-        return payload
-
     status = response.status_code
+    if response.is_success:
+        match payload.get("items"):
+            case list():
+                return payload
+            case _:
+                unexpected = f"{status} the API returned an unexpected response body"
+                raise ApiError(unexpected)
+
     code = _as_text(payload.get("code")) or "unknown_error"
     message = _as_text(payload.get("message")) or response.reason_phrase
     if status == httpx.codes.TOO_MANY_REQUESTS or code == "rate_limited":
