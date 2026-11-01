@@ -8,59 +8,23 @@ import typing as typ
 import uuid
 
 import pytest
-from sqlalchemy import update
 
-from episodic.canonical.qa_artefacts import QA_ARTEFACT_SCHEMA_VERSION
-from episodic.canonical.storage.qa_artefact_models import QaEvaluationRecord
 from tests.fixtures.api import api_async_client
 from tests.steps.qa_artefact_retrieval_seed import (
     ANTHEM_EVALUATION_ID,
     PRINCIPAL_A,
     PRINCIPAL_B,
-    QaEpisodeFixture,
-    create_generated_episode,
     record_anthem_success,
-    record_background_evaluations,
 )
-from tests.steps.qa_artefact_retrieval_support import build_qa_dependencies
+from tests.steps.qa_artefact_retrieval_support import (
+    build_qa_dependencies,
+    error_envelope,
+    listing_items,
+    seed_background_evaluations,
+)
 
 if typ.TYPE_CHECKING:
-    import httpx
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-    from episodic.api.dependencies import ApiDependencies
-
-
-async def _seed(dependencies: ApiDependencies) -> QaEpisodeFixture:
-    """Create one generated episode and its three background evaluations."""
-    episode = await create_generated_episode(dependencies)
-    await record_background_evaluations(dependencies, episode)
-    return episode
-
-
-def _items(response: httpx.Response) -> list[dict[str, object]]:
-    """Return the items of a successful listing response."""
-    payload = typ.cast("dict[str, object]", response.json())
-    return typ.cast("list[dict[str, object]]", payload["items"])
-
-
-def _envelope(response: httpx.Response) -> dict[str, object]:
-    """Return an error response's envelope."""
-    return typ.cast("dict[str, object]", response.json())
-
-
-async def _pretend_a_newer_release_wrote_the_row(
-    session_factory: async_sessionmaker[AsyncSession],
-    evaluation_id: str,
-) -> None:
-    """Raise the stored schema version past what this release reads."""
-    async with session_factory() as session:
-        await session.execute(
-            update(QaEvaluationRecord)
-            .where(QaEvaluationRecord.id == uuid.UUID(evaluation_id))
-            .values(artefact_schema_version=QA_ARTEFACT_SCHEMA_VERSION + 1)
-        )
-        await session.commit()
 
 
 @pytest.mark.asyncio
@@ -70,7 +34,7 @@ async def test_list_returns_every_evaluation_newest_first(
     """The unfiltered listing carries the page envelope and newest-first order."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         response = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
             headers=PRINCIPAL_A,
@@ -78,7 +42,7 @@ async def test_list_returns_every_evaluation_newest_first(
 
     payload = typ.cast("dict[str, object]", response.json())
     assert response.status_code == 200, response.text
-    assert [item["evaluator"] for item in _items(response)] == [
+    assert [item["evaluator"] for item in listing_items(response)] == [
         "anthem",
         "chrono",
         "pedante",
@@ -86,7 +50,9 @@ async def test_list_returns_every_evaluation_newest_first(
     assert payload["limit"] == 20, payload
     assert payload["offset"] == 0, payload
     assert payload["total"] == 3, payload
-    assert [item["finding_count"] for item in _items(response)] == [0, 0, 3], payload
+    assert [item["finding_count"] for item in listing_items(response)] == [0, 0, 3], (
+        payload
+    )
 
 
 @pytest.mark.asyncio
@@ -96,7 +62,7 @@ async def test_list_filters_by_evaluator_and_compliance_status(
     """Either filter narrows the page and its unpaged total together."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         endpoint = f"/v1/episodes/{episode.episode_id}/qa-evaluations"
         pedante = await client.get(
             endpoint,
@@ -114,12 +80,14 @@ async def test_list_filters_by_evaluator_and_compliance_status(
             params={"evaluator": "chrono", "compliance_status": "non_compliant"},
         )
 
-    assert [item["evaluator"] for item in _items(pedante)] == ["pedante"], pedante.text
+    assert [item["evaluator"] for item in listing_items(pedante)] == ["pedante"], (
+        pedante.text
+    )
     assert typ.cast("dict[str, object]", pedante.json())["total"] == 1, pedante.text
-    assert [item["compliance_status"] for item in _items(non_compliant)] == [
+    assert [item["compliance_status"] for item in listing_items(non_compliant)] == [
         "non_compliant"
     ], non_compliant.text
-    assert _items(empty) == [], empty.text
+    assert listing_items(empty) == [], empty.text
     assert typ.cast("dict[str, object]", empty.json())["total"] == 0, empty.text
 
 
@@ -130,7 +98,7 @@ async def test_list_paginates_and_echoes_the_requested_page(
     """A limit and offset select one page while the total stays unpaged."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         response = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
             headers=PRINCIPAL_A,
@@ -139,7 +107,9 @@ async def test_list_paginates_and_echoes_the_requested_page(
 
     payload = typ.cast("dict[str, object]", response.json())
     assert response.status_code == 200, response.text
-    assert [item["evaluator"] for item in _items(response)] == ["chrono"], payload
+    assert [item["evaluator"] for item in listing_items(response)] == ["chrono"], (
+        payload
+    )
     assert payload["limit"] == 1, payload
     assert payload["offset"] == 1, payload
     assert payload["total"] == 3, payload
@@ -152,14 +122,14 @@ async def test_list_rejects_out_of_range_pagination(
     """Pagination bounds are enforced before any query runs."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         response = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
             headers=PRINCIPAL_A,
             params={"limit": 0},
         )
 
-    envelope = _envelope(response)
+    envelope = error_envelope(response)
     assert response.status_code == 400, response.text
     assert envelope["code"] == "validation_error", envelope
     assert typ.cast("dict[str, object]", envelope["details"])["field"] == "limit", (
@@ -180,14 +150,14 @@ async def test_list_rejects_unknown_enum_filters(
     """An unknown enum value names its offending parameter."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         response = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
             headers=PRINCIPAL_A,
             params={parameter: value},
         )
 
-    envelope = _envelope(response)
+    envelope = error_envelope(response)
     details = typ.cast("dict[str, object]", envelope["details"])
     assert response.status_code == 400, response.text
     assert envelope["code"] == "validation_error", envelope
@@ -201,13 +171,13 @@ async def test_detail_returns_findings_in_emitted_order(
     """The detail representation is the summary plus ordered findings."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         listing = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
             headers=PRINCIPAL_A,
             params={"evaluator": "pedante"},
         )
-        evaluation_id = typ.cast("str", _items(listing)[0]["id"])
+        evaluation_id = typ.cast("str", listing_items(listing)[0]["id"])
         response = await client.get(
             f"/v1/qa-evaluations/{evaluation_id}",
             headers=PRINCIPAL_A,
@@ -233,12 +203,12 @@ async def test_list_hides_foreign_and_unauthenticated_callers(
     """The listing is absent to a foreign principal and denied without one."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         endpoint = f"/v1/episodes/{episode.episode_id}/qa-evaluations"
         cross_principal = await client.get(endpoint, headers=PRINCIPAL_B)
         unauthenticated = await client.get(endpoint)
 
-    envelope = _envelope(cross_principal)
+    envelope = error_envelope(cross_principal)
     assert cross_principal.status_code == 404, cross_principal.text
     assert envelope["code"] == "qa_evaluation_not_found", envelope
     assert envelope["details"] == {"episode_id": str(episode.episode_id)}, envelope
@@ -252,17 +222,17 @@ async def test_detail_hides_foreign_and_unauthenticated_callers(
     """The detail route applies its own ownership check, not just the listing."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         listing = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
             headers=PRINCIPAL_A,
         )
-        evaluation_id = typ.cast("str", _items(listing)[0]["id"])
+        evaluation_id = typ.cast("str", listing_items(listing)[0]["id"])
         endpoint = f"/v1/qa-evaluations/{evaluation_id}"
         cross_principal = await client.get(endpoint, headers=PRINCIPAL_B)
         unauthenticated = await client.get(endpoint)
 
-    envelope = _envelope(cross_principal)
+    envelope = error_envelope(cross_principal)
     assert cross_principal.status_code == 404, cross_principal.text
     assert envelope["code"] == "qa_evaluation_not_found", envelope
     assert envelope["details"] == {"evaluation_id": evaluation_id}, envelope
@@ -282,7 +252,7 @@ async def test_unknown_evaluation_identifier_is_not_found(
             headers=PRINCIPAL_A,
         )
 
-    envelope = _envelope(response)
+    envelope = error_envelope(response)
     assert response.status_code == 404, response.text
     assert envelope["code"] == "qa_evaluation_not_found", envelope
     assert envelope["details"] == {"evaluation_id": str(missing_id)}, envelope
@@ -295,7 +265,7 @@ async def test_successful_anthem_retry_supersedes_the_failure(
     """A later success replaces the errored artefact and keeps its identifier."""
     dependencies = build_qa_dependencies(session_factory)
     async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
+        episode = await seed_background_evaluations(dependencies)
         await record_anthem_success(dependencies, episode)
         listing = await client.get(
             f"/v1/episodes/{episode.episode_id}/qa-evaluations",
@@ -307,7 +277,7 @@ async def test_successful_anthem_retry_supersedes_the_failure(
             headers=PRINCIPAL_A,
         )
 
-    items = _items(listing)
+    items = listing_items(listing)
     detail_payload = typ.cast("dict[str, object]", detail.json())
     assert len(items) == 1, listing.text
     assert items[0]["id"] == str(ANTHEM_EVALUATION_ID), items
@@ -315,73 +285,3 @@ async def test_successful_anthem_retry_supersedes_the_failure(
     assert items[0]["finding_count"] == 0, items
     assert detail_payload["compliance_status"] == "compliant", detail_payload
     assert detail_payload["findings"] == [], detail_payload
-
-
-@pytest.mark.asyncio
-async def test_unsupported_schema_version_is_rejected(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """A row written by a newer release fails loudly on either route."""
-    dependencies = build_qa_dependencies(session_factory)
-    async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
-        seeded = await client.get(
-            f"/v1/episodes/{episode.episode_id}/qa-evaluations",
-            headers=PRINCIPAL_A,
-            params={"evaluator": "pedante"},
-        )
-        evaluation_id = typ.cast("str", _items(seeded)[0]["id"])
-        await _pretend_a_newer_release_wrote_the_row(
-            session_factory,
-            evaluation_id,
-        )
-        listed = await client.get(
-            f"/v1/episodes/{episode.episode_id}/qa-evaluations",
-            headers=PRINCIPAL_A,
-        )
-        detailed = await client.get(
-            f"/v1/qa-evaluations/{evaluation_id}",
-            headers=PRINCIPAL_A,
-        )
-
-    for response in (listed, detailed):
-        envelope = _envelope(response)
-        details = typ.cast("dict[str, object]", envelope["details"])
-        assert response.status_code == 422, response.text
-        assert envelope["code"] == "qa_artefact_schema_unsupported", envelope
-        assert details["evaluation_id"] == evaluation_id, envelope
-        assert details["artefact_schema_version"] == (QA_ARTEFACT_SCHEMA_VERSION + 1), (
-            envelope
-        )
-        assert details["supported_artefact_schema_version"] == (
-            QA_ARTEFACT_SCHEMA_VERSION
-        ), envelope
-
-
-@pytest.mark.asyncio
-async def test_unsupported_schema_version_stays_hidden_from_foreign_callers(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """An unreadable row owned elsewhere is still reported as absent."""
-    dependencies = build_qa_dependencies(session_factory)
-    async with api_async_client(dependencies) as client:
-        episode = await _seed(dependencies)
-        seeded = await client.get(
-            f"/v1/episodes/{episode.episode_id}/qa-evaluations",
-            headers=PRINCIPAL_A,
-            params={"evaluator": "pedante"},
-        )
-        evaluation_id = typ.cast("str", _items(seeded)[0]["id"])
-        await _pretend_a_newer_release_wrote_the_row(
-            session_factory,
-            evaluation_id,
-        )
-        foreign = await client.get(
-            f"/v1/qa-evaluations/{evaluation_id}",
-            headers=PRINCIPAL_B,
-        )
-
-    envelope = _envelope(foreign)
-    assert foreign.status_code == 404, foreign.text
-    assert envelope["code"] == "qa_evaluation_not_found", envelope
-    assert envelope["details"] == {"evaluation_id": evaluation_id}, envelope

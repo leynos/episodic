@@ -7,7 +7,7 @@ be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
 `EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
-finding through round 17 repaired and each repair gate-swept before the next
+finding through round 18 repaired and each repair gate-swept before the next
 round.
 
 ## Purpose / big picture
@@ -1141,9 +1141,33 @@ Stop and escalate when any of these is reached.
     with the `MAX_FINDINGS_PER_EVALUATION` check deleted, so it did not isolate
     the bound it names. Each finding now derives a distinct id with
     `uuid.uuid5(FINDING_ID, str(index))`, leaving the ceiling as the only
-    violated rule, and the match pins the ceiling message. The repair is carried
-    by the commit that adds this bullet, whose own gate sweep and review round
-    close the pair.
+    violated rule, and the match pins the ceiling message.
+  - Gate evidence on the round-17 repair, pinned at `da811759`, clean tree, with
+    `git rev-parse HEAD` and `git status --short` unchanged before the first
+    gate, after every gate, and after the last: `check-fmt` (ruff 864 files,
+    mdtablefix 129 unchanged), `typecheck` (`ty 0.0.32`), `lint` with all eight
+    stages run to completion (Hecate, Ruff, Pylint 10.00/10, df12 lints
+    10.00/10, ambrleaks, Skylos, nose duplication gate with 30 reasoned
+    exceptions), `markdownlint` (129 files, 0 issues), `nixie`, and `make test`
+    — 1950 passed, 3 skipped, 30 warnings, 219.15 s, 67 snapshots. An earlier
+    attempt at the same sweep was discarded: it straddled a mid-run amend, so
+    its `check-fmt` result described a superseded tree.
+  - Post-delivery CodeRabbit CLI review round 18 at `da811759` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 82 reviewed paths, no rate limit). One
+    `minor` finding, upheld and repaired:
+    `evaluation_from_record` built every `QaFinding` before calling
+    `summary_from_record`, so the schema-version check that raises
+    `UnsupportedQaArtefactSchemaError` ran last. A row written by a newer
+    release whose finding exceeded this release's bounds therefore raised
+    `ValueError` from `QaFinding.__post_init__` and answered `500
+    internal_error` instead of the documented `422
+    qa_artefact_schema_unsupported`. Red was observed first: widening one
+    finding of the seeded row in
+    `test_unsupported_schema_version_is_rejected` and its hidden-from-foreign-
+    callers sibling failed both with `internal_error` before the fix. The
+    mapper now resolves the summary first, and the seeding helper widens a
+    finding alongside the version bump so the ordering is what the test
+    exercises.
 
 ## Surprises & discoveries
 
@@ -1976,23 +2000,26 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Seventeen review
-  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, 14, 15, 16, and 17 each
+  and a CodeRabbit CLI review of the committed milestone diff. Eighteen review
+  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, 14, 15, 16, 17, and 18 each
   raised at least one finding that was verified against source and repaired in
   its own commit; round 9 completed with none; and round 12 reviewed this
   closing record and is answered by the corrections in it. Round 17's single
   minor finding was a test-isolation defect: the finding-ceiling test shared
   one identifier across every synthetic finding, so a loosened match would let
-  the duplicate-id rejection satisfy it. Round 13's five minor findings
+  the duplicate-id rejection satisfy it. Round 18's single minor finding was an
+  ordering defect in the storage read path, where findings were validated
+  before the schema version was checked. Round 13's five minor findings
   included the one production repair after the rebase: `record_evaluation` now
   flushes a caller's pending state outside its failure handler, so a
   caller-owned constraint violation is not counted as a QA recording failure.
-- The delivered code is attested by the sweeps at `a54223c7` (1949 tests) and
-  `0c4c566e` (1950 tests), the heads that carry the round-15 and round-16
-  repairs, both green with a clean tree on all six deterministic gates:
-  check-fmt, markdownlint (including the en-GB-oxendict spelling gate), nixie,
-  typecheck, lint (Pylint 10.00/10, df12 lints, ambrleaks, Skylos, and the
-  duplication gate with 30 reasoned exceptions), and 67 snapshots.
+- The delivered code is attested by the sweeps at `a54223c7` (1949 tests),
+  `0c4c566e` (1950 tests), and `da811759` (1950 tests), the heads that carry
+  the round-15, round-16, and round-17 repairs, all green with a clean tree on
+  all six deterministic gates: check-fmt, markdownlint (including the
+  en-GB-oxendict spelling gate), nixie, typecheck, lint (Pylint 10.00/10, df12
+  lints, ambrleaks, Skylos, and the duplication gate with 30 reasoned
+  exceptions), and 67 snapshots.
 - The migration gate ran `check-migrations` at `d2a53f1c`, the head that
   carries round 13's repairs, whose sweep covered all seven gates and passed
   1945 tests with 67 snapshots; no migration changed after it. The earlier
@@ -2001,9 +2028,9 @@ REST API and a first-party CLI.
   are green; the rebase changed no tracked file relative to those heads, and
   every patch replayed identically.
 - Every later commit that carries this record is gate-swept at its own head
-  before publication. The round-17 repair commit changes one test alongside
-  this record, so it is swept on all six deterministic gates rather than the
-  Markdown gates alone.
+  before publication. The round-17 and round-18 repair commits each change code
+  alongside this record, so each is swept on all six deterministic gates rather
+  than the Markdown gates alone.
 
 ### Retrospective
 

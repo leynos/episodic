@@ -1764,7 +1764,10 @@ Maintainer rules:
   `QA_ARTEFACT_SCHEMA_VERSION`, and both API resources turn that into a `422`
   envelope with code `qa_artefact_schema_unsupported`; the detail resource
   applies the episode ownership check first, so an unreadable row owned
-  elsewhere is still a `404`.
+  elsewhere is still a `404`. `evaluation_from_record` resolves the summary
+  before it maps any finding, because the version check must decide the outcome
+  first: a finding that a newer release widened past this release's bounds
+  would otherwise raise `ValueError` and surface as a `500`.
 - `compliance_policy_version` versions the decision rule that produced
   `compliance_status` and `QaFinding.is_blocking`. Changing the blocking
   severity set, or any evaluator's outcome-to-status mapping, obliges a bump

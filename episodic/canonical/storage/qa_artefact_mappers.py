@@ -188,11 +188,14 @@ def evaluation_from_record(record: QaEvaluationRecord) -> QaEvaluation:
         set that was not fetched in order still satisfies the aggregate's
         ordering contract.
     """
+    # The summary's schema-version check runs first, so a row written by a
+    # newer release reports its unsupported payload shape before any finding is
+    # validated. Otherwise a field that release widened would raise
+    # ``ValueError`` from here and surface as a 500 rather than the documented
+    # 422.
+    summary = summary_from_record(record)
     findings = tuple(
         finding_from_record(item)
         for item in sorted(record.findings, key=lambda item: item.ordinal)
     )
-    return QaEvaluation(
-        summary_record=summary_from_record(record),
-        findings=findings,
-    )
+    return QaEvaluation(summary_record=summary, findings=findings)

@@ -8,7 +8,18 @@ behavioural steps call synchronously.
 
 import dataclasses as dc
 import typing as typ
+import uuid
 
+from sqlalchemy import update
+
+from episodic.canonical.qa_artefacts import (
+    MAX_CODE_CHARS,
+    QA_ARTEFACT_SCHEMA_VERSION,
+)
+from episodic.canonical.storage.qa_artefact_models import (
+    QaEvaluationRecord,
+    QaFindingRecord,
+)
 from tests.fixtures.api import api_async_client, build_api_dependencies
 from tests.fixtures.generation_run_api import (
     HeaderPrincipalAuthorization,
@@ -20,6 +31,7 @@ from tests.steps.qa_artefact_retrieval_seed import (
     create_generated_episode,
     record_anthem_failure,
     record_anthem_success,
+    record_background_evaluations,
     record_chrono_evaluation,
     record_pedante_evaluation,
     require,
@@ -28,7 +40,6 @@ from tests.steps.qa_artefact_retrieval_seed import (
 if typ.TYPE_CHECKING:
     import asyncio
     import collections.abc as cabc
-    import uuid
 
     import httpx
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -97,6 +108,53 @@ def build_qa_dependencies(
         ),
         launcher=RecordingLauncher(),
     )
+
+
+async def seed_background_evaluations(
+    dependencies: ApiDependencies,
+) -> QaEpisodeFixture:
+    """Create one generated episode and its three background evaluations."""
+    episode = await create_generated_episode(dependencies)
+    await record_background_evaluations(dependencies, episode)
+    return episode
+
+
+def listing_items(response: httpx.Response) -> list[dict[str, object]]:
+    """Return the items of a successful listing response."""
+    payload = typ.cast("dict[str, object]", response.json())
+    return typ.cast("list[dict[str, object]]", payload["items"])
+
+
+def error_envelope(response: httpx.Response) -> dict[str, object]:
+    """Return an error response's envelope."""
+    return typ.cast("dict[str, object]", response.json())
+
+
+async def pretend_a_newer_release_wrote_the_row(
+    session_factory: async_sessionmaker[AsyncSession],
+    evaluation_id: str,
+) -> None:
+    """Raise the stored schema version past what this release reads.
+
+    One finding is also widened past this release's bounds. A reader that
+    validated findings before checking the stored version would fail on the
+    widened field and answer 500, so the update makes the documented 422 the
+    only way through.
+    """
+    evaluation = uuid.UUID(evaluation_id)
+    async with session_factory() as session:
+        await session.execute(
+            update(QaEvaluationRecord)
+            .where(QaEvaluationRecord.id == evaluation)
+            .values(artefact_schema_version=QA_ARTEFACT_SCHEMA_VERSION + 1)
+        )
+        widened = await session.execute(
+            update(QaFindingRecord)
+            .where(QaFindingRecord.evaluation_id == evaluation)
+            .values(code="x" * (MAX_CODE_CHARS + 1))
+        )
+        await session.commit()
+    assert widened.rowcount, "the seeded evaluation carries no findings to widen"
 
 
 def establish_generated_episode(context: QaRetrievalContext) -> None:
