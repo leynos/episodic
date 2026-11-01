@@ -2065,6 +2065,44 @@ been applied, so a deployment that ships the new code before running
 `alembic upgrade head` fails at its first checkpoint write. Apply migrations
 first; the application does not apply them itself.
 
+#### Review-checkpoint observability
+
+Metrics are optional wiring. `SqlAlchemyUnitOfWork` passes
+`UnitOfWorkRuntime.value_metrics` into the checkpoint store, and the store
+falls back to `NoopValueMetrics` when it receives `None`. With no sink
+configured the store still logs its transitions but skips the open-count query
+entirely, so a deployment without a metrics sink pays no extra `COUNT` per
+checkpoint operation. Wire a `ValueMetricsPort` when you need the series below.
+
+An explicitly constructed `SqlAlchemyReviewCheckpointStore` follows the same
+rule: `metrics=` is the only switch, and there is no separate enable flag to
+keep in step with it.
+
+The store emits four series:
+
+- `review_checkpoint_created_total` counts accepted creations.
+- `review_checkpoint_resolved_total{status}` counts terminal transitions,
+  labelled with the status the checkpoint reached (`responded`, `timed_out` or
+  `cancelled`). The label is the resulting status rather than the reviewer's
+  response action, because the action describes one input to a transition while
+  the status describes where the checkpoint actually ended up.
+- `review_checkpoint_open_gauge` observes the number of checkpoints still in
+  `created` across _all_ runs, after every creation and resolution. It is
+  deliberately global: a per-run value emitted without a run label would be
+  attributed to whichever run wrote last, so resolving one run's final
+  checkpoint would report a zero backlog while another run still had one.
+- `review_checkpoint_terminal_conflict_total` counts transitions refused
+  because the checkpoint was already terminal. Both routes count: a rejection
+  raised by the domain precondition before any write, and a compare-and-set
+  that lost to another writer. Counting only lost races would hide the ordinary
+  retry storm where callers keep re-submitting a response that was resolved
+  earlier.
+
+All four are emitted after the store's flush or compare-and-set has run but
+before the caller commits, so they describe accepted work in the current
+transaction rather than durable commit outcomes. A later rollback is not
+reflected in these counters.
+
 ### No-QA launcher and TEI retrieval
 
 The no-QA path is deliberately a small application service around the

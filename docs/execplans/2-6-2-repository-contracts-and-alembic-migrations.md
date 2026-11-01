@@ -691,6 +691,35 @@ Stop and escalate rather than improvising when any of these is reached.
       neither worker health nor that the worker stopped running, which is the
       claim the surrounding fencing advice actually needs.
 
+- [x] (2026-11-01) The formal review of `a6a46907` raised one error and four
+      warnings. The error was real and is fixed: `get_checkpoint` and
+      `list_checkpoints` read through `AsyncSession.get`/`execute`, which
+      autoflush by default, so a caller holding unflushed work had it flushed
+      early by a query that never wrote, and any constraint violation in it
+      would be attributed to the read. Both read paths now run inside
+      `no_autoflush`; the run-existence lookup and the checkpoint SELECT share
+      one boundary in `list_checkpoints`. The commands are unaffected because
+      they flush and refresh explicitly. `test_review_checkpoint_query_purity`
+      stages the same by asserting. The properties of the store's autoflush
+      behaviour are documented in the "Review-checkpoint observability"
+      subsection of the developers' guide: the four metric names, the optional
+      `ValueMetricsPort` wiring, the `status` label on resolutions, and that
+      terminal conflicts count both domain refusals and lost races.
+      `test_generation_run_lease_backlog_property` generalizes the batch
+      invariant with Hypothesis: arbitrary expired backlogs with ties and
+      varied limits drain as leading `(lease_expires_at, id)` slices, each run
+      exactly once, and a drained backlog reclaims nothing.
+      The remaining two warnings are declined with evidence rather than
+      deferred silently. Domain Architecture asks the lease contract to move,
+      but `lease_expires_at` is a storage column with no `GenerationRun`
+      counterpart, the in-memory adapter's no-op is documented, and the port
+      exists so the launcher can reclaim without importing the SQL adapter;
+      changing that boundary is a design decision outside this slice. The
+      Observability row repeats a request already recorded in `Residual gaps`
+      against roadmap `2.6.5`, and no production caller exercises the spans
+      it asks for. The review-thread replies carry those dispositions and the
+      delivery ledger records their identifiers.
+
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
 
@@ -2187,6 +2216,15 @@ uv run pytest \
   or invokes reclamation. Instrumenting the pair belongs with the scheduler and
   stuck-run detection in roadmap 2.6.5, where those operations acquire callers
   worth tracing.
+- **Lease reclamation is a storage capability exposed behind a domain port.**
+  `lease_expires_at` exists only as a `generation_runs` column; `GenerationRun`
+  has no lease field and no renewal path writes the column. Exposing
+  `fail_expired_leases` through `GenerationRunLeaseReclamationPort` gives
+  roadmap 2.6.5's scheduler a seam that does not import the SQL adapter, at the
+  cost of an in-memory implementation that returns `()` because it cannot
+  observe a lease. Promoting the lease to a domain concept needs a model change
+  and a migration, neither of which this slice scopes. The asymmetry is
+  documented on both adapters rather than left implicit.
 - **Behavioural equivalence holds only under a single writer per run.** The
   in-memory adapter serializes with an in-process `asyncio.Lock` that no
   cross-connection adapter can reproduce.

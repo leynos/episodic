@@ -177,7 +177,11 @@ class SqlAlchemyReviewCheckpointStore:
         checkpoint_id: uuid.UUID,
     ) -> Checkpoint | None:
         """Return a checkpoint by identifier."""
-        record = await self._session.get(ReviewCheckpointRecord, checkpoint_id)
+        # Business logic that holds unflushed work can still read: without this
+        # boundary the SELECT would autoflush the caller's staged objects and
+        # attribute their constraint violations to a query that never wrote.
+        with self._session.no_autoflush:
+            record = await self._session.get(ReviewCheckpointRecord, checkpoint_id)
         if record is None:
             return None
         return checkpoint_from_record(record)
@@ -208,8 +212,6 @@ class SqlAlchemyReviewCheckpointStore:
         if limit < 0 or offset < 0:
             msg = "limit and offset must be non-negative."
             raise ValueError(msg)
-        if await self._session.get(GenerationRunRecord, run_id) is None:
-            raise RunNotFound(run_id)
         statement = (
             sa
             .select(ReviewCheckpointRecord)
@@ -220,7 +222,12 @@ class SqlAlchemyReviewCheckpointStore:
         )
         if status is not None:
             statement = statement.where(ReviewCheckpointRecord.status == status)
-        result = await self._session.execute(statement)
+
+        # As in `get_checkpoint`: no query may autoflush the caller's work.
+        with self._session.no_autoflush:
+            if await self._session.get(GenerationRunRecord, run_id) is None:
+                raise RunNotFound(run_id)
+            result = await self._session.execute(statement)
         return tuple(checkpoint_from_record(record) for record in result.scalars())
 
     async def respond_to_checkpoint(
