@@ -7,7 +7,7 @@ be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
 `EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
-finding through round 20 repaired and each repair gate-swept before the next
+finding through round 21 repaired and each repair gate-swept before the next
 round.
 
 ## Purpose / big picture
@@ -1213,6 +1213,13 @@ Stop and escalate when any of these is reached.
     the metadata diff but does not itself prove FK-constraint parity; the model
     and migration declare the same `sa.Index`, which is what the comparison
     covers.
+  - Gate evidence on the round-20 correction, pinned at `acb96e5b`, four
+    targets on a clean tree with no HEAD drift: `check-fmt` (ruff 865 files,
+    mdtablefix 129 unchanged), `lint` with every stage to completion including
+    the Skylos gate whose configuration text changed, `markdownlint` (129 files,
+    0 issues), and `nixie`. `test` and `check-migrations` were not re-run
+    because the change surface is two Markdown files and six reason strings;
+    the parent `3e13bf0a` carries both.
   - Post-delivery CodeRabbit CLI review round 20 at `3e13bf0a` (`coderabbit`
     0.9.2, exit 0, `review_completed`, 83 reviewed paths, no rate limit). One
     `minor` documentation finding, upheld and repaired: the deferred-
@@ -1223,6 +1230,17 @@ Stop and escalate when any of these is reached.
     Caesura evaluator and `2.2.1` as Pedante, whose delivery commit
     (`cdcf922e`) carries the plan for `2.2.1`. Every occurrence of the pairing
     now reads `2.2.1` and `2.2.6`; unrelated `2.2.5` references are untouched.
+  - Post-delivery CodeRabbit CLI review round 21 at `acb96e5b` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 83 reviewed paths, no rate limit). Two
+    findings, both upheld and repaired. The `minor` finding corrected the
+    Interfaces section, which named `episodic/cli/__init__.py` as the only
+    module permitted to write to standard output or exit; the delivered
+    boundary is `entrypoint.py`, which holds `main` and `sys.exit(main())`,
+    while `__init__.py` only re-exports it, and the plan's own EP-M5 list says
+    so. It also corrected the Module budget row from six CLI modules to eight.
+    The `trivial` finding recorded the budget outcome the pre-authorized
+    escalation demanded and the plan had omitted; the new Decision log entry
+    carries the measured figures and the rationale for not splitting.
 
 ## Surprises & discoveries
 
@@ -1612,6 +1630,21 @@ Stop and escalate when any of these is reached.
   it. The escalation stays available on the budget trigger above and does not
   need re-approval when taken — record the measured figures here instead.
   Accepted by leynos, 2026-08-23.
+- Decision (EP-M5 budget outcome): the delivered CLI exceeds both the
+  `EP-M5` trigger and the `Tolerances` scope cap, and the overrun is recorded
+  instead of splitting the bootstrap into roadmap item `2.2.8`. Measured
+  2026-11-01: `episodic/cli/` holds seven non-init production modules
+  (`entrypoint.py`, `app.py`, `qa.py`, `client.py`, `responses.py`, `errors.py`,
+  `rendering.py`; eight files with `__init__.py`) and 893 net production
+  lines, over the 6-module and 500-line trigger, and the branch changes 83
+  paths, over the 50-file cap. Splitting before implementation was offered and
+  declined because `RM-2.2.7-b` names the CLI and roadmap item `4.6.1` already
+  assumes a client exists; splitting after delivery would move the surface
+  `2.2.7` is accepted against into a new item and leave `2.2.7` unrunnable as
+  shipped. Date/Author: 2026-11-01, implementation agent. **Deviation status:
+  reported** — the figures above are measured, no requirement or interface
+  changed, and the overrun is surfaced at handoff rather than presented as a
+  budget pass.
 - Decision: place both ADRs in `docs/adr/`, not `docs/`.
   Rationale: `docs/documentation-style-guide.md` says "Place ADRs in the
   `docs/` directory", but every ADR since 001 lives in `docs/adr/` and
@@ -2055,27 +2088,38 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Twenty review
-  rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–20 each raised at least
-  one finding that was verified against source and repaired in its own commit;
-  round 9 completed with none; and round 12 reviewed this closing record and is
-  answered by the corrections in it. Round 17's single minor finding was a
-  test-isolation defect: the finding-ceiling test shared one identifier across
-  every synthetic finding, so a loosened match would let the duplicate-id
-  rejection satisfy it. Round 18's single minor finding was an ordering defect
-  in the storage read path, where findings were validated before the schema
-  version was checked. Round 19's single trivial finding observed that the
-  generation-run foreign key had no index: PostgreSQL indexes no referencing
-  column, every evaluation index leads with `episode_id`, and the column nulls
-  on run-history purge, so a purge scanned the whole table once per deleted
-  run. The partial index `ix_qa_evaluations_generation_run_id` now covers the
-  non-null values in the migration, the model, and the downgrade, and ADR 024's
-  retention posture records why. Round 20's single minor finding corrected the
-  deferred- implementation example: the developers' guide, this plan, and the
-  six Skylos whitelist reasons credited the LangGraph graph builders to roadmap
-  items `2.2.5` and `2.2.6`, but `2.2.5` is the unchecked Caesura evaluator;
-  the Pedante builder is `2.2.1`, as its delivery commit's plan shows, so every
-  occurrence of the pairing now reads `2.2.1` and `2.2.6`. Round 13's five
+  and a CodeRabbit CLI review of the committed milestone diff. Twenty-one
+  review rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–21 each raised at
+  least one finding that was verified against source and repaired in its own
+  commit; round 9 completed with none; and round 12 reviewed this closing
+  record and is answered by the corrections in it. Round 17's single minor
+  finding was a test-isolation defect: the finding-ceiling test shared one
+  identifier across every synthetic finding, so a loosened match would let the
+  duplicate-id rejection satisfy it. Round 18's single minor finding was an
+  ordering defect in the storage read path, where findings were validated
+  before the schema version was checked. Round 19's single trivial finding
+  observed that the generation-run foreign key had no index: PostgreSQL indexes
+  no referencing column, every evaluation index leads with `episode_id`, and
+  the column nulls on run-history purge, so a purge scanned the whole table
+  once per deleted run. The partial index `ix_qa_evaluations_generation_run_id`
+  now covers the non-null values in the migration, the model, and the
+  downgrade, and ADR 024's retention posture records why. Round 20's single
+  minor finding corrected the deferred-implementation example: the developers'
+  guide, this plan, and the six Skylos whitelist reasons credited the LangGraph
+  graph builders to roadmap items `2.2.5` and `2.2.6`, but `2.2.5` is the
+  unchecked Caesura evaluator; the Pedante builder is `2.2.1`, as its delivery
+  commit's plan shows, so every occurrence of the pairing now reads `2.2.1` and
+  `2.2.6`. Round 21's two findings were documentation accuracy defects: the
+  Interfaces section named `episodic/cli/__init__.py` as the only module
+  allowed to write to standard output or exit, where the plan's own EP-M5 list
+  and the code put that role in `entrypoint.py`; the Module budget row counted
+  six CLI modules where eight files exist. Both now match the delivered code.
+  The second finding recorded the EP-M5 budget outcome, which the
+  pre-authorized escalation required and the plan had omitted: seven non-init
+  CLI modules, 893 net production lines, and 83 changed paths breach both the
+  6-module and 500-line trigger and the 50-file Tolerances cap, so the Decision
+  log now carries the measured figures and the rationale for keeping the
+  bootstrap in `2.2.7` rather than splitting it into `2.2.8`. Round 13's five
   minor findings included the one production repair after the rebase:
   `record_evaluation` now flushes a caller's pending state outside its failure
   handler, so a caller-owned constraint violation is not counted as a QA
@@ -3703,7 +3747,8 @@ piped into `jq`.
 Keep the `cyclopts.App` construction, the HTTP client, and the renderers in
 separate modules. The renderers must be pure functions from a parsed payload to
 a string so `syrupy` can snapshot them without a process boundary; only
-`episodic/cli/__init__.py` may write to standard output or exit.
+`episodic/cli/entrypoint.py` may write to standard output or exit, and
+`episodic/cli/__init__.py` only re-exports `main` for the console-script target.
 
 ## Module budget
 
@@ -3725,7 +3770,7 @@ each one mirrors: `episodic/canonical/storage/generation_runs.py` is 358 lines,
 | `episodic/canonical/qa_artefact_service.py`                  | 150–200       | none expected                                                                                                                |
 | `episodic/api/resources/qa_artefacts.py`                     | 200–280       | see below                                                                                                                    |
 | `episodic/api/episode_access.py`                             | 60–90         | new shared helper                                                                                                            |
-| `episodic/cli/*` (6 modules)                                 | 350–500 total | see the pre-authorized escalation                                                                                            |
+| `episodic/cli/*` (8 modules)                                 | 350–500 total | see the pre-authorized escalation                                                                                            |
 
 Two notes that change the work rather than describing it:
 
