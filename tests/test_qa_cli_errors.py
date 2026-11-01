@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from episodic.cli import main
-from episodic.cli.client import ApiUnavailableError, InvalidConfigError
+from episodic.cli.errors import ApiUnavailableError, InvalidConfigError
 from tests.qa_cli_fixtures import (
     EPISODE_ID,
     PAGE,
@@ -237,6 +237,25 @@ def test_unusable_base_url_is_a_usage_error(
     assert exit_code == InvalidConfigError.exit_code == 2, captured.err
     assert recorded.seen == [], recorded.seen
     assert expected_fragment in captured.err, captured.err
+
+
+@pytest.mark.parametrize("timeout", ["-1", "0", "nan", "inf"])
+def test_unusable_timeout_is_a_usage_error(
+    capsys: pytest.CaptureFixture[str],
+    timeout: str,
+) -> None:
+    """A timeout the transport cannot use is a usage error, not a traceback."""
+    transport, recorded = canned(PAGE)
+
+    exit_code = main(
+        ["--timeout", timeout, *list_arguments()],
+        transport=transport,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
+    assert recorded.seen == [], recorded.seen
+    assert "positive, finite number of seconds" in captured.err, captured.err
 
 
 def test_base_url_with_embedded_credentials_is_rejected(

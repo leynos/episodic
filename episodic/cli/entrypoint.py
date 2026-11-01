@@ -2,7 +2,7 @@
 
 This module is the command's only writer of standard output and its only
 source of process exit codes. Every other CLI module returns values and raises
-:class:`~episodic.cli.client.CliError`, which keeps the output boundary in one
+:class:`~episodic.cli.errors.CliError`, which keeps the output boundary in one
 reviewable place.
 """
 
@@ -12,7 +12,7 @@ import typing as typ
 import cyclopts
 
 from episodic.cli.app import build_app
-from episodic.cli.client import CliError
+from episodic.cli.errors import CliError
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc

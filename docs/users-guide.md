@@ -39,7 +39,9 @@ The default endpoint is `http://127.0.0.1:8000`. Set `EPISODIC_API_URL` or pass
 `--token` to authenticate. A bearer token is refused over plain HTTP unless the
 host is loopback, so a remote endpoint needs `https://`. A base URL must not
 carry embedded credentials or a query string. A token must be printable ASCII;
-anything else is refused as a usage error before a request is sent.
+anything else is refused as a usage error before a request is sent. `--timeout`
+must be a positive, finite number of seconds; zero would disable the timeout,
+so it is refused along with negative and non-finite values.
 
 Filter the results and choose machine-readable output:
 

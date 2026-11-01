@@ -65,7 +65,9 @@ why `episodic/cli/qa.py` imports `uuid` and the enum helpers at module level.
 - `episodic/cli/entrypoint.py` owns `main` and the process exit status.
 - `episodic/cli/app.py` owns the application object and global options.
 - `episodic/cli/qa.py` declares the `qa evaluations list` command.
-- `episodic/cli/client.py` owns the `httpx` client and error translation.
+- `episodic/cli/client.py` owns the `httpx` client; `episodic/cli/responses.py`
+  translates its answers, and `episodic/cli/errors.py` defines the exit-coded
+  error types both use.
 - `episodic/cli/rendering.py` owns the pure table and JSON renderers.
 - `episodic/cli/__init__.py` re-exports `main` and nothing else, because the
   `non-empty-init-module` lint rule forbids implementation code there.

@@ -1066,6 +1066,29 @@ Stop and escalate when any of these is reached.
       "documented in ADR 001", while its own non-vacuity note recorded that
       ADR 001 does not enumerate it. The invariant now names the Pedante
       taxonomy and the recorded compliance policy as its provenance.
+  - Post-delivery CodeRabbit CLI review round 15 at `bf5bc24a` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 79 changed paths, no rate limit). The
+    round-14 repairs were re-verified as no longer reported. One new minor
+    finding, upheld and repaired: `--timeout` was stored unvalidated, and
+    `httpx` forwards a negative or non-finite value to socket timeout calls,
+    which raise `ValueError` or `OverflowError`; neither is an `httpx.HTTPError`,
+    so it escaped `main` as a traceback. A local probe over a real socket under
+    `httpx` 0.28.1 confirmed all three failures (`-1` → `ValueError: Timeout
+    value out of range`, `nan` → `ValueError: Invalid value NaN`, `inf` →
+    `OverflowError: timestamp out of range`), and that `0` disables the timeout
+    rather than failing. `CliRuntime.configure` now rejects a non-positive or
+    non-finite timeout as a usage error before any request is built. Red was
+    observed first: the new parameterized
+    `test_unusable_timeout_is_a_usage_error` failed all four cases with the
+    guard removed and passes with it restored. The guard took
+    `episodic/cli/client.py` to 404 lines, over the repository's 400-line
+    limit and Pylint's `too-many-lines`, so the module was split by
+    responsibility rather than suppressed: `episodic/cli/errors.py` now owns
+    `CliError` and its exit-coded subclasses, and
+    `episodic/cli/responses.py` owns the status-code-to-error translation.
+    `client.py` is 312 lines and holds only the `httpx` client and its option
+    resolution; the developers' guide, ADR 025, and this plan's module list
+    name the new files.
 
 ## Surprises & discoveries
 
@@ -1688,6 +1711,33 @@ Stop and escalate when any of these is reached.
   why `_supersede` needs no flush of its own. Date/Author: 2026-11-01,
   implementation agent. **Deviation status: none** — the public contract is
   unchanged; the store now fails a caller-owned defect without claiming it.
+- Decision: `CliRuntime.configure` rejects a non-positive or non-finite
+  `--timeout` as an `InvalidConfigError` (exit code `2`) before it builds
+  `ClientOptions`, rather than relying on the transport to fail. Rationale:
+  `Cyclopts` parses the argument as a `float`, so `-1`, `0`, `nan`, and `inf`
+  all reach the client. `httpx` forwards the value to socket timeout calls:
+  measured under `httpx` 0.28.1, `-1` raises
+  `ValueError: Timeout value out of range`, `nan` raises
+  `ValueError: Invalid value NaN`, and `inf` raises
+  `OverflowError: timestamp out of range`; none is an `httpx.HTTPError`, so
+  each escaped `main` as a traceback. `0` does not fail at all — it disables
+  the timeout, which no operator asking for a timeout expects. Validating the
+  resolved value keeps every failure on the documented usage-error path.
+  Date/Author: 2026-11-01, implementation agent. **Deviation status: none** —
+  the CLI contract already promises exit code `2` for an unusable global
+  option; this closes a value the contract omitted.
+- Decision: `episodic/cli/client.py` is split into `client.py` (the `httpx`
+  client and option resolution), `responses.py` (response decoding and
+  status-code translation), and `errors.py` (`CliError` and its exit-coded
+  subclasses). Rationale: the timeout guard took the module to 404 lines, past
+  the repository's 400-line limit and Pylint's `too-many-lines`. Raising the
+  limit or adding a suppression would hide a file that had grown two
+  responsibilities beyond its title: opening a request and interpreting an
+  answer. Errors move to their own module so the decoder can raise them without
+  importing the client that imports the decoder, which would be a cycle.
+  Date/Author: 2026-11-01, implementation agent. **Deviation status: none** —
+  no public behaviour changes; the existing tests import the error types from
+  their new home.
 - Decision: the five `EP-M3` projection and key signatures keep the flat
   keyword-argument shape pinned under "Interfaces and dependencies", and carry
   a local `# ruff: ignore[too-many-arguments]` instead of collapsing their
@@ -1855,14 +1905,15 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Fourteen review
-  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, and 14 each raised at least
-  one finding that was verified against source and repaired in its own commit;
-  round 9 completed with none; and round 12 reviewed this closing record and is
-  answered by the corrections in it. Round 13's five minor findings included
-  the one production repair after the rebase: `record_evaluation` now flushes a
-  caller's pending state outside its failure handler, so a caller-owned
-  constraint violation is not counted as a QA recording failure.
+  and a CodeRabbit CLI review of the committed milestone diff. Fifteen review
+  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, 14, and 15 each raised at
+  least one finding that was verified against source and repaired in its own
+  commit; round 9 completed with none; and round 12 reviewed this closing
+  record and is answered by the corrections in it. Round 13's five minor
+  findings included the one production repair after the rebase:
+  `record_evaluation` now flushes a caller's pending state outside its failure
+  handler, so a caller-owned constraint violation is not counted as a QA
+  recording failure.
 - The delivered code is attested by the sweep at `d2a53f1c`, the head that
   carries round 13's repairs, which is green with a clean tree on all seven
   gates: check-fmt, markdownlint (including the en-GB-oxendict spelling gate),
@@ -2807,7 +2858,10 @@ fenced blocks.
     standard output or exits.
   - `episodic/cli/app.py` — the `cyclopts.App` and global options.
   - `episodic/cli/qa.py` — the `qa evaluations list` command.
-  - `episodic/cli/client.py` — a thin `httpx` client and error translation.
+  - `episodic/cli/client.py` — a thin `httpx` client.
+  - `episodic/cli/responses.py` — response decoding and the status-code to
+    `CliError` translation.
+  - `episodic/cli/errors.py` — `CliError` and its exit-coded subclasses.
   - `episodic/cli/rendering.py` — pure table and JSON renderers.
   - `tests/test_qa_cli.py`, `tests/test_qa_cli_errors.py`,
     `tests/qa_cli_fixtures.py`, and `tests/__snapshots__/test_qa_cli.ambr` —
@@ -3447,6 +3501,10 @@ appends. `--token` defaults to `EPISODIC_API_TOKEN`; it is sent as
 `Authorization: Bearer <token>`. Never echo the token, and never place it in a
 rendered table. A bearer token is refused over plain HTTP unless the host is
 loopback, so a remote operator cannot put the credential on the wire in clear.
+`--timeout` must be a positive, finite number of seconds: zero would disable
+the timeout, and a negative or non-finite value reaches a socket call that
+raises `ValueError` or `OverflowError`, neither of which the client translates,
+so all four are usage errors raised before a request is built.
 
 Exit codes: `0` success; `1` the API returned an error envelope (print
 `message` to standard error, prefixed with the HTTP status); `2` usage error,

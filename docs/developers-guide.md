@@ -1833,9 +1833,12 @@ database client. See
 - `episodic/cli/app.py` builds the `cyclopts.App`, declares the global options,
   and owns the `CliApplication` launcher.
 - `episodic/cli/qa.py` declares the `qa evaluations list` command.
-- `episodic/cli/client.py` holds the `httpx` client, the resolved
-  `ClientOptions`, and the translation from HTTP outcomes to `CliError`
-  subclasses.
+- `episodic/cli/client.py` holds the `httpx` client and the resolved
+  `ClientOptions`.
+- `episodic/cli/responses.py` translates a completed response into a page
+  payload or the matching `CliError`.
+- `episodic/cli/errors.py` holds `CliError` and its exit-coded subclasses, so
+  the decoder and the command modules name them without importing the client.
 - `episodic/cli/rendering.py` holds the pure table and JSON renderers.
 - `episodic/cli/__init__.py` re-exports `main` and nothing else.
 

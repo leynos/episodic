@@ -9,11 +9,15 @@ inspect status codes themselves.
 import dataclasses as dc
 import enum
 import ipaddress
+import math
 import os
 import typing as typ
 import urllib.parse
 
 import httpx
+
+from episodic.cli.errors import ApiUnavailableError, InvalidConfigError
+from episodic.cli.responses import decode_page
 
 if typ.TYPE_CHECKING:
     import uuid
@@ -24,41 +28,6 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 BASE_URL_ENV = "EPISODIC_API_URL"
 TOKEN_ENV = "EPISODIC_API_TOKEN"  # ruff: ignore[hardcoded-password-string]  # An environment-variable name, not a credential.
 DEFAULT_TIMEOUT_SECONDS = 30.0
-
-MISSING_TOKEN_HINT = "no API token configured; set EPISODIC_API_TOKEN or pass --token"  # ruff: ignore[hardcoded-password-string]  # Guidance naming the variable, not a credential.
-
-
-class CliError(Exception):
-    """Failure the CLI reports on standard error."""
-
-    exit_code: int = 1
-
-    def __init__(self, message: str, *, hint: str | None = None) -> None:
-        """Record the message and an optional remediation hint."""
-        super().__init__(message)
-        self.hint = hint
-
-
-class ApiError(CliError):
-    """The API answered with an error envelope."""
-
-
-class InvalidConfigError(CliError):
-    """A global option names a value the HTTP client cannot use."""
-
-    exit_code = 2
-
-
-class ApiUnavailableError(CliError):
-    """The API could not be reached within the configured timeout."""
-
-    exit_code = 3
-
-
-class RateLimitedError(CliError):
-    """The API throttled the request."""
-
-    exit_code = 4
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -95,6 +64,16 @@ class CliRuntime:
         timeout: float,
     ) -> None:
         """Resolve the global arguments against the environment."""
+        if not math.isfinite(timeout) or timeout <= 0:
+            # ``httpx`` hands the value to socket timeout calls, which raise
+            # ``ValueError`` or ``OverflowError`` for a negative or non-finite
+            # value; neither is an ``httpx.HTTPError``, so it would escape
+            # ``main`` as a traceback. Zero silently disables the timeout.
+            invalid = (
+                "The request timeout must be a positive, finite number of "
+                "seconds; check --timeout"
+            )
+            raise InvalidConfigError(invalid)
         resolved_token = _first_present(token, os.environ.get(TOKEN_ENV))
         if resolved_token is not None and not _is_header_safe(resolved_token):
             # ``httpx`` raises ``UnicodeEncodeError`` while building the client
@@ -300,7 +279,7 @@ class QaApiClient:
             If the API could not be reached before the timeout elapsed.
         RateLimitedError
             If the API throttled the request.
-        """  # ruff: ignore[docstring-extraneous-exception]  # _decode_page() raises them from this call.
+        """  # ruff: ignore[docstring-extraneous-exception]  # decode_page() raises them from this call.
         options = self._runtime.options
         url = f"{options.base_url.rstrip('/')}{query.path()}"
         try:
@@ -318,7 +297,7 @@ class QaApiClient:
                 f"Cannot reach the Episodic API at {options.base_url}: {error}"
             )
             raise ApiUnavailableError(unreachable) from error
-        return _decode_page(
+        return decode_page(
             response,
             token_configured=options.token is not None,
         )
@@ -327,67 +306,3 @@ class QaApiClient:
         """Return the authorization header, omitting an unset token."""
         token = self._runtime.options.token
         return {} if token is None else {"Authorization": f"Bearer {token}"}
-
-
-def _decode_page(
-    response: httpx.Response,
-    *,
-    token_configured: bool,
-) -> dict[str, object]:
-    """Return a successful payload or raise the matching CLI error."""
-    payload = _decode(response)
-    status = response.status_code
-    if response.is_success:
-        match payload.get("items"):
-            case list():
-                return payload
-            case _:
-                unexpected = f"{status} the API returned an unexpected response body"
-                raise ApiError(unexpected)
-
-    code = _as_text(payload.get("code")) or "unknown_error"
-    message = _as_text(payload.get("message")) or response.reason_phrase
-    if status == httpx.codes.TOO_MANY_REQUESTS or code == "rate_limited":
-        raise RateLimitedError(
-            _throttled_message(status, message, response.headers.get("Retry-After"))
-        )
-    unauthorized = status == httpx.codes.UNAUTHORIZED and not token_configured
-    hint = MISSING_TOKEN_HINT if unauthorized else None
-    text = f"{status} {message}"
-    raise ApiError(text, hint=hint)
-
-
-def _decode(response: httpx.Response) -> dict[str, object]:
-    """Decode a JSON object body, treating anything else as absent."""
-    if not response.content:
-        return {}
-    try:
-        payload = response.json()
-    except ValueError:
-        return {}
-    match payload:
-        case dict() as body:
-            return body
-        case _:
-            return {}
-
-
-def _as_text(value: object) -> str | None:
-    """Return a non-empty string value, or ``None``."""
-    match value:
-        case str() as text if text:
-            return text
-        case _:
-            return None
-
-
-def _throttled_message(status: int, message: str, retry_after: str | None) -> str:
-    """Compose a throttle message that names the retry delay when present."""
-    text = f"{status} {message}"
-    if not retry_after:
-        return text
-    if retry_after.isdigit():
-        return f"{text} (retry after {retry_after} seconds)"
-    # RFC 9110 allows an HTTP-date as well as a delay in seconds, and a
-    # "seconds" unit after a date would be a unit the server never sent.
-    return f"{text} (retry after {retry_after})"
