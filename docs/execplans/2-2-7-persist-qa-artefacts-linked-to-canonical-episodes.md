@@ -8,7 +8,7 @@ be kept up to date as work proceeds.
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
 `EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
 finding through round 24 repaired and each repair gate-swept before the next
-round.
+round; review round 25 completed with no finding.
 
 ## Purpose / big picture
 
@@ -1306,6 +1306,10 @@ Stop and escalate when any of these is reached.
     — 1953 passed, 3 skipped, 30 warnings, 358.54 s, 67 snapshots.
     `check-migrations` was not re-run because the change surface touches no
     migration; `3e13bf0a` carries that gate for the schema as delivered.
+  - Post-delivery CodeRabbit CLI review round 25 at `5419ed1f` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 85 reviewed paths, no rate limit). No
+    finding was raised, so the review loop closed: no valid concern remains
+    unresolved in the branch.
 
 ## Surprises & discoveries
 
@@ -2153,14 +2157,14 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Twenty-four
+  and a CodeRabbit CLI review of the committed milestone diff. Twenty-five
   review rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–24 each raised at
   least one finding that was verified against source and repaired in its own
-  commit; round 9 completed with none; and round 12 reviewed this closing
-  record and is answered by the corrections in it. Round 17's single minor
-  finding was a test-isolation defect: the finding-ceiling test shared one
-  identifier across every synthetic finding, so a loosened match would let the
-  duplicate-id rejection satisfy it. Round 18's single minor finding was an
+  commit; rounds 9 and 25 completed with none; and round 12 reviewed this
+  closing record and is answered by the corrections in it. Round 17's single
+  minor finding was a test-isolation defect: the finding-ceiling test shared
+  one identifier across every synthetic finding, so a loosened match would let
+  the duplicate-id rejection satisfy it. Round 18's single minor finding was an
   ordering defect in the storage read path, where findings were validated
   before the schema version was checked. Round 19's single trivial finding
   observed that the generation-run foreign key had no index: PostgreSQL indexes
