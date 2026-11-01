@@ -94,8 +94,11 @@ credentials, and without a query string or fragment, because the client appends
 the resource path to it. A bearer token is refused over plain HTTP to a
 non-loopback host: loopback and every `https://` endpoint remain allowed, so
 local development works unchanged while a misconfigured remote endpoint cannot
-put the credential on the wire in clear. The token is never echoed and never
-appears in a rendered table.
+put the credential on the wire in clear. A token must be printable ASCII,
+because `httpx` raises `UnicodeEncodeError` — which is not an `httpx` transport
+error — while building a request whose header cannot carry the value; the
+client rejects it during option resolution instead, as a usage error. The token
+is never echoed and never appears in a rendered table.
 
 ### Output and exit-code policy
 

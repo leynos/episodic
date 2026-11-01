@@ -96,6 +96,15 @@ class CliRuntime:
     ) -> None:
         """Resolve the global arguments against the environment."""
         resolved_token = _first_present(token, os.environ.get(TOKEN_ENV))
+        if resolved_token is not None and not _is_header_safe(resolved_token):
+            # ``httpx`` raises ``UnicodeEncodeError`` while building the client
+            # for a value a header cannot carry, and that is not an
+            # ``httpx.HTTPError``, so it would escape ``main`` as a traceback.
+            invalid = (
+                "The API token must be printable ASCII; "
+                "check --token or EPISODIC_API_TOKEN"
+            )
+            raise InvalidConfigError(invalid)
         resolved_url = (
             _first_present(base_url, os.environ.get(BASE_URL_ENV)) or DEFAULT_BASE_URL
         )
@@ -112,6 +121,11 @@ def _first_present(*values: str | None) -> str | None:
         if value:
             return value
     return None
+
+
+def _is_header_safe(token: str) -> bool:
+    """Return whether ``token`` can travel as an HTTP header value."""
+    return token.isascii() and token.isprintable()
 
 
 def _validated_base_url(base_url: str, *, token: str | None) -> str:

@@ -38,7 +38,8 @@ The default endpoint is `http://127.0.0.1:8000`. Set `EPISODIC_API_URL` or pass
 `--base-url` to reach another deployment, and set `EPISODIC_API_TOKEN` or pass
 `--token` to authenticate. A bearer token is refused over plain HTTP unless the
 host is loopback, so a remote endpoint needs `https://`. A base URL must not
-carry embedded credentials or a query string.
+carry embedded credentials or a query string. A token must be printable ASCII;
+anything else is refused as a usage error before a request is sent.
 
 Filter the results and choose machine-readable output:
 

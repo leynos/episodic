@@ -106,6 +106,27 @@ def test_configured_token_suppresses_the_missing_token_hint(
     assert "EPISODIC_API_TOKEN" not in captured.err, captured.err
 
 
+@pytest.mark.parametrize(
+    "token",
+    ["placeholder-café", "placeholder\tvalue"],
+    ids=["non-ascii", "control-character"],
+)
+def test_unusable_token_is_a_usage_error(
+    capsys: pytest.CaptureFixture[str],
+    token: str,
+) -> None:
+    """A token no HTTP header can carry is rejected before dispatch."""
+    transport, recorded = canned(PAGE)
+
+    exit_code = main(["--token", token, *list_arguments()], transport=transport)
+
+    captured = capsys.readouterr()
+    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
+    assert recorded.seen == [], recorded.seen
+    assert "printable ASCII" in captured.err, captured.err
+    assert "placeholder" not in captured.err, captured.err
+
+
 def test_unreachable_api_maps_to_exit_three(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
