@@ -243,22 +243,18 @@ def reports_evaluator_and_status(context: QaRetrievalContext) -> None:
         assert item["compliance_status"] in statuses, item
 
 
-@then(parsers.parse("the response lists {count:d} evaluation"))
-def lists_counted_evaluation(
-    context: QaRetrievalContext,
-    count: int,
-) -> None:
-    """Assert the listing carries the expected number of evaluations."""
-    assert len(_listed_items(context)) == count, context.listed
-
-
-@then(parsers.parse("the response lists {count:d} evaluations"))
+@then(parsers.re(r"^the response lists (?P<count>\d+) evaluations?$"))
 def lists_counted_evaluations(
     context: QaRetrievalContext,
-    count: int,
+    count: str,
 ) -> None:
-    """Assert the listing carries the expected number of evaluations."""
-    assert len(_listed_items(context)) == count, context.listed
+    """Assert the listing carries the expected number of evaluations.
+
+    The step text is deliberately number-agnostic in its noun: a scenario says
+    "1 evaluation" and "0 evaluations", and one definition keeps both spellings
+    asserting the same thing.
+    """
+    assert len(_listed_items(context)) == int(count), context.listed
 
 
 @then(parsers.parse("the response reports a total of {total:d}"))

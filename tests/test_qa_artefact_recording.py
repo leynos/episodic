@@ -15,11 +15,10 @@ import typing as typ
 
 import pytest
 
-from episodic.canonical.qa_artefact_recording import (
-    compliance_status_for_pedante,
-    evaluation_from_pedante,
-)
+from episodic.canonical.qa_artefact_compliance import compliance_status_for_pedante
+from episodic.canonical.qa_artefact_recording import evaluation_from_pedante
 from episodic.canonical.qa_artefacts import (
+    MAX_SUMMARY_CHARS,
     QA_ARTEFACT_SCHEMA_VERSION,
     QA_COMPLIANCE_POLICY_VERSION,
     QaComplianceStatus,
@@ -260,3 +259,16 @@ def test_pedante_metadata_carries_the_provider_response() -> None:
     assert "usage" not in evaluation.summary_record.evaluator_metadata, (
         "token usage belongs to the cost ledger, not the artefact"
     )
+
+
+def test_oversized_result_is_refused_rather_than_truncated() -> None:
+    """A result beyond the stored bounds raises instead of being shortened."""
+    result = pedante_result(summary="x" * (MAX_SUMMARY_CHARS + 1))
+
+    with pytest.raises(ValueError, match="summary"):
+        evaluation_from_pedante(
+            result,
+            episode_id=EPISODE_ID,
+            tei_content_hash=TEI_CONTENT_HASH,
+            evaluated_at=EVALUATED_AT,
+        )

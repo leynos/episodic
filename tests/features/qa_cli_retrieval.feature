@@ -25,6 +25,7 @@ Feature: QA artefact retrieval through the CLI
     When the operator lists the episode's QA evaluations for evaluator "pedante"
     Then the CLI exits with status 0
     And the table lists 1 evaluation
+    And every table row names evaluator "pedante"
     And the summary line reports "1 of 1 evaluations"
 
   Scenario: Combining filters that match nothing

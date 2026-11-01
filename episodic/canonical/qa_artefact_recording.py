@@ -2,9 +2,10 @@
 
 An evaluator returns its own result type, but the archive stores one shape for
 every evaluator. This module owns that translation and nothing else: each
-function is total over its result type, the compliance policy is a single
-predicate over the Pedante finding set, and the idempotency key is a function
-of exactly the inputs the store's uniqueness constraint depends on.
+function is a pure projection that raises ``ValueError`` when the projected data
+exceeds a bound the QA artefact types enforce, the compliance policy is a single
+predicate over the Pedante finding set, and the idempotency key is a function of
+exactly the inputs the store's uniqueness constraint depends on.
 
 The projections are pure. They read no clock and no identifier generator other
 than the one the caller supplies, which keeps ``INV-KEY-DETERMINISM`` a property
@@ -22,6 +23,7 @@ from episodic.qa.pedante.types import (
     PedanteFinding,
 )
 
+from .qa_artefact_compliance import compliance_status_for_pedante
 from .qa_artefacts import (
     QA_ARTEFACT_SCHEMA_VERSION,
     QA_COMPLIANCE_POLICY_VERSION,
@@ -43,28 +45,6 @@ if typ.TYPE_CHECKING:
 type UuidFactory = cabc.Callable[[], uuid.UUID]
 
 _NO_GENERATION_RUN = "-"
-
-
-def compliance_status_for_pedante(
-    result: PedanteEvaluationResult,
-) -> QaComplianceStatus:
-    """Return the verdict Pedante's blocking policy gives a result.
-
-    Parameters
-    ----------
-    result : PedanteEvaluationResult
-        Typed Pedante findings for one script.
-
-    Returns
-    -------
-    QaComplianceStatus
-        ``NON_COMPLIANT`` when any finding blocks editorial approval, and
-        ``COMPLIANT`` otherwise. Severity does not decide the verdict; the
-        support level does, so an advisory finding never holds an episode back.
-    """
-    if result.requires_revision:
-        return QaComplianceStatus.NON_COMPLIANT
-    return QaComplianceStatus.COMPLIANT
 
 
 # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # key is a function of the five pinned inputs
@@ -222,6 +202,18 @@ def evaluation_from_pedante(  # ruff: ignore[too-many-arguments]
     QaEvaluation
         The mapped evaluation with ``finding_count`` equal to its findings.
 
+    Raises
+    ------
+    ValueError
+        If the result exceeds a bound declared in
+        :mod:`episodic.canonical.qa_artefacts`: a summary longer than
+        :data:`~episodic.canonical.qa_artefacts.MAX_SUMMARY_CHARS`, a finding
+        field beyond its own limit, or more than
+        :data:`~episodic.canonical.qa_artefacts.MAX_FINDINGS_PER_EVALUATION`
+        findings. The projection never truncates, so a caller that meets this
+        failure records it with :func:`evaluation_from_failure` rather than
+        storing a shortened artefact.
+
     Examples
     --------
     >>> import datetime as dt
@@ -236,7 +228,7 @@ def evaluation_from_pedante(  # ruff: ignore[too-many-arguments]
     ... )
     >>> evaluation.summary_record.compliance_status.value
     'compliant'
-    """
+    """  # ruff: ignore[docstring-extraneous-exception]  # QaEvaluation validates the mapped fields here.
     evaluation_id = uuid_factory()
     return QaEvaluation(
         summary_record=_summary_record(

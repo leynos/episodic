@@ -166,12 +166,19 @@ def table_lists_newest_first(cli: QaCliContext, count: int) -> None:
     assert [int(row[2]) for row in rows] == [0, 0, 3][:count], rows
 
 
-@then(parsers.parse("the table lists {count:d} evaluation"))
-def table_lists_one(cli: QaCliContext, count: int) -> None:
+@then(parsers.re(r"^the table lists (?P<count>\d+) evaluations?$"))
+def table_lists_counted(cli: QaCliContext, count: str) -> None:
     """Assert the table carries the expected number of evaluations."""
     rows = table_rows(cli)
-    assert len(rows) == count, rows
-    assert rows[0][0] == "pedante", rows
+    assert len(rows) == int(count), rows
+
+
+@then(parsers.parse('every table row names evaluator "{evaluator}"'))
+def table_rows_name_evaluator(cli: QaCliContext, evaluator: str) -> None:
+    """Assert every listed row belongs to the filtered evaluator."""
+    rows = table_rows(cli)
+    assert rows, "expected at least one row"
+    assert all(row[0] == evaluator for row in rows), rows
 
 
 @then(parsers.parse('the summary line reports "{summary}"'))

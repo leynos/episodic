@@ -1744,7 +1744,10 @@ episode. See
 - `episodic/canonical/qa_artefact_errors.py` defines the errors a reader raises
   when a stored row cannot be interpreted.
 - `episodic/canonical/qa_artefact_recording.py` projects Pedante and Chrono
-  results onto artefacts, including the compliance policy.
+  results onto artefacts. It raises `ValueError` when a result exceeds a stored
+  bound; it never truncates.
+- `episodic/canonical/qa_artefact_compliance.py` holds the compliance policy,
+  the single predicate that maps Pedante findings onto a verdict.
 - `episodic/canonical/qa_artefact_service.py` is the application service that
   records and reads evaluations through the unit of work.
 - `episodic/canonical/storage/` holds the SQLAlchemy models, the mappers, and

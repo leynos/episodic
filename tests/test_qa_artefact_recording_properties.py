@@ -10,8 +10,8 @@ import hypothesis
 import hypothesis.strategies as st
 from hypothesis import given, settings
 
+from episodic.canonical.qa_artefact_compliance import compliance_status_for_pedante
 from episodic.canonical.qa_artefact_recording import (
-    compliance_status_for_pedante,
     evaluation_from_pedante,
 )
 from episodic.canonical.qa_artefacts import (
