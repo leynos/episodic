@@ -155,9 +155,9 @@ pure and the entry point does the printing.
 
 - The CLI inherits the API's authorization, pagination, and error contracts and
   must be re-released only when the API's wire shape changes.
-- `cyclopts` becomes a runtime dependency and its version is pinned, so a
-  breaking change in its annotation handling is a dependency decision rather
-  than an implementation detail.
+- `cyclopts` becomes a runtime dependency and its version is bounded to the
+  current major release, so a breaking change in its annotation handling is a
+  dependency decision rather than an implementation detail.
 - The Hecate group makes a future convenience import a build failure, which is
   the point but does mean an intentional new dependency needs a configuration
   change and an architecture review.
