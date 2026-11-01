@@ -138,8 +138,8 @@ def _validated_base_url(base_url: str, *, token: str | None) -> str:
     ------
     InvalidConfigError
         If the URL has no HTTP(S) scheme, names no host, carries embedded
-        credentials, carries a query string or fragment, or would send
-        ``token`` over plain HTTP to a non-loopback host.
+        credentials, contains a ``?`` or ``#`` marker even with nothing after
+        it, or would send ``token`` over plain HTTP to a non-loopback host.
     """
     try:
         parsed = urllib.parse.urlsplit(base_url)
@@ -164,7 +164,10 @@ def _validated_base_url(base_url: str, *, token: str | None) -> str:
             "expected an http or https URL with a host"
         )
         raise InvalidConfigError(invalid)
-    if parsed.query or parsed.fragment:
+    # Test the raw string, not the parsed parts: ``urlsplit`` reports an empty
+    # query for a trailing "?", yet appending the resource path to that base
+    # URL still sends the request to "/" with the path in the query.
+    if "?" in base_url or "#" in base_url:
         invalid = (
             f"Invalid Episodic API URL {shown}: remove the query string and fragment"
         )

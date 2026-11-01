@@ -163,11 +163,25 @@ def test_unexpected_success_body_is_an_error(
             "remove the query string and fragment",
         ),
         (
+            ["--base-url", "https://api.example.test?"],
+            "remove the query string and fragment",
+        ),
+        (
+            ["--base-url", "https://api.example.test#"],
+            "remove the query string and fragment",
+        ),
+        (
             ["--base-url", "http://api.example.test", "--token", "secret-token"],
             "Refusing to send a bearer token",
         ),
     ],
-    ids=["malformed", "query-string", "token-over-remote-http"],
+    ids=[
+        "malformed",
+        "query-string",
+        "bare-query-marker",
+        "bare-fragment-marker",
+        "token-over-remote-http",
+    ],
 )
 def test_unusable_base_url_is_a_usage_error(
     capsys: pytest.CaptureFixture[str],
