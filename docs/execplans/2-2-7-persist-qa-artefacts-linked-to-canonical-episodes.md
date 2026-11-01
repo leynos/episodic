@@ -809,6 +809,17 @@ Stop and escalate when any of these is reached.
     `test_base_url_with_embedded_credentials_is_rejected`
     was added, asserting the credential never reaches standard error; the CLI
     suites pass with 23 unit tests, 6 scenarios, and 4 snapshots.
+  - Commit `0c3383b1`, re-gated green (check-fmt, markdownlint, nixie,
+    typecheck, lint, check-migrations, test: 1936 passed, 3 skipped).
+  - Milestone CLI review round 4 attempt at `0c3383b1` (`coderabbit 0.9.2`):
+    no review was produced. The CLI returned `errorType: rate_limit`,
+    `recoverable: true`, `waitTime: "0 minutes and 14 seconds"`, with the
+    account at 10/10 included reviews. Under the CLI backoff policy the
+    requested wait rounds up to 1 minute, so `q = 11` and the sampled wait is
+    11–90 minutes; the sample was **18 minutes**, making the next attempt
+    eligible at `2026-11-01T00:51:25Z`. Recorded evidence:
+    `/tmp/coderabbit-epm5-myQaj3Q0/`. The milestone stays open until a review
+    completes.
 - [ ] EP-M6 Documentation, ADRs, and roadmap completion.
   - Operator-requested early edit (2026-10-31): the design document's
     `Quality Assurance Stack` section now carries the ER diagram of
