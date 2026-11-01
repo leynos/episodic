@@ -14,9 +14,10 @@ from tests.qa_cli_fixtures import (
     EPISODE_ID,
     PAGE,
     canned,
-    clean_environment,  # ruff: ignore[unused-import]  # An autouse fixture pytest needs in this module.
     list_arguments,
 )
+
+pytestmark = pytest.mark.usefixtures("clean_environment")
 
 _CONNECTION_REFUSED = "connection refused"
 

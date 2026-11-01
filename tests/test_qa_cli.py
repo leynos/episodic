@@ -10,6 +10,8 @@ behavioural coverage through the real application lives in
 import json
 import typing as typ
 
+import pytest
+
 from episodic.cli import main
 from episodic.cli.rendering import render_json, render_table
 from tests.qa_cli_fixtures import (
@@ -17,14 +19,14 @@ from tests.qa_cli_fixtures import (
     EPISODE_ID,
     PAGE,
     canned,
-    clean_environment,  # ruff: ignore[unused-import]  # An autouse fixture pytest needs in this module.
     list_arguments,
     redacted,
 )
 
 if typ.TYPE_CHECKING:
-    import pytest
     from syrupy.assertion import SnapshotAssertion
+
+pytestmark = pytest.mark.usefixtures("clean_environment")
 
 
 def test_table_renders_a_page(snapshot: SnapshotAssertion) -> None:

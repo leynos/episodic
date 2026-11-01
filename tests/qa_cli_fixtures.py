@@ -9,7 +9,6 @@ import dataclasses as dc
 import typing as typ
 
 import httpx
-import pytest
 
 from tests.snapshot_redaction import redact_snapshot_uuids
 
@@ -17,7 +16,6 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 EPISODE_ID = "0199a0c2-0000-7000-8000-000000000010"
-CLI_ENVIRONMENT_VARIABLES = ("EPISODIC_API_URL", "EPISODIC_API_TOKEN")
 
 _PEDANTE = {
     "id": "0199a0c2-0000-7000-8000-000000000001",
@@ -75,13 +73,6 @@ class RecordedRequests:
     """Requests the stubbed transport received."""
 
     seen: list[httpx.Request] = dc.field(default_factory=list)
-
-
-@pytest.fixture(autouse=True)
-def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Isolate the CLI from the operator's own API settings."""
-    for name in CLI_ENVIRONMENT_VARIABLES:
-        monkeypatch.delenv(name, raising=False)
 
 
 def canned(
