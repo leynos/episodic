@@ -210,9 +210,9 @@ well as a mixin would.
   `review_checkpoint_history` table would duplicate it. The deletion half of
   ADR-018's policy does apply — see the `RESTRICT` consequence above.
 - **Nothing schedules lease reclamation.** The composite port gains a
-  `fail_expired_leases` primitive, but no worker calls it. Until 2.6.3 supplies
-  an entry point, the manual `psql` procedure in the developers' guide remains
-  the operative recovery path.
+  `fail_expired_leases` primitive, but no worker calls it. Until roadmap item
+  2.6.5 supplies a scheduler, the manual `psql` procedure in the developers'
+  guide remains the operative recovery path.
 
 ## References
 

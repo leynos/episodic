@@ -598,7 +598,26 @@ Stop and escalate rather than improvising when any of these is reached.
       pre-existing `SAWarning` about the `episodes`/`generation_runs`/
       `ingestion_jobs` cycle is unrelated and did not fail the gate), `make
       check-architecture` (hecate passed), and `make test` (1814 passed, 3
-      skipped, 361.91 s).
+      skipped, 361.91 s). Re-run in full after the review repairs below: all
+      eight again green, `make test` at 1816 passed, 3 skipped, 249.45 s.
+
+- [x] (2026-11-01) Local CodeRabbit CLI review of `origin/main..HEAD`, plus the
+      disposition of each finding. The first attempt was rate-limited (all 10
+      included reviews spent, shared across the account); a retry after the
+      reported window completed and raised seven findings across four files.
+      Three were accepted and fixed: the ADR and the developers' guide both
+      cited roadmap `2.6.2`/`2.6.3` for scheduling lease reclamation, when the
+      roadmap entry is `2.6.5`; `_count_open` now returns early instead of
+      issuing a `COUNT` nobody can observe when the store was built without a
+      metrics sink, with a test that asserts both halves (no count without a
+      sink, a count with one); and `generation_run_context` no longer requests
+      the database fixture for every scenario, only the two PostgreSQL steps
+      do. One was accepted in part: the migration keeps importing the shared
+      predicate constant, because freezing a literal copy would reintroduce the
+      drift the constant exists to prevent — `make check-migrations` cannot
+      compare partial-index predicates, so two literals fail open — but the
+      suggested `pg_indexes` comparison is worth having on its own and is now
+      `tests/canonical_storage/test_expired_lease_index_definition.py`.
 
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
@@ -1626,11 +1645,11 @@ declined with a reason (D-21).
 child of `3e031425` carrying the `EP-ASSESS-2.6.2-a1` repairs: `make check-fmt`,
 `make lint` (all nine substeps executed), `make typecheck`,
 `make markdownlint`, `make nixie`, `make check-migrations`,
-`make check-architecture`, and `make test` (1814 passed, 3 skipped, 0 failed,
-361.91 s). The earlier CLI review of `59249971` returned zero findings across
-all 44 changed files; the repair commit is reviewed again on top of it, because
-the findings that prompted the repairs were raised *after* that review. What
-remains is outside this plan's authority: hosted assessment on the PR, the two
+`make check-architecture`, and `make test` (1816 passed, 3 skipped, 0 failed,
+249.45 s). The CLI review of the repairs raised seven findings; the three
+accepted are fixed and the fourth is fixed in part, with the migration-import
+suggestion declined in Progress for the reason recorded there. What remains is
+outside this plan's authority: hosted assessment on the PR, the two
 `pr-babysitting`-owned CodeRabbit assessments, and merge. *Residual gaps* is
 deliberately long — eight items, each with a roadmap number — because the
 plan's own conformance check requires that nothing be silently dropped.

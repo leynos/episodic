@@ -52,7 +52,6 @@ class GenerationRunLifecycleContext:
     """Shared state for checkpoint lifecycle scenarios."""
 
     runner: asyncio.Runner
-    session_factory: async_sessionmaker[AsyncSession] | None = None
     store: GenerationRunPort = dc.field(default_factory=InMemoryGenerationRunStore)
     uow: SqlAlchemyUnitOfWork | None = None
     stack: contextlib.AsyncExitStack | None = None
@@ -77,13 +76,10 @@ async def _close(ctx: GenerationRunLifecycleContext) -> None:
 @pytest.fixture
 def generation_run_context(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: async_sessionmaker[AsyncSession],
 ) -> cabc.Iterator[GenerationRunLifecycleContext]:
     """Create isolated BDD state for each scenario."""
-    ctx = GenerationRunLifecycleContext(
-        runner=_function_scoped_runner,
-        session_factory=session_factory,
-    )
+    # No database fixture here: only the PostgreSQL steps request one.
+    ctx = GenerationRunLifecycleContext(runner=_function_scoped_runner)
     yield ctx
     ctx.tear_down()
 
@@ -205,12 +201,13 @@ def responded_checkpoint(
 @given("a generation run persisted in PostgreSQL")
 def run_persisted_in_postgres(
     generation_run_context: GenerationRunLifecycleContext,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Open a unit of work over a run whose foreign keys are committed."""
     ctx = generation_run_context
+    factory = session_factory
 
     async def prepare() -> GenerationRun:
-        factory = _require(ctx.session_factory, "Scenario needs a session factory.")
         run = _run()
         await persist_generation_run_prerequisites(factory, run)
         stack = contextlib.AsyncExitStack()
@@ -358,11 +355,10 @@ async def _commit_and_close(ctx: GenerationRunLifecycleContext) -> None:
 
 
 async def _read_fresh(
-    ctx: GenerationRunLifecycleContext,
+    factory: async_sessionmaker[AsyncSession],
     checkpoint_id: uuid.UUID,
 ) -> Checkpoint | None:
     """Read a checkpoint back through a brand-new unit of work."""
-    factory = _require(ctx.session_factory, "Scenario needs a session factory.")
     async with SqlAlchemyUnitOfWork(factory) as uow:
         return await uow.generation_runs.get_checkpoint(checkpoint_id)
 
@@ -374,12 +370,13 @@ async def _read_fresh(
 )
 def checkpoint_status_read_fresh(
     generation_run_context: GenerationRunLifecycleContext,
+    session_factory: async_sessionmaker[AsyncSession],
     status: str,
 ) -> None:
     """Assert a later unit of work observes the committed status."""
     ctx = generation_run_context
     checkpoint = _require(ctx.checkpoint, "Checkpoint was not prepared.")
-    ctx.reloaded = ctx.runner.run(_read_fresh(ctx, checkpoint.id))
+    ctx.reloaded = ctx.runner.run(_read_fresh(session_factory, checkpoint.id))
     reloaded = _require(ctx.reloaded, "Checkpoint was not re-read.")
     assert reloaded.status is CheckpointStatus(status), "Expected values to match"
 

@@ -1,14 +1,13 @@
 """PostgreSQL adapter for user-facing generation-run review checkpoints.
 
 Every state change routes through the domain transition on :class:`Checkpoint`
-and then persists the entity it returned. The adapter owns no lifecycle rules:
-INV-CKPT-1 exists because two implementations of one rule set drift.
+and persists what it returned. The adapter owns no lifecycle rules: INV-CKPT-1
+exists because two implementations of one rule set drift.
 
-Transitions use compare-and-set rather than ``SELECT ... FOR UPDATE`` (D-10,
-ADR-018); ``status = 'created'`` is the control, and its outcome is observable
-sequentially — a row lock's is not here, because the harness serializes every
-transaction. Core ``UPDATE``s leave the session holding a stale copy that ORM
-reads answer from, so behavioural reads pass ``populate_existing``.
+Transitions use compare-and-set, not ``SELECT ... FOR UPDATE`` (D-10, ADR-018);
+``status = 'created'`` is the control, and the harness's serialization makes
+its outcome sequential. Core ``UPDATE``s leave a stale session copy, so reads
+pass ``populate_existing``.
 """
 
 import typing as typ
@@ -70,15 +69,13 @@ class SqlAlchemyReviewCheckpointStore:
     a reviewer's decision. Any other violation propagates as ``IntegrityError``,
     since a foreign-key or CHECK failure is a different fault.
 
-    Every terminal transition is applied as one compare-and-set. The write is
-    guarded by ``status = 'created'`` rather than by locking the row, so a
-    losing writer learns it lost from `rowcount` instead of from lock ordering.
-    The named domain transition runs first and its result is what gets
-    persisted, so the adapter reimplements no lifecycle rule and a rejection
-    leaves the stored row untouched. Each transition returns that resolved
-    checkpoint, and raises :class:`CheckpointNotFound` when no row holds the
-    identifier or :class:`CheckpointAlreadyTerminal` when another writer
-    resolved the row first.
+    Every terminal transition is one compare-and-set guarded by
+    ``status = 'created'`` rather than by a row lock, so a losing writer learns
+    it lost from `rowcount`, not from lock ordering. The named domain transition
+    runs first and its result is persisted, so the adapter reimplements no
+    lifecycle rule and a rejection leaves the row untouched. A transition raises
+    :class:`CheckpointNotFound` when no row holds the identifier, or
+    :class:`CheckpointAlreadyTerminal` when another writer resolved it first.
     """
 
     def __init__(
@@ -91,6 +88,8 @@ class SqlAlchemyReviewCheckpointStore:
         self._session = session
         self._runtime = generation_run_storage_runtime(runtime)
         self._metrics = metrics or NoopValueMetrics()
+        # The gauge costs a COUNT per transition; skip it when nobody listens.
+        self._reports_metrics = metrics is not None
 
     async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
         """Persist a checkpoint, rejecting duplicate or terminal input.
@@ -305,8 +304,7 @@ class SqlAlchemyReviewCheckpointStore:
         try:
             updated = transition(checkpoint_from_record(record))
         except CheckpointAlreadyTerminal:
-            # The domain-precondition route; the lost-race route counts in
-            # `_raise_lost_race`. Only one of the two can be taken per call.
+            # The domain-precondition route; `_raise_lost_race` counts the other.
             record_terminal_conflict(self._metrics)
             raise
         result = await self._session.execute(
@@ -346,6 +344,8 @@ class SqlAlchemyReviewCheckpointStore:
 
     async def _count_open(self) -> float:
         """Return the unresolved count across all runs; the gauge has no labels."""
+        if not self._reports_metrics:
+            return 0.0
         count = await self._session.scalar(
             sa
             .select(sa.func.count())

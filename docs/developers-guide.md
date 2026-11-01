@@ -2353,8 +2353,8 @@ evidence.
 
 Nothing schedules this method yet. No reaper, worker, or cron entry invokes it,
 so during this slice it runs only when an operator or test calls it, and a
-backlog persists until something does. Periodic reclamation, retry, and
-reassignment remain roadmap item `2.6.2`.
+backlog persists until something does. Periodic reclamation and stuck-run
+detection remain roadmap item `2.6.5`.
 
 TEI representation selection is centralized in
 `episodic.api.resources.episode_tei.negotiate_tei_media_type`. Keep JSON as the

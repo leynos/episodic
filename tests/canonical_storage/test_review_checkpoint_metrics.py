@@ -14,6 +14,7 @@ import typing as typ
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy import event
 
 from episodic.canonical.domain import (
     CheckpointAction,
@@ -38,7 +39,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 _METRIC_CREATED = "review_checkpoint_created_total"
 _METRIC_RESOLVED = "review_checkpoint_resolved_total"
@@ -213,3 +214,48 @@ async def test_lost_compare_and_set_counts_as_a_terminal_conflict(
     assert metrics.counter_names().count(_METRIC_TERMINAL_CONFLICT) == 1, (
         "the conditional-update conflict route must keep counting"
     )
+
+
+@pytest.mark.asyncio
+async def test_gauge_count_is_skipped_without_a_metrics_sink(
+    session_factory: async_sessionmaker[AsyncSession],
+    migrated_engine: AsyncEngine,
+) -> None:
+    """The gauge's ``COUNT`` runs only when a sink could receive it.
+
+    Both halves are asserted: without a sink no count statement may run, and
+    with one it must. Without the second half the first would pass if
+    ``_count_open`` were never reached at all.
+    """
+    committed = await commit_run_and_checkpoint(session_factory)
+    statements: list[str] = []
+
+    def _record_statement(*args: object) -> None:
+        """Capture one statement; SQLAlchemy passes it third of six arguments."""
+        statements.append(typ.cast("str", args[2]))
+
+    engine = migrated_engine.sync_engine
+    event.listen(engine, "before_cursor_execute", _record_statement)
+    try:
+        async with session_factory() as session:
+            store = SqlAlchemyReviewCheckpointStore(session)
+            await store.create_checkpoint(make_checkpoint(committed.run_id))
+            await session.commit()
+        without_sink = [statement for statement in statements if "count(" in statement]
+
+        statements.clear()
+        async with session_factory() as session:
+            store = SqlAlchemyReviewCheckpointStore(
+                session,
+                metrics=_RecordingValueMetrics(),
+            )
+            await store.create_checkpoint(make_checkpoint(committed.run_id))
+            await session.commit()
+        with_sink = [statement for statement in statements if "count(" in statement]
+    finally:
+        event.remove(engine, "before_cursor_execute", _record_statement)
+
+    assert without_sink == [], (
+        f"an unwatched gauge must not cost a query, but ran: {without_sink}"
+    )
+    assert with_sink != [], "a configured sink must still receive the open gauge"
