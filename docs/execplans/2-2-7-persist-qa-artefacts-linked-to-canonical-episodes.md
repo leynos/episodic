@@ -7,7 +7,7 @@ be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
 `EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
-finding through round 22 repaired and each repair gate-swept before the next
+finding through round 23 repaired and each repair gate-swept before the next
 round.
 
 ## Purpose / big picture
@@ -1271,6 +1271,17 @@ Stop and escalate when any of these is reached.
     not re-run because the change surface is four Python test files; the parent
     `11a6b471` carries the documentation gates and `3e13bf0a` the migration
     gate.
+  - Post-delivery CodeRabbit CLI review round 23 at `9b77c915` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 84 reviewed paths, no rate limit). One
+    `minor` documentation finding, upheld and repaired: this plan's *Database
+    schema (EP-M2)* section still created two indexes and said "Two indexes",
+    and the *Performance* criterion repeated the count, even though round 19
+    delivered `ix_qa_evaluations_generation_run_id` and ADR 024 and the
+    migration both record it. The SQL block now carries the partial index, the
+    prose explains why it has no sort key and why the `WHERE` clause keeps it
+    small, and the *Performance* criterion counts three indexes and says what
+    the third covers. Fixed at `4465ae9f`; the documentation gates were run
+    against a copy of that file verified byte-identical to the candidate.
 
 ## Surprises & discoveries
 
@@ -2118,8 +2129,8 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Twenty-two
-  review rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–22 each raised at
+  and a CodeRabbit CLI review of the committed milestone diff. Twenty-three
+  review rounds ran in total: rounds 6, 7, 8, 10, 11, and 13–23 each raised at
   least one finding that was verified against source and repaired in its own
   commit; round 9 completed with none; and round 12 reviewed this closing
   record and is answered by the corrections in it. Round 17's single minor
@@ -2155,10 +2166,14 @@ REST API and a first-party CLI.
   each needed an unused-import suppression. It now lives in `tests/conftest.py`
   as a non-autouse fixture that both CLI unit test modules apply through
   `pytestmark`, so the isolation is claimed where it is used instead of being
-  implied by an import. Round 13's five minor findings included the one
-  production repair after the rebase: `record_evaluation` now flushes a
-  caller's pending state outside its failure handler, so a caller-owned
-  constraint violation is not counted as a QA recording failure.
+  implied by an import. Round 23's single minor finding was the same kind of
+  staleness in this plan: the *Database schema (EP-M2)* block still created two
+  indexes and both it and the *Performance* criterion still said two, so the
+  plan's own conformance check sent a reader to a schema that omits round 19's
+  partial index. Round 13's five minor findings included the one production
+  repair after the rebase: `record_evaluation` now flushes a caller's pending
+  state outside its failure handler, so a caller-owned constraint violation is
+  not counted as a QA recording failure.
 - The delivered code is attested by the sweeps at `a54223c7` (1949 tests),
   `0c4c566e`, `da811759`, and `b3c174eb` (1950 tests each), the heads that
   carry the round-15 through round-18 repairs and their follow-up, all green
@@ -2170,7 +2185,8 @@ REST API and a first-party CLI.
   Python-only round-22 repair at `7ec3a656` is attested by `check-fmt`,
   `typecheck`, `lint`, and `make test` (1950 passed, 67 snapshots) against that
   commit's exact content on top of `11a6b471`, which carries the documentation
-  gates.
+  gates. The documentation-only round-23 correction at `4465ae9f` is attested by
+  `check-fmt`, `markdownlint` (129 files, 0 issues), and `nixie`.
 - The migration gate ran `check-migrations` at `d2a53f1c`, the head that
   carries round 13's repairs, whose sweep covered all seven gates and passed
   1945 tests with 67 snapshots, and again at `3e13bf0a`, which adds the
