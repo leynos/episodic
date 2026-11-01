@@ -25,11 +25,13 @@ from episodic.canonical.qa_artefact_service import (
     list_qa_evaluations,
 )
 from episodic.canonical.qa_artefacts import QaComplianceStatus, QaEvaluator
+from episodic.observability import NoopTracer
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.api.types import UowFactory
+    from episodic.observability import SpanHandle, TracerPort
 
 
 def _evaluation_not_found(
@@ -44,6 +46,18 @@ def _evaluation_not_found(
             details=dict(details),
         ),
     )
+
+
+def _record_rejection(span: SpanHandle, failure_category: str) -> None:
+    """Mark the span as a rejected request with its stable category."""
+    span.set_attribute("outcome", "rejected")
+    span.set_attribute("failure_category", failure_category)
+
+
+def _record_not_found(span: SpanHandle, failure_category: str) -> None:
+    """Mark the span as a not-found response with its stable category."""
+    span.set_attribute("outcome", "not_found")
+    span.set_attribute("failure_category", failure_category)
 
 
 def _unsupported_schema(
@@ -76,10 +90,18 @@ class EpisodeQaEvaluationsResource:
     ----------
     uow_factory : UowFactory
         Callable dependency invoked to construct a unit of work per request.
+    tracer : TracerPort | None, optional
+        Span recorder. A no-op tracer is used when omitted.
     """
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        *,
+        tracer: TracerPort | None = None,
+    ) -> None:
         self._uow_factory = uow_factory
+        self._tracer = NoopTracer() if tracer is None else tracer
 
     async def on_get(
         self,
@@ -111,45 +133,57 @@ class EpisodeQaEvaluationsResource:
             If a stored row records a payload shape newer than this release
             reads.
         """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # The errors come from parse_uuid(), parse_pagination(), parse_enum_param(), _evaluation_not_found(), and _unsupported_schema(), which the docstring describes as one contract.
-        parsed_episode_id = parse_uuid(episode_id, "episode_id")
-        page = parse_pagination(req)
-        evaluator = parse_enum_param(req, "evaluator", QaEvaluator)
-        compliance_status = parse_enum_param(
-            req,
-            "compliance_status",
-            QaComplianceStatus,
-        )
-        async with self._uow_factory() as uow:
-            episode = await read_owned_episode(
-                uow,
-                parsed_episode_id,
-                principal_id(req),
-            )
-            if episode is None:
-                raise _evaluation_not_found({"episode_id": str(parsed_episode_id)})
+        with self._tracer.start_span(
+            "qa_evaluations.list",
+            attributes={"operation": "qa_evaluations.list"},
+        ) as span:
             try:
-                summaries, total = await list_qa_evaluations(
-                    uow,
-                    QaEvaluationListRequest(
-                        episode_id=parsed_episode_id,
-                        pagination=page,
-                        evaluator=evaluator,
-                        compliance_status=compliance_status,
-                    ),
+                parsed_episode_id = parse_uuid(episode_id, "episode_id")
+                page = parse_pagination(req)
+                evaluator = parse_enum_param(req, "evaluator", QaEvaluator)
+                compliance_status = parse_enum_param(
+                    req,
+                    "compliance_status",
+                    QaComplianceStatus,
                 )
-            except UnsupportedQaArtefactSchemaError as error:
-                # The caller already owns the episode, so naming the schema
-                # failure reveals nothing it could not learn from the rows.
-                raise _unsupported_schema(error) from error
-        resp.media = {
-            "items": [
-                serialize_qa_evaluation_summary(summary) for summary in summaries
-            ],
-            "limit": page.limit,
-            "offset": page.offset,
-            "total": total,
-        }
-        resp.status = falcon.HTTP_200
+            except falcon.HTTPError:
+                _record_rejection(span, "invalid_input")
+                raise
+            span.set_attribute("pagination", "offset")
+            async with self._uow_factory() as uow:
+                episode = await read_owned_episode(
+                    uow,
+                    parsed_episode_id,
+                    principal_id(req),
+                )
+                if episode is None:
+                    _record_not_found(span, "episode.not_found")
+                    raise _evaluation_not_found({"episode_id": str(parsed_episode_id)})
+                try:
+                    summaries, total = await list_qa_evaluations(
+                        uow,
+                        QaEvaluationListRequest(
+                            episode_id=parsed_episode_id,
+                            pagination=page,
+                            evaluator=evaluator,
+                            compliance_status=compliance_status,
+                        ),
+                    )
+                except UnsupportedQaArtefactSchemaError as error:
+                    # The caller already owns the episode, so naming the schema
+                    # failure reveals nothing it could not learn from the rows.
+                    _record_rejection(span, "qa_artefact_schema_unsupported")
+                    raise _unsupported_schema(error) from error
+            resp.media = {
+                "items": [
+                    serialize_qa_evaluation_summary(summary) for summary in summaries
+                ],
+                "limit": page.limit,
+                "offset": page.offset,
+                "total": total,
+            }
+            resp.status = falcon.HTTP_200
+            span.set_attribute("outcome", "success")
 
 
 class QaEvaluationResource:
@@ -159,10 +193,18 @@ class QaEvaluationResource:
     ----------
     uow_factory : UowFactory
         Callable dependency invoked to construct a unit of work per request.
+    tracer : TracerPort | None, optional
+        Span recorder. A no-op tracer is used when omitted.
     """
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        *,
+        tracer: TracerPort | None = None,
+    ) -> None:
         self._uow_factory = uow_factory
+        self._tracer = NoopTracer() if tracer is None else tracer
 
     async def on_get(
         self,
@@ -192,30 +234,43 @@ class QaEvaluationResource:
             If the stored row records a payload shape newer than this release
             reads, and the caller owns its episode.
         """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # parse_uuid(), _evaluation_not_found(), and _unsupported_schema() raise the documented errors.
-        parsed_evaluation_id = parse_uuid(evaluation_id, "evaluation_id")
-        details = {"evaluation_id": str(parsed_evaluation_id)}
-        async with self._uow_factory() as uow:
+        with self._tracer.start_span(
+            "qa_evaluation.read",
+            attributes={"operation": "qa_evaluation.read"},
+        ) as span:
             try:
-                evaluation = await get_qa_evaluation(uow, parsed_evaluation_id)
-            except UnsupportedQaArtefactSchemaError as error:
-                # The row is unreadable, but its episode still decides whether
-                # this caller may learn that it exists.
+                parsed_evaluation_id = parse_uuid(evaluation_id, "evaluation_id")
+            except falcon.HTTPError:
+                _record_rejection(span, "invalid_input")
+                raise
+            details = {"evaluation_id": str(parsed_evaluation_id)}
+            async with self._uow_factory() as uow:
+                try:
+                    evaluation = await get_qa_evaluation(uow, parsed_evaluation_id)
+                except UnsupportedQaArtefactSchemaError as error:
+                    # The row is unreadable, but its episode still decides
+                    # whether this caller may learn that it exists.
+                    episode = await read_owned_episode(
+                        uow,
+                        error.episode_id,
+                        principal_id(req),
+                    )
+                    if episode is None:
+                        _record_not_found(span, "evaluation.not_found")
+                        raise _evaluation_not_found(details) from error
+                    _record_rejection(span, "qa_artefact_schema_unsupported")
+                    raise _unsupported_schema(error) from error
+                if evaluation is None:
+                    _record_not_found(span, "evaluation.not_found")
+                    raise _evaluation_not_found(details)
                 episode = await read_owned_episode(
                     uow,
-                    error.episode_id,
+                    evaluation.summary_record.episode_id,
                     principal_id(req),
                 )
                 if episode is None:
-                    raise _evaluation_not_found(details) from error
-                raise _unsupported_schema(error) from error
-            if evaluation is None:
-                raise _evaluation_not_found(details)
-            episode = await read_owned_episode(
-                uow,
-                evaluation.summary_record.episode_id,
-                principal_id(req),
-            )
-            if episode is None:
-                raise _evaluation_not_found(details)
-        resp.media = serialize_qa_evaluation(evaluation)
-        resp.status = falcon.HTTP_200
+                    _record_not_found(span, "evaluation.not_found")
+                    raise _evaluation_not_found(details)
+            resp.media = serialize_qa_evaluation(evaluation)
+            resp.status = falcon.HTTP_200
+            span.set_attribute("outcome", "success")

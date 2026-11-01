@@ -2416,17 +2416,19 @@ normalization therefore happen after the metadata read unit of work has closed,
 so external reads do not retain a generation-run row lock or database
 connection.
 
-Generation-run polling, event listing, and TEI retrieval emit the bounded
-`generation_run.read`, `generation_run.events.list`, and `episode_tei.read`
-spans. Their only route attributes are operation, outcome, representation,
-pagination mode, and stable failure category; they never include content,
-principal identifiers, idempotency keys, or run identifiers.
+Generation-run polling, event listing, TEI retrieval, and QA-artefact retrieval
+emit the bounded `generation_run.read`, `generation_run.events.list`,
+`episode_tei.read`, `qa_evaluations.list`, and `qa_evaluation.read` spans.
+Their only route attributes are operation, outcome, representation, pagination
+mode, and stable failure category; they never include content, principal
+identifiers, idempotency keys, evaluation identifiers, or run identifiers.
 
 The API composition root emits `generation_api_request_total` and
 `generation_api_request_latency_ms` for generation creation, polling, event
-listing, and TEI retrieval. Their only labels are `operation` and the bounded
-`outcome` (`success`, `rejected`, `failed`, or `not_modified` for TEI cache
-responses); they contain no request data or principal identity.
+listing, TEI retrieval, QA-evaluation listing, and QA-evaluation detail
+requests. Their only labels are `operation` and the bounded `outcome`
+(`success`, `rejected`, `failed`, or `not_modified` for TEI cache responses);
+they contain no request data or principal identity.
 
 `GET /v1/generation-runs/{run_id}/events` returns append-only events after an
 optional `after_seq` cursor, with `items`, `after_seq`, `limit`, `offset`, and

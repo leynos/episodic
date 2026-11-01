@@ -76,6 +76,10 @@ def _generation_route_operation(path: str) -> str | None:
         )
     if path.startswith("/v1/episodes/") and path.endswith("/tei"):
         return "episode_tei.read"
+    if path.startswith("/v1/episodes/") and path.endswith("/qa-evaluations"):
+        return "qa_evaluations.list"
+    if path.startswith("/v1/qa-evaluations/"):
+        return "qa_evaluation.read"
     return None
 
 
@@ -305,14 +309,15 @@ def _register_episode_tei_routes(
 def _register_qa_artefact_routes(
     app: asgi.App,
     uow_factory: UowFactory,
+    dependencies: ApiDependencies,
 ) -> None:
     app.add_route(
         "/v1/episodes/{episode_id}/qa-evaluations",
-        EpisodeQaEvaluationsResource(uow_factory),
+        EpisodeQaEvaluationsResource(uow_factory, tracer=dependencies.tracer),
     )
     app.add_route(
         "/v1/qa-evaluations/{evaluation_id}",
-        QaEvaluationResource(uow_factory),
+        QaEvaluationResource(uow_factory, tracer=dependencies.tracer),
     )
 
 
@@ -344,6 +349,6 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     _register_intake_routes(app, uow_factory, dependencies)
     _register_generation_run_routes(app, uow_factory, dependencies)
     _register_episode_tei_routes(app, uow_factory, dependencies)
-    _register_qa_artefact_routes(app, uow_factory)
+    _register_qa_artefact_routes(app, uow_factory, dependencies)
 
     return app
