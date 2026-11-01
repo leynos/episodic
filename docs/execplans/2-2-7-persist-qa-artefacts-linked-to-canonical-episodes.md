@@ -1703,9 +1703,9 @@ REST API and a first-party CLI.
   evaluation row, so one row answers for one evaluator invocation.
 - `RM-2.2.7-b` — retrieval filtered by evaluator and compliance status, over
   API and CLI. Delivered as `GET /v1/episodes/{episode_id}/qa-evaluations`
-  (filtered, paginated, with an unpaged `total`) and `episodic qa evaluations
-  list`, which reuses the same filters and renders a table or the raw JSON
-  envelope.
+  (filtered, paginated, with an unpaged `total`) and
+  `episodic qa evaluations list`, which reuses the same filters and renders a
+  table or the raw JSON envelope.
 
 ### Conformance reconciliation
 
@@ -1719,8 +1719,8 @@ REST API and a first-party CLI.
   back to ADR 001.
 - `docs/roadmap.md` item `2.2.7` is `[x]`.
 - Every trace link in `Conformance basis` resolves, and every deviation in the
-  `Decision log` is recorded in an ADR, the design document, or the
-  developers' guide.
+  `Decision log` is recorded in an ADR, the design document, or the developers'
+  guide.
 
 ### Validation
 
