@@ -6,8 +6,9 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 be kept up to date as work proceeds.
 
 Status: COMPLETE — approved for implementation 2026-10-29; milestones
-`EP-M0`–`EP-M6` delivered 2026-11-01, with every gate green at `a54223c7` and
-every upheld milestone-review finding repaired.
+`EP-M0`–`EP-M6` delivered 2026-11-01, with every upheld milestone-review
+finding through round 17 repaired and each repair gate-swept before the next
+round.
 
 ## Purpose / big picture
 
@@ -1122,9 +1123,27 @@ Stop and escalate when any of these is reached.
     was discarded rather than reported: the worktree was still being edited
     while it ran, and its two failures (`mdtablefix` reflow and Pylint's
     `too-many-lines` on `client.py`) were repaired before the commit.
-  - Gate evidence on the round-16 repairs sits in the commit that carries them;
-    the sweep recorded above covers the round-15 code, and the round-17 review
-    and its gate sweep close the pair.
+  - Gate evidence on the round-16 repairs, pinned at `0c4c566e`, clean tree and
+    unchanged head before and after: `check-fmt` (ruff 864 files, mdtablefix 129
+    files), `typecheck` (`ty 0.0.32`), `lint` with every stage run to completion
+    (Hecate and the new compliance module resolving to the `application` group,
+    Ruff, Pylint 10.00/10, df12 lints 10.00/10, ambrleaks, Skylos, nose
+    duplication gate with 30 reasoned exceptions), `markdownlint` (129 files, 0
+    issues, typos gate clean), `nixie`, and `make test` — 1950 passed, 3
+    skipped, 30 warnings, 237.36 s, 67 snapshots.
+  - Post-delivery CodeRabbit CLI review round 17 at `0c4c566e` (`coderabbit`
+    0.9.2, exit 0, `review_completed`, 82 reviewed paths, no rate limit). One
+    `minor` finding, upheld and repaired:
+    `test_evaluation_rejects_too_many_findings` built its 201 findings from the
+    default `FINDING_ID`, so every finding shared one id, and its loose
+    `match="findings"` could be satisfied by the duplicate-id rejection in
+    `_validate_findings_against_summary`. The test would therefore still pass
+    with the `MAX_FINDINGS_PER_EVALUATION` check deleted, so it did not isolate
+    the bound it names. Each finding now derives a distinct id with
+    `uuid.uuid5(FINDING_ID, str(index))`, leaving the ceiling as the only
+    violated rule, and the match pins the ceiling message. The repair is carried
+    by the commit that adds this bullet, whose own gate sweep and review round
+    close the pair.
 
 ## Surprises & discoveries
 
@@ -1957,27 +1976,34 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Sixteen review
-  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, 14, 15, and 16 each raised
-  at least one finding that was verified against source and repaired in its own
-  commit; round 9 completed with none; and round 12 reviewed this closing
-  record and is answered by the corrections in it. Round 13's five minor
-  findings included the one production repair after the rebase:
-  `record_evaluation` now flushes a caller's pending state outside its failure
-  handler, so a caller-owned constraint violation is not counted as a QA
-  recording failure.
-- The delivered code is attested by the sweep at `d2a53f1c`, the head that
-  carries round 13's repairs, which is green with a clean tree on all seven
-  gates: check-fmt, markdownlint (including the en-GB-oxendict spelling gate),
-  nixie, typecheck, lint (Pylint 10.00/10, df12 lints, ambrleaks, Skylos, and
-  the duplication gate with 30 reasoned exceptions), check-migrations, and 1945
-  passing tests with 67 snapshots. The earlier sweeps at the rebased head
-  `314b0fde` (1944 tests), and at `14b882a8` (1943 tests) and `c1d9ad61` (1944
-  tests) on the same gates plus `check-migrations`, are green; the rebase
-  changed no tracked file relative to those heads, and every patch replayed
-  identically.
-- Every later commit that carries this record changes documentation only and is
-  re-gated for the Markdown gates before publication.
+  and a CodeRabbit CLI review of the committed milestone diff. Seventeen review
+  rounds ran in total: rounds 6, 7, 8, 10, 11, 13, 14, 15, 16, and 17 each
+  raised at least one finding that was verified against source and repaired in
+  its own commit; round 9 completed with none; and round 12 reviewed this
+  closing record and is answered by the corrections in it. Round 17's single
+  minor finding was a test-isolation defect: the finding-ceiling test shared
+  one identifier across every synthetic finding, so a loosened match would let
+  the duplicate-id rejection satisfy it. Round 13's five minor findings
+  included the one production repair after the rebase: `record_evaluation` now
+  flushes a caller's pending state outside its failure handler, so a
+  caller-owned constraint violation is not counted as a QA recording failure.
+- The delivered code is attested by the sweeps at `a54223c7` (1949 tests) and
+  `0c4c566e` (1950 tests), the heads that carry the round-15 and round-16
+  repairs, both green with a clean tree on all six deterministic gates:
+  check-fmt, markdownlint (including the en-GB-oxendict spelling gate), nixie,
+  typecheck, lint (Pylint 10.00/10, df12 lints, ambrleaks, Skylos, and the
+  duplication gate with 30 reasoned exceptions), and 67 snapshots.
+- The migration gate ran `check-migrations` at `d2a53f1c`, the head that
+  carries round 13's repairs, whose sweep covered all seven gates and passed
+  1945 tests with 67 snapshots; no migration changed after it. The earlier
+  sweeps at the rebased head `314b0fde` (1944 tests), and at `14b882a8` (1943
+  tests) and `c1d9ad61` (1944 tests) on the same gates plus `check-migrations`,
+  are green; the rebase changed no tracked file relative to those heads, and
+  every patch replayed identically.
+- Every later commit that carries this record is gate-swept at its own head
+  before publication. The round-17 repair commit changes one test alongside
+  this record, so it is swept on all six deterministic gates rather than the
+  Markdown gates alone.
 
 ### Retrospective
 

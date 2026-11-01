@@ -12,6 +12,7 @@ own. Rubric-score precision is covered by
 
 import datetime as dt
 import typing as typ
+import uuid
 
 import pytest
 
@@ -313,11 +314,16 @@ def test_evaluation_rejects_non_consecutive_ordinals(
 
 def test_evaluation_rejects_too_many_findings() -> None:
     """One evaluation cannot exceed the documented finding ceiling."""
+    # Distinct ids and consecutive ordinals leave the ceiling as the only
+    # violated rule, so the rejection cannot be satisfied by another check.
     findings = tuple(
-        finding(ordinal=index) for index in range(MAX_FINDINGS_PER_EVALUATION + 1)
+        finding(finding_id=uuid.uuid5(FINDING_ID, str(index)), ordinal=index)
+        for index in range(MAX_FINDINGS_PER_EVALUATION + 1)
     )
 
-    with pytest.raises(ValueError, match="findings"):
+    with pytest.raises(
+        ValueError, match=f"at most {MAX_FINDINGS_PER_EVALUATION} entries"
+    ):
         QaEvaluation(
             summary_record=summary(finding_count=len(findings)), findings=findings
         )
