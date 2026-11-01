@@ -719,6 +719,16 @@ Stop and escalate rather than improvising when any of these is reached.
       against roadmap `2.6.5`, and no production caller exercises the spans
       it asks for. The review-thread replies carry those dispositions and the
       delivery ledger records their identifiers.
+- [x] (2026-11-01) The five dispositions were confirmed by the reviewer
+      against `39b8a31c`, with one separate wording correction: the
+      developers' guide claimed all four checkpoint metrics are emitted after
+      the write, but a domain-precondition refusal increments the
+      terminal-conflict counter before any write is attempted. `153236ef`
+      scopes the write-relative timing to the creation and resolution metrics
+      and states the pre-write refusal path explicitly. `2b8bcff2` fixes the
+      hyphenated spelling that failed CI's spelling step. The reviewer
+      retained every disposition at `153236ef` and found no further defect in
+      the documentation-only delta.
 
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
