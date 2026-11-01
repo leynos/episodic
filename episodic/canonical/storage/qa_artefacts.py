@@ -97,6 +97,11 @@ class SqlAlchemyQaArtefactStore:
             The database rejected the statement for another reason.
         """  # ruff: ignore[docstring-extraneous-exception]  # The flush's integrity error is re-raised, not constructed here.
         summary = evaluation.summary_record
+        # ``begin_nested()`` flushes pending state unconditionally before it
+        # opens the savepoint, whatever ``autoflush`` says. Flush the caller's
+        # work first, outside the ``try``, so a caller-owned constraint failure
+        # propagates without being counted as a QA recording failure.
+        await self._session.flush()
         try:
             async with self._session.begin_nested():
                 record = evaluation_to_record(

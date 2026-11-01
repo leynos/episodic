@@ -119,6 +119,46 @@ async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
 
 
 @pytest.mark.asyncio
+async def test_caller_owned_constraint_failure_is_not_counted_as_a_qa_failure(
+    session_factory: SessionFactory,
+) -> None:
+    """A caller's invalid pending row fails without a QA failure metric."""
+    episode_id = await create_episode(session_factory)
+    first = make_evaluation(episode_id, idempotency_key="caller-pending")
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        stored = await uow.qa_artefacts.record_evaluation(first)
+        await uow.commit()
+
+    metrics = RecordingMetrics()
+    runtime = QaArtefactStorageRuntime(
+        clock=lambda: REPLAYED_AT,
+        uuid_factory=uuid.uuid7,
+        metrics=metrics,
+    )
+    incoming = make_evaluation(episode_id, idempotency_key="caller-pending-other")
+    async with session_factory() as session:
+        session.add(
+            QaFindingRecord(
+                id=uuid.uuid7(),
+                evaluation_id=stored.summary_record.id,
+                ordinal=-1,
+                severity=QaFindingSeverity.LOW,
+                code="caller-owned",
+                summary="A pending row the caller owns.",
+                is_blocking=False,
+            )
+        )
+        store = SqlAlchemyQaArtefactStore(session, runtime=runtime)
+        with pytest.raises(IntegrityError):
+            await store.record_evaluation(incoming)
+        await session.rollback()
+
+    assert not metrics.counters, (
+        "a caller-owned constraint failure must not be counted as a QA failure"
+    )
+
+
+@pytest.mark.asyncio
 async def test_replay_lookup_locks_the_stored_row_against_supersession(
     session_factory: SessionFactory,
 ) -> None:

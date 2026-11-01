@@ -674,8 +674,8 @@ require a live RabbitMQ broker.
   normalized usage metrics for cost accounting.
 - Pedante currently operates as an internal authoring-loop check rather than a
   public API feature. Its outputs are therefore visible in internal workflows
-  first, with broader generation-run and QA artefact APIs planned in later
-  roadmap items.
+  first; the retrieval endpoints described below serve recorded artefacts once
+  a generation run writes them.
 - Generated scripts can now receive an internal Chrono spoken-runtime estimate
   during QA. Chrono uses the canonical TEI script through `tei-rapporteur`,
   counts spoken words with a deterministic local heuristic, and records
@@ -690,7 +690,10 @@ require a live RabbitMQ broker.
   with `limit` and `offset`; each item is a summary.
   `GET /v1/qa-evaluations/{evaluation_id}` returns one evaluation in full, with
   its findings in the order the evaluator recorded them. An unknown `evaluator`
-  or `compliance_status` value is a `400` validation error naming the parameter.
+  or `compliance_status` value is a `400` validation error naming the
+  parameter. Generation runs do not record evaluator results yet, so a listing
+  stays empty for an episode produced by a run today; that recording path
+  arrives with a later roadmap item.
 - Both reads are authorized through the episode. A request without credentials
   receives `401 unauthorized`. An authenticated caller whose principal does not
   own the episode receives `404 qa_evaluation_not_found`, whether the episode,

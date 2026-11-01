@@ -429,15 +429,20 @@ Stop and escalate when any of these is reached.
       directly as the documented observable substitute, and its non-vacuity was
       proven by removing the clause from a scratch copy and watching
       `test_replay_lookup_locks_the_stored_row_against_supersession` fail.
-    - F3 (partly upheld, repaired; premise partly refuted): the
+    - F3 (upheld, repaired; premise confirmed by round 13): the
       non-idempotency test did not discriminate the constraint narrowing, since
       its caller-owned duplicate finding failed the flush regardless. The test
       now makes the store's own row fail a foreign key to a missing episode and
       asserts the `integrity_violation` metric; removing the narrowing makes it
       report `conflict_without_row` and fail. The reviewer's premise that
-      `begin_nested()` flushes before it opens the savepoint is wrong — the
-      method emits no SQL (see `Decision log`), which is why the previous
-      scenario never reached the savepoint harmlessly.
+      `begin_nested()` flushes before it opens the savepoint is correct; this
+      plan first recorded the opposite, and the `Decision log` now states the
+      documented behaviour. A round-13 probe under SQLAlchemy 2.0.52, with
+      `autoflush` both true and false, confirmed that
+      `Session.begin_nested()` flushes pending state unconditionally before the
+      `SAVEPOINT`. That is why the previous scenario's caller-owned row failed
+      before the savepoint existed, and it is what round 13 turned into the
+      production repair.
     - F4 (rejected): recording a second artefact for an existing key would
       collide on `uq_qa_evaluations_episode_idempotency_key` before the findings
       constraint could fire, so the suggested scenario cannot exercise the
@@ -1003,9 +1008,46 @@ Stop and escalate when any of these is reached.
     snapshots, 240.39 s), markdownlint and nixie all exit 0 (logs
     `...-rebase.out`) — and the branch was force-pushed with lease bound to
     `28f1ad4f`.
+  - Post-delivery CodeRabbit CLI review round 13 at `9ea74edd` (exit 0,
+    `review_completed`, five minor findings), adjudicated as follows:
+    - F1 (upheld, repaired): the `Validation and acceptance` section said "how
+      we check" in the first person; it now reads "how to check".
+    - F2 (upheld, repaired): the users' guide still promised "QA artefact APIs
+      planned in later roadmap items" after this branch delivered them, and
+      never said that a listing is empty today. It now says the retrieval
+      endpoints serve recorded artefacts once a generation run writes them, and
+      the retrieval bullet states that generation runs do not record evaluator
+      results yet.
+    - F3 (upheld, repaired): this plan recorded that `begin_nested()` emits no
+      SQL. The round-2 F3 entry and the `Decision log` now state the documented
+      behaviour — that `Session.begin_nested()` flushes pending state
+      unconditionally before the `SAVEPOINT` — and mark the reviewer's premise
+      correct. An in-memory probe under SQLAlchemy 2.0.52 with `autoflush` both
+      true and false raised the pending row's `IntegrityError` inside
+      `async with session.begin_nested():` in both cases.
+    - F4 and F5 (upheld, repaired; the two findings overlap):
+      `record_evaluation` relied on the savepoint to bound a caller-owned
+      failure, but `begin_nested()`'s pre-savepoint flush ran inside its `try`,
+      so a caller's constraint violation was counted as
+      `qa_evaluation_record_failed` with `integrity_violation`. The method now
+      flushes explicitly before the `try`, so that failure propagates without a
+      QA metric. F4 also proposed the same flush in `_supersede`; F5's rationale
+      was adopted instead — `_supersede` is reached only after the new
+      pre-flush and its savepoint then holds store-owned changes alone — so
+      `_supersede` is unchanged. Red was observed first: the new
+      `test_caller_owned_constraint_failure_is_not_counted_as_a_qa_failure`
+      failed on the spurious counter when the pre-flush was removed, and passes
+      with it restored.
 
 ## Surprises & discoveries
 
+- Observation: `Session.begin_nested()` flushes pending state unconditionally
+  before it opens the `SAVEPOINT`, whatever the session's `autoflush` setting
+  says. This plan asserted the opposite for several rounds. An in-memory
+  SQLAlchemy 2.0.52 probe with a `NOT NULL`-violating pending row raised
+  `IntegrityError` inside `async with session.begin_nested():` with `autoflush`
+  both true and false, so the savepoint cannot be relied on to bound a caller's
+  own pending failure.
 - Observation: this host still carries a user-wide attributes block —
   `*.rs`, `*.py`, `*.ts`, and `*.tsx` all `merge=weave` — in
   `${XDG_CONFIG_HOME:-~/.config}/git/attributes`, so `git check-attr merge`
@@ -1594,17 +1636,30 @@ Stop and escalate when any of these is reached.
   never runs.
 - Decision: the non-idempotency test rejects a store-owned row through a
   foreign key to a missing episode rather than through the caller's pending
-  duplicate finding. Rationale: `Session.begin_nested()` emits no SQL and does
-  not flush, so the previous scenario's caller-owned `QaFindingRecord` failed
-  during the store's savepoint flush and invalidated the outer transaction,
-  which no savepoint rollback can repair. That made the test's transaction-
-  usability assertion impossible to satisfy and, more importantly, made the
-  scenario fail for a reason unrelated to the narrowing it meant to exercise. A
-  store-owned foreign key failure keeps the whole rejection inside the
-  savepoint and still reaches the same
-  `constraint_name(err) != _IDEMPOTENCY_CONSTRAINT` branch. Date/Author:
-  2026-10-31, implementation agent. **Deviation status: none** — test
-  implementation only; the production contract is unchanged.
+  duplicate finding. Rationale: `Session.begin_nested()` flushes pending state
+  unconditionally before it opens the `SAVEPOINT`, whatever `autoflush` says,
+  so the previous scenario's caller-owned `QaFindingRecord` failed outside any
+  savepoint and invalidated the outer transaction, which no savepoint rollback
+  can repair. That made the test's transaction-usability assertion impossible
+  to satisfy and, more importantly, made the scenario fail for a reason
+  unrelated to the narrowing it meant to exercise. A store-owned foreign key
+  failure keeps the whole rejection inside the savepoint and still reaches the
+  same `constraint_name(err) != _IDEMPOTENCY_CONSTRAINT` branch. Date/Author:
+  2026-10-31, implementation agent; rationale corrected 2026-11-01 after
+  CodeRabbit round 13. **Deviation status: none** — test implementation only;
+  the production contract is unchanged.
+- Decision: `record_evaluation` flushes the caller's session before it opens its
+  savepoint and before any handler that emits `qa_evaluation_record_failed`.
+  Rationale: `Session.begin_nested()` flushes pending state unconditionally
+  before the `SAVEPOINT` whatever `autoflush` says, so the flush used to happen
+  inside the `try`. A caller's own pending constraint violation then surfaced
+  as an `IntegrityError` on a non-idempotency constraint, was counted as a QA
+  recording failure, and was re-raised. Attributing a caller's defect to this
+  store misdirects the on-call signal the metric exists to carry. The same
+  pre-flush guarantees the savepoint holds store-owned changes alone, which is
+  why `_supersede` needs no flush of its own. Date/Author: 2026-11-01,
+  implementation agent. **Deviation status: none** — the public contract is
+  unchanged; the store now fails a caller-owned defect without claiming it.
 - Decision: the five `EP-M3` projection and key signatures keep the flat
   keyword-argument shape pinned under "Interfaces and dependencies", and carry
   a local `# ruff: ignore[too-many-arguments]` instead of collapsing their
@@ -1772,11 +1827,14 @@ REST API and a first-party CLI.
 ### Validation
 
 - Every milestone closed with a full seven-gate sweep at one unchanged head
-  and a CodeRabbit CLI review of the committed milestone diff. Twelve review
-  rounds ran in total: rounds 6, 7, 8, 10, and 11 each raised a finding that
-  was verified against source and repaired in its own commit; round 9 completed
-  with none; and round 12 reviewed this closing record and is answered by the
-  corrections in it.
+  and a CodeRabbit CLI review of the committed milestone diff. Thirteen review
+  rounds ran in total: rounds 6, 7, 8, 10, 11, and 13 each raised a finding
+  that was verified against source and repaired in its own commit; round 9
+  completed with none; and round 12 reviewed this closing record and is
+  answered by the corrections in it. Round 13's five minor findings included
+  the one production repair after the rebase: `record_evaluation` now flushes a
+  caller's pending state outside its failure handler, so a caller-owned
+  constraint violation is not counted as a QA recording failure.
 - The delivered code is attested by the sweep at the rebased head `314b0fde`,
   which is green with a clean tree: check-fmt, markdownlint (including the
   en-GB-oxendict spelling gate), nixie, typecheck, lint (Pylint 10.00/10,
@@ -3136,16 +3194,19 @@ dataclass carrying `clock`, `uuid_factory`, and `metrics`, defaulting to
 
 `record_evaluation` must:
 
-1. Open `session.begin_nested()`, add the evaluation and its findings, and
-   `flush()`.
+1. Flush the caller's pending state **before** opening any savepoint and
+   outside every `try` that emits a failure metric. `Session.begin_nested()`
+   flushes pending state unconditionally before it opens the `SAVEPOINT`,
+   whatever `autoflush` says, so a caller-owned constraint violation would
+   otherwise surface inside the handler below and be counted as a QA recording
+   failure. Then open `session.begin_nested()`, add the evaluation and its
+   findings, and `flush()`.
 2. On `IntegrityError`, inspect `err.orig.diag.constraint_name`. Treat **only**
    `uq_qa_evaluations_episode_idempotency_key` as a replay; re-raise anything
    else, including any `qa_findings` constraint. This narrowing is not
-   optional. The service does not commit, so `record_evaluation` runs inside a
-   caller's unit of work alongside other pending work; `flush()` flushes the
-   whole session, so an unrelated failure would otherwise be caught, rolled
-   back to this savepoint (discarding the unrelated change), and — if a row for
-   the key happens to exist — reported as a successful replay.
+   optional: the store's own findings can violate a constraint the caller must
+   see as a failure, not as a replay reported for a key that happens to have a
+   row.
 3. Re-select by `(episode_id, idempotency_key)` **with its findings**. If the
    stored artefact's `compliance_status` is `ERRORED` and the incoming one is
    not, delete its findings, update its mutable fields in place, insert the new
@@ -3626,7 +3687,7 @@ Quality criteria (what "done" means):
   may quote script content. Do not log finding text, do not place it in metric
   labels, and keep the CLI from writing the bearer token to standard output.
 
-Quality method (how we check): run each gate sequentially via `make`,
+Quality method (how to check): run each gate sequentially via `make`,
 delegating full gate runs to the `scrutineer` subagent so bulky output stays
 out of the working context. When a gate fails, read the cited log under `/tmp`
 rather than re-running it; re-run only after applying a fix.
