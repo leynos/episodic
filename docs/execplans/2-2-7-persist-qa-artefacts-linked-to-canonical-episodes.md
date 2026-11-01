@@ -965,6 +965,12 @@ Stop and escalate when any of these is reached.
     upgrades applied to `20261031_000014`, no drift), and test (1943 passed, 3
     skipped, 67 snapshots, 30 warnings, 267.59 s). Logs
     `/tmp/<gate>-episodic-2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md-r10repair.out`.
+  - Documentation-only follow-up: `183a9e1c` and `93263b26` carry this record.
+    The Markdown gates exit 0 at `93263b26` — `make check-fmt` (`129 files
+    left unchanged`), `make markdownlint` (spelling prerequisite clean,
+    `0 issues`) and `make nixie` (all diagrams validated); logs
+    `...-finaldocs2.out`. No Python, migration, or test surface changed after
+    the sweep above, which still attests them.
 
 ## Surprises & discoveries
 
