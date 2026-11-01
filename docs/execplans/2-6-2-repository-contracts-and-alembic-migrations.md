@@ -681,6 +681,16 @@ Stop and escalate rather than improvising when any of these is reached.
       All three now carry the same lower-bound wording (D-22). Documentation
       only: no behaviour changed and no scheduler consumes the guidance.
 
+- [x] (2026-11-01) The formal review of `a6a46907` found one further
+      documentation defect in the same section: the guide still said "an
+      expired lease shows that a worker stopped heartbeating". That is false
+      here, and this plan already says so at line 329 -- `lease_expires_at` is
+      written once as `started_at + lease_seconds` and nothing renews it, so
+      expiry reports a fixed deadline, not a missed heartbeat, and an active
+      run can pass it. The paragraph now states that expiry alone establishes
+      neither worker health nor that the worker stopped running, which is the
+      claim the surrounding fencing advice actually needs.
+
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
 

@@ -2346,8 +2346,11 @@ async with SqlAlchemyUnitOfWork(session_factory) as uow:
 ```
 
 Reclaim only after the worker that held the lease can no longer finish its run.
-An expired lease shows that a worker stopped heartbeating; it does not show
-that the worker stopped running. A paused, partitioned, or restarted worker can
+An expired lease shows only that the run passed the fixed deadline written when
+the launcher claimed it. Nothing renews that deadline -- no heartbeat exists
+anywhere in the tree -- so an active run can pass it without any missed
+heartbeat. Expiry alone therefore establishes neither worker health nor that
+the worker stopped running. A paused, partitioned, or restarted worker can
 resume after its lease lapsed and keep writing to the same run. Stop every
 worker that could still hold the run, or fence it so its later writes cannot
 land, before reclaiming. Once the run is `failed`, the store's mutating paths
