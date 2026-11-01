@@ -2072,7 +2072,7 @@ Metrics are optional wiring. `SqlAlchemyUnitOfWork` passes
 falls back to `NoopValueMetrics` when it receives `None`. With no sink
 configured the store still logs its transitions but skips the open-count query
 entirely, so a deployment without a metrics sink pays no extra `COUNT` per
-checkpoint operation. Wire a `ValueMetricsPort` when you need the series below.
+checkpoint operation. Wire a `ValueMetricsPort` to emit the series below.
 
 An explicitly constructed `SqlAlchemyReviewCheckpointStore` follows the same
 rule: `metrics=` is the only switch, and there is no separate enable flag to

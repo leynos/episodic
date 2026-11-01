@@ -722,7 +722,7 @@ Stop and escalate rather than improvising when any of these is reached.
 - [x] (2026-11-01) The five dispositions were confirmed by the reviewer
       against `39b8a31c`, with one separate wording correction: the
       developers' guide claimed all four checkpoint metrics are emitted after
-      the write, but a domain-precondition refusal increments the
+      the write operation, but a domain-precondition refusal increments the
       terminal-conflict counter before any write is attempted. `153236ef`
       scopes the write-relative timing to the creation and resolution metrics
       and states the pre-write refusal path explicitly. `2b8bcff2` fixes the
