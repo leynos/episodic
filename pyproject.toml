@@ -962,6 +962,7 @@ prefixes = [
     "episodic.canonical.episode_errors",
     "episodic.canonical.generation_quality",
     "episodic.canonical.generation_run_errors",
+    "episodic.canonical.generation_run_lease_ports",
     "episodic.canonical.generation_run_ports",
     "episodic.canonical.history_protocols",
     "episodic.canonical.health",

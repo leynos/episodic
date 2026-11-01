@@ -377,7 +377,8 @@ Stop and escalate rather than improvising when any of these is reached.
   ungrouped. `make check-architecture` would stay green if Stage C step 7's
   docstring work, or a later edit, imported `episodic.canonical.storage` from
   the port module. Mitigation: D-12 adds both modules to `domain_ports` in
-  EP-M2, with a negative control proving the gate then fires.
+  EP-M2 — and EP-M4 adds `generation_run_lease_ports`, which it creates — with
+  a negative control proving the gate then fires.
 
 - **Risk 9: the shared contract suite certifies a shared blind spot as
   correct.** Severity: medium. Likelihood: medium. Evidence: neither adapter
@@ -562,6 +563,42 @@ Stop and escalate rather than improvising when any of these is reached.
       item an explicit home. `docs/users-guide.md` is deliberately unchanged:
       no production path creates a checkpoint until 2.6.3, so telling users
       checkpoints are durable would describe a capability with no entry point.
+
+- [x] (2026-10-30) Post-completion assessment repair
+      (`EP-ASSESS-2.6.2-a1`). Six findings were still open against the tree
+      even though every item above was ticked; each was verified against
+      current source before acting. (1) The manual-recovery runbook in
+      `docs/developers-guide.md` now requires a post-lock checkpoint recheck
+      and explains the `READ COMMITTED` window that makes it necessary, with
+      the SQL to run. (2) `_count_open` counts every unresolved checkpoint
+      globally, matching the gauge's empty label set; the new
+      `tests/canonical_storage/test_review_checkpoint_metrics.py` pins the
+      cross-run case a per-run count would fail. (3) `record_terminal_conflict`
+      is now emitted on **both** refusal routes — the domain precondition and
+      the lost compare-and-set — with one test per route. (4) The in-memory
+      `fail_expired_leases` calls the shared `lease_reclamation_limit`
+      validator instead of ignoring `limit`; both adapters now pin `0` and
+      `-1` as caller errors. (5) `generation_run_lease_ports` joined the
+      `domain_ports` Hecate group (D-12), with an `ARCH001` control recorded
+      under *Artefacts and notes*. (6) INV-LEASE-1's stated negative controls
+      were wrong and are corrected in the Verification plan: dropping either
+      checkpoint guard alone is unobservable under `py-pglite`, so the control
+      must bypass both. Every mutation was reverted and the touched files
+      verified byte-identical to `HEAD` (`git diff --exit-code`) before this
+      entry was written.
+
+- [x] (2026-11-01) Full gate re-run on the repaired tree, sequentially and in
+      the repository's cache-safe order. `make check-fmt` (837 files formatted,
+      128 Markdown unchanged), `make lint` (exit 0; all nine substeps ran, so
+      the abbreviated-green trap recorded above did not recur), `make
+      typecheck` (ty 0.0.32, "All checks passed"), `make markdownlint` (0
+      issues in 128 files; the typos-config-builder gate regenerated
+      `typos.toml`, which is committed separately so this slice's diff stays
+      about the slice), `make nixie`, `make check-migrations` (no drift; the
+      pre-existing `SAWarning` about the `episodes`/`generation_runs`/
+      `ingestion_jobs` cycle is unrelated and did not fail the gate), `make
+      check-architecture` (hecate passed), and `make test` (1814 passed, 3
+      skipped, 361.91 s).
 
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
@@ -1276,14 +1313,20 @@ Append further observations here as work proceeds.
   gate.** Rationale: Risk 8. Add `episodic.canonical.generation_run_ports` and
   `episodic.canonical.generation_run_errors` to the `domain_ports` group in
   `[tool.hecate.groups]`, in the EP-M2 commit, since that is the commit that
-  widens the port. Place them beside the other `episodic.canonical` entries;
+  widens the port. `episodic.canonical.generation_run_lease_ports` joins the
+  same group in the EP-M4 commit, since that is the commit that creates it
+  (added 2026-10-30 after the post-completion assessment showed the module was
+  left ungrouped). Place them beside the other `episodic.canonical` entries;
   `domain_ports` is the first group whose prefixes could match, so ordering
   cannot misroute them (Hecate's first-match group ordering is described in the
   developers' guide and in ADR-022). Non-vacuity: temporarily add
   `import episodic.canonical.storage` to `generation_run_ports.py`, confirm
-  `make check-architecture` fails with `ARCH001`, then remove it. If adding the
-  modules exposes an existing violation, stop and escalate rather than adding a
-  Hecate ignore. Date/Author: 2026-10-18, planning agent.
+  `make check-architecture` fails with `ARCH001`, then remove it; repeat for
+  `generation_run_lease_ports.py`, which EP-M4 introduced and which the
+  2026-10-30 control used (its transcript is under *Artefacts and notes*). If
+  adding the modules exposes an existing violation, stop and escalate rather
+  than adding a Hecate ignore. Date/Author: 2026-10-18, planning agent;
+  extended 2026-10-30.
 
 - **D-13. Name the duplicate-identifier error `CheckpointAlreadyExists`.**
   Rationale: INV-CKPT-5 requires `create_checkpoint` to reject a duplicate
@@ -1553,6 +1596,19 @@ a caller reading the checkpoint back is told a reviewer answered a checkpoint
 that timed out. The half of the drafted fix that no test could fail was removed
 rather than kept.
 
+**A fourth, found after completion was first claimed.** Six
+`EP-ASSESS-2.6.2-a1` findings were still open against the tree: a
+manual-recovery runbook that did not recheck the checkpoint after taking the
+lock, a gauge labelled globally but computed per run, a conflict counter that
+saw only one of its two refusal routes, an in-memory adapter that ignored the
+`limit` its own port declares, a port module created by EP-M4 and never added
+to the architecture gate, and a negative-control description that provably
+could not fail. The last two matter most for this retrospective: both were
+*claims in this document* that no test could contradict, which is the same
+failure mode the plan had already identified for INV-CKPT-2 and then repeated.
+The repair is recorded in Progress under 2026-10-30, with the controls that had
+been described but never run now transcribed.
+
 **Verification discipline that mattered.** Three habits did the work.
 *Non-vacuity by construction*: the lease-state partition asserts an exact
 identifier set, guarded by `assert expected` and
@@ -1566,9 +1622,15 @@ bullet was corrected rather than deleted (its claim about `CanonicalUnitOfWork`
 was stale; its existence was not), and how the re-stamp optimization was
 declined with a reason (D-21).
 
-**Handover.** Eight gates are green on `59249971`, and a CLI review of that
-revision returned zero findings across all 44 changed files. What remains is
-outside this plan's authority: hosted assessment on the PR, the two
+**Handover.** Eight gates are green on the tree that publishes this record, the
+child of `3e031425` carrying the `EP-ASSESS-2.6.2-a1` repairs: `make check-fmt`,
+`make lint` (all nine substeps executed), `make typecheck`,
+`make markdownlint`, `make nixie`, `make check-migrations`,
+`make check-architecture`, and `make test` (1814 passed, 3 skipped, 0 failed,
+361.91 s). The earlier CLI review of `59249971` returned zero findings across
+all 44 changed files; the repair commit is reviewed again on top of it, because
+the findings that prompted the repairs were raised *after* that review. What
+remains is outside this plan's authority: hosted assessment on the PR, the two
 `pr-babysitting`-owned CodeRabbit assessments, and merge. *Residual gaps* is
 deliberately long — eight items, each with a roadmap number — because the
 plan's own conformance check requires that nothing be silently dropped.
@@ -1975,9 +2037,21 @@ uv run pytest \
 - Artefact: `tests/canonical_storage/test_generation_run_lease_reclamation.py`.
 - Non-vacuity: assert the exact set of reclaimed run identifiers, not a count;
   the partition must contain at least one reclaimed and at least one of each
-  non-reclaimed kind. Negative controls: drop the
-  `lease_expires_at IS NOT NULL` predicate and confirm the no-lease case fails;
-  drop the checkpoint clause and confirm the open-checkpoint case fails.
+  non-reclaimed kind. Negative controls, corrected 2026-10-30 after both were
+  run (transcripts under *Artefacts and notes*):
+  - **Null-lease admission.** Replace
+    `lease_expires_at IS NOT NULL AND lease_expires_at <= now` with
+    `lease_expires_at IS NULL OR lease_expires_at <= now`. The
+    `running-no-lease` case must appear in the reclaimed set. It does.
+  - **Both checkpoint guards bypassed.** Remove `~open_checkpoint` from
+    `expired_lease_candidates` **and** make
+    `_drop_checkpointed_candidates` return its input unchanged. The
+    `running-expired-open-checkpoint` case must appear in the reclaimed set.
+    It does. Removing either half alone changes nothing observable: under
+    `py-pglite` the two checks cannot disagree, so a control that drops only
+    the select clause (as this plan originally said) leaves the recheck
+    filtering the same row and the case still passes. The original wording was
+    therefore not a control at all.
 - Limit: `FOR UPDATE SKIP LOCKED` **cannot be shown to skip anything** under
   py-pglite (AXIOM-3). The state-partition cases are sequential and will pass,
   but the `SKIP LOCKED` clause itself is unverified. Recorded in
@@ -2282,8 +2356,9 @@ violation.
     consumers") would be false here. The honest reason is "no runtime caller
     until roadmap 2.6.3". Match any method entry as `type = "method"`.
 11. **Architecture gate.** Apply D-12: add the two port modules to
-    `domain_ports`, run the negative control it describes, and record the
-    transcript.
+    `domain_ports` in EP-M2, add `generation_run_lease_ports` when EP-M4
+    creates it, run the negative control D-12 describes against the newest
+    module, and record the transcript.
 12. **Duplication gate.** Run `make lint` and read the nose report before
     reaching for an exception. Extract shared guards (for example the
     checkpoint-transition argument checks) into a helper both adapters call
@@ -2425,7 +2500,7 @@ offending span rather than reverting the format.
   signature changed; every file under 400 lines; no new dependency; **ADR-018
   conformance** — transitions use the compare-and-set shape with a typed domain
   error (D-10), the foreign key is `RESTRICT` under the audit-trail policy, and
-  D-11 records why no history table is required; the two port modules are in
+  D-11 records why no history table is required; the three port modules are in
   Hecate's `domain_ports` group with the D-12 negative control recorded; and
   any duplication exception is reasoned and no broader than one file pair.
 - Recovery: **code may be reverted freely; the migration may not.** Reverting
@@ -2966,6 +3041,97 @@ is sound; only the plan's stated non-vacuity route was wrong, and the two
 sentences quoted above have been corrected in the Verification plan to describe
 the stale-writer route and to record why the sequential-mutation route cannot
 reach the statement.
+
+### EP-ASSESS-2.6.2-a1 negative controls, measured 2026-10-30
+
+The post-completion assessment asked for two controls the plan had either left
+undischarged or described incorrectly. Both were run against the working tree
+and then reverted; `git diff --exit-code` confirmed the touched files
+byte-identical to `HEAD` after each.
+
+#### D-12 extension — `generation_run_lease_ports` is under the gate
+
+EP-M4 created `episodic/canonical/generation_run_lease_ports.py`, but D-12's
+`domain_ports` entry was never extended to cover it, so Hecate skipped every
+edge touching the module. Injected immediately after `import typing as typ`:
+
+```python
+import episodic.canonical.storage  # architecture negative control
+```
+
+```plaintext
+$ make check-architecture
+ARCH001: episodic.canonical.generation_run_lease_ports:20 imports forbidden module
+  episodic.canonical.storage (domain_ports -> outbound_adapter)
+make: *** [Makefile:203: check-architecture] Error 1
+GATE_EXIT=2
+```
+
+The import was removed, the file compared against `HEAD` with
+`git diff --exit-code` (no output), and the gate re-run:
+
+```plaintext
+$ make check-architecture
+hecate: architecture check passed
+GATE_EXIT=0
+```
+
+The finding names the injected line and the correct group pair, so it is
+specific: before the `pyproject.toml` entry was added, the same import produced
+no finding because `checker.py` skips edges with an ungrouped endpoint.
+
+#### INV-LEASE-1 — null-lease admission
+
+`lease_expires_at IS NOT NULL AND lease_expires_at <= now` was replaced with
+`lease_expires_at IS NULL OR lease_expires_at <= now`:
+
+```plaintext
+$ uv run pytest tests/canonical_storage/test_generation_run_lease_reclamation.py \
+    -k test_reclamation_selects_exactly_the_expired_lease_state -q
+1 failed, 1 warning in 4.76s
+FAILED test_reclamation_selects_exactly_the_expired_lease_state
+E  Extra items in the left set: UUID('01a18d35-3a5a-70b4-9bd5-04fc3849d011')
+```
+
+The extra identifier is the `running-no-lease` run — the only running row that
+holds no lease and no checkpoint, since `pending` is excluded by status and the
+future lease by the expiry comparison. The select is the only guard for this
+case, so the control fires exactly once.
+
+#### INV-LEASE-1 — both checkpoint guards bypassed
+
+The plan's original wording was to "drop the checkpoint clause and confirm the
+open-checkpoint case fails". Removing `~open_checkpoint` from
+`expired_lease_candidates` alone does **not** fail anything: the select then
+returns the guarded row, but `_drop_checkpointed_candidates` — the post-lock
+recheck documented as unobservable under `py-pglite` — removes it again. The
+control must disable both, which is what the overall invariant actually depends
+on:
+
+```plaintext
+$ # ~open_checkpoint removed from the select AND _drop_checkpointed_candidates
+$ # made to return its input unchanged
+$ uv run pytest tests/canonical_storage/test_generation_run_lease_reclamation.py \
+    -k test_reclamation_selects_exactly_the_expired_lease_state -q
+1 failed, 1 warning in 5.44s
+FAILED test_reclamation_selects_exactly_the_expired_lease_state
+E  Extra items in the left set: UUID('01a18d38-ea86-716a-866d-b78d2e70ac53')
+```
+
+That identifier is the `running-expired-open-checkpoint` run. The
+`running-expired-lease` row is still reclaimed, so the failure is an extra row
+rather than a wholesale change, which is what the exact-set assertion is for.
+
+Both mutations were reverted;
+`git diff --exit-code --
+episodic/canonical/storage/generation_run_lease_reclamation.py`
+printed nothing, and the restored suite ran:
+
+```plaintext
+$ uv run pytest tests/canonical_storage/test_generation_run_lease_reclamation.py \
+    tests/canonical_storage/test_review_checkpoint_metrics.py -q
+6 passed, 1 warning in 6.46s
+```
 
 ## Interfaces and dependencies
 

@@ -342,6 +342,28 @@ class TestGenerationEventLog:
             await store.append_event(uuid.uuid7(), kind="created", payload={})
 
 
+class TestLeaseReclamationContract:
+    """Contract tests for the lease-reclamation argument checks.
+
+    The in-memory adapter reclaims nothing because it cannot store a lease, so
+    its *result* carries no signal. The caller-error contract still applies:
+    both adapters share one validator, and a zero or negative batch limit must
+    be refused rather than silently returning an empty batch that a caller
+    could mistake for "nothing to reclaim".
+    """
+
+    @pytest.mark.parametrize("limit", [0, -1])
+    @pytest.mark.asyncio
+    async def test_fail_expired_leases_rejects_non_positive_limit(
+        self,
+        store: InMemoryGenerationRunStore,
+        limit: int,
+    ) -> None:
+        """A non-positive limit is a caller error, even for the no-op adapter."""
+        with pytest.raises(ValueError, match="limit must be a positive integer"):
+            await store.fail_expired_leases(now=NOW, limit=limit)
+
+
 class TestCompositeProtocol:
     """Contract tests for the composite generation-run protocol."""
 

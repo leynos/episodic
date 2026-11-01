@@ -2238,8 +2238,15 @@ To fail the run manually, use a privileged database transaction. The locking
 query below selects only a running run with a non-null expired lease and no
 open checkpoint. If it returns no row, execute `ROLLBACK` and stop: this is an
 explicit no-op, and the event and status update must not be executed. If it
-returns the requested run, keep the transaction open, append the failure event,
-update the terminal state, and then commit both writes together.
+returns the requested run, keep the transaction open and re-check the
+checkpoint guard once more, as the shipped primitive does, before appending the
+failure event and updating the terminal state. The re-check closes the window a
+lock wait opens: under `READ COMMITTED` the locking statement's snapshot can
+predate a checkpoint committed while the statement waited, so the `NOT EXISTS`
+predicate in that statement is not by itself authoritative. The `FOR UPDATE`
+lock does stop a _new_ checkpoint from being inserted while it is held, because
+the checkpoint's foreign key needs `FOR KEY SHARE` on the run row, so the
+second look is conclusive once the lock is held.
 
 ```sql
 BEGIN;
@@ -2259,6 +2266,18 @@ WHERE id = :run_id
 FOR UPDATE;
 
 -- If no row is returned, execute ROLLBACK and stop. Do not execute the
+-- statements below.
+
+-- The statement above may have waited for the row lock, and its snapshot can
+-- predate a checkpoint committed during that wait. Re-check now that the lock
+-- is held; the lock blocks a new checkpoint insert, so a missing row here is
+-- authoritative.
+SELECT 1
+FROM review_checkpoints
+WHERE generation_run_id = :run_id
+  AND status = 'created';
+
+-- If a row is returned, execute ROLLBACK and stop. Do not execute the
 -- statements below.
 
 -- After the qualifying row is locked, append run.failed with the same

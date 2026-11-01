@@ -8,7 +8,7 @@ import uuid
 
 import hypothesis.strategies as st
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, event, example, given, settings
 
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
 from episodic.canonical.generation_run_ports import event_seq
@@ -32,7 +32,7 @@ else:
 _EVENT_KINDS = st.lists(
     st.text(alphabet="abc", min_size=1, max_size=8),
     min_size=1,
-    max_size=6,
+    max_size=8,
 )
 
 
@@ -58,8 +58,12 @@ async def _recover_expired_lease(
 
 
 @given(first_kinds=_EVENT_KINDS, second_kinds=_EVENT_KINDS)
+# Guarantees at least one multi-event batch, so the property cannot pass by
+# drawing only single-event runs and never exercising the allocation arithmetic
+# beyond seq 1.
+@example(first_kinds=["a", "b"], second_kinds=["c", "a", "b"])
 @settings(
-    max_examples=6,
+    max_examples=25,
     deadline=None,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
@@ -70,6 +74,8 @@ async def test_sql_event_batches_are_gap_free_and_isolated(
     second_kinds: list[str],
 ) -> None:
     """Persisted event batches keep contiguous sequence spaces per run."""
+    event(f"first_event_count={len(first_kinds)}")
+    event(f"second_event_count={len(second_kinds)}")
     factory = session_factory
     first_run = make_generation_run()
     second_run = make_generation_run()

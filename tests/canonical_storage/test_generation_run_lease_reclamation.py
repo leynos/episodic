@@ -216,11 +216,13 @@ def _assert_reclaimed(
     assert run.ended_at == NOW, f"{name}: ended_at {run.ended_at!r}"
 
 
+@pytest.mark.parametrize("limit", [0, -1])
 @pytest.mark.asyncio
 async def test_reclamation_rejects_non_positive_limit(
     session_factory: async_sessionmaker[AsyncSession],
+    limit: int,
 ) -> None:
     """A non-positive limit is a caller error, not a silent empty batch."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(ValueError, match="limit must be a positive integer"):
-            await uow.generation_runs.fail_expired_leases(now=NOW, limit=0)
+            await uow.generation_runs.fail_expired_leases(now=NOW, limit=limit)

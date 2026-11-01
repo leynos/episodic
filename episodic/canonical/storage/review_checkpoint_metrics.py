@@ -26,14 +26,18 @@ def record_checkpoint_created(
     *,
     open_count: float,
 ) -> None:
-    """Count a creation and observe the run's remaining open checkpoints.
+    """Count a creation and observe the total unresolved checkpoints.
 
     Parameters
     ----------
     metrics : ValueMetricsPort
         Sink to write to.
     open_count : float
-        Unresolved checkpoints the new checkpoint's run now holds.
+        Unresolved checkpoints across *all* runs after this creation. The gauge
+        is deliberately global: a per-run value emitted without a run label
+        would be attributed to whichever run happened to write last, so
+        resolving run B's final checkpoint would report zero while run A still
+        had a backlog.
     """
     metrics.increment_counter(_METRIC_CREATED, labels={})
     metrics.observe_value(_METRIC_OPEN, open_count, labels={})
@@ -57,12 +61,19 @@ def record_checkpoint_resolved(
         *action* in this package is the distinct ``CheckpointAction`` a
         reviewer response carries.
     open_count : float
-        Unresolved checkpoints the resolved checkpoint's run still holds.
+        Unresolved checkpoints across *all* runs after this resolution, so the
+        gauge keeps reporting a backlog held by other runs.
     """
     metrics.increment_counter(_METRIC_RESOLVED, labels={"status": status.value})
     metrics.observe_value(_METRIC_OPEN, open_count, labels={})
 
 
 def record_terminal_conflict(metrics: ValueMetricsPort) -> None:
-    """Count a compare-and-set transition that lost to another writer."""
+    """Count a transition refused because the checkpoint was already terminal.
+
+    Both routes count: a rejection raised by the domain precondition before any
+    write, and a compare-and-set that lost to another writer. Exposing only the
+    latter would hide the ordinary retry storm, in which callers keep
+    re-submitting a response to a checkpoint that was resolved earlier.
+    """
     metrics.increment_counter(_METRIC_TERMINAL_CONFLICT, labels={})

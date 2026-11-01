@@ -19,6 +19,8 @@ no-op it never exercised.
 
 import typing as typ
 
+from episodic.canonical.generation_run_lease_ports import lease_reclamation_limit
+
 if typ.TYPE_CHECKING:
     import datetime as dt
 
@@ -47,11 +49,21 @@ class InMemoryGenerationRunLeaseReclamationMixin:
             Instant the expiry predicate would use. Accepted for protocol
             parity and ignored.
         limit : int
-            Maximum batch size. Accepted for protocol parity and ignored.
+            Maximum batch size. Accepted for protocol parity and ignored, but
+            still validated: the port contract rejects a non-positive limit, and
+            an argument check is not storage behaviour.
 
         Returns
         -------
         tuple[GenerationRun, ...]
             Always empty, for every input.
+
+        Notes
+        -----
+        Raises ``ValueError`` when ``limit`` is not positive. That raise lives
+        one call away in the shared validator, so this adapter cannot state it
+        as a local ``Raises`` section; the argument contract still applies even
+        though no lease is stored here.
         """
+        lease_reclamation_limit(limit)
         return ()

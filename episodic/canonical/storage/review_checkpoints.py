@@ -1,17 +1,14 @@
 """PostgreSQL adapter for user-facing generation-run review checkpoints.
 
 Every state change routes through the domain transition on :class:`Checkpoint`
-and then persists whatever entity the domain returned. The adapter owns no
-lifecycle rules of its own: INV-CKPT-1 exists because two independent
-implementations of one rule set drift.
+and then persists the entity it returned. The adapter owns no lifecycle rules:
+INV-CKPT-1 exists because two implementations of one rule set drift.
 
-Transitions are applied by compare-and-set rather than ``SELECT ... FOR UPDATE``
-(D-10, ADR-018). The predicate ``status = 'created'`` is the concurrency
-control, and its outcome is observable sequentially — which a row lock is not,
-under a harness that serializes every transaction globally.
-
-Core ``UPDATE``s leave the session holding a stale copy of the row, which ORM
-reads answer from; a behavioural read must pass ``populate_existing``.
+Transitions use compare-and-set rather than ``SELECT ... FOR UPDATE`` (D-10,
+ADR-018); ``status = 'created'`` is the control, and its outcome is observable
+sequentially — a row lock's is not here, because the harness serializes every
+transaction. Core ``UPDATE``s leave the session holding a stale copy that ORM
+reads answer from, so behavioural reads pass ``populate_existing``.
 """
 
 import typing as typ
@@ -144,7 +141,7 @@ class SqlAlchemyReviewCheckpointStore:
         # Also observed on resolution: both ends, so accumulation is visible.
         record_checkpoint_created(
             self._metrics,
-            open_count=await self._count_open(checkpoint.generation_run_id),
+            open_count=await self._count_open(),
         )
         _log_event(
             "info",
@@ -305,7 +302,13 @@ class SqlAlchemyReviewCheckpointStore:
             )
             raise CheckpointNotFound(checkpoint_id)
 
-        updated = transition(checkpoint_from_record(record))
+        try:
+            updated = transition(checkpoint_from_record(record))
+        except CheckpointAlreadyTerminal:
+            # The domain-precondition route; the lost-race route counts in
+            # `_raise_lost_race`. Only one of the two can be taken per call.
+            record_terminal_conflict(self._metrics)
+            raise
         result = await self._session.execute(
             sa
             .update(ReviewCheckpointRecord)
@@ -325,7 +328,7 @@ class SqlAlchemyReviewCheckpointStore:
         record_checkpoint_resolved(
             self._metrics,
             updated.status,
-            open_count=await self._count_open(updated.generation_run_id),
+            open_count=await self._count_open(),
         )
         _log_event(
             "info",
@@ -341,16 +344,13 @@ class SqlAlchemyReviewCheckpointStore:
         """Reconcile the session's copy with the row just written."""
         await self._session.refresh(record)
 
-    async def _count_open(self, run_id: uuid.UUID) -> float:
-        """Return the number of unresolved checkpoints for one run."""
+    async def _count_open(self) -> float:
+        """Return the unresolved count across all runs; the gauge has no labels."""
         count = await self._session.scalar(
             sa
             .select(sa.func.count())
             .select_from(ReviewCheckpointRecord)
-            .where(
-                ReviewCheckpointRecord.generation_run_id == run_id,
-                ReviewCheckpointRecord.status == CheckpointStatus.CREATED,
-            )
+            .where(ReviewCheckpointRecord.status == CheckpointStatus.CREATED)
         )
         return float(typ.cast("int", count))
 
