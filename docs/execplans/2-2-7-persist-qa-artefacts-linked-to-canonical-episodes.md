@@ -3447,6 +3447,9 @@ CREATE INDEX ix_qa_evaluations_episode_evaluated_at
     ON qa_evaluations (episode_id, evaluated_at DESC, id DESC);
 CREATE INDEX ix_qa_evaluations_episode_evaluator_evaluated_at
     ON qa_evaluations (episode_id, evaluator, evaluated_at DESC, id DESC);
+CREATE INDEX ix_qa_evaluations_generation_run_id
+    ON qa_evaluations (generation_run_id)
+    WHERE generation_run_id IS NOT NULL;
 
 CREATE TABLE qa_findings (
     id            UUID PRIMARY KEY,
@@ -3467,10 +3470,17 @@ CREATE TABLE qa_findings (
 );
 ```
 
-Two indexes, both ending in the full sort key. The canonical listing order is
-`evaluated_at DESC, id DESC`; `id` is load-bearing because identifiers are
-UUIDv7 and therefore monotonic with creation time, so without it evaluations
-sharing an `evaluated_at` can swap between pages.
+Three indexes. The two listing indexes both end in the full sort key. The
+canonical listing order is `evaluated_at DESC, id DESC`; `id` is load-bearing
+because identifiers are UUIDv7 and therefore monotonic with creation time, so
+without it evaluations sharing an `evaluated_at` can swap between pages.
+
+The third, `ix_qa_evaluations_generation_run_id`, carries no sort key and is
+partial over non-null values. It exists so that a run-history purge, which
+nulls this foreign key in every referencing row, does not scan the whole table
+once per deleted run; PostgreSQL indexes no referencing column on its own, and
+both listing indexes lead with `episode_id`. The `WHERE` clause keeps it small
+for the common case of evaluations with no correlated run.
 
 `ix_qa_evaluations_episode_evaluated_at` serves the unfiltered listing — the
 default for both the API and the CLI — and the compliance-filtered listing,
@@ -4031,10 +4041,10 @@ Quality criteria (what "done" means):
 - Migrations: `make check-migrations` reports no drift, and
   `alembic downgrade -1 && alembic upgrade head` round-trips.
 - Documentation: `make markdownlint` and `make nixie` exit 0.
-- Performance: no benchmark threshold applies. The two indexes on
-  `qa_evaluations` cover the documented filters; do not add further indexes
-  without a measured query. Keep `make test` inside the 180-second per-test
-  timeout by holding `max_examples` at 5–6.
+- Performance: no benchmark threshold applies. The three indexes on
+  `qa_evaluations` cover the documented filters and the run-history purge; do
+  not add further indexes without a measured query. Keep `make test` inside the
+  180-second per-test timeout by holding `max_examples` at 5–6.
 - Security: the artefact stores evaluator summaries and remediation text, which
   may quote script content. Do not log finding text, do not place it in metric
   labels, and keep the CLI from writing the bearer token to standard output.
