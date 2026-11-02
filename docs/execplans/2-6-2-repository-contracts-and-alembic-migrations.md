@@ -729,6 +729,13 @@ Stop and escalate rather than improvising when any of these is reached.
       hyphenated spelling that failed CI's spelling step. The reviewer
       retained every disposition at `153236ef` and found no further defect in
       the documentation-only delta.
+- [x] (2026-11-02) The formal review of `3260dbaf` raised one unverified
+      finding: the domain-model diagram presented `list_checkpoints`'s
+      optional `status` filter and defaulted `limit`/`offset` as required
+      parameters. Every port in that diagram is drawn with parameter types
+      only, so `ca049cd9` fixes the convention rather than one line: the
+      figure caption now states that keyword-only markers, optional
+      parameters, and default values are omitted and stated by each port.
 
 Record a timestamp against each item as it completes, in the form
 `- [x] (2026-10-20 14:05Z) EP-M1 ...`.
