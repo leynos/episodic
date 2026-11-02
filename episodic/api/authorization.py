@@ -4,6 +4,7 @@ import dataclasses as dc
 import enum
 import hmac
 import typing as typ
+import unicodedata
 
 import falcon
 
@@ -169,8 +170,13 @@ def _authorization_result(
 
 
 def _escape_path_for_log(path: str) -> str:
-    """Escape request-path line breaks before including them in log records."""
-    return path.replace("\r", r"\r").replace("\n", r"\n")
+    """Escape Unicode control characters before logging a request path."""
+    return "".join(
+        character.encode("unicode_escape").decode("ascii")
+        if unicodedata.category(character) == "Cc"
+        else character
+        for character in path
+    )
 
 
 def _log_authorization_denial(

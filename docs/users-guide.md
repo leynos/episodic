@@ -403,7 +403,7 @@ The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
 `WARNING`. Each denial record contains only the decision, HTTP method, and
 request path; it excludes the `Authorization` header and bearer token.
 Carriage returns and line feeds in the logged path appear as visible `\r` and
-`\n` sequences.
+`\n` sequences; other Unicode control characters are escaped as well.
 
 ### Migration note for the next minor release
 
