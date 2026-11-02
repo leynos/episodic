@@ -116,7 +116,7 @@ class AuthorizationMiddleware:
                 logger,
                 "Authorization adapter failed for %s %s.",
                 context.method,
-                context.path,
+                _escape_path_for_log(context.path),
                 exc_info=True,
             )
             resp.media = {
@@ -168,6 +168,11 @@ def _authorization_result(
     return AuthorizationResult(decision=outcome)
 
 
+def _escape_path_for_log(path: str) -> str:
+    """Escape request-path line breaks before including them in log records."""
+    return path.replace("\r", r"\r").replace("\n", r"\n")
+
+
 def _log_authorization_denial(
     decision: AuthorizationDecision,
     context: AuthorizationContext,
@@ -178,5 +183,5 @@ def _log_authorization_denial(
         "Authorization denied with %s for %s %s.",
         decision,
         context.method,
-        context.path,
+        _escape_path_for_log(context.path),
     )

@@ -76,11 +76,24 @@ class ForbidSeriesProfilesAuthorization:
 class RaisingAuthorization:
     """Authorization adapter that simulates an unavailable policy service."""
 
+    def __init__(self, error_type: type[Exception] = RuntimeError) -> None:
+        """Set the adapter failure type used by the request tests."""
+        self._error_type = error_type
+
     async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
         """Raise instead of returning a decision."""
         del context
         msg = "authorization backend unavailable"
-        raise RuntimeError(msg)
+        raise self._error_type(msg)
+
+
+class _AuthorizationLogCase(typ.NamedTuple):
+    """Inputs and expected output for one authorization log assertion."""
+
+    adapter_factory: type[AuthorizationPort]
+    request_path: str
+    expected_status: int
+    expected_message: str
 
 
 @pytest.mark.asyncio
@@ -203,26 +216,94 @@ def test_authorization_decision_serializes_to_canonical_envelope(
 
 
 @pytest.mark.parametrize(
-    ("adapter_factory", "expected"),
+    "exception_type",
+    [OSError, RuntimeError, TypeError, ValueError],
+    ids=["os-error", "runtime-error", "type-error", "value-error"],
+)
+def test_authorization_adapter_failure_types_return_service_unavailable(
+    session_factory: async_sessionmaker[AsyncSession],
+    exception_type: type[Exception],
+) -> None:
+    """Every handled adapter failure returns the canonical 503 envelope."""
+    client = _build_client(
+        session_factory,
+        RaisingAuthorization(error_type=exception_type),
+    )
+
+    response = client.simulate_get("/v1/series-profiles")
+
+    assert response.status_code == 503, response.status_code
+    payload = typ.cast("dict[str, object]", response.json)
+    assert payload == {
+        "code": "service_unavailable",
+        "message": "Authorization service is unavailable.",
+        "details": {},
+    }, payload
+
+
+@pytest.mark.parametrize(
+    "case",
     [
-        (DenyAllAuthorization, (AuthorizationDecision.UNAUTHORIZED, 401)),
-        (
+        _AuthorizationLogCase(
+            DenyAllAuthorization,
+            "/v1/series-profiles",
+            401,
+            "Authorization denied with unauthorized for GET /v1/series-profiles.",
+        ),
+        _AuthorizationLogCase(
             ForbidSeriesProfilesAuthorization,
-            (AuthorizationDecision.FORBIDDEN, 403),
+            "/v1/series-profiles",
+            403,
+            "Authorization denied with forbidden for GET /v1/series-profiles.",
+        ),
+        _AuthorizationLogCase(
+            DenyAllAuthorization,
+            "/v1/series-profiles%0Aforged",
+            401,
+            (
+                r"Authorization denied with unauthorized for "
+                r"GET /v1/series-profiles\nforged."
+            ),
+        ),
+        _AuthorizationLogCase(
+            DenyAllAuthorization,
+            "/v1/series-profiles%0Dforged",
+            401,
+            (
+                r"Authorization denied with unauthorized for "
+                r"GET /v1/series-profiles\rforged."
+            ),
+        ),
+        _AuthorizationLogCase(
+            RaisingAuthorization,
+            "/v1/series-profiles%0Aforged",
+            503,
+            r"Authorization adapter failed for GET /v1/series-profiles\nforged.",
+        ),
+        _AuthorizationLogCase(
+            RaisingAuthorization,
+            "/v1/series-profiles%0Dforged",
+            503,
+            r"Authorization adapter failed for GET /v1/series-profiles\rforged.",
         ),
     ],
-    ids=["unauthorized", "forbidden"],
+    ids=[
+        "unauthorized",
+        "forbidden",
+        "unauthorized-newline-path",
+        "unauthorized-carriage-return-path",
+        "adapter-error-newline-path",
+        "adapter-error-carriage-return-path",
+    ],
 )
-def test_authorization_denials_log_warning_without_credentials(
+def test_authorization_logs_warning_without_credentials_or_control_characters(
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
-    adapter_factory: type[AuthorizationPort],
-    expected: tuple[AuthorizationDecision, int],
+    case: _AuthorizationLogCase,
 ) -> None:
-    """Unauthorized and forbidden responses should emit redacted warnings."""
+    """Authorization warnings should be redacted and safe for log records."""
     import femtologging
 
-    expected_decision, expected_status = expected
     femtologging.reset_manager()
     logger = femtologging.getLogger("episodic.api.authorization")
     collector = _AuthorizationLogCollector()
@@ -232,23 +313,23 @@ def test_authorization_denials_log_warning_without_credentials(
     monkeypatch.setattr(authorization_module, "logger", logger)
 
     try:
-        client = _build_client(session_factory, adapter_factory())
+        client = _build_client(session_factory, case.adapter_factory())
         response = client.simulate_get(
-            "/v1/series-profiles",
+            case.request_path,
             headers={"Authorization": "Bearer sensitive-token"},
         )
         _wait_for_authorization_log(logger, collector)
     finally:
         femtologging.reset_manager()
 
-    assert response.status_code == expected_status, response.status_code
+    assert response.status_code == case.expected_status, response.status_code
     assert len(collector.records) == 1, collector.records
     logger_name, level, message = collector.records[0]
     assert logger_name == "episodic.api.authorization", logger_name
     assert level == "WARN", level
-    assert message == (
-        f"Authorization denied with {expected_decision} for GET /v1/series-profiles."
-    ), message
+    assert message == case.expected_message, message
+    assert "\n" not in message, message
+    assert "\r" not in message, message
     assert "Bearer sensitive-token" not in message, message
     assert "sensitive-token" not in message, message
 
