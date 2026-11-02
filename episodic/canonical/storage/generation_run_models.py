@@ -16,6 +16,10 @@ from episodic.canonical.generation_quality import (  # ruff: ignore[typing-only-
     QualityMode,
 )
 
+from .generation_run_schema import (
+    GENERATION_RUN_EXPIRED_LEASE_INDEX,
+    GENERATION_RUN_EXPIRED_LEASE_PREDICATE_SQL,
+)
 from .models_base import GENERATION_RUN_STATUS, QA_STATUS, QUALITY_MODE, Base
 
 
@@ -112,6 +116,16 @@ class GenerationRunRecord(Base):
             "idempotency_principal_id",
             "idempotency_key",
             name="uq_generation_runs_idempotency_principal_key",
+        ),
+        # Partial on `status = 'running'`: a run holds an execution lease only
+        # while running, so the index stays small as terminal rows accumulate.
+        # The predicate text is shared with the migration rather than repeated,
+        # because Alembic's drift check does not compare partial-index
+        # predicates and a divergence here would go unreported.
+        sa.Index(
+            GENERATION_RUN_EXPIRED_LEASE_INDEX,
+            "lease_expires_at",
+            postgresql_where=sa.text(GENERATION_RUN_EXPIRED_LEASE_PREDICATE_SQL),
         ),
     )
 

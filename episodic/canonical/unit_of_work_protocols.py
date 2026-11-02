@@ -16,7 +16,7 @@ if typ.TYPE_CHECKING:
         SourceDocumentRepository,
         TeiHeaderRepository,
     )
-    from .generation_run_ports import GenerationRunEventStore
+    from .generation_run_ports import GenerationRunPort
     from .history_protocols import (
         EpisodeTemplateHistoryRepository,
         SeriesProfileHistoryRepository,
@@ -52,7 +52,7 @@ class CanonicalUnitOfWork(typ.Protocol):
     uploads: UploadRepository
     ingestion_job_sources: IngestionJobSourceRepository
     idempotency: IdempotencyStore
-    generation_runs: GenerationRunEventStore
+    generation_runs: GenerationRunPort
     cost_ledger: CostLedgerPort
 
     async def __aenter__(self) -> CanonicalUnitOfWork:

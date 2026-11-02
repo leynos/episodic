@@ -15,6 +15,9 @@ Episode TEI revision history follows
 and the shared versioning strategy in
 [ADR-018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md).
 
+Durable review-checkpoint persistence follows
+[ADR-024: Review checkpoint persistence](adr/adr-024-review-checkpoint-persistence.md).
+
 ## Motivation
 
 Episodic positions canonical Text Encoding Initiative (TEI) P5 as the auditable
@@ -837,7 +840,7 @@ projections, export jobs, voice previews) require corresponding port
 definitions owned by the domain layer:
 
 - `GenerationRunPort` — persistence and lifecycle for generation runs,
-  events, and checkpoints.
+  events, checkpoints, and lease reclamation.
 - `AudioRunPort` — persistence and lifecycle for audio synthesis runs,
   previews, and feedback.
 - `ScriptProjectionPort` — read and patch structured script
@@ -1022,8 +1025,12 @@ created_at: datetime
   audio, mastered audio, stems, and export bundles.
 - **TEI payloads** continue to use zstd compression in persistence,
   with the API returning plain XML.
-- **Event logs** are append-only and partitioned by `generation_run_id`
-  for efficient range queries.
+- **Event logs** are append-only, indexed by `generation_run_id`, and uniquely
+  constrained on `(generation_run_id, seq)`. They are deliberately not
+  partitioned: every read filters on a single `generation_run_id`, which the
+  index already serves, and `generation_run_id` is a UUID, so partitioning by
+  it would mean hash partitioning and buy nothing. The only partitioning worth
+  revisiting is a range partition on `created_at`, for cheap retention drops.
 - **Loudness targets** are stored per audio run as
   `target_loudness_lufs` (default: -16 Loudness Units relative to Full Scale
   (LUFS) for podcast distribution, -23 LUFS for broadcast contexts per European
@@ -1174,9 +1181,11 @@ interfaces defined for the TUI API. Domain entities (GenerationRun, AudioRun,
 Checkpoint, etc.) are modelled as frozen dataclasses with UUIDv7 identifiers
 and timestamp fields. Port interfaces define the contract between domain
 services and outbound adapters, specifying operations for persistence, event
-streaming, and lifecycle management. The diagram illustrates the one-to-many
-relationships between runs and their derived artefacts, and the dependency
-relationships between ports and domain entities._
+streaming, and lifecycle management. Port method signatures are abbreviated to
+their parameter types: keyword-only markers, optional parameters, and default
+values are omitted here and stated by each port itself. The diagram illustrates
+the one-to-many relationships between runs and their derived artefacts, and the
+dependency relationships between ports and domain entities._
 
 ```mermaid
 classDiagram
@@ -1325,7 +1334,13 @@ classDiagram
         <<interface>>
         +create_checkpoint(Checkpoint checkpoint)
         +get_checkpoint(UUID checkpoint_id)
+        +list_checkpoints(UUID run_id, CheckpointStatus status, int limit, int offset)
         +respond_to_checkpoint(UUID checkpoint_id, CheckpointAction action)
+    }
+
+    class GenerationRunLeaseReclamationPort {
+        <<interface>>
+        +fail_expired_leases(datetime now, int limit)
     }
 
     class GenerationRunPort {
@@ -1395,6 +1410,7 @@ classDiagram
     GenerationRunPort ..|> GenerationRunRepository
     GenerationRunPort ..|> GenerationEventLog
     GenerationRunPort ..|> GenerationCheckpointPort
+    GenerationRunPort ..|> GenerationRunLeaseReclamationPort
 
     AudioRunPort ..> AudioRun
     AudioRunPort ..> PreviewAsset

@@ -8,14 +8,11 @@ import uuid
 
 import hypothesis.strategies as st
 import pytest
-import sqlalchemy as sa
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, event, example, given, settings
 
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
-from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate, event_seq
+from episodic.canonical.generation_run_ports import event_seq
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from episodic.canonical.storage.generation_run_models import GenerationRunRecord
-from episodic.canonical.storage.generation_runs import SqlAlchemyGenerationRunStore
 from tests.canonical_storage._generation_run_support import (
     NOW,
     ExecutionClaim,
@@ -35,7 +32,7 @@ else:
 _EVENT_KINDS = st.lists(
     st.text(alphabet="abc", min_size=1, max_size=8),
     min_size=1,
-    max_size=6,
+    max_size=8,
 )
 
 
@@ -53,46 +50,20 @@ async def _recover_expired_lease(
     session_factory: SessionFactory,
     run_id: uuid.UUID,
 ) -> bool:
-    """Apply the documented recovery transition only to an expired running run."""
-    async with session_factory() as session:
-        record = await session.scalar(
-            sa
-            .select(GenerationRunRecord)
-            .where(
-                GenerationRunRecord.id == run_id,
-                GenerationRunRecord.status == GenerationRunStatus.RUNNING,
-                GenerationRunRecord.lease_expires_at.is_not(None),
-                GenerationRunRecord.lease_expires_at <= NOW,
-            )
-            .with_for_update()
-        )
-        if record is None:
-            await session.rollback()
-            return False
-        store = SqlAlchemyGenerationRunStore(session)
-        await store.append_event(
-            run_id,
-            kind="run.failed",
-            payload={"error_category": "launcher.lease_expired"},
-            occurred_at=NOW,
-        )
-        await store.update_run_status(
-            run_id,
-            update=GenerationRunStatusUpdate(
-                status=GenerationRunStatus.FAILED,
-                current_node=None,
-                ended_at=NOW,
-                error_message="Generation lease expired; failed manually.",
-                error_category="launcher.lease_expired",
-            ),
-        )
-        await session.commit()
-    return True
+    """Reclaim one expired run through the port, reporting whether it moved."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        reclaimed = await uow.generation_runs.fail_expired_leases(now=NOW)
+        await uow.commit()
+    return [run.id for run in reclaimed] == [run_id]
 
 
 @given(first_kinds=_EVENT_KINDS, second_kinds=_EVENT_KINDS)
+# Guarantees at least one multi-event batch, so the property cannot pass by
+# drawing only single-event runs and never exercising the allocation arithmetic
+# beyond seq 1.
+@example(first_kinds=["a", "b"], second_kinds=["c", "a", "b"])
 @settings(
-    max_examples=6,
+    max_examples=25,
     deadline=None,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
@@ -103,6 +74,8 @@ async def test_sql_event_batches_are_gap_free_and_isolated(
     second_kinds: list[str],
 ) -> None:
     """Persisted event batches keep contiguous sequence spaces per run."""
+    event(f"first_event_count={len(first_kinds)}")
+    event(f"second_event_count={len(second_kinds)}")
     factory = session_factory
     first_run = make_generation_run()
     second_run = make_generation_run()
@@ -305,6 +278,11 @@ async def test_sql_claim_races_and_lease_recovery_preserve_one_terminal_path(
     if recovered:
         assert persisted.status is GenerationRunStatus.FAILED, persisted.status
         assert [event.kind for event in events] == ["run.failed"], events
+        assert persisted.error_category == "launcher.lease_expired", persisted
+        assert events[0].payload == {
+            "error_category": "launcher.lease_expired",
+            "error_message": "Generation lease expired; failed manually.",
+        }, events
     else:
         assert persisted.status is GenerationRunStatus.RUNNING, persisted.status
         assert events == (), events

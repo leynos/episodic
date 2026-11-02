@@ -1210,6 +1210,12 @@ The `SqlAlchemyUnitOfWork` manages transaction boundaries:
   same transaction.
 - When the context manager exits with an unhandled exception, the unit of work
   rolls back automatically.
+- When it exits cleanly, the unit of work does **not** commit. Pending writes
+  are discarded, and the close emits a structured
+  `canonical_unit_of_work.closed_with_uncommitted_changes` warning so the loss
+  is visible rather than silent. Call `commit()` explicitly before leaving the
+  context: the warning is a safety net, and it fires only after the changes are
+  already unrecoverable.
 
 Database-level constraints (unique slugs, foreign keys, and CHECK constraints
 such as the weight bound on source documents) are enforced by Postgres and raise
@@ -2019,16 +2025,33 @@ The port surface is intentionally split:
   the inbound adapter and invoke this helper only after values become domain
   types.
 - `GenerationRunEventStore` composes the run repository and event log for
-  durable generation-run storage. `CanonicalUnitOfWork.generation_runs` exposes
-  this port; `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunStore` to
-  its session, so callers use the same unit of work and own its commit or
-  rollback. `GenerationRunStorageRuntime` supplies the adapter's clock and UUID
-  providers, with production defaults and deterministic injection available to
-  tests.
-- `GenerationCheckpointPort` creates checkpoints and records reviewer
-  responses through the `Checkpoint.respond(...)` domain transition.
-- `GenerationRunPort` composes the three sub-ports for callers that need the
-  complete surface.
+  durable generation-run storage, and remains the narrower seam for callers
+  that need only run-plus-event persistence. `SqlAlchemyGenerationRunStore`
+  implements it; `GenerationRunStorageRuntime` supplies the adapter's clock and
+  UUID providers, with production defaults and deterministic injection
+  available to tests. `CanonicalUnitOfWork.generation_runs` no longer exposes
+  this port — see `GenerationRunPort` below.
+- `GenerationCheckpointPort` creates checkpoints, reads them back, and records
+  reviewer responses through the `Checkpoint.respond(...)` domain transition.
+  `get_checkpoint` returns `None` for an unknown identifier, whereas
+  `list_checkpoints` raises `RunNotFound` for an unknown run and returns that
+  run's checkpoints in `(created_at, id)` order, oldest first. The listing
+  takes an optional `status` filter plus `limit`/`offset` paging, and rejects a
+  negative bound with `ValueError`. Both reads run inside the adapter's
+  `no_autoflush` boundary, so a caller may read while holding unflushed work.
+- `GenerationRunLeaseReclamationPort` declares `fail_expired_leases`, which
+  fails runs abandoned by a worker holding an expired execution lease. It is
+  the only sub-port that reads two tables: a run is eligible only when no
+  checkpoint is still in `created`, so a run suspended awaiting human review is
+  never reclaimed out from under its reviewer.
+- `GenerationRunPort` composes the four sub-ports for callers that need the
+  complete surface. `CanonicalUnitOfWork.generation_runs` exposes this port, and
+  `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunPortAdapter` to its
+  session, so callers use the same unit of work and own its commit or rollback.
+
+`SqlAlchemyGenerationRunPortAdapter` holds a `SqlAlchemyGenerationRunStore` and
+a `SqlAlchemyReviewCheckpointStore` and delegates to each explicitly, rather
+than mixing both into one class.
 
 Use `InMemoryGenerationRunStore` from
 `episodic.canonical.adapters.generation_runs` as the reference adapter in fast
@@ -2041,6 +2064,52 @@ review checkpoint attached to a generation run. It is not the same as
 `episodic.orchestration.WorkflowCheckpoint`, which stores internal LangGraph
 suspend/resume state through `CheckpointPort`. Do not convert between the two
 implicitly; bridge logic belongs in the later orchestration and REST work.
+
+Migrations lead the code. `SqlAlchemyReviewCheckpointStore` writes
+`review_checkpoints`, which exists only once revision `20261020_000014` has
+been applied, so a deployment that ships the new code before running
+`alembic upgrade head` fails at its first checkpoint write. Apply migrations
+first; the application does not apply them itself.
+
+#### Review-checkpoint observability
+
+Metrics are optional wiring. `SqlAlchemyUnitOfWork` passes
+`UnitOfWorkRuntime.value_metrics` into the checkpoint store, and the store
+falls back to `NoopValueMetrics` when it receives `None`. With no sink
+configured the store still logs its transitions but skips the open-count query
+entirely, so a deployment without a metrics sink pays no extra `COUNT` per
+checkpoint operation. Wire a `ValueMetricsPort` to emit the series below.
+
+An explicitly constructed `SqlAlchemyReviewCheckpointStore` follows the same
+rule: `metrics=` is the only switch, and there is no separate enable flag to
+keep in step with it.
+
+The store emits four series:
+
+- `review_checkpoint_created_total` counts accepted creations.
+- `review_checkpoint_resolved_total{status}` counts terminal transitions,
+  labelled with the status the checkpoint reached (`responded`, `timed_out` or
+  `cancelled`). The label is the resulting status rather than the reviewer's
+  response action, because the action describes one input to a transition while
+  the status describes where the checkpoint actually ended up.
+- `review_checkpoint_open_gauge` observes the number of checkpoints still in
+  `created` across _all_ runs, after every creation and resolution. It is
+  deliberately global: a per-run value emitted without a run label would be
+  attributed to whichever run wrote last, so resolving one run's final
+  checkpoint would report a zero backlog while another run still had one.
+- `review_checkpoint_terminal_conflict_total` counts transitions refused
+  because the checkpoint was already terminal. Both routes count: a rejection
+  raised by the domain precondition before any write, and a compare-and-set
+  that lost to another writer. Counting only lost races would hide the ordinary
+  retry storm where callers keep re-submitting a response that was resolved
+  earlier.
+
+Creation and resolution metrics are emitted after the insert or compare-and-set
+has run but before the caller commits, so they describe accepted work in the
+current transaction rather than durable commit outcomes. The terminal-conflict
+counter is not tied to a write: it also records domain-precondition refusals,
+which happen before any write is attempted. A later rollback is not reflected
+in these counters.
 
 ### No-QA launcher and TEI retrieval
 
@@ -2200,12 +2269,36 @@ claim that updates zero rows has lost the race or found a terminal run. Do not
 reset an expired `running` row to `pending` or launch a replacement: this slice
 has no automatic reaper or reassignment path.
 
+An expired lease is not by itself proof of abandonment. A run suspended at a
+review checkpoint is legitimately `running` while it waits for a human, and its
+lease expires regardless. Before failing such a run, check whether a checkpoint
+is still open:
+
+```sql
+SELECT id, node, status
+FROM review_checkpoints
+WHERE generation_run_id = :run_id
+  AND status = 'created';
+```
+
+If that returns a row, the run is awaiting review rather than abandoned;
+resolving the checkpoint is the recovery, and failing the run would discard
+queued human work. Both the reclamation primitive and the manual statement
+below encode this guard, so a run awaiting review is not failed by either.
+
 To fail the run manually, use a privileged database transaction. The locking
-query below selects only a running run with a non-null expired lease. If it
-returns no row, execute `ROLLBACK` and stop: this is an explicit no-op, and the
-event and status update must not be executed. If it returns the requested run,
-keep the transaction open, append the failure event, update the terminal state,
-and then commit both writes together.
+query below selects only a running run with a non-null expired lease and no
+open checkpoint. If it returns no row, execute `ROLLBACK` and stop: this is an
+explicit no-op, and the event and status update must not be executed. If it
+returns the requested run, keep the transaction open and re-check the
+checkpoint guard once more, as the shipped primitive does, before appending the
+failure event and updating the terminal state. The re-check closes the window a
+lock wait opens: under `READ COMMITTED` the locking statement's snapshot can
+predate a checkpoint committed while the statement waited, so the `NOT EXISTS`
+predicate in that statement is not by itself authoritative. The `FOR UPDATE`
+lock does stop a _new_ checkpoint from being inserted while it is held, because
+the checkpoint's foreign key needs `FOR KEY SHARE` on the run row, so the
+second look is conclusive once the lock is held.
 
 ```sql
 BEGIN;
@@ -2216,9 +2309,27 @@ WHERE id = :run_id
   AND status = 'running'
   AND lease_expires_at IS NOT NULL
   AND lease_expires_at <= CURRENT_TIMESTAMP
+  AND NOT EXISTS (
+      SELECT 1
+      FROM review_checkpoints
+      WHERE review_checkpoints.generation_run_id = generation_runs.id
+        AND review_checkpoints.status = 'created'
+  )
 FOR UPDATE;
 
 -- If no row is returned, execute ROLLBACK and stop. Do not execute the
+-- statements below.
+
+-- The statement above may have waited for the row lock, and its snapshot can
+-- predate a checkpoint committed during that wait. Re-check now that the lock
+-- is held; the lock blocks a new checkpoint insert, so a missing row here is
+-- authoritative.
+SELECT 1
+FROM review_checkpoints
+WHERE generation_run_id = :run_id
+  AND status = 'created';
+
+-- If a row is returned, execute ROLLBACK and stop. Do not execute the
 -- statements below.
 
 -- After the qualifying row is locked, append run.failed with the same
@@ -2266,8 +2377,55 @@ before persistence.
 
 Keep `idempotency_principal_id` and `idempotency_key` unchanged. They remain
 attached to the failed generation run so a replay is tied to the existing
-record rather than creating an untracked replacement. Automatic recovery and
-reassignment remain roadmap item `2.6.2`.
+record rather than creating an untracked replacement.
+
+#### Reclaiming expired leases through the port
+
+The same reclamation is available as `fail_expired_leases` on the composite
+`GenerationRunPort`, so operators and future schedulers do not have to
+reconstruct the statement by hand:
+
+```python
+async with SqlAlchemyUnitOfWork(session_factory) as uow:
+    reclaimed = await uow.generation_runs.fail_expired_leases(now=now, limit=100)
+    await uow.commit()
+```
+
+Reclaim only after the worker that held the lease can no longer finish its run.
+An expired lease shows only that the run passed the fixed deadline written when
+the launcher claimed it. Nothing renews that deadline -- no heartbeat exists
+anywhere in the tree -- so an active run can pass it without any missed
+heartbeat. Expiry alone therefore establishes neither worker health nor that
+the worker stopped running. A paused, partitioned, or restarted worker can
+resume after its lease lapsed and keep writing to the same run. Stop every
+worker that could still hold the run, or fence it so its later writes cannot
+land, before reclaiming. Once the run is `failed`, the store's mutating paths
+(`update_run_status` and `append_event`) resolve it through
+`_require_mutable_run`, which locks the row and raises `RunAlreadyTerminal`, so
+a resuming worker's later writes are rejected rather than corrupting the
+record. That is still not a substitute for stopping the worker: reclaiming too
+early fails a run out from under work that could have finished, which is the
+outcome fencing prevents.
+
+Each call reclaims at most `limit` runs, oldest expiry first, and returns the
+runs it moved. A full batch means more eligible runs may remain, but it does
+not prove that any do: it can be the last batch of a backlog that held exactly
+`limit` runs. A short or empty batch does not establish exhaustion either,
+because a run selected under the statement's snapshot can be dropped by the
+post-lock checkpoint recheck when a reviewer's checkpoint committed while the
+statement waited for the run lock. Treat the returned count as a lower bound,
+not a completion signal. The call appends each `run.failed` event and its
+terminal update in one transaction and writes one instant, `now`, to the event's
+`occurred_at`, `ended_at`, and `updated_at`. A non-positive `limit` raises
+`ValueError`. Both adapters expose the method: the SQL adapter reclaims, while
+the in-memory adapter necessarily returns `()` because `GenerationRun` carries
+no lease field — its emptiness is a divergence, not a contract, so a shared
+suite must not treat agreement between the two as evidence.
+
+Nothing schedules this method yet. No reaper, worker, or cron entry invokes it,
+so during this slice it runs only when an operator or test calls it, and a
+backlog persists until something does. Periodic reclamation and stuck-run
+detection remain roadmap item `2.6.5`.
 
 TEI representation selection is centralized in
 `episodic.api.resources.episode_tei.negotiate_tei_media_type`. Keep JSON as the

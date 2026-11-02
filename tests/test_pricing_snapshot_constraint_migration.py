@@ -22,6 +22,10 @@ if typ.TYPE_CHECKING:
 _LEGACY_NAME = "pricing_snapshots_content_hash_key"
 _CURRENT_NAME = "uq_pricing_snapshots_content_hash"
 _PREVIOUS_REVISION = "20260624_000012"
+#: The pricing migration's own revision. It is deliberately not ``"head"``:
+#: this suite exercises one migration, so pinning the revision keeps a later
+#: revision's SQL out of these assertions and out of the offline snapshots.
+_PRICING_REVISION = "20261010_000013"
 
 
 def _migrate(
@@ -88,7 +92,7 @@ async def _migration_target(
     """Prepare one migration direction and return its target and source name."""
     if direction == "upgrade":
         await _prepare_legacy_schema(connection)
-        return "head", _LEGACY_NAME
+        return _PRICING_REVISION, _LEGACY_NAME
     return _PREVIOUS_REVISION, _CURRENT_NAME
 
 
@@ -134,7 +138,7 @@ async def test_legacy_pricing_snapshot_constraint_upgrade_and_downgrade(
         legacy_constraint = await _constraint(connection)
         await _insert_snapshot(connection, uuid.UUID(int=1))
 
-        await connection.run_sync(_migrate, "upgrade", "head")
+        await connection.run_sync(_migrate, "upgrade", _PRICING_REVISION)
         assert await _constraint(connection) == (
             _CURRENT_NAME,
             "u",
@@ -155,7 +159,7 @@ async def test_legacy_pricing_snapshot_constraint_upgrade_and_downgrade(
             sa.select(sa.func.count()).select_from(PricingSnapshotRecord)
         )
         assert row_count == 1, "the persisted snapshot must survive both migrations"
-        await connection.run_sync(_migrate, "upgrade", "head")
+        await connection.run_sync(_migrate, "upgrade", _PRICING_REVISION)
         assert await _constraint(connection) == (
             _CURRENT_NAME,
             "u",
@@ -172,7 +176,7 @@ async def test_pricing_snapshot_constraint_migration_obeys_caller_rollback(
         await _prepare_legacy_schema(connection)
     async with migrated_engine.connect() as connection:
         transaction = await connection.begin()
-        await connection.run_sync(_migrate, "upgrade", "head")
+        await connection.run_sync(_migrate, "upgrade", _PRICING_REVISION)
         assert (await _constraint(connection))[0] == _CURRENT_NAME, (
             "the caller's uncommitted upgrade must rename the constraint"
         )
@@ -197,14 +201,14 @@ async def test_preview_pricing_snapshot_constraint_upgrade_is_noop(
             )
         )
         existing_constraint = await _constraint(connection)
-        await connection.run_sync(_migrate, "upgrade", "head")
+        await connection.run_sync(_migrate, "upgrade", _PRICING_REVISION)
         assert await _constraint(connection) == existing_constraint, (
             "preview upgrade must preserve the existing named constraint and index"
         )
         revision = await connection.scalar(
             sa.text("SELECT version_num FROM alembic_version")
         )
-        assert revision == "20261010_000013", (
+        assert revision == _PRICING_REVISION, (
             "preview upgrade must advance the Alembic revision despite the no-op rename"
         )
 
@@ -311,9 +315,9 @@ def test_offline_pricing_snapshot_migration_keeps_schema_validation(
     config.output_buffer = output
     migration = command.upgrade if direction == "upgrade" else command.downgrade
     revision = (
-        f"{_PREVIOUS_REVISION}:head"
+        f"{_PREVIOUS_REVISION}:{_PRICING_REVISION}"
         if direction == "upgrade"
-        else f"head:{_PREVIOUS_REVISION}"
+        else f"{_PRICING_REVISION}:{_PREVIOUS_REVISION}"
     )
     migration(config, revision, sql=True)
     assert output.getvalue() == snapshot, (

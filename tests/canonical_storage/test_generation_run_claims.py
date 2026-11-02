@@ -7,15 +7,12 @@ import typing as typ
 import uuid
 
 import pytest
-import sqlalchemy as sa
 
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.storage import generation_runs as generation_runs_module
-from episodic.canonical.storage.generation_run_models import GenerationRunRecord
-from episodic.canonical.storage.generation_runs import SqlAlchemyGenerationRunStore
 from tests.canonical_storage._generation_run_support import (
     NOW,
     ExecutionClaim,
@@ -38,51 +35,17 @@ class _ClaimOutcomeLogExpectations:
     lease_expires_at: dt.datetime
 
 
-async def _manually_fail_expired_run(
+async def _reclaim_expired_lease(
     session_factory: async_sessionmaker[AsyncSession],
     run_id: uuid.UUID,
     *,
     now: dt.datetime,
 ) -> bool:
-    """Apply the documented manual-recovery transaction for one run."""
-    async with session_factory() as session:
-        record = await session.scalar(
-            sa
-            .select(GenerationRunRecord)
-            .where(
-                GenerationRunRecord.id == run_id,
-                GenerationRunRecord.status == GenerationRunStatus.RUNNING,
-                GenerationRunRecord.lease_expires_at.is_not(None),
-                GenerationRunRecord.lease_expires_at <= now,
-            )
-            .with_for_update()
-        )
-        if record is None:
-            await session.rollback()
-            return False
-
-        store = SqlAlchemyGenerationRunStore(session)
-        await store.append_event(
-            run_id,
-            kind="run.failed",
-            payload={
-                "error_category": "launcher.lease_expired",
-                "error_message": "Generation lease expired; failed manually.",
-            },
-            occurred_at=now,
-        )
-        await store.update_run_status(
-            run_id,
-            update=GenerationRunStatusUpdate(
-                status=GenerationRunStatus.FAILED,
-                current_node=None,
-                ended_at=now,
-                error_message="Generation lease expired; failed manually.",
-                error_category="launcher.lease_expired",
-            ),
-        )
-        await session.commit()
-        return True
+    """Reclaim expired leases through the port, reporting whether this run moved."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        reclaimed = await uow.generation_runs.fail_expired_leases(now=now)
+        await uow.commit()
+    return run_id in {run.id for run in reclaimed}
 
 
 async def _assert_manual_recovery_state(
@@ -260,13 +223,9 @@ async def test_manual_recovery_only_fails_expired_running_leases(
         await uow.commit()
 
     recovered = [
-        await _manually_fail_expired_run(session_factory, expired_run.id, now=NOW),
-        await _manually_fail_expired_run(
-            session_factory,
-            non_expired_run.id,
-            now=NOW,
-        ),
-        await _manually_fail_expired_run(session_factory, terminal_run.id, now=NOW),
+        await _reclaim_expired_lease(session_factory, expired_run.id, now=NOW),
+        await _reclaim_expired_lease(session_factory, non_expired_run.id, now=NOW),
+        await _reclaim_expired_lease(session_factory, terminal_run.id, now=NOW),
     ]
     assert recovered == [True, False, False], f"manual recovery results: {recovered!r}"
 

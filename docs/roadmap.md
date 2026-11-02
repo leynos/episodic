@@ -320,9 +320,13 @@ enables real-time visibility into generation progress.
   - Implement append-only event log with monotonic sequence numbers.
   - Define checkpoint lifecycle (created, responded).
   - See [Generation runs](episodic-tui-api-design.md#generation-runs).
-- [ ] 2.6.2. Implement repository contracts and Alembic migrations.
+- [x] 2.6.2. Implement repository contracts and Alembic migrations.
   - Define repository interfaces for generation-run aggregates.
   - Add integration tests validating event ordering.
+  - Completed 2026-10-21. Run and event persistence landed earlier under item
+    4.3.2; this slice adds durable review-checkpoint storage, the SQL adapter
+    behind `GenerationRunPort`, and a gated lease-reclamation primitive. See
+    [ADR 024](adr/adr-024-review-checkpoint-persistence.md).
 - [ ] 2.6.3. Implement REST endpoints for generation runs. Requires 2.6.1.
   - Implement `/v1/episodes/{episode_id}/generation-runs` (POST, GET).
   - Implement `/v1/generation-runs/{run_id}` (GET).
@@ -332,6 +336,47 @@ enables real-time visibility into generation progress.
   - Enforce idempotency-key support for run creation.
   - Validate hexagonal boundary tests passing.
   - See [Generation runs](episodic-tui-api-design.md#generation-runs).
+- [ ] 2.6.4. Renumber the three ADR 015 documents and index the ADR set.
+  - `adr-015-cost-accounting-ports-and-pricing-engine.md`,
+    `adr-015-generation-run-port-split.md`, and
+    `adr-015-upload-and-idempotency-ports.md` share one number; two of them are
+    absent from `docs/contents.md`.
+  - Renumbering is docs-only and touches no runtime behaviour.
+- [ ] 2.6.5. Schedule generation-run lease reclamation and stuck-run detection.
+  - `GenerationRunPort.fail_expired_leases` exists but nothing calls it on a
+    timer, and nothing detects a run that is stuck rather than merely expired.
+  - Requires a scheduler, at-most-once semantics, and an operational owner for
+    the resulting failures.
+- [ ] 2.6.6. Add `Checkpoint.expires_at` so an expired review checkpoint can be
+  discovered.
+  - `time_out_checkpoint` requires the caller to already know which checkpoint
+    expired, and neither the entity nor its table carries a deadline.
+  - A checkpoint on a reclaimed run is otherwise left in `created` forever.
+- [ ] 2.6.7. Add an opt-in concurrency test tier against a real PostgreSQL.
+  - Gaplessness and prefix stability under genuinely concurrent writers cannot
+    be shown under `py-pglite`, which serves one backend and blocks a second
+    session rather than racing it.
+  - Covers `FOR UPDATE SKIP LOCKED`, which is likewise unobservable there, and
+    the single-writer equivalence limit of the in-memory adapter.
+  - Use the existing but unused `slow` marker, excluded from `make test`.
+  - Note in the port docstring that adapters may impose length limits: `node`
+    is `String(160)` and `responded_by` is `String(240)` in SQL while the
+    domain validates non-blank only.
+- [ ] 2.6.8. Establish event-log retention and repair episode deletion.
+  - Event payloads are unbounded and there is no retention path, so one run
+    logging full LLM node payloads could be tens of megabytes on its own.
+  - `generation_runs.episode_id` cascades from `episodes`, but
+    `generation_events.generation_run_id` has no `ondelete`, so deleting an
+    episode with any event raises a foreign-key violation.
+- [ ] 2.6.9. Replace `count_events` with the O(log N) max-sequence computation.
+  - Sequences are gapless and append-only with no delete path, so
+    `count_events(run, after_seq=s)` is exactly `max(0, max_seq(run) - s)`.
+  - The current `COUNT(*)` walks a 10,000-event log at roughly 5 million
+    index-tuple reads per 20-event page.
+- [ ] 2.6.10. Retire the unreachable `StaleEventSequence`.
+  - Declared, never raised, never imported, and unreachable given that the
+    adapter owns sequence allocation under ADR-015.
+  - Deleting it touches a frozen module, so it is deferred rather than dropped.
 
 ### 2.7. Script projection and editing
 

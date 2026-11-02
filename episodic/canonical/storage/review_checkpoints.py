@@ -1,0 +1,400 @@
+"""PostgreSQL adapter for user-facing generation-run review checkpoints.
+
+Every state change routes through the domain transition on :class:`Checkpoint`
+and persists what it returned; the adapter owns no lifecycle rules, because
+INV-CKPT-1 exists to stop two implementations of one rule set drifting.
+
+Transitions use compare-and-set, not ``SELECT ... FOR UPDATE`` (D-10, ADR-018):
+``status = 'created'`` is the control. Core ``UPDATE``s leave a stale session
+copy, so reads pass ``populate_existing``.
+"""
+
+import typing as typ
+
+import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
+
+from episodic.canonical.domain import Checkpoint, CheckpointStatus
+from episodic.canonical.generation_run_errors import (
+    CheckpointAlreadyExists,
+    CheckpointAlreadyTerminal,
+    CheckpointNotFound,
+    RunNotFound,
+)
+from episodic.logging import log_event as _log_event
+from episodic.observability import NoopValueMetrics, ValueMetricsPort
+
+from .generation_run_models import GenerationRunRecord
+from .generation_run_storage_runtime import (
+    GenerationRunStorageRuntime,
+    generation_run_storage_runtime,
+)
+from .integrity_helpers import constraint_name
+from .review_checkpoint_mappers import (
+    checkpoint_from_record,
+    checkpoint_to_record,
+    resolved_values,
+)
+from .review_checkpoint_metrics import (
+    record_checkpoint_created,
+    record_checkpoint_resolved,
+    record_terminal_conflict,
+)
+from .review_checkpoint_models import ReviewCheckpointRecord
+from .review_checkpoint_refusals import refuse_already_terminal
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    import datetime as dt
+    import uuid
+
+    from sqlalchemy.engine import CursorResult
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from episodic.canonical.domain import CheckpointResponse
+
+#: PostgreSQL names the table's primary-key index `<table>_pkey`. Matching it
+#: keeps a foreign-key or CHECK violation from being reported as a duplicate
+#: identifier, which would hide the real fault.
+_CHECKPOINT_PKEY_CONSTRAINT = "review_checkpoints_pkey"
+
+
+@typ.final
+class SqlAlchemyReviewCheckpointStore:
+    """Durable review-checkpoint adapter.
+
+    Creation is non-destructive: an identifier already in use raises
+    :class:`CheckpointAlreadyExists` rather than overwriting the stored row,
+    because two adapters must not disagree on whether a replayed create destroys
+    a reviewer's decision. Any other violation propagates as ``IntegrityError``,
+    since a foreign-key or CHECK failure is a different fault.
+
+    Each terminal transition is one compare-and-set guarded by
+    ``status = 'created'``, so a losing writer learns it lost from `rowcount`.
+    The domain transition runs first and its result is persisted, so the
+    adapter reimplements no lifecycle rule. A transition raises
+    :class:`CheckpointNotFound` when no row holds the identifier, or
+    :class:`CheckpointAlreadyTerminal` when another writer resolved it first.
+    """
+
+    def __init__(
+        self,
+        session: "AsyncSession",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
+        *,
+        runtime: GenerationRunStorageRuntime | None = None,
+        metrics: ValueMetricsPort | None = None,
+    ) -> None:
+        self._session = session
+        self._runtime = generation_run_storage_runtime(runtime)
+        self._metrics = metrics or NoopValueMetrics()
+        # The gauge costs a COUNT per transition; skip it when nobody listens.
+        self._reports_metrics = metrics is not None
+
+    async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
+        """Persist a checkpoint, rejecting duplicate or terminal input.
+
+        Parameters
+        ----------
+        checkpoint : Checkpoint
+            Checkpoint to store. Its status must be ``created``.
+
+        Returns
+        -------
+        Checkpoint
+            The checkpoint that was stored.
+
+        Raises
+        ------
+        RunNotFound
+            If the parent generation run does not exist. Only existence is
+            checked; the run's own status is deliberately not a precondition,
+            so this adapter agrees with the in-memory one.
+        CheckpointAlreadyTerminal
+            If the checkpoint arrives already resolved.
+        """
+        if checkpoint.status is not CheckpointStatus.CREATED:
+            _log_event(
+                "warning",
+                "sql_review_checkpoint_store.create_checkpoint_terminal",
+                checkpoint_id=str(checkpoint.id),
+                run_id=str(checkpoint.generation_run_id),
+                status=checkpoint.status.value,
+            )
+            raise CheckpointAlreadyTerminal(checkpoint.id)
+
+        parent = await self._session.get(
+            GenerationRunRecord, checkpoint.generation_run_id
+        )
+        if parent is None:
+            _log_event(
+                "warning",
+                "sql_review_checkpoint_store.create_checkpoint_missing_run",
+                checkpoint_id=str(checkpoint.id),
+                run_id=str(checkpoint.generation_run_id),
+            )
+            raise RunNotFound(checkpoint.generation_run_id)
+
+        record = await self._insert_record(checkpoint)
+
+        # Also observed on resolution: both ends, so accumulation is visible.
+        record_checkpoint_created(
+            self._metrics,
+            open_count=await self._count_open(),
+        )
+        _log_event(
+            "info",
+            "sql_review_checkpoint_store.create_checkpoint",
+            checkpoint_id=str(checkpoint.id),
+            run_id=str(checkpoint.generation_run_id),
+            status=checkpoint.status.value,
+        )
+        return checkpoint_from_record(record)
+
+    async def _insert_record(self, checkpoint: Checkpoint) -> ReviewCheckpointRecord:
+        """Insert the row, translating a primary-key clash to its domain error."""
+        record = checkpoint_to_record(checkpoint)
+        try:
+            # A nested transaction contains the primary-key violation, so a
+            # rejected create does not poison unrelated pending writes on the
+            # outer session.
+            async with self._session.begin_nested():
+                self._session.add(record)
+                await self._session.flush()
+        except IntegrityError as exc:
+            if constraint_name(exc) != _CHECKPOINT_PKEY_CONSTRAINT:
+                raise
+            _log_event(
+                "warning",
+                "sql_review_checkpoint_store.create_checkpoint_duplicate",
+                checkpoint_id=str(checkpoint.id),
+                run_id=str(checkpoint.generation_run_id),
+            )
+            raise CheckpointAlreadyExists(checkpoint.id) from exc
+        return record
+
+    async def get_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+    ) -> Checkpoint | None:
+        """Return a checkpoint by identifier."""
+        # Business logic that holds unflushed work can still read: without this
+        # boundary the SELECT would autoflush the caller's staged objects and
+        # attribute their constraint violations to a query that never wrote.
+        with self._session.no_autoflush:
+            record = await self._session.get(ReviewCheckpointRecord, checkpoint_id)
+        if record is None:
+            return None
+        return checkpoint_from_record(record)
+
+    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
+    async def list_checkpoints(
+        self,
+        run_id: uuid.UUID,
+        *,
+        status: CheckpointStatus | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[Checkpoint, ...]:
+        """List a run's checkpoints, oldest-created first.
+
+        Returns
+        -------
+        tuple of Checkpoint
+            Matching checkpoints in ``(created_at, id)`` order.
+
+        Raises
+        ------
+        RunNotFound
+            If ``run_id`` does not identify a stored generation run.
+        ValueError
+            If ``limit`` or ``offset`` is negative.
+        """
+        if limit < 0 or offset < 0:
+            msg = "limit and offset must be non-negative."
+            raise ValueError(msg)
+        statement = (
+            sa
+            .select(ReviewCheckpointRecord)
+            .where(ReviewCheckpointRecord.generation_run_id == run_id)
+            .order_by(ReviewCheckpointRecord.created_at, ReviewCheckpointRecord.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        if status is not None:
+            statement = statement.where(ReviewCheckpointRecord.status == status)
+
+        # As in `get_checkpoint`: no query may autoflush the caller's work.
+        with self._session.no_autoflush:
+            if await self._session.get(GenerationRunRecord, run_id) is None:
+                raise RunNotFound(run_id)
+            result = await self._session.execute(statement)
+        return tuple(checkpoint_from_record(record) for record in result.scalars())
+
+    async def respond_to_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        response: CheckpointResponse,
+    ) -> Checkpoint:
+        """Record a reviewer response through the domain transition.
+
+        Returns
+        -------
+        Checkpoint
+            The resolved checkpoint the domain transition returned.
+        """
+        return await self._resolve(
+            checkpoint_id,
+            transition=lambda checkpoint: checkpoint.respond(response),
+            event="respond_checkpoint",
+            extra={"action": response.action.value},
+        )
+
+    async def time_out_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint:
+        """Record the expiry of an unanswered review window.
+
+        Nobody answered before the window closed, so the expiry the caller
+        supplies is what resolves it.
+
+        Returns
+        -------
+        Checkpoint
+            The expired checkpoint the transition returned.
+        """
+        return await self._resolve(
+            checkpoint_id,
+            transition=lambda checkpoint: checkpoint.time_out(at),
+            event="timeout_checkpoint",
+        )
+
+    async def cancel_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint:
+        """Record an operator withdrawing a pending review.
+
+        A withdrawal is a deliberate act that follows no expiry rule.
+
+        Returns
+        -------
+        Checkpoint
+            The withdrawn checkpoint, resolved by that act.
+        """
+        return await self._resolve(
+            checkpoint_id,
+            transition=lambda checkpoint: checkpoint.cancel(at),
+            event="cancel_checkpoint",
+        )
+
+    async def _resolve(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        transition: cabc.Callable[[Checkpoint], Checkpoint],
+        event: str,
+        extra: dict[str, str] | None = None,
+    ) -> Checkpoint:
+        """Apply one terminal transition by compare-and-set."""
+        fields: dict[str, str] = {} if extra is None else extra
+        record = await self._session.get(ReviewCheckpointRecord, checkpoint_id)
+        if record is None:
+            _log_event(
+                "warning",
+                f"sql_review_checkpoint_store.{event}_missing",
+                checkpoint_id=str(checkpoint_id),
+                **fields,
+            )
+            raise CheckpointNotFound(checkpoint_id)
+
+        try:
+            updated = transition(checkpoint_from_record(record))
+        except CheckpointAlreadyTerminal:
+            # The domain-precondition route; `_raise_lost_race` reports the other.
+            record_terminal_conflict(self._metrics)
+            refuse_already_terminal(event, record, fields)
+        result = await self._session.execute(
+            sa
+            .update(ReviewCheckpointRecord)
+            .where(
+                ReviewCheckpointRecord.id == checkpoint_id,
+                # The predicate is the concurrency control: only a checkpoint
+                # still in `created` may be resolved, so a second writer's
+                # update matches no row and its outcome is observable.
+                ReviewCheckpointRecord.status == CheckpointStatus.CREATED,
+            )
+            .values(**resolved_values(updated))
+        )
+        if typ.cast("CursorResult[object]", result).rowcount != 1:
+            await self._raise_lost_race(checkpoint_id, event=event, fields=fields)
+        # Reconcile the session's copy with the row just written.
+        await self._session.refresh(record)
+        record_checkpoint_resolved(
+            self._metrics,
+            updated.status,
+            open_count=await self._count_open(),
+        )
+        _log_event(
+            "info",
+            f"sql_review_checkpoint_store.{event}",
+            checkpoint_id=str(checkpoint_id),
+            run_id=str(updated.generation_run_id),
+            status=updated.status.value,
+            **fields,
+        )
+        return updated
+
+    async def _count_open(self) -> float:
+        """Return the unresolved count across all runs; the gauge has no labels."""
+        if not self._reports_metrics:
+            return 0.0
+        count = await self._session.scalar(
+            sa
+            .select(sa.func.count())
+            .select_from(ReviewCheckpointRecord)
+            .where(ReviewCheckpointRecord.status == CheckpointStatus.CREATED)
+        )
+        return float(typ.cast("int", count))
+
+    async def _raise_lost_race(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        event: str,
+        fields: dict[str, str],
+    ) -> typ.NoReturn:
+        """Distinguish a deleted checkpoint from one that changed underneath.
+
+        The re-read is the point of the compare-and-set shape: `rowcount == 0`
+        alone cannot say whether the row vanished or was already resolved.
+        ``populate_existing`` makes it a re-read rather than an identity map hit
+        reporting a status the row never held. A surviving row goes through the
+        shared refusal route, which reports the terminal conflict and raises
+        there.
+
+        Raises
+        ------
+        CheckpointNotFound
+            If the row is gone.
+        """
+        current = await self._session.get(
+            ReviewCheckpointRecord,
+            checkpoint_id,
+            populate_existing=True,
+        )
+        if current is None:
+            _log_event(
+                "warning",
+                f"sql_review_checkpoint_store.{event}_missing",
+                checkpoint_id=str(checkpoint_id),
+                **fields,
+            )
+            raise CheckpointNotFound(checkpoint_id)
+        record_terminal_conflict(self._metrics)
+        refuse_already_terminal(event, current, fields)

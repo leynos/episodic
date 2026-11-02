@@ -35,6 +35,8 @@ from .models_base import (
     REFERENCE_BINDING_TARGET_KIND,
     REFERENCE_DOCUMENT_KIND,
     REFERENCE_DOCUMENT_LIFECYCLE_STATE,
+    REVIEW_CHECKPOINT_ACTION,
+    REVIEW_CHECKPOINT_STATUS,
     UPLOAD_STATE,
     WORKFLOW_CHECKPOINT_STATUS,
     Base,
@@ -45,6 +47,7 @@ from .reference_models import (
     ReferenceDocumentRecord,
     ReferenceDocumentRevisionRecord,
 )
+from .review_checkpoint_models import ReviewCheckpointRecord
 from .source_intake_models import (
     IdempotencyRecordModel,
     IngestionJobSourceRecord,
@@ -65,6 +68,8 @@ __all__ = (
     "REFERENCE_BINDING_TARGET_KIND",
     "REFERENCE_DOCUMENT_KIND",
     "REFERENCE_DOCUMENT_LIFECYCLE_STATE",
+    "REVIEW_CHECKPOINT_ACTION",
+    "REVIEW_CHECKPOINT_STATUS",
     "UPLOAD_STATE",
     "WORKFLOW_CHECKPOINT_STATUS",
     "ApprovalEventRecord",
@@ -84,6 +89,7 @@ __all__ = (
     "ReferenceBindingRecord",
     "ReferenceDocumentRecord",
     "ReferenceDocumentRevisionRecord",
+    "ReviewCheckpointRecord",
     "RunPricingPinRecord",
     "SeriesProfileHistoryRecord",
     "SeriesProfileRecord",

@@ -16,6 +16,9 @@ from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotF
 from episodic.canonical.generation_run_ports import event_page_minimum_sequence
 from episodic.logging import log_event as _log_event
 
+from .generation_run_lease_reclamation import (
+    GenerationRunLeaseReclamationMixin,
+)
 from .generation_run_mappers import (
     event_from_record,
     normalise_idempotency_principal,
@@ -41,8 +44,13 @@ if typ.TYPE_CHECKING:
     )
 
 
-class SqlAlchemyGenerationRunStore:
-    """Durable generation-run repository and event-log adapter."""
+class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
+    """Durable generation-run repository and event-log adapter.
+
+    The expired-lease reclamation transaction is composed in from
+    :mod:`episodic.canonical.storage.generation_run_lease_reclamation`, which
+    reads both this store's table and the review-checkpoint table.
+    """
 
     def __init__(
         self,

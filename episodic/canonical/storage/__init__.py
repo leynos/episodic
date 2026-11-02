@@ -31,6 +31,7 @@ from .models import (
     ReferenceBindingRecord,
     ReferenceDocumentRecord,
     ReferenceDocumentRevisionRecord,
+    ReviewCheckpointRecord,
     SeriesProfileHistoryRecord,
     SeriesProfileRecord,
     SourceDocumentRecord,
@@ -50,6 +51,7 @@ from .repositories import (
     SqlAlchemySourceDocumentRepository,
     SqlAlchemyTeiHeaderRepository,
 )
+from .review_checkpoints import SqlAlchemyReviewCheckpointStore
 from .source_intake_repositories import (
     SqlAlchemyIdempotencyStore,
     SqlAlchemyIngestionJobSourceRepository,
@@ -73,6 +75,7 @@ __all__ = (
     "ReferenceBindingRecord",
     "ReferenceDocumentRecord",
     "ReferenceDocumentRevisionRecord",
+    "ReviewCheckpointRecord",
     "SeriesProfileHistoryRecord",
     "SeriesProfileRecord",
     "SourceDocumentRecord",
@@ -87,6 +90,7 @@ __all__ = (
     "SqlAlchemyReferenceBindingRepository",
     "SqlAlchemyReferenceDocumentRepository",
     "SqlAlchemyReferenceDocumentRevisionRepository",
+    "SqlAlchemyReviewCheckpointStore",
     "SqlAlchemySeriesProfileHistoryRepository",
     "SqlAlchemySeriesProfileRepository",
     "SqlAlchemySourceDocumentRepository",

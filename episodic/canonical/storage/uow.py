@@ -24,11 +24,18 @@ from sqlalchemy.ext.asyncio import (
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.cost.storage import SqlAlchemyCostLedgerStore
 from episodic.logging import get_logger
+from episodic.logging import log_event as _log_event
 
 if typ.TYPE_CHECKING:
-    from episodic.observability import MetricsPort, MonotonicClockPort, TracerPort
+    from episodic.observability import (
+        MetricsPort,
+        MonotonicClockPort,
+        TracerPort,
+        ValueMetricsPort,
+    )
 
 from .episode_repository import SqlAlchemyEpisodeRepository
+from .generation_run_port_adapter import SqlAlchemyGenerationRunPortAdapter
 from .generation_run_storage_runtime import (  # ruff: ignore[typing-only-first-party-import] - autospec resolves annotations
     GenerationRunStorageRuntime,
 )
@@ -46,6 +53,8 @@ from .repositories import (
     SqlAlchemySourceDocumentRepository,
     SqlAlchemyTeiHeaderRepository,
 )
+from .review_checkpoints import SqlAlchemyReviewCheckpointStore
+from .session_write_tracker import SessionWriteTracker
 from .source_intake_repositories import (
     SqlAlchemyIdempotencyStore,
     SqlAlchemyIngestionJobSourceRepository,
@@ -71,12 +80,16 @@ class UnitOfWorkRuntime:
         Optional tracing sink forwarded to cost storage.
     generation_run_runtime : GenerationRunStorageRuntime | None
         Optional generation-run storage providers.
+    value_metrics : ValueMetricsPort | None
+        Optional scalar-metrics sink, used by adapters that report gauges.
+        `metrics` alone is insufficient: `MetricsPort` has no `observe_value`.
     """
 
     metrics: MetricsPort | None = None
     monotonic_clock: MonotonicClockPort | None = None
     tracer: TracerPort | None = None
     generation_run_runtime: GenerationRunStorageRuntime | None = None
+    value_metrics: ValueMetricsPort | None = None
 
 
 class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
@@ -117,8 +130,10 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for immutable reusable reference document revisions.
     reference_bindings : SqlAlchemyReferenceBindingRepository
         Repository for reusable reference binding persistence.
-    generation_runs : SqlAlchemyGenerationRunStore
-        Repository and event log for durable generation runs.
+    generation_runs : SqlAlchemyGenerationRunPortAdapter
+        Composite port for durable generation runs: the run repository, the
+        append-only event log, and the review-checkpoint store, bound to the
+        same session.
     cost_ledger : SqlAlchemyCostLedgerStore
         Cost ledger adapter bound to the same session.
     """
@@ -132,6 +147,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         self._session_factory = session_factory
         self._runtime = UnitOfWorkRuntime() if runtime is None else runtime
         self._session: AsyncSession | None = None
+        self._writes: SessionWriteTracker | None = None
 
     async def __aenter__(self) -> SqlAlchemyUnitOfWork:
         """Open a unit-of-work session.
@@ -142,6 +158,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             The active unit-of-work instance.
         """
         self._session = self._session_factory()
+        self._writes = SessionWriteTracker(self._session.sync_session)
         self.series_profiles = SqlAlchemySeriesProfileRepository(self._session)
         self.tei_headers = SqlAlchemyTeiHeaderRepository(self._session)
         self.episodes = SqlAlchemyEpisodeRepository(self._session)
@@ -172,9 +189,16 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
                 monotonic_clock=self._runtime.monotonic_clock,
             ),
         )
-        self.generation_runs = SqlAlchemyGenerationRunStore(
-            self._session,
-            runtime=self._runtime.generation_run_runtime,
+        self.generation_runs = SqlAlchemyGenerationRunPortAdapter(
+            SqlAlchemyGenerationRunStore(
+                self._session,
+                runtime=self._runtime.generation_run_runtime,
+            ),
+            SqlAlchemyReviewCheckpointStore(
+                self._session,
+                runtime=self._runtime.generation_run_runtime,
+                metrics=self._runtime.value_metrics,
+            ),
         )
         self.cost_ledger = SqlAlchemyCostLedgerStore(
             self._session,
@@ -197,6 +221,11 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
     ) -> None:
         """Close the unit-of-work session.
 
+        Closing does **not** commit. Work left pending when the context exits
+        cleanly is discarded silently, which is the most likely durability bug
+        in a new slice and is invisible in a test that only checks the entity
+        it already holds. The event below makes it greppable instead.
+
         Parameters
         ----------
         exc_type : type[BaseException] | None
@@ -211,8 +240,48 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         try:
             if exc is not None:
                 await self._session.rollback()
+            elif self._has_pending_changes():
+                # Emitted as a structured event, not a bare warning: the
+                # canonical logger is a femtologging logger whose records do
+                # not reach stdlib handlers, so a plain logger.warning() would
+                # be invisible to caplog and therefore to any regression test.
+                _log_event(
+                    "warning",
+                    "canonical_unit_of_work.closed_with_uncommitted_changes",
+                    outcome="discarded",
+                )
         finally:
             await self._session.close()
+
+    def _has_pending_changes(self) -> bool:
+        """Return whether the active session holds unsettled writes.
+
+        Delegated to the tracker in addition to the session's own staged
+        collections, because each is blind where the other sees.
+
+        The collections are emptied by every flush and never populated by a
+        core ``UPDATE``, so a check built on them alone is silent on exactly
+        the writes it exists to catch. The tracker's ``before_flush`` listener
+        does not fire until a flush happens, so it alone is silent on a
+        staged-but-unflushed ``add`` -- which is how every repository in this
+        package stages its rows.
+
+        Returns
+        -------
+        bool
+            Whether a write has been observed and not yet settled.
+        """
+        if self._writes is not None and self._writes.wrote:
+            return True
+        session = self._session
+        return session is not None and bool(
+            session.new or session.dirty or session.deleted
+        )
+
+    def _mark_settled(self) -> None:
+        """Clear tracked writes once the session's work has been settled."""
+        if self._writes is not None:
+            self._writes.mark_clean()
 
     def _require_session(self) -> AsyncSession:
         """Return the active session or raise when missing."""
@@ -235,6 +304,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             If no unit-of-work session is active.
         """  # ruff: ignore[docstring-extraneous-exception]  # Documents an exception propagated by the helper.
         await self._apply_session_action("commit")
+        self._mark_settled()
         logger.info("Committed canonical unit of work.")
 
     async def flush(self) -> None:
@@ -245,3 +315,4 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         """Roll back the current unit-of-work session."""
         session = self._require_session()
         await session.rollback()
+        self._mark_settled()
