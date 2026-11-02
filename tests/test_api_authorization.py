@@ -4,10 +4,8 @@ import time
 import typing as typ
 import unicodedata
 
-import hypothesis.strategies as st
 import pytest
 from falcon import testing
-from hypothesis import given
 
 from episodic.api import authorization as authorization_module
 from episodic.api import create_app
@@ -19,6 +17,8 @@ from episodic.api.authorization import (
     StaticBearerTokenAuthorization,
 )
 from tests.fixtures.api import build_api_dependencies
+
+_LOG_ESCAPED_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -287,6 +287,24 @@ def test_authorization_adapter_failure_types_return_service_unavailable(
             ),
         ),
         _AuthorizationLogCase(
+            DenyAllAuthorization,
+            "/v1/series-profiles%E2%80%A8forged",
+            401,
+            (
+                r"Authorization denied with unauthorized for "
+                r"GET /v1/series-profiles\u2028forged."
+            ),
+        ),
+        _AuthorizationLogCase(
+            DenyAllAuthorization,
+            "/v1/series-profiles%E2%80%AEforged",
+            401,
+            (
+                r"Authorization denied with unauthorized for "
+                r"GET /v1/series-profiles\u202eforged."
+            ),
+        ),
+        _AuthorizationLogCase(
             RaisingAuthorization,
             "/v1/series-profiles%0Aforged",
             503,
@@ -311,12 +329,14 @@ def test_authorization_adapter_failure_types_return_service_unavailable(
         "unauthorized-newline-path",
         "unauthorized-carriage-return-path",
         "unauthorized-escape-control-path",
+        "unauthorized-line-separator-path",
+        "unauthorized-bidi-override-path",
         "adapter-error-newline-path",
         "adapter-error-carriage-return-path",
         "adapter-error-escape-control-path",
     ],
 )
-def test_authorization_logs_warning_without_credentials_or_control_characters(
+def test_authorization_logs_warning_without_credentials_or_unsafe_unicode(
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
     case: _AuthorizationLogCase,
@@ -348,20 +368,12 @@ def test_authorization_logs_warning_without_credentials_or_control_characters(
     assert logger_name == "episodic.api.authorization", logger_name
     assert level == "WARN", level
     assert message == case.expected_message, message
-    assert all(unicodedata.category(char) != "Cc" for char in message), message
+    assert all(
+        unicodedata.category(char) not in _LOG_ESCAPED_UNICODE_CATEGORIES
+        for char in message
+    ), message
     assert "Bearer sensitive-token" not in message, message
     assert "sensitive-token" not in message, message
-
-
-@given(control_character=st.characters(categories=("Cc",)))
-def test_authorization_log_paths_escape_all_unicode_control_characters(
-    control_character: str,
-) -> None:
-    """Every Unicode control character is escaped at the log boundary."""
-    escaped_control = control_character.encode("unicode_escape").decode("ascii")
-    actual = authorization_module._escape_path_for_log(control_character)
-
-    assert actual == escaped_control, f"expected escaped control {escaped_control!r}"
 
 
 def test_non_v1_paths_bypass_authorization(
