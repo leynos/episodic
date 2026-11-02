@@ -1181,9 +1181,11 @@ interfaces defined for the TUI API. Domain entities (GenerationRun, AudioRun,
 Checkpoint, etc.) are modelled as frozen dataclasses with UUIDv7 identifiers
 and timestamp fields. Port interfaces define the contract between domain
 services and outbound adapters, specifying operations for persistence, event
-streaming, and lifecycle management. The diagram illustrates the one-to-many
-relationships between runs and their derived artefacts, and the dependency
-relationships between ports and domain entities._
+streaming, and lifecycle management. Port method signatures are abbreviated to
+their parameter types: keyword-only markers, optional parameters, and default
+values are omitted here and stated by each port itself. The diagram illustrates
+the one-to-many relationships between runs and their derived artefacts, and the
+dependency relationships between ports and domain entities._
 
 ```mermaid
 classDiagram
