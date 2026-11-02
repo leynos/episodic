@@ -461,6 +461,13 @@ access. Requests for resources owned by another principal use the same
 not-found response as requests for resources that do not exist. Health
 endpoints are not covered by this `/v1` authorization requirement.
 
+The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
+`403 Forbidden` and are recorded through the application logging port at
+`WARNING`. Each denial record contains only the decision, HTTP method, and
+request path; it excludes the `Authorization` header and bearer token.
+Carriage returns and line feeds in the logged path appear as visible `\r` and
+`\n` sequences.
+
 ### Migration note for the next minor release
 
 Before upgrading to the next minor release, apply the new Alembic revisions.

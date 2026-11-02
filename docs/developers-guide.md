@@ -847,6 +847,9 @@ Authorization scaffold:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
   `503`, so policy-backend outages are not reported as resource failures.
+- Denial and adapter-failure warnings escape carriage returns and line feeds
+  in the logged request path as visible `\r` and `\n` sequences. The adapter
+  still receives the unmodified `AuthorizationContext.path`.
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
 
