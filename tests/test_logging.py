@@ -156,6 +156,28 @@ class _RaisingInfoLogger(_LogOnlySpyLogger):
         raise TypeError(msg)
 
 
+class _RaisingDebugLogger(_LogOnlySpyLogger):
+    """Record a DEBUG call before simulating an emission failure."""
+
+    def debug(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record one call then raise the original emission failure."""
+        self.calls.append((
+            episodic_logging.LogLevel.DEBUG,
+            message,
+            exc_info,
+            stack_info,
+        ))
+        msg = "emission failed"
+        raise TypeError(msg)
+
+
 class _LogFallbackCase(typ.NamedTuple):
     emit: cabc.Callable[..., None]
     template: str
@@ -272,6 +294,19 @@ def test_log_wrapper_does_not_retry_a_failed_convenience_emission() -> None:
 
     assert spy_logger.calls == [
         (episodic_logging.LogLevel.INFO, "Loaded 3 documents", None, False)
+    ], "A failed convenience call must not be retried through log()."
+
+
+def test_debug_wrapper_does_not_retry_a_failed_convenience_emission() -> None:
+    """A DEBUG failure propagates without a second call through log()."""
+    spy_logger = _RaisingDebugLogger()
+    logger = episodic_logging.LoggerHandle(spy_logger)
+
+    with pytest.raises(TypeError, match="emission failed"):
+        episodic_logging.log_debug(logger, "Loaded %s documents", 3)
+
+    assert spy_logger.calls == [
+        (episodic_logging.LogLevel.DEBUG, "Loaded 3 documents", None, False)
     ], "A failed convenience call must not be retried through log()."
 
 
