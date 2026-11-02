@@ -12,6 +12,8 @@ from episodic.logging import get_logger, log_warning
 
 logger = get_logger(__name__)
 
+_LOG_ESCAPED_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+
 
 class AuthorizationDecision(enum.StrEnum):
     """Possible authorization outcomes for one HTTP request."""
@@ -170,10 +172,10 @@ def _authorization_result(
 
 
 def _escape_path_for_log(path: str) -> str:
-    """Escape Unicode control characters before logging a request path."""
+    """Escape controls, formatting characters, and separators in request paths."""
     return "".join(
         character.encode("unicode_escape").decode("ascii")
-        if unicodedata.category(character) == "Cc"
+        if unicodedata.category(character) in _LOG_ESCAPED_UNICODE_CATEGORIES
         else character
         for character in path
     )

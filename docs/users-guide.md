@@ -402,8 +402,9 @@ The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
 `403 Forbidden` and are recorded through the application logging port at
 `WARNING`. Each denial record contains only the decision, HTTP method, and
 request path; it excludes the `Authorization` header and bearer token.
-Carriage returns and line feeds in the logged path appear as visible `\r` and
-`\n` sequences; other Unicode control characters are escaped as well.
+The logged path escapes Unicode control and formatting characters and line
+and paragraph separators. Carriage returns and line feeds appear as visible
+`\r` and `\n` sequences.
 
 ### Migration note for the next minor release
 
