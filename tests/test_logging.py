@@ -157,7 +157,12 @@ class _RaisingInfoLogger(_LogOnlySpyLogger):
 
 
 class _RaisingDebugLogger(_LogOnlySpyLogger):
-    """Record a DEBUG call before simulating an emission failure."""
+    """Track a DEBUG attempt before simulating an emission failure."""
+
+    def __init__(self) -> None:
+        """Initialise the generic logger and DEBUG attempt records."""
+        super().__init__()
+        self.debug_calls: list[tuple[str, object | None, bool]] = []
 
     def debug(
         self,
@@ -168,12 +173,7 @@ class _RaisingDebugLogger(_LogOnlySpyLogger):
         stack_info: bool = False,
     ) -> None:
         """Record one call then raise the original emission failure."""
-        self.calls.append((
-            episodic_logging.LogLevel.DEBUG,
-            message,
-            exc_info,
-            stack_info,
-        ))
+        self.debug_calls.append((message, exc_info, stack_info))
         msg = "emission failed"
         raise TypeError(msg)
 
@@ -299,17 +299,19 @@ def test_log_wrapper_does_not_retry_a_failed_convenience_emission() -> None:
     ], "A failed convenience call must not be retried through log()."
 
 
-def test_debug_wrapper_does_not_retry_a_failed_convenience_emission() -> None:
-    """A DEBUG failure propagates without a second call through log()."""
+def test_debug_wrapper_falls_back_after_convenience_method_type_error() -> None:
+    """A failed DEBUG convenience call falls back through the logging port."""
     spy_logger = _RaisingDebugLogger()
     logger = episodic_logging.LoggerHandle(spy_logger)
 
-    with pytest.raises(TypeError, match="emission failed"):
-        episodic_logging.log_debug(logger, "Loaded %s documents", 3)
+    episodic_logging.log_debug(logger, "Loaded %s documents", 3)
 
+    assert spy_logger.debug_calls == [
+        ("Loaded 3 documents", None, False)
+    ], "the DEBUG convenience method should be attempted once"
     assert spy_logger.calls == [
-        (episodic_logging.LogLevel.DEBUG, "Loaded 3 documents", None, False)
-    ], "A failed convenience call must not be retried through log()."
+        (logging.DEBUG, "Loaded 3 documents", None, False)
+    ], "the failed DEBUG attempt should fall back through log()"
 
 
 def test_femtologging_exposes_stdlib_style_logger_surface() -> None:

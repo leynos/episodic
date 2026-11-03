@@ -3122,6 +3122,10 @@ level. Keep that pair together: a new adapter that logs through femtologging
 needs a configuration seam and an end-to-end delivery test, not only a unit
 test of the adapter.
 
+The wrappers fall back to the backend's generic `log` method when a level
+method is absent. `log_debug` also falls back when the backend's `debug` method
+raises `AttributeError` or `TypeError`; other emission errors propagate.
+
 Use `log_event(...)` for structured event fields on the port's configured
 logger. When an event must use a caller's `LoggerHandle`, use
 `format_log_event(event, **fields)` to build the stable JSON message, then emit
