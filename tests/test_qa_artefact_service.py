@@ -35,6 +35,7 @@ from tests.fixtures.qa_artefact_recording_builders import (
     EVALUATION_ID,
     TEI_CONTENT_HASH,
     chrono_estimate,
+    identifier_sequence,
     pedante_finding,
     pedante_result,
 )
@@ -116,11 +117,6 @@ class _FailingRepository(_FakeQaArtefactRepository):
         raise RuntimeError(msg)
 
 
-def _fixed_identifiers() -> uuid.UUID:
-    """Return the shared evaluation identifier."""
-    return EVALUATION_ID
-
-
 def _request(outcome: QaEvaluationOutcome) -> QaEvaluationRecordingRequest:
     """Build a fully specified recording command around one outcome."""
     return QaEvaluationRecordingRequest(
@@ -128,7 +124,7 @@ def _request(outcome: QaEvaluationOutcome) -> QaEvaluationRecordingRequest:
         tei_content_hash=TEI_CONTENT_HASH,
         evaluated_at=EVALUATED_AT,
         outcome=outcome,
-        uuid_factory=_fixed_identifiers,
+        uuid_factory=identifier_sequence(),
     )
 
 
@@ -256,7 +252,7 @@ async def test_recorder_opens_records_and_commits_once() -> None:
     recorder = QaEvaluationRecorder(
         uow_factory=lambda: _uow(fake),
         clock=lambda: EVALUATED_AT,
-        uuid_factory=_fixed_identifiers,
+        uuid_factory=identifier_sequence(),
     )
 
     recorded = await recorder.record(
@@ -284,7 +280,7 @@ async def test_recorder_stamps_the_clock_rather_than_the_caller() -> None:
     recorder = QaEvaluationRecorder(
         uow_factory=lambda: _uow(fake),
         clock=lambda: later,
-        uuid_factory=_fixed_identifiers,
+        uuid_factory=identifier_sequence(),
     )
 
     recorded = await recorder.record(
@@ -306,12 +302,12 @@ async def test_recorder_replays_the_same_outcome_across_clock_readings() -> None
     first = QaEvaluationRecorder(
         uow_factory=lambda: _uow(fake),
         clock=lambda: EVALUATED_AT,
-        uuid_factory=_fixed_identifiers,
+        uuid_factory=identifier_sequence(),
     )
     second = QaEvaluationRecorder(
         uow_factory=lambda: _uow(fake),
         clock=lambda: EVALUATED_AT + dt.timedelta(hours=5),
-        uuid_factory=_fixed_identifiers,
+        uuid_factory=identifier_sequence(),
     )
 
     earlier = await first.record(
@@ -338,7 +334,7 @@ async def test_recorder_does_not_commit_a_failed_recording() -> None:
     recorder = QaEvaluationRecorder(
         uow_factory=lambda: _uow(fake),
         clock=lambda: EVALUATED_AT,
-        uuid_factory=_fixed_identifiers,
+        uuid_factory=identifier_sequence(),
     )
 
     with pytest.raises(RuntimeError, match="rejected the write"):

@@ -7,7 +7,12 @@ here rather than in either test module.
 
 import dataclasses as dc
 import datetime as dt
+import itertools
+import typing as typ
 import uuid
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 from episodic.llm.ports import LLMUsage
 from episodic.qa.chrono import ChronoEstimatorMetadata, ChronoRuntimeEstimate
@@ -52,6 +57,34 @@ _DEFAULT_CHRONO_METADATA = ChronoEstimatorMetadata(
     spoken_word_count=1500,
     words_per_minute=150,
 )
+
+
+def identifier_sequence(
+    first: uuid.UUID = EVALUATION_ID,
+) -> cabc.Callable[[], uuid.UUID]:
+    """Build a deterministic identifier factory for the projection doubles.
+
+    The production contract is that the factory never repeats itself: an
+    evaluation and each of its findings take one identifier apiece. A double
+    that always returned the same value would give every finding the
+    evaluation's identifier and trip the distinctness check, so the first call
+    yields *first* and later calls derive a deterministic identifier from it,
+    which also keeps two sequences started from different evaluations apart.
+
+    Returns
+    -------
+    cabc.Callable[[], uuid.UUID]
+        A zero-argument factory whose first result is *first*.
+    """
+    issued = itertools.count()
+
+    def next_identifier() -> uuid.UUID:
+        ordinal = next(issued)
+        if ordinal == 0:
+            return first
+        return uuid.uuid5(first, f"identifier-{ordinal}")
+
+    return next_identifier
 
 
 def pedante_finding(**overrides: object) -> PedanteFinding:

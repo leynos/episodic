@@ -21,9 +21,9 @@ from episodic.canonical.qa_artefacts import QaEvaluator
 from tests.fixtures.qa_artefact_recording_builders import (
     EPISODE_ID,
     EVALUATED_AT,
-    EVALUATION_ID,
     GENERATION_RUN_ID,
     TEI_CONTENT_HASH,
+    identifier_sequence,
     pedante_result,
 )
 
@@ -54,11 +54,6 @@ class _KeyInputs:
         )
 
 
-def _fixed_identifiers() -> uuid.UUID:
-    """Return the shared evaluation identifier."""
-    return EVALUATION_ID
-
-
 def _key_reading_at(evaluated_at: dt.datetime) -> str:
     """Record one identical outcome as if the clock read ``evaluated_at``."""
     evaluation = evaluation_from_pedante(
@@ -68,7 +63,7 @@ def _key_reading_at(evaluated_at: dt.datetime) -> str:
             tei_content_hash=TEI_CONTENT_HASH,
             evaluated_at=evaluated_at,
             generation_run_id=GENERATION_RUN_ID,
-            uuid_factory=_fixed_identifiers,
+            uuid_factory=identifier_sequence(),
         ),
     )
     return evaluation.summary_record.idempotency_key

@@ -142,9 +142,10 @@ def _validated_base_url(base_url: str, *, token: str | None) -> str:
     Raises
     ------
     InvalidConfigError
-        If the URL has no HTTP(S) scheme, names no host, carries embedded
-        credentials, contains a ``?`` or ``#`` marker even with nothing after
-        it, or would send ``token`` over plain HTTP to a non-loopback host.
+        If the URL cannot be parsed, has no HTTP(S) scheme, names no host,
+        carries embedded credentials, contains a ``?`` or ``#`` marker even
+        with nothing after it, or would send ``token`` over plain HTTP to a
+        non-loopback host.
     """  # ruff: ignore[docstring-extraneous-exception]  # The guard helpers raise it.
     parsed = _parse_base_url(base_url)
     host = parsed.hostname
@@ -161,7 +162,10 @@ def _parse_base_url(base_url: str) -> urllib.parse.SplitResult:
     try:
         return urllib.parse.urlsplit(base_url)
     except ValueError as error:
-        invalid = f"Invalid Episodic API URL: {error}"
+        # ``urlsplit`` quotes the offending netloc in its message, and the
+        # netloc may still hold the userinfo this module exists to reject.
+        # The diagnostic is therefore fixed: the URL itself never appears.
+        invalid = "Invalid Episodic API URL: malformed URL"
         raise InvalidConfigError(invalid) from error
 
 

@@ -218,11 +218,12 @@ def _finding_from_pedante(
     *,
     evaluation_id: uuid.UUID,
     ordinal: int,
+    uuid_factory: UuidFactory,
 ) -> QaFinding:
     """Project one Pedante finding onto its QA finding."""
     return QaFinding(
-        # Derived, not random: the store keys findings by (evaluation_id, ordinal).
-        id=uuid.uuid5(evaluation_id, str(ordinal)),
+        # Application-side UUIDv7, like every other primary key in this store.
+        id=uuid_factory(),
         evaluation_id=evaluation_id,
         ordinal=ordinal,
         severity=QaFindingSeverity(finding.severity.value),
@@ -234,22 +235,6 @@ def _finding_from_pedante(
         is_blocking=finding.is_blocking,
         citations=finding.cited_source_ids,
         details={"claim_kind": finding.claim_kind.value},
-    )
-
-
-def _pedante_findings(
-    findings: tuple[PedanteFinding, ...],
-    *,
-    evaluation_id: uuid.UUID,
-) -> tuple[QaFinding, ...]:
-    """Project Pedante findings in their emission order."""
-    return tuple(
-        _finding_from_pedante(
-            finding,
-            evaluation_id=evaluation_id,
-            ordinal=ordinal,
-        )
-        for ordinal, finding in enumerate(findings)
     )
 
 
@@ -316,7 +301,15 @@ def evaluation_from_pedante(
             evaluation_id=evaluation_id,
             target=target,
         ),
-        findings=_pedante_findings(result.findings, evaluation_id=evaluation_id),
+        findings=tuple(
+            _finding_from_pedante(
+                finding,
+                evaluation_id=evaluation_id,
+                ordinal=ordinal,
+                uuid_factory=target.uuid_factory,
+            )
+            for ordinal, finding in enumerate(result.findings)
+        ),
     )
 
 

@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from episodic.cli import main
-from episodic.cli.client import TOKEN_ENV
+from episodic.cli.client import BASE_URL_ENV, TOKEN_ENV
 from episodic.cli.errors import ApiUnavailableError, InvalidConfigError
 from tests.qa_cli_fixtures import PAGE, canned, list_arguments
 
@@ -18,6 +18,10 @@ pytestmark = pytest.mark.usefixtures("clean_environment")
 # A padded header value rather than a credential: the surrounding spaces are
 # the thing under test.
 _PADDED_VALUE = " placeholder "
+
+# A fullwidth solidus in the authority makes ``urlsplit`` raise, and its
+# message quotes the whole netloc, userinfo included.
+_MALFORMED_AUTHORITY = "\uff0fextra"
 
 
 def test_environment_token_with_surrounding_space_is_a_usage_error(
@@ -36,6 +40,32 @@ def test_environment_token_with_surrounding_space_is_a_usage_error(
     assert "printable ASCII" in captured.err, captured.err
     assert "placeholder" not in captured.err, captured.err
     assert "placeholder" not in captured.out, captured.out
+
+
+@pytest.mark.parametrize("route", ["argument", "environment"])
+def test_malformed_base_url_cannot_echo_embedded_credentials(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+) -> None:
+    """A URL the parser rejects must not quote the credential it carried."""
+    credential = "-".join(("not", "a", "real", "credential"))
+    malformed = f"https://scribe:{credential}@api.example.test{_MALFORMED_AUTHORITY}"
+    if route == "argument":
+        arguments = ["--base-url", malformed, *list_arguments()]
+    else:
+        monkeypatch.setenv(BASE_URL_ENV, malformed)
+        arguments = list_arguments()
+    transport, recorded = canned(PAGE)
+
+    exit_code = main(arguments, transport=transport)
+
+    captured = capsys.readouterr()
+    assert exit_code == InvalidConfigError.exit_code == 2, captured.err
+    assert recorded.seen == [], recorded.seen
+    assert "malformed URL" in captured.err, captured.err
+    assert credential not in captured.err, captured.err
+    assert credential not in captured.out, captured.out
 
 
 def test_transport_error_cannot_echo_the_configured_token(

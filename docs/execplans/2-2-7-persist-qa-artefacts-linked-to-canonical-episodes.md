@@ -1416,6 +1416,59 @@ Stop and escalate when any of these is reached.
   `20261031_000016`; `tests/canonical_storage/test_qa_artefact_migration.py` and
   `tests/test_pricing_snapshot_constraint_migration.py` pass (17 passed, 2
   snapshots). The dropped commit is recorded under *Surprises & discoveries*.
+- Hosted assessment follow-up (2026-11-03): the two ExecPlan assessments on
+  `3b7a363e` returned substantive replies (`EP227-REBASE-20261103-A` and `-B`).
+  Three findings were upheld and repaired:
+  - **Credential disclosure (major).** `_parse_base_url` interpolated the
+    `urlsplit` exception into the usage error, and that message quotes the
+    offending netloc. A URL such as
+    `https://scribe:<secret>@api.example.test／extra` (fullwidth solidus,
+    `U+FF0F`) therefore printed the embedded password to standard error before
+    the embedded-credential guard could run. The diagnostic is now the fixed
+    string `Invalid Episodic API URL: malformed URL`, and
+    `tests/test_qa_cli_credentials.py` covers both `--base-url` and
+    `EPISODIC_API_URL`, asserting exit 2, no dispatch, and no credential in
+    either stream. Red was observed first: both cases failed against the old
+    message with the credential in `captured.err`.
+  - **Finding identifiers (minor).** `_finding_from_pedante` derived finding
+    primary keys with `uuid.uuid5(evaluation_id, str(ordinal))`, but the plan
+    requires application-side UUIDv7 primary keys and no exception was
+    recorded. Findings now take `target.uuid_factory()`, the same injected
+    factory the evaluation identifier uses; the store still keys them by
+    `(evaluation_id, ordinal)`, so nothing depended on the derived value.
+    `test_finding_identifiers_come_from_the_injected_factory` pins the
+    factory call and the UUID version.
+  - **Documentation accuracy.** The proof inventory credited rubric-score
+    normalization to `QaFinding`, which has no `rubric_score` field; only
+    `QaEvaluationSummary` calls the helper. The rubric-score test comment
+    attributed half-even rounding to the `NUMERIC(5, 4)` column, which rounds
+    ties away from zero; the comment now says the domain helper quantizes
+    first, which is what makes the stored value independent of the column's
+    rule.
+  - **Assurance evidence.** `crosshair check --report_all` reports all three
+    postconditions as `Not confirmed`, which is the honest reading of exit 0:
+    no counterexample was found, not that the property was proved. A
+    production-body negative control (returning `Decimal(0)` for every
+    supplied score) produced
+    `false when calling _normalize_rubric_score(Decimal('0.0010')) (which
+    returns Decimal('0'))` at the tolerance postcondition, so the contract is
+    non-vacuous against the implementation as well as against a mutated
+    specification. The analysis runs under CPython 3.14.7's default decimal
+    context (precision 28, no traps); the contract is not claimed to hold
+    under a caller-installed low-precision or trapping context.
+  - **Test doubles for the identifier factory.** Making findings take the
+    injected factory exposed that four test doubles returned one fixed
+    identifier for every call, so every finding shared the evaluation's
+    identifier and `QaEvaluation` rejected the artefact with
+    `findings must carry distinct ids.` (30 failures). The production contract
+    is that the factory never repeats itself, so
+    `tests/fixtures/qa_artefact_recording_builders.py::identifier_sequence`
+    now issues the pinned evaluation identifier on its first call and a
+    distinct identifier derived from it on every later one, and the recording,
+    service, idempotency-key, and retrieval-seed doubles each take a fresh
+    sequence per evaluation. The single-use `_pedante_findings` wrapper was
+    also removed, bringing `qa_artefact_recording.py` back under the 400-line
+    module ceiling.
 
 ## Surprises & discoveries
 

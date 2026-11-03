@@ -11,7 +11,7 @@ The Chrono and failure outcomes are covered by
 ``tests/test_qa_artefact_idempotency_key.py``.
 """
 
-import typing as typ
+import dataclasses as dc
 
 import pytest
 
@@ -42,25 +42,16 @@ from tests.fixtures.qa_artefact_recording_builders import (
     EVALUATION_ID,
     GENERATION_RUN_ID,
     TEI_CONTENT_HASH,
+    identifier_sequence,
     pedante_finding,
     pedante_result,
 )
-
-if typ.TYPE_CHECKING:
-    import uuid
-
-
-def _fixed_identifiers() -> uuid.UUID:
-    """Return the shared evaluation identifier."""
-    return EVALUATION_ID
-
 
 _TARGET = QaEvaluationTarget(
     episode_id=EPISODE_ID,
     tei_content_hash=TEI_CONTENT_HASH,
     evaluated_at=EVALUATED_AT,
     generation_run_id=GENERATION_RUN_ID,
-    uuid_factory=_fixed_identifiers,
 )
 _DEFAULT_TARGET = QaEvaluationTarget(
     episode_id=EPISODE_ID,
@@ -70,8 +61,18 @@ _DEFAULT_TARGET = QaEvaluationTarget(
 
 
 def _pedante_evaluation(*findings: PedanteFinding) -> QaEvaluation:
-    """Map the supplied Pedante findings with deterministic identifiers."""
-    return evaluation_from_pedante(pedante_result(*findings), target=_TARGET)
+    """Map the supplied Pedante findings with deterministic identifiers.
+
+    Each call gets its own identifier sequence, so the evaluation keeps the
+    shared identifier while every finding still takes a distinct one.
+
+    Returns
+    -------
+    QaEvaluation
+        The mapped evaluation, carrying the shared evaluation identifier.
+    """
+    target = dc.replace(_TARGET, uuid_factory=identifier_sequence())
+    return evaluation_from_pedante(pedante_result(*findings), target=target)
 
 
 def test_records_pedante_result() -> None:

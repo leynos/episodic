@@ -43,6 +43,7 @@ from tests.fixtures.generation_run_api import (
 )
 from tests.fixtures.qa_artefact_recording_builders import (
     chrono_estimate,
+    identifier_sequence,
     pedante_finding,
     pedante_result,
 )
@@ -238,7 +239,7 @@ async def _record_id(
                 evaluated_at=slot.evaluated_at,
                 outcome=slot.outcome,
                 generation_run_id=episode.generation_run_id,
-                uuid_factory=lambda: slot.evaluation_id,
+                uuid_factory=identifier_sequence(slot.evaluation_id),
             ),
         )
         await uow.commit()

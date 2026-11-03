@@ -20,7 +20,9 @@ _FOUR_DECIMAL_PLACES = -4
         (decimal.Decimal(0), decimal.Decimal("0.0000")),
         (decimal.Decimal(1), decimal.Decimal("1.0000")),
         (decimal.Decimal("0.5"), decimal.Decimal("0.5000")),
-        # Rounded half-to-even, exactly as the NUMERIC(5, 4) column stores it.
+        # The domain helper rounds half-to-even before persistence. PostgreSQL
+        # numeric would round ties away from zero, so quantizing first is what
+        # keeps the stored value independent of the column's own rule.
         (decimal.Decimal("1.00004"), decimal.Decimal("1.0000")),
         (decimal.Decimal("-0.00004"), decimal.Decimal("0.0000")),
         (decimal.Decimal("1.00005"), decimal.Decimal("1.0000")),

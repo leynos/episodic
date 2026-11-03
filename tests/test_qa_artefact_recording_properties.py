@@ -6,6 +6,8 @@ a ``hypothesis.event`` for the branch it took, which lets a deliberate policy
 or mapper defect be observed as a counter-example instead of a vacuous pass.
 """
 
+import uuid
+
 import hypothesis
 import hypothesis.strategies as st
 from hypothesis import given, settings
@@ -162,4 +164,37 @@ def test_only_the_documented_blocking_levels_make_a_result_non_compliant(
 
     assert compliance_status_for_pedante(pedante_result(*findings)) is expected, (
         "the verdict disagreed with the documented blocking set"
+    )
+
+
+def test_finding_identifiers_come_from_the_injected_factory() -> None:
+    """Findings take application-side UUIDv7 identifiers, not derived ones."""
+    # One identifier for the evaluation, then one per finding.
+    issued = iter(uuid.uuid7() for _ in range(4))
+    target = QaEvaluationTarget(
+        episode_id=EPISODE_ID,
+        tei_content_hash=TEI_CONTENT_HASH,
+        evaluated_at=EVALUATED_AT,
+        uuid_factory=lambda: next(issued),
+    )
+    findings = [
+        PedanteFinding(
+            claim_id=f"claim-{index}",
+            claim_text="A claim.",
+            claim_kind=ClaimKind.DIRECT_QUOTE,
+            support_level=SupportLevel.ACCURATE_QUOTATION,
+            severity=FindingSeverity.LOW,
+            summary="A finding.",
+            remediation="A remedy.",
+            cited_source_ids=(),
+        )
+        for index in range(3)
+    ]
+
+    evaluation = evaluation_from_pedante(pedante_result(*findings), target=target)
+
+    identifiers = [finding.id for finding in evaluation.findings]
+    assert len(set(identifiers)) == len(findings), "finding identifiers collided"
+    assert all(identifier.version == 7 for identifier in identifiers), (
+        "a finding identifier is not a UUIDv7"
     )
