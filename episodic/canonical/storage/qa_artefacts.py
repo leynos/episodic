@@ -182,9 +182,14 @@ class SqlAlchemyQaArtefactStore:
         total_statement = (
             sa.select(sa.func.count()).select_from(QaEvaluationRecord).where(*filters)
         )
-        result = await self._session.execute(page_statement)
-        summaries = [summary_from_record(record) for record in result.scalars()]
-        total = await self._session.scalar(total_statement)
+        # A query must not autoflush the caller's staged objects: that would
+        # turn a read into a write and attribute a pending constraint failure
+        # to a statement that never wrote it. Hold one boundary across both
+        # statements so the page and the total see the same snapshot.
+        with self._session.no_autoflush:
+            result = await self._session.execute(page_statement)
+            summaries = [summary_from_record(record) for record in result.scalars()]
+            total = await self._session.scalar(total_statement)
         return summaries, typ.cast("int", total)
 
     async def _select_with_findings(
@@ -192,11 +197,14 @@ class SqlAlchemyQaArtefactStore:
         statement: sa.Select[tuple[QaEvaluationRecord]],
     ) -> QaEvaluationRecord | None:
         """Execute a statement selecting one evaluation, findings included."""
-        result = await self._session.execute(
-            statement.options(
-                orm.selectinload(QaEvaluationRecord.findings)
-            ).execution_options(populate_existing=True)
-        )
+        # As in ``list_evaluations``: a read never flushes the caller's work.
+        # Callers that need the write visible flush it explicitly first.
+        with self._session.no_autoflush:
+            result = await self._session.execute(
+                statement.options(
+                    orm.selectinload(QaEvaluationRecord.findings)
+                ).execution_options(populate_existing=True)
+            )
         return result.scalar_one_or_none()
 
     async def _require_stored(self, evaluation_id: uuid.UUID) -> QaEvaluation:

@@ -39,6 +39,10 @@ platform foundations (Phase 1 of 6).
 📋 See [`docs/roadmap.md`](docs/roadmap.md) for detailed development status and
 planned features.
 
+⬆️ Upgrading from `0.1.0`? The [0.2.0 migration guide](docs/migration-0.2.0.md)
+covers the renamed `episodic` command, the QA database migration, and the new
+QA retrieval interfaces.
+
 ## Planned Features
 
 ### 🔄 Content Pipeline

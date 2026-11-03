@@ -1514,6 +1514,29 @@ Stop and escalate when any of these is reached.
     - The rubric-score cases could not see a signed zero, because
       `Decimal("-0.0000") == Decimal("0.0000")`. A dedicated case asserts
       `not stored.is_signed()`.
+  - **Pre-merge-check round (head `aefd8b17`).** The walkthrough's failed
+    pre-merge rows named three items. Two needed code and documentation; the
+    third was partly stale:
+    - **Unit Architecture (error).** `get_evaluation()` and
+      `list_evaluations()` queried through `AsyncSession.execute` and
+      `scalar`, which autoflush by default, so a read could send the caller's
+      staged objects and attribute their constraint failures to a query that
+      never wrote. Both paths now hold `session.no_autoflush` across the
+      complete read, matching `review_checkpoints.py`. The new
+      `test_reads_do_not_flush_the_callers_pending_work` stages a valid record
+      and asserts it stays in `session.new`; it fails with the boundary
+      removed.
+    - **User-Facing Documentation (warning).** The release replaces the dead
+      `stilyagi` script and adds QA retrieval, so `docs/migration-0.2.0.md`
+      now covers the rename, `alembic upgrade head`, the REST endpoints, and
+      the CLI configuration and exit codes. `docs/contents.md` indexes it and
+      `README.md` signposts it.
+    - **Developer Documentation (warning).** The developers' guide and
+      crosshair bullets were already corrected in `aefd8b17`; the remaining
+      stale claim was the `EP-M1` file list, which still gave
+      `qa_artefact_ports.py` the error types. It now names only the protocol
+      and request objects, and `qa_artefact_errors.py` is listed under `EP-M2`
+      with its `EP-M4` HTTP mapping.
 
 ## Surprises & discoveries
 
@@ -3341,8 +3364,9 @@ fenced blocks.
     pushed `qa_artefacts.py` to the 400-line module ceiling, and these checks
     form one cohesive contract, so they live beside the models in the same way
     `domain_validation.py` serves the older `domain_*` dataclasses.
-  - `episodic/canonical/qa_artefact_ports.py` — the repository `Protocol`,
-    request objects, and error types.
+  - `episodic/canonical/qa_artefact_ports.py` — the repository `Protocol` and
+    request objects. The error types were deferred to the milestone that first
+    raises them; see the decision log.
 - Acceptance evidence: `uv run pytest tests/test_qa_artefact_domain.py -q`
   passes and fails before the module exists. `EV-M1-domain`.
 - Conformance check: no import of Falcon, SQLAlchemy, LangGraph, or `httpx`,
@@ -3367,6 +3391,8 @@ fenced blocks.
   - `episodic/canonical/storage/qa_artefact_models.py` — two ORM models.
   - `episodic/canonical/storage/qa_artefact_mappers.py` — record/domain
     mappers, including tuple re-hydration for `citations`.
+  - `episodic/canonical/qa_artefact_errors.py` — the unsupported-schema error
+    the mapper raises for a row written by a newer release.
   - `episodic/canonical/storage/qa_artefact_storage_runtime.py` —
     `QaArtefactStorageRuntime` (clock, uuid factory, metrics), mirroring
     `episodic/canonical/storage/generation_run_storage_runtime.py`.
@@ -3447,7 +3473,9 @@ fenced blocks.
     `episodic/api/resources/episode_tei.py`, and change that module to use it.
     Do this as a separate atomic refactor commit after the QA resources pass,
     per `AGENTS.md`. Writing a third copy of the check is not acceptable.
-  - `episodic/api/resources/qa_artefacts.py` — two resource classes.
+  - `episodic/api/resources/qa_artefacts.py` — two resource classes, including
+    the `422 qa_artefact_schema_unsupported` mapping for
+    `UnsupportedQaArtefactSchemaError`.
   - `episodic/api/serializers.py` — `serialize_qa_evaluation_summary`,
     `serialize_qa_evaluation`, `serialize_qa_finding`.
   - `episodic/api/app.py` — `_register_qa_artefact_routes`.

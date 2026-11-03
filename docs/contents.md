@@ -18,6 +18,12 @@ or delivery planning.
 - [Roadmap](roadmap.md) - tracks phased delivery work, dependencies, and
   acceptance criteria.
 
+## Migration guides
+
+- [Migrating to Episodic 0.2.0](migration-0.2.0.md) - upgrade steps for the
+  renamed `episodic` command, the QA database migration, and the new QA
+  retrieval interfaces.
+
 ## Product and system design
 
 - [Episodic podcast generation system design](episodic-podcast-generation-system-design.md)
