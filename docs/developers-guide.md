@@ -2746,6 +2746,10 @@ Keep `configure_logging(...)` as the local configuration seam. `log_exception`
 records exception information by default; the other wrappers accept optional
 `exc_info` explicitly when a caller needs it.
 
+The wrappers fall back to the backend's generic `log` method when a level
+method is absent. `log_debug` also falls back when the backend's `debug` method
+raises `AttributeError` or `TypeError`; other emission errors propagate.
+
 Use `log_event(...)` for structured event fields on the port's configured
 logger. When an event must use a caller's `LoggerHandle`, use
 `format_log_event(event, **fields)` to build the stable JSON message, then emit
