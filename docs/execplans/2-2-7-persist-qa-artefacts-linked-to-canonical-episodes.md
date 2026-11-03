@@ -1411,21 +1411,21 @@ Stop and escalate when any of these is reached.
   `a78273d3` onto `origin/main` at `d7d8fde0` (71 commits, one dropped as
   empty). Main had landed `20261020_000014`, `20261020_000015`, and ADR 024
   while this plan was in review, so the QA artefact migration was renumbered
-  `20261031_000014` → `20261031_000016` (chained off `20261020_000015`) and
-  the two ADRs moved 024/025 → 025/026. `alembic heads` reports the single
-  head `20261031_000016`; `tests/canonical_storage/test_qa_artefact_migration.py`
-  and `tests/test_pricing_snapshot_constraint_migration.py` pass (17 passed,
-  2 snapshots). The dropped commit is recorded under *Surprises & discoveries*.
+  `20261031_000014` → `20261031_000016` (chained off `20261020_000015`) and the
+  two ADRs moved 024/025 → 025/026. `alembic heads` reports the single head
+  `20261031_000016`; `tests/canonical_storage/test_qa_artefact_migration.py` and
+  `tests/test_pricing_snapshot_constraint_migration.py` pass (17 passed, 2
+  snapshots). The dropped commit is recorded under *Surprises & discoveries*.
 
 ## Surprises & discoveries
 
-- Observation (2026-11-03): the commit `356361f9 Refresh generated typos
-  configuration` replayed empty during the rebase onto `d7d8fde0`, because
-  main already carries the identical `typos.toml` (`git diff --quiet d7d8fde0
-  -- typos.toml` is clean). It was dropped with `git rebase --skip` rather than
-  kept as an empty commit. Impact: the rebased series has 70 commits where the
-  original had 71; no tracked content is lost, and `make spelling` still
-  regenerates the same file.
+- Observation (2026-11-03): the commit
+  `356361f9 Refresh generated typos configuration` replayed empty during the
+  rebase onto `d7d8fde0`, because main already carries an identical
+  `typos.toml`; `git diff --quiet d7d8fde0 -- typos.toml` is clean. It was
+  dropped with `git rebase --skip` rather than kept as an empty commit. Impact:
+  the rebased series has 70 commits where the original had 71; no tracked
+  content is lost, and `make spelling` still regenerates the same file.
 - Observation: the `qa_findings` unique constraint on
   `(evaluation_id, ordinal)` makes a `WHERE evaluation_id = ...` query return
   rows in ordinal order even with no `ORDER BY`, because that index is the
