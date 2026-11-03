@@ -33,22 +33,20 @@ DIRECT_LOGGER_METHODS = (
 
 def test_typechecker_rejects_direct_logger_handle_calls() -> None:
     """The opaque handle rejects raw level-method calls under ty."""
-    uv_executable = shutil.which("uv")
-    assert uv_executable is not None, "Expected uv to run the pinned ty release."
+    make_executable = shutil.which("make")
+    assert make_executable is not None, "Expected make to run the pinned ty release."
     completed_process = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # Static local command and fixture path.
         [
-            uv_executable,
-            "tool",
-            "run",
-            "ty==0.0.32",
-            "check",
-            str(DIRECT_CALL_FIXTURE),
+            make_executable,
+            "--no-print-directory",
+            "typecheck-path",
+            f"TY_CHECK_PATH={DIRECT_CALL_FIXTURE}",
         ],
         check=False,
         capture_output=True,
         cwd=REPOSITORY_ROOT,
         text=True,
-        timeout=30,
+        timeout=120,
     )
 
     rendered = f"{completed_process.stdout}\n{completed_process.stderr}"

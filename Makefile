@@ -39,6 +39,7 @@ LOCAL_K8S_PROVIDER ?= k3d
 PYLINT_PYTHON ?= 3.14
 PYLINT_VERSION ?= 4.0.9
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
+TY_VERSION ?= 0.0.32
 # Limit Pylint to a tenth of the available cores, with two workers minimum.
 PYLINT_JOBS ?= $(shell n=$$(nproc 2>/dev/null || echo 2); \
 	echo $$(( n / 10 > 2 ? n / 10 : 2 )))
@@ -72,7 +73,7 @@ CARGO_BINSTALL ?= cargo-binstall
 DUPLICATION_GATE = $(UV_ENV) NOSE_BIN=$(NOSE_BIN) $(UV) run scripts/duplication_gate.py
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie spelling test typecheck \
+        markdownlint nixie spelling test typecheck typecheck-path \
         crosshair check-migrations skylos-allow validate \
         install-nose duplication duplication-test duplication-allow \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
@@ -203,8 +204,12 @@ check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run hecate check
 
 typecheck: build ## Run typechecking
-	$(UV_ENV) $(UV) tool run ty==0.0.32 --version
-	$(UV_ENV) $(UV) tool run ty==0.0.32 check
+	$(UV_ENV) $(UV) tool run ty==$(TY_VERSION) --version
+	$(UV_ENV) $(UV) tool run ty==$(TY_VERSION) check
+
+typecheck-path: ## Typecheck one path using the pinned typechecker
+	@test -n "$(TY_CHECK_PATH)" || { printf '%s\n' "Error: TY_CHECK_PATH is required" >&2; exit 2; }
+	$(UV_ENV) $(UV) tool run ty==$(TY_VERSION) check "$(TY_CHECK_PATH)"
 
 crosshair: build ## Verify CrossHair PEP 316 contracts
 	$(UV_ENV) $(UV) run crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py

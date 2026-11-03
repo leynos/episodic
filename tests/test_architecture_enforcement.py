@@ -15,7 +15,6 @@ from pathlib import Path
 import pytest
 from architecture_hecate_config import (
     LOGGING_PORT_FIXTURE,
-    diagnostic_for_expectation,
     run_hecate_fixture_check,
     run_hecate_production_check,
     write_fixture_config,
@@ -196,14 +195,6 @@ def _fixture_module(package_name: str, module_name: str) -> str:
                 _fixture_module("ungrouped_adapter_is_caught", "adapter"),
             ),
         ),
-        (
-            LOGGING_PORT_FIXTURE,
-            (
-                "ARCH001",
-                "tests.fixtures.architecture.femtologging_outside_logging_port.api",
-                "femtologging",
-            ),
-        ),
     ],
 )
 def test_checker_reports_fixture_boundary_violations(
@@ -219,14 +210,34 @@ def test_checker_reports_fixture_boundary_violations(
     rendered = f"{completed_process.stdout}\n{completed_process.stderr}"
     assert completed_process.returncode == 1, rendered
     for expected_message_part in expected_message_parts:
-        diagnostic = diagnostic_for_expectation(
-            package_name,
-            expected_message_part,
-            rendered,
-        )
-        assert expected_message_part in diagnostic, (
+        assert expected_message_part in rendered, (
             f"expected {expected_message_part!r} in {rendered!r}"
         )
+
+
+def test_checker_rejects_femtologging_outside_logging_port(
+    tmp_path: Path,
+) -> None:
+    """The boundary reports the exact forbidden backend import structurally."""
+    config_path = write_fixture_config(tmp_path, LOGGING_PORT_FIXTURE)
+
+    completed_process = run_hecate_fixture_check(
+        LOGGING_PORT_FIXTURE,
+        config_path,
+        output_format="json",
+    )
+
+    rendered = _render_process(completed_process)
+    assert completed_process.returncode == 1, rendered
+    report = typ.cast("dict[str, object]", json.loads(completed_process.stdout))
+    violations = typ.cast("list[dict[str, object]]", report["violations"])
+    expected_importer = _fixture_module(LOGGING_PORT_FIXTURE, "api")
+    assert any(
+        violation.get("rule_id") == "ARCH001"
+        and violation.get("importer") == expected_importer
+        and violation.get("imported") == "femtologging"
+        for violation in violations
+    ), f"expected ARCH001 for {expected_importer} importing femtologging in {rendered}"
 
 
 def test_checker_diagnostic_output_matches_snapshot(

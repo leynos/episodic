@@ -12,12 +12,14 @@ contract.
 from __future__ import annotations
 
 import dataclasses as dc
+import json
 import subprocess  # ruff: ignore[suspicious-subprocess-import, typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
+import typing as typ
 from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 
 import pytest
 from architecture_hecate_config import (
-    diagnostic_for_expectation,
+    LOGGING_PORT_FIXTURE,
     run_hecate_fixture_check,
     write_fixture_config,
 )
@@ -115,9 +117,11 @@ def architecture_fixture_package(
 def architecture_checker_runs(context: ArchitectureContext, tmp_path: Path) -> None:
     """Run the architecture checker through its command-line entrypoint."""
     config_path = write_fixture_config(tmp_path, context.package_name)
+    output_format = "json" if context.package_name == LOGGING_PORT_FIXTURE else "text"
     context.completed_process = run_hecate_fixture_check(
         context.package_name,
         config_path,
+        output_format=output_format,
     )
 
 
@@ -150,9 +154,14 @@ def architecture_diagnostic_mentions(
     completed_process = context.completed_process
     assert completed_process is not None, "checker did not run"
     output = f"{completed_process.stdout}\n{completed_process.stderr}"
-    diagnostic = diagnostic_for_expectation(
-        context.package_name,
-        expected_text,
-        output,
-    )
-    assert expected_text in diagnostic, f"expected {expected_text!r} in {output!r}"
+    if context.package_name == LOGGING_PORT_FIXTURE and expected_text == "femtologging":
+        report = typ.cast("dict[str, object]", json.loads(completed_process.stdout))
+        violations = typ.cast("list[dict[str, object]]", report["violations"])
+        assert any(
+            violation.get("imported") == expected_text
+            and violation.get("importer")
+            == f"tests.fixtures.architecture.{LOGGING_PORT_FIXTURE}.api"
+            for violation in violations
+        ), f"expected imported module {expected_text!r} in {output!r}"
+        return
+    assert expected_text in output, f"expected {expected_text!r} in {output!r}"

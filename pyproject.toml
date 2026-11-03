@@ -775,7 +775,7 @@ reason = "Metrics and tracing adapters implement runtime-selected observability 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = ["episodic.observability._emit_structured_event"]
-reason = "StructuredLogMetrics and StructuredLogTracer invoke this shared port-emission helper."
+reason = "StructuredLogMetrics.increment_counter, StructuredLogMetrics._emit_value, _NoopSpan.__exit__, and StructuredLogTracer.start_span call this shared helper; Skylos flags it despite these local callers."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "variable"

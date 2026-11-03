@@ -6,10 +6,8 @@ import typing as typ
 import pytest
 from architecture_hecate_config import (
     HECATE_TIMEOUT_SECONDS,
-    LOGGING_PORT_FIXTURE,
     REPO_ROOT,
     HecateInvocationError,
-    diagnostic_for_expectation,
     run_hecate_fixture_check,
     run_hecate_production_check,
     write_fixture_config,
@@ -24,56 +22,6 @@ class _ErrorCase(typ.NamedTuple):
     exception_factory: cabc.Callable[[list[str]], Exception]
     expected_match: str
     expected_cause_type: type[BaseException]
-
-
-@pytest.mark.parametrize(
-    ("package_name", "expected_text", "rendered", "expected"),
-    [
-        (
-            LOGGING_PORT_FIXTURE,
-            "femtologging",
-            (
-                "Violation in tests.fixtures.architecture."
-                "femtologging_outside_logging_port.api imports femtologging"
-            ),
-            "Violation in .api imports femtologging",
-        ),
-        (
-            LOGGING_PORT_FIXTURE,
-            "api",
-            (
-                "Violation in tests.fixtures.architecture."
-                "femtologging_outside_logging_port.api"
-            ),
-            (
-                "Violation in tests.fixtures.architecture."
-                "femtologging_outside_logging_port.api"
-            ),
-        ),
-        (
-            "other_fixture",
-            "femtologging",
-            (
-                "Violation in tests.fixtures.architecture.other_fixture.api "
-                "imports femtologging"
-            ),
-            (
-                "Violation in tests.fixtures.architecture.other_fixture.api "
-                "imports femtologging"
-            ),
-        ),
-    ],
-)
-def test_diagnostic_for_expectation_normalizes_only_backend_checks(
-    package_name: str,
-    expected_text: str,
-    rendered: str,
-    expected: str,
-) -> None:
-    """Only the backend-name assertion strips the fixture module prefix."""
-    diagnostic = diagnostic_for_expectation(package_name, expected_text, rendered)
-
-    assert diagnostic == expected, "diagnostic normalization must be narrowly scoped"
 
 
 @pytest.mark.parametrize(
