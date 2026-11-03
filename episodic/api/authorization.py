@@ -4,7 +4,6 @@ import dataclasses as dc
 import enum
 import hmac
 import typing as typ
-import unicodedata
 
 import falcon
 
@@ -12,7 +11,17 @@ from episodic.logging import get_logger, log_warning
 
 logger = get_logger(__name__)
 
-_LOG_ESCAPED_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+_AUTHORIZATION_LOG_RESOURCE_LABELS = {
+    "episode-templates": "/v1/episode-templates",
+    "episodes": "/v1/episodes",
+    "generation-runs": "/v1/generation-runs",
+    "ingestion-jobs": "/v1/ingestion-jobs",
+    "reference-bindings": "/v1/reference-bindings",
+    "reference-document-revisions": "/v1/reference-document-revisions",
+    "series-profiles": "/v1/series-profiles",
+    "uploads": "/v1/uploads",
+}
+_UNKNOWN_AUTHORIZATION_LOG_RESOURCE = "/v1/<unknown>"
 
 
 class AuthorizationDecision(enum.StrEnum):
@@ -119,7 +128,7 @@ class AuthorizationMiddleware:
                 logger,
                 "Authorization adapter failed for %s %s.",
                 context.method,
-                _escape_path_for_log(context.path),
+                _authorization_route_label(context.path),
                 exc_info=True,
             )
             resp.media = {
@@ -171,13 +180,14 @@ def _authorization_result(
     return AuthorizationResult(decision=outcome)
 
 
-def _escape_path_for_log(path: str) -> str:
-    """Escape controls, formatting characters, and separators in request paths."""
-    return "".join(
-        character.encode("unicode_escape").decode("ascii")
-        if unicodedata.category(character) in _LOG_ESCAPED_UNICODE_CATEGORIES
-        else character
-        for character in path
+def _authorization_route_label(path: str) -> str:
+    """Return an allow-listed route root without client-controlled path values."""
+    if not path.startswith("/v1/"):
+        return _UNKNOWN_AUTHORIZATION_LOG_RESOURCE
+    resource = path.removeprefix("/v1/").partition("/")[0]
+    return _AUTHORIZATION_LOG_RESOURCE_LABELS.get(
+        resource,
+        _UNKNOWN_AUTHORIZATION_LOG_RESOURCE,
     )
 
 
@@ -191,5 +201,5 @@ def _log_authorization_denial(
         "Authorization denied with %s for %s %s.",
         decision,
         context.method,
-        _escape_path_for_log(context.path),
+        _authorization_route_label(context.path),
     )

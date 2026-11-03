@@ -2767,6 +2767,11 @@ limited to its backend and private type support.
 The architectural decision and its consequences are recorded in
 [ADR-025](adr/adr-025-central-logging-port.md).
 
+Authorization warnings log only an allow-listed resource root for `/v1/`
+requests. Dynamic and unrecognized path segments are omitted because URLs can
+carry credentials. The authorization adapter still receives the original path
+through `AuthorizationContext`.
+
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:
 
