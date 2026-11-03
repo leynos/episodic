@@ -1240,8 +1240,9 @@ The enforced groups are:
   `logging_port` may import.
 - `external_libraries`: approved third-party libraries, tracked as import
   edges alongside the internal groups.
-- `external_workers`: Celery and Kombu, which only worker tasks, worker
-  topology, and the runtime composition root may import.
+- `external_workers`: Celery and Kombu, restricted to the `composition_root`,
+  `orchestration_tasks`, and `inbound_adapter` groups. The latter includes
+  Falcon API modules and worker topology.
 - `logging_internals`: private logger backend protocols used by the port. This
   group has no dependency on the femtologging backend.
 - `domain_ports`: canonical domain types, canonical ports, ingestion ports,
