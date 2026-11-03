@@ -1530,7 +1530,11 @@ Stop and escalate when any of these is reached.
       `stilyagi` script and adds QA retrieval, so `docs/migration-0.2.0.md`
       now covers the rename, `alembic upgrade head`, the REST endpoints, and
       the CLI configuration and exit codes. `docs/contents.md` indexes it and
-      `README.md` signposts it.
+      `README.md` signposts it. A follow-up review of that guide corrected the
+      migration's enum count from two to three (`qa_evaluator`,
+      `qa_compliance_status`, `qa_finding_severity`) and separated the option
+      precedence: `--base-url` and `--token` override their environment
+      variables, while `--timeout` sets the request timeout independently.
     - **Developer Documentation (warning).** The developers' guide and
       crosshair bullets were already corrected in `aefd8b17`; the remaining
       stale claim was the `EP-M1` file list, which still gave

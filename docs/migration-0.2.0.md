@@ -23,8 +23,9 @@ Any wrapper, container entry point, or local documentation that invokes
 
 ## Database migration
 
-The release adds the `qa_evaluations` and `qa_findings` tables and two
-PostgreSQL enum types. Apply the migration before starting the API or any
+The release adds the `qa_evaluations` and `qa_findings` tables and three
+PostgreSQL enum types: `qa_evaluator`, `qa_compliance_status`, and
+`qa_finding_severity`. Apply the migration before starting the API or any
 worker:
 
 ```console
@@ -61,12 +62,13 @@ uv run episodic qa evaluations list \
     0199a0c1-0000-7000-8000-000000000001
 ```
 
-The command reads `EPISODIC_API_URL` and `EPISODIC_API_TOKEN`; `--base-url`,
-`--token`, and `--timeout` override them. A bearer token is refused over plain
-HTTP unless the host is loopback, so a remote endpoint needs `https://`.
-`--format json` prints the API envelope unchanged. Exit codes are `0` for
-success, `1` for an API error envelope, `2` for a usage error, `3` when the API
-is unreachable or times out, and `4` for `429 Too Many Requests`.
+The command reads `EPISODIC_API_URL` and `EPISODIC_API_TOKEN`. `--base-url`
+overrides the first and `--token` the second; `--timeout` sets the request
+timeout independently and has no environment variable. A bearer token is
+refused over plain HTTP unless the host is loopback, so a remote endpoint needs
+`https://`. `--format json` prints the API envelope unchanged. Exit codes are
+`0` for success, `1` for an API error envelope, `2` for a usage error, `3` when
+the API is unreachable or times out, and `4` for `429 Too Many Requests`.
 
 ## Configuration summary
 
