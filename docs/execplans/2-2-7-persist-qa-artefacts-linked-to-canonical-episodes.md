@@ -1541,6 +1541,67 @@ Stop and escalate when any of these is reached.
       `qa_artefact_ports.py` the error types. It now names only the protocol
       and request objects, and `qa_artefact_errors.py` is listed under `EP-M2`
       with its `EP-M4` HTTP mapping.
+  - **Hosted approval and the residual Observability finding (head
+    `a2d3a23a`).** CodeRabbit approved the candidate but marked the
+    Observability pre-merge row as a required follow-up in warning mode: the
+    QA storage runtime and the CLI had no injectable tracer, metrics, or
+    monotonic clock, and the new QA operations therefore produced no spans and
+    no latency. The remediation is the shared
+    `episodic/operation_observation.py` helper plus the wiring it enables:
+    - `OperationObservation` opens one span named from a fixed vocabulary and
+      emits one `<span>.latency_ms` observation when it exits. `succeeded()`
+      and `failed()` supply the bounded outcome or failure category; an
+      exception no branch classified is recorded as `unexpected_error`, so an
+      unhandled path cannot read as a success.
+    - `QaArtefactStorageRuntime` now carries a `tracer` and a
+      `monotonic_clock`, and the unit of work forwards both from
+      `UnitOfWorkRuntime`. The store opens `qa_artefact.record`,
+      `qa_artefact.get`, `qa_artefact.list`, and `qa_artefact.supersede`, with
+      outcomes `recorded`, `replayed`, `superseded`, `success`, and
+      `not_found`, and failure categories `integrity_violation`,
+      `conflict_without_row`, `database_error`, `unsupported_schema`, and
+      `supersede_failed`. Only an evaluator and an outcome reach a span or a
+      metric.
+    - `CliRuntime` gained `tracer`, `metrics`, and `clock`; `main` and
+      `build_app` accept and forward them, and `QaApiClient.list_evaluations`
+      opens one `cli.qa_evaluations.list` span with outcomes `success`,
+      `api_error`, `rate_limited`, `transport_failure`, and `invalid_url`.
+      The defaults stay no-op, so output and exit codes are unchanged.
+    - `episodic.operation_observation` joins the `domain_ports` Hecate group,
+      because `episodic.cli` and the storage adapter may import only those
+      prefixes.
+    - The added instrumentation took `qa_artefacts.py` and `client.py` past the
+      400-line module ceiling, so the recording outcome signals moved to
+      `qa_artefact_outcomes.py` and base-URL validation to
+      `episodic/cli/base_url.py`. Both moves leave their call contracts,
+      messages, and stored values unchanged.
+    - `tests/canonical_storage/test_qa_artefact_storage_observability.py`
+      (nine cases) and `tests/test_qa_cli_observability.py` (five cases) pin
+      the span, the outcome, and the latency for each success and failure
+      boundary with `RecordingTracer`, `RecordingMetrics`, and `StepClock`.
+      The existing QA store snapshot now pins the two deterministic latency
+      observations its recording cases produce.
+    - The first gate pass found two format defects and one lint defect, all in
+      the remediation itself: `mdtablefix` wanted different wrapping in
+      `docs/developers-guide.md`, and Pylint reported `too-many-arguments` on
+      `main`, which the existing `# ruff: ignore[...]` comment does not
+      silence. Both are fixed; the reflow is mechanical and the Pylint
+      suppression sits beside its Ruff counterpart with the same reason.
+    - The full test run then found three more defects, again in the
+      remediation. The `_log_event` monkeypatch in
+      `test_qa_artefacts.py` still targeted `qa_artefacts`, so it now targets
+      `qa_artefact_outcomes`, which owns logging after the extraction. Five
+      bare exit-code asserts and two `get_evaluation` asserts lacked failure
+      messages (df12 `C9102`), and the three-span supersession literal met the
+      df12 `R9108` snapshot threshold, so it now asserts the name-and-outcome
+      projection. The three modules that import the observability ports and
+      default adapters tripped the duplication gate as an import-list
+      copy-paste family; a reasoned exception records that the shared block is
+      a port surface, not logic, matching the existing entries for cost ports
+      and idempotency helpers. `make lint` and the duplication gate both pass,
+      and the focused suites pass: 15 cases for the fixed store and CLI
+      observability tests, 37 for the duplication-gate and environment-wiring
+      tests.
 
 ## Surprises & discoveries
 
@@ -1975,7 +2036,12 @@ Stop and escalate when any of these is reached.
   shipped. Date/Author: 2026-11-01, implementation agent. **Deviation status:
   reported** — the figures above are measured, no requirement or interface
   changed, and the overrun is surfaced at handoff rather than presented as a
-  budget pass.
+  budget pass. Follow-up 2026-11-03: the observability remediation pushed
+  `client.py` past the 400-line module ceiling, so base-URL validation now
+  lives in `episodic/cli/base_url.py` and the package holds eight non-init
+  production modules (nine files). The 500-line and 50-file overruns above are
+  unchanged in kind; the split keeps each module under the project ceiling
+  rather than raising it.
 - Decision: place both ADRs in `docs/adr/`, not `docs/`.
   Rationale: `docs/documentation-style-guide.md` says "Place ADRs in the
   `docs/` directory", but every ADR since 001 lives in `docs/adr/` and
@@ -2423,6 +2489,21 @@ Stop and escalate when any of these is reached.
   delivered signatures. Date/Author: 2026-11-01, implementation agent.
   **Deviation status: reported deviation** — an internal interface changed
   shape without changing observable behaviour or the public API surface.
+
+- Decision: extract the QA recording outcome signals into
+  `episodic/canonical/storage/qa_artefact_outcomes.py`, and the CLI base-URL
+  validation into `episodic/cli/base_url.py`, rather than raising the 400-line
+  module ceiling. Rationale: the Observability remediation added the span and
+  latency plumbing to `qa_artefacts.py` and `client.py`, and Pylint's `C0302`
+  and the project rule both cap a module at 400 lines. The outcome helpers are
+  a cohesive "how the recording resolved" concern, separate from the
+  persistence state machine, and base-URL validation is configuration
+  resolution rather than HTTP client behaviour. Both extractions move existing
+  code without changing a call contract, an outcome label, a message, or a
+  stored value. Date/Author: 2026-11-03, implementation agent. **Deviation
+  status: reported** — the plan's Module budget suggested splitting reads out of
+  `qa_artefacts.py`; the actual growth was in instrumentation and outcome
+  reporting, so the split follows the observed concern instead.
 
 ## Outcomes & retrospective
 

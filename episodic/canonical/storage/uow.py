@@ -88,7 +88,7 @@ class UnitOfWorkRuntime:
         Optional generation-run storage providers.
     qa_artefact_runtime : QaArtefactStorageRuntime | None
         Optional QA artefact storage providers. When omitted, the adapter
-        derives a bundle from ``metrics``.
+        derives a bundle from ``metrics``, ``tracer``, and ``monotonic_clock``.
     value_metrics : ValueMetricsPort | None
         Optional scalar-metrics sink, used by adapters that report gauges.
         `metrics` alone is insufficient: `MetricsPort` has no `observe_value`.
@@ -217,6 +217,8 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             runtime=qa_artefact_storage_runtime(
                 self._runtime.qa_artefact_runtime,
                 metrics=self._runtime.metrics,
+                tracer=self._runtime.tracer,
+                monotonic_clock=self._runtime.monotonic_clock,
             ),
         )
         self.cost_ledger = SqlAlchemyCostLedgerStore(

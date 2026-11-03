@@ -8,16 +8,29 @@ inspect status codes themselves.
 
 import dataclasses as dc
 import enum
-import ipaddress
 import math
 import os
 import typing as typ
-import urllib.parse
 
 import httpx
 
-from episodic.cli.errors import ApiUnavailableError, InvalidConfigError
+from episodic.cli.base_url import validated_base_url
+from episodic.cli.errors import (
+    ApiError,
+    ApiUnavailableError,
+    InvalidConfigError,
+    RateLimitedError,
+)
 from episodic.cli.responses import decode_page
+from episodic.observability import (
+    MetricsPort,
+    MonotonicClockPort,
+    NoopMetrics,
+    NoopTracer,
+    PerfCounterClock,
+    TracerPort,
+)
+from episodic.operation_observation import OperationObservation
 
 if typ.TYPE_CHECKING:
     import uuid
@@ -51,10 +64,21 @@ class CliRuntime:
     options : ClientOptions
         Settings the global ``--base-url``, ``--token``, and ``--timeout``
         arguments resolved to.
+    tracer : TracerPort
+        Span sink for one bounded span per API call. The default is a no-op
+        sink: a CLI invocation's observable surface is its output and exit
+        code, and tests or an embedding deployment may inject a real sink.
+    metrics : MetricsPort
+        Latency sink for each API call, defaulting to a no-op sink.
+    clock : MonotonicClockPort
+        Elapsed-time source for the call latency observations.
     """
 
     transport: httpx.BaseTransport | None = None
     options: ClientOptions = dc.field(default_factory=ClientOptions)
+    tracer: TracerPort = dc.field(default_factory=NoopTracer)
+    metrics: MetricsPort = dc.field(default_factory=NoopMetrics)
+    clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
 
     def configure(
         self,
@@ -91,7 +115,7 @@ class CliRuntime:
             _first_present(base_url, os.environ.get(BASE_URL_ENV)) or DEFAULT_BASE_URL
         )
         self.options = ClientOptions(
-            base_url=_validated_base_url(resolved_url, token=resolved_token),
+            base_url=validated_base_url(resolved_url, token=resolved_token),
             token=resolved_token,
             timeout=timeout,
         )
@@ -117,139 +141,6 @@ def _redact(text: str, secret: str | None) -> str:
     if not secret:
         return text
     return text.replace(secret, "[redacted]")
-
-
-def _validated_base_url(base_url: str, *, token: str | None) -> str:
-    """Return ``base_url`` after checking it is a usable API root.
-
-    ``httpx`` raises plain ``ValueError`` for a URL with no scheme, and its
-    transport layer can raise ``httpx.InvalidURL`` later, so rejecting the
-    obvious misconfiguration here gives one clean usage error instead of two
-    different failure paths.
-
-    Parameters
-    ----------
-    base_url : str
-        API root resolved from ``--base-url`` or the environment.
-    token : str | None
-        Bearer credential the same invocation configured, if any.
-
-    Returns
-    -------
-    str
-        The base URL, unchanged.
-
-    Raises
-    ------
-    InvalidConfigError
-        If the URL cannot be parsed, has no HTTP(S) scheme, names no host,
-        carries embedded credentials, contains a ``?`` or ``#`` marker even
-        with nothing after it, or would send ``token`` over plain HTTP to a
-        non-loopback host.
-    """  # ruff: ignore[docstring-extraneous-exception]  # The guard helpers raise it.
-    parsed = _parse_base_url(base_url)
-    host = parsed.hostname
-    _reject_embedded_credentials(parsed, host)
-    shown = _shown_url(parsed)
-    _require_http_scheme_and_host(parsed, shown)
-    _reject_query_or_fragment(base_url, shown)
-    _reject_cleartext_credentials(parsed, token)
-    return base_url
-
-
-def _parse_base_url(base_url: str) -> urllib.parse.SplitResult:
-    """Split ``base_url``, reporting a malformed URL as a configuration error."""
-    try:
-        return urllib.parse.urlsplit(base_url)
-    except ValueError as error:
-        # ``urlsplit`` quotes the offending netloc in its message, and the
-        # netloc may still hold the userinfo this module exists to reject.
-        # The diagnostic is therefore fixed: the URL itself never appears.
-        invalid = "Invalid Episodic API URL: malformed URL"
-        raise InvalidConfigError(invalid) from error
-
-
-def _shown_url(parsed: urllib.parse.SplitResult) -> str:
-    """Return the URL without its query or fragment, which may hold a secret."""
-    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
-
-
-def _reject_embedded_credentials(
-    parsed: urllib.parse.SplitResult,
-    host: str | None,
-) -> None:
-    """Refuse a URL that embeds credentials instead of accepting ``--token``."""
-    if parsed.username is not None or parsed.password is not None:
-        # The URL itself must not appear here: it is the thing carrying the
-        # credential, and this message is written to standard error.
-        credentials = (
-            f"Invalid Episodic API URL for host {host or 'unknown'}: "
-            "remove the embedded credentials and pass --token"
-        )
-        raise InvalidConfigError(credentials)
-
-
-def _require_http_scheme_and_host(
-    parsed: urllib.parse.SplitResult,
-    shown: str,
-) -> None:
-    """Refuse a URL that is not an http(s) root naming a host."""
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        invalid = (
-            f"Invalid Episodic API URL {shown}: "
-            "expected an http or https URL with a host"
-        )
-        raise InvalidConfigError(invalid)
-
-
-def _reject_query_or_fragment(base_url: str, shown: str) -> None:
-    """Refuse a base URL carrying a query string or fragment marker."""
-    # Test the raw string, not the parsed parts: ``urlsplit`` reports an empty
-    # query for a trailing "?", yet appending the resource path to that base
-    # URL still sends the request to "/" with the path in the query.
-    if "?" in base_url or "#" in base_url:
-        invalid = (
-            f"Invalid Episodic API URL {shown}: remove the query string and fragment"
-        )
-        raise InvalidConfigError(invalid)
-
-
-def _reject_cleartext_credentials(
-    parsed: urllib.parse.SplitResult,
-    token: str | None,
-) -> None:
-    """Refuse to send a bearer token over plain HTTP to a remote host."""
-    host = parsed.hostname
-    if host is not None and _sends_credential_in_clear(
-        scheme=parsed.scheme, host=host, token=token
-    ):
-        insecure = (
-            f"Refusing to send a bearer token over plain HTTP to {parsed.netloc}: "
-            "use an https URL or connect over loopback"
-        )
-        raise InvalidConfigError(insecure)
-
-
-def _sends_credential_in_clear(
-    *,
-    scheme: str,
-    host: str,
-    token: str | None,
-) -> bool:
-    """Return whether ``token`` would travel over unencrypted off-host HTTP."""
-    if token is None or scheme != "http":
-        return False
-    return not _is_loopback(host)
-
-
-def _is_loopback(host: str) -> bool:
-    """Return whether ``host`` names this machine."""
-    if host == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -335,31 +226,49 @@ class QaApiClient:
             If the API could not be reached before the timeout elapsed.
         RateLimitedError
             If the API throttled the request.
-        """  # ruff: ignore[docstring-extraneous-exception]  # decode_page() raises them from this call.
+        """
         options = self._runtime.options
         url = f"{options.base_url.rstrip('/')}{query.path()}"
-        try:
-            with httpx.Client(
-                transport=self._runtime.transport,
-                timeout=options.timeout,
-                headers=self._authorization(),
-            ) as client:
-                response = client.get(url, params=query.params())
-        except httpx.InvalidURL as error:
-            invalid = f"Invalid Episodic API URL {options.base_url}: {error}"
-            raise InvalidConfigError(invalid) from error
-        except httpx.HTTPError as error:
-            # A protocol error can quote the header it rejected, so mask the
-            # configured token before the text reaches standard error.
-            detail = _redact(str(error), options.token)
-            unreachable = (
-                f"Cannot reach the Episodic API at {options.base_url}: {detail}"
-            )
-            raise ApiUnavailableError(unreachable) from error
-        return decode_page(
-            response,
-            token_configured=options.token is not None,
+        observation = OperationObservation(
+            tracer=self._runtime.tracer,
+            metrics=self._runtime.metrics,
+            clock=self._runtime.clock,
+            span_name="cli.qa_evaluations.list",
         )
+        with observation:
+            try:
+                with httpx.Client(
+                    transport=self._runtime.transport,
+                    timeout=options.timeout,
+                    headers=self._authorization(),
+                ) as client:
+                    response = client.get(url, params=query.params())
+            except httpx.InvalidURL as error:
+                observation.failed("invalid_url")
+                invalid = f"Invalid Episodic API URL {options.base_url}: {error}"
+                raise InvalidConfigError(invalid) from error
+            except httpx.HTTPError as error:
+                observation.failed("transport_failure")
+                # A protocol error can quote the header it rejected, so mask
+                # the configured token before the text reaches standard error.
+                detail = _redact(str(error), options.token)
+                unreachable = (
+                    f"Cannot reach the Episodic API at {options.base_url}: {detail}"
+                )
+                raise ApiUnavailableError(unreachable) from error
+            try:
+                page = decode_page(
+                    response,
+                    token_configured=options.token is not None,
+                )
+            except RateLimitedError:
+                observation.failed("rate_limited")
+                raise
+            except ApiError:
+                observation.failed("api_error")
+                raise
+            observation.succeeded("success")
+            return page
 
     def _authorization(self) -> dict[str, str]:
         """Return the authorization header, omitting an unset token."""

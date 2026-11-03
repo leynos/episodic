@@ -971,6 +971,10 @@ reason = "Per-tool TEI enrichment modules: an identical import surface over the 
 [[tool.duplication_gate.allow]]
 members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/storage/review_checkpoints.py"]
 reason = "Parallel implementations of one port: the in-memory checkpoint mixin and the SQLAlchemy checkpoint store bind the same domain exception set and the same log-event helper. An import list cannot be factored into shared code without changing which names each module binds."
+
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/qa_artefact_storage_runtime.py", "episodic/cli/app.py", "episodic/cli/client.py"]
+reason = "The QA storage runtime and the CLI composition roots import the same observability port and default-adapter names; the shared block is an import list, not logic, and each module binds the defaults for its own runtime."
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"
@@ -1085,6 +1089,7 @@ prefixes = [
     "episodic.llm.ports",
     "episodic.metrics_ports",
     "episodic.observability",
+    "episodic.operation_observation",
     "episodic.orchestration._types",
     "episodic.qa.chrono",
     "episodic.qa.pedante.types",

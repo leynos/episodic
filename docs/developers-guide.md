@@ -1031,6 +1031,19 @@ spans cannot leak request payloads, identifiers, or other sensitive operation
 metadata into logs. `NoopTracer` is the default no-op adapter used when no
 tracing backend is wired.
 
+`episodic/operation_observation.py` supplies `OperationObservation`, the shared
+helper for operation-level instrumentation: one span named from a fixed
+vocabulary and one latency observation named `<span>.latency_ms`. The caller
+supplies a bounded outcome through `succeeded(outcome)` or a stable failure
+category through `failed(category)`; an exception no branch classified is
+recorded as `unexpected_error` rather than read as a success. Use it at an
+adapter boundary that has no richer instrumentation of its own. The QA artefact
+store opens `qa_artefact.record`, `qa_artefact.get`, `qa_artefact.list`, and
+`qa_artefact.supersede`, and the CLI opens `cli.qa_evaluations.list`. Both read
+their tracer, metrics sink, and monotonic clock from an injected runtime and
+default to the no-op adapters, so instrumentation changes no user-visible
+output.
+
 `episodic/metrics_ports.py` retains the narrower `BoundedMetricsPort` and
 `BoundedValueMetricsPort` protocols, whose `labels` parameters are typed as
 `dict[str, str]`. They exist for the feature-specific ports
@@ -1791,6 +1804,15 @@ Maintainer rules:
 - Extending the `qa_evaluator` enum is a two-deploy operation, because
   PostgreSQL cannot add an enum value and use it in the same transaction. Add
   the value in a migration, then use it in a later release.
+- The storage adapter opens one `qa_artefact.<operation>` span and emits one
+  `<operation>.latency_ms` observation per call through `OperationObservation`.
+  Outcomes are bounded (`recorded`, `replayed`, `superseded`, `success`,
+  `not_found`) and failures carry a stable category (`integrity_violation`,
+  `conflict_without_row`, `database_error`, `unsupported_schema`,
+  `supersede_failed`); no identifier, summary, or finding text reaches a span
+  or a metric. `QaArtefactStorageRuntime` carries the tracer and monotonic
+  clock, and the unit of work forwards both from `UnitOfWorkRuntime`. Tests
+  drive the adapter with `RecordingTracer`, `RecordingMetrics`, and `StepClock`.
 
 ### Testing the evaluator
 
@@ -1835,9 +1857,11 @@ Maintainer rules:
   `test_qa_artefact_ordering.py` and `test_qa_artefact_properties.py` for the
   ordering and count invariants, `test_qa_artefact_replay.py` for replay and
   supersession, `test_qa_artefact_failure_handling.py` for failed recordings,
-  and `test_qa_artefact_migration.py` for the migration round trip. The
-  behavioural scenario lives in `tests/features/qa_artefact_retrieval.feature`
-  with steps in `tests/steps/test_qa_artefact_retrieval_steps.py`.
+  `test_qa_artefact_storage_observability.py` for the store's spans, outcomes,
+  and latency observations, and `test_qa_artefact_migration.py` for the
+  migration round trip. The behavioural scenario lives in
+  `tests/features/qa_artefact_retrieval.feature` with steps in
+  `tests/steps/test_qa_artefact_retrieval_steps.py`.
 - Snapshot output that carries incidental identifiers passes through
   `tests.snapshot_redaction.redact_snapshot_uuids` so the `ambrleaks` gate does
   not treat a fixture UUID as a leak. The QA artefact serializers and the CLI
@@ -1859,6 +1883,9 @@ database client. See
 - `episodic/cli/qa.py` declares the `qa evaluations list` command.
 - `episodic/cli/client.py` holds the `httpx` client and the resolved
   `ClientOptions`.
+- `episodic/cli/base_url.py` validates the resolved API base URL while the
+  global options resolve, so a malformed URL is a usage error rather than a
+  traceback from the transport.
 - `episodic/cli/responses.py` translates a completed response into a page
   payload or the matching `CliError`.
 - `episodic/cli/errors.py` holds `CliError` and its exit-coded subclasses, so
@@ -1886,6 +1913,13 @@ database client. See
   `HTTPError` hierarchy and a schemeless URL raises plain `ValueError`.
 - The top-level noun structure is provisional until roadmap item `4.6.1` adds
   a second command group.
+- `main` accepts `tracer`, `metrics`, and `clock` keywords and forwards them
+  through `build_app` into `CliRuntime`. Production leaves them unset, so the
+  no-op adapters apply and instrumentation changes no output or exit code.
+  `QaApiClient.list_evaluations` opens one `cli.qa_evaluations.list` span with
+  a bounded outcome (`success`, `api_error`, `rate_limited`,
+  `transport_failure`, `invalid_url`) and emits its latency; tests inject
+  `RecordingTracer`, `RecordingMetrics`, and `StepClock` through `main`.
 
 ### Adding a command
 
@@ -1900,7 +1934,9 @@ database client. See
 ### Testing the CLI
 
 - `tests/test_qa_cli.py` covers rendering and request shaping;
-  `tests/test_qa_cli_errors.py` covers exit codes and base-URL validation.
+  `tests/test_qa_cli_errors.py` covers exit codes and base-URL validation;
+  `tests/test_qa_cli_observability.py` covers the client span and its bounded
+  outcomes.
 - `tests/qa_cli_fixtures.py` holds the canned payloads, the stubbed transport,
   and the autouse environment-isolation fixture both test modules import.
 - `tests/features/qa_cli_retrieval.feature`, `tests/steps/test_qa_cli_steps.py`,

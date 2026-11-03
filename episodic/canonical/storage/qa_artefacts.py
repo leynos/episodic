@@ -12,8 +12,9 @@ import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from episodic.canonical.qa_artefact_errors import UnsupportedQaArtefactSchemaError
 from episodic.canonical.qa_artefacts import QaComplianceStatus
-from episodic.logging import log_event as _log_event
+from episodic.operation_observation import OperationObservation
 
 from .integrity_helpers import constraint_name
 from .qa_artefact_mappers import (
@@ -23,6 +24,12 @@ from .qa_artefact_mappers import (
     summary_from_record,
 )
 from .qa_artefact_models import QaEvaluationRecord
+from .qa_artefact_outcomes import (
+    emit_failed,
+    emit_recorded,
+    emit_replayed,
+    log_outcome,
+)
 from .qa_artefact_storage_runtime import qa_artefact_storage_runtime
 
 if typ.TYPE_CHECKING:
@@ -80,6 +87,20 @@ class SqlAlchemyQaArtefactStore:
         self._session = session
         self._runtime = qa_artefact_storage_runtime(runtime)
 
+    def _observe(
+        self,
+        operation: str,
+        labels: dict[str, str] | None = None,
+    ) -> OperationObservation:
+        """Return an operation observer bound to the store's runtime."""
+        return OperationObservation(
+            tracer=self._runtime.tracer,
+            metrics=self._runtime.metrics,
+            clock=self._runtime.monotonic_clock,
+            span_name=f"qa_artefact.{operation}",
+            labels={} if labels is None else labels,
+        )
+
     async def record_evaluation(self, evaluation: QaEvaluation) -> QaEvaluation:
         """Persist an evaluation and its findings, replaying or superseding.
 
@@ -106,27 +127,32 @@ class SqlAlchemyQaArtefactStore:
             The database rejected the statement for another reason.
         """  # ruff: ignore[docstring-extraneous-exception]  # The flush's integrity error is re-raised, not constructed here.
         summary = evaluation.summary_record
-        # ``begin_nested()`` flushes pending state unconditionally before it
-        # opens the savepoint, whatever ``autoflush`` says. Flush the caller's
-        # work first, outside the ``try``, so a caller-owned constraint failure
-        # propagates without being counted as a QA recording failure.
-        await self._session.flush()
-        try:
-            async with self._session.begin_nested():
-                record = evaluation_to_record(
-                    evaluation,
-                    created_at=summary.created_at or self._runtime.clock(),
-                )
-                self._session.add(record)
-                await self._session.flush()
-        except IntegrityError as err:
-            return await self._replay_after_conflict(err, evaluation)
-        except SQLAlchemyError:
-            self._emit_failed(summary, "database_error")
-            raise
-        self._emit_recorded(summary)
-        self._log_outcome(summary, replayed=False, superseded=False)
-        return await self._require_stored(evaluation.summary_record.id)
+        operation = self._observe("record", {"evaluator": summary.evaluator.value})
+        with operation:
+            # ``begin_nested()`` flushes pending state unconditionally before it
+            # opens the savepoint, whatever ``autoflush`` says. Flush the
+            # caller's work first, outside the ``try``, so a caller-owned
+            # constraint failure propagates without being counted as a QA
+            # recording failure.
+            await self._session.flush()
+            try:
+                async with self._session.begin_nested():
+                    record = evaluation_to_record(
+                        evaluation,
+                        created_at=summary.created_at or self._runtime.clock(),
+                    )
+                    self._session.add(record)
+                    await self._session.flush()
+            except IntegrityError as err:
+                return await self._replay_after_conflict(err, evaluation, operation)
+            except SQLAlchemyError:
+                emit_failed(self._runtime.metrics, summary, "database_error")
+                operation.failed("database_error")
+                raise
+            emit_recorded(self._runtime.metrics, summary)
+            log_outcome(summary, replayed=False, superseded=False)
+            operation.succeeded("recorded")
+            return await self._require_stored(evaluation.summary_record.id)
 
     async def get_evaluation(self, evaluation_id: uuid.UUID) -> QaEvaluation | None:
         """Return one evaluation with its findings, or ``None``.
@@ -140,13 +166,30 @@ class SqlAlchemyQaArtefactStore:
         -------
         QaEvaluation | None
             The stored artefact when it exists, otherwise ``None``.
+
+        Raises
+        ------
+        UnsupportedQaArtefactSchemaError
+            If the stored artefact carries a schema version this release
+            cannot read.
         """
-        record = await self._select_with_findings(
-            sa.select(QaEvaluationRecord).where(QaEvaluationRecord.id == evaluation_id)
-        )
-        if record is None:
-            return None
-        return evaluation_from_record(record)
+        operation = self._observe("get")
+        with operation:
+            record = await self._select_with_findings(
+                sa.select(QaEvaluationRecord).where(
+                    QaEvaluationRecord.id == evaluation_id
+                )
+            )
+            if record is None:
+                operation.succeeded("not_found")
+                return None
+            try:
+                stored = evaluation_from_record(record)
+            except UnsupportedQaArtefactSchemaError:
+                operation.failed("unsupported_schema")
+                raise
+            operation.succeeded("success")
+            return stored
 
     async def list_evaluations(
         self,
@@ -164,33 +207,52 @@ class SqlAlchemyQaArtefactStore:
         tuple[list[QaEvaluationSummary], int]
             The summaries on the requested page in ``evaluated_at DESC, id
             DESC`` order, and the unpaged total that matches the filters.
+
+        Raises
+        ------
+        sqlalchemy.exc.SQLAlchemyError
+            The database rejected either statement.
         """
-        filters = _evaluation_filters(request)
-        # Both statements are built from the same criteria so the total cannot
-        # describe a different population from the page (INV-FILTER-SOUND).
-        page_statement = (
-            sa
-            .select(QaEvaluationRecord)
-            .where(*filters)
-            .order_by(
-                QaEvaluationRecord.evaluated_at.desc(),
-                QaEvaluationRecord.id.desc(),
+        operation = self._observe("list")
+        with operation:
+            filters = _evaluation_filters(request)
+            # Both statements are built from the same criteria so the total
+            # cannot describe a different population from the page
+            # (INV-FILTER-SOUND).
+            page_statement = (
+                sa
+                .select(QaEvaluationRecord)
+                .where(*filters)
+                .order_by(
+                    QaEvaluationRecord.evaluated_at.desc(),
+                    QaEvaluationRecord.id.desc(),
+                )
+                .limit(request.pagination.limit)
+                .offset(request.pagination.offset)
             )
-            .limit(request.pagination.limit)
-            .offset(request.pagination.offset)
-        )
-        total_statement = (
-            sa.select(sa.func.count()).select_from(QaEvaluationRecord).where(*filters)
-        )
-        # A query must not autoflush the caller's staged objects: that would
-        # turn a read into a write and attribute a pending constraint failure
-        # to a statement that never wrote it. Hold one boundary across both
-        # statements so the page and the total see the same snapshot.
-        with self._session.no_autoflush:
-            result = await self._session.execute(page_statement)
-            summaries = [summary_from_record(record) for record in result.scalars()]
-            total = await self._session.scalar(total_statement)
-        return summaries, typ.cast("int", total)
+            total_statement = (
+                sa
+                .select(sa.func.count())
+                .select_from(QaEvaluationRecord)
+                .where(*filters)
+            )
+            # A query must not autoflush the caller's staged objects: that
+            # would turn a read into a write and attribute a pending constraint
+            # failure to a statement that never wrote it. Hold one boundary
+            # across both statements so the page and the total see the same
+            # snapshot.
+            try:
+                with self._session.no_autoflush:
+                    result = await self._session.execute(page_statement)
+                    summaries = [
+                        summary_from_record(record) for record in result.scalars()
+                    ]
+                    total = await self._session.scalar(total_statement)
+            except SQLAlchemyError:
+                operation.failed("database_error")
+                raise
+            operation.succeeded("success")
+            return summaries, typ.cast("int", total)
 
     async def _select_with_findings(
         self,
@@ -221,6 +283,7 @@ class SqlAlchemyQaArtefactStore:
         self,
         err: IntegrityError,
         evaluation: QaEvaluation,
+        operation: OperationObservation,
     ) -> QaEvaluation:
         """Return the stored artefact for a replay, or re-raise."""
         summary = evaluation.summary_record
@@ -229,7 +292,8 @@ class SqlAlchemyQaArtefactStore:
         # the loser then replaces findings the winner already replaced and
         # collides on their ordinal instead of replaying the committed result.
         if constraint_name(err) not in _REPLAY_CONSTRAINTS:
-            self._emit_failed(summary, "integrity_violation")
+            emit_failed(self._runtime.metrics, summary, "integrity_violation")
+            operation.failed("integrity_violation")
             raise err
         record = await self._select_with_findings(
             sa
@@ -246,18 +310,21 @@ class SqlAlchemyQaArtefactStore:
             # category stays distinct from ``integrity_violation`` so a
             # constraint that should have been rejected before the lookup is
             # still visible in the metrics.
-            self._emit_failed(summary, "conflict_without_row")
+            emit_failed(self._runtime.metrics, summary, "conflict_without_row")
+            operation.failed("conflict_without_row")
             raise err
         if self._should_supersede(record, evaluation):
             # Read the stored status before superseding it, so the metric names
             # the verdict that was replayed rather than the one just written.
             stored_status = record.compliance_status
             stored = await self._supersede(record, evaluation)
-            self._emit_replayed(summary, stored_status)
-            self._log_outcome(summary, replayed=True, superseded=True)
+            emit_replayed(self._runtime.metrics, summary, stored_status)
+            log_outcome(summary, replayed=True, superseded=True)
+            operation.succeeded("superseded")
             return stored
-        self._emit_replayed(summary, record.compliance_status)
-        self._log_outcome(summary, replayed=True, superseded=False)
+        emit_replayed(self._runtime.metrics, summary, record.compliance_status)
+        log_outcome(summary, replayed=True, superseded=False)
+        operation.succeeded("replayed")
         return evaluation_from_record(record)
 
     @staticmethod
@@ -279,85 +346,41 @@ class SqlAlchemyQaArtefactStore:
     ) -> QaEvaluation:
         """Replace the payload and findings of a stored errored artefact."""
         summary = evaluation.summary_record
-        try:
-            # The savepoint keeps a rejected supersession from taking the
-            # caller's unrelated pending work down with it, matching the
-            # read-then-replace contract ``record_evaluation`` documents.
-            async with self._session.begin_nested():
-                record.evaluator_version = summary.evaluator_version
-                record.artefact_schema_version = summary.artefact_schema_version
-                record.compliance_policy_version = summary.compliance_policy_version
-                record.compliance_status = summary.compliance_status
-                record.summary = summary.summary
-                record.rubric_score = summary.rubric_score
-                record.runtime_estimate_seconds = summary.runtime_estimate_seconds
-                record.finding_count = summary.finding_count
-                record.evaluator_metadata = summary.evaluator_metadata
-                record.evaluated_at = summary.evaluated_at
-                record.generation_run_id = summary.generation_run_id
-                # The deletes must reach the database before the replacements
-                # are inserted: one flush emits inserts first, so ordinal 0 of
-                # the replacement would collide with ordinal 0 of the errored
-                # recording.
-                record.findings.clear()
-                await self._session.flush()
-                record.findings = [
-                    finding_to_record(finding, evaluation_id=record.id)
-                    for finding in evaluation.findings
-                ]
-                await self._session.flush()
-        except SQLAlchemyError:
-            self._emit_failed(summary, "supersede_failed")
-            raise
-        return await self._require_stored(record.id)
-
-    def _emit_recorded(self, summary: QaEvaluationSummary) -> None:
-        """Count a first-time recording."""
-        self._runtime.metrics.increment_counter(
-            "qa_evaluation_recorded",
-            labels={
-                "evaluator": summary.evaluator.value,
-                "compliance_status": summary.compliance_status.value,
-            },
+        operation = self._observe(
+            "supersede",
+            {"evaluator": summary.evaluator.value},
         )
-
-    def _emit_replayed(
-        self,
-        summary: QaEvaluationSummary,
-        stored_status: QaComplianceStatus,
-    ) -> None:
-        """Count a replay of an existing artefact."""
-        self._runtime.metrics.increment_counter(
-            "qa_evaluation_replayed",
-            labels={
-                "evaluator": summary.evaluator.value,
-                "stored_status": stored_status.value,
-            },
-        )
-
-    def _emit_failed(self, summary: QaEvaluationSummary, error_category: str) -> None:
-        """Count a failed recording under a bounded error category."""
-        self._runtime.metrics.increment_counter(
-            "qa_evaluation_record_failed",
-            labels={
-                "evaluator": summary.evaluator.value,
-                "error_category": error_category,
-            },
-        )
-
-    @staticmethod
-    def _log_outcome(
-        summary: QaEvaluationSummary,
-        *,
-        replayed: bool,
-        superseded: bool,
-    ) -> None:
-        """Log the recording outcome without any finding text."""
-        _log_event(
-            "info",
-            "sql_qa_artefact_store.record_evaluation",
-            evaluator=summary.evaluator.value,
-            episode_id=str(summary.episode_id),
-            replayed=replayed,
-            superseded=superseded,
-        )
+        with operation:
+            try:
+                # The savepoint keeps a rejected supersession from taking the
+                # caller's unrelated pending work down with it, matching the
+                # read-then-replace contract ``record_evaluation`` documents.
+                async with self._session.begin_nested():
+                    record.evaluator_version = summary.evaluator_version
+                    record.artefact_schema_version = summary.artefact_schema_version
+                    record.compliance_policy_version = summary.compliance_policy_version
+                    record.compliance_status = summary.compliance_status
+                    record.summary = summary.summary
+                    record.rubric_score = summary.rubric_score
+                    record.runtime_estimate_seconds = summary.runtime_estimate_seconds
+                    record.finding_count = summary.finding_count
+                    record.evaluator_metadata = summary.evaluator_metadata
+                    record.evaluated_at = summary.evaluated_at
+                    record.generation_run_id = summary.generation_run_id
+                    # The deletes must reach the database before the
+                    # replacements are inserted: one flush emits inserts first,
+                    # so ordinal 0 of the replacement would collide with
+                    # ordinal 0 of the errored recording.
+                    record.findings.clear()
+                    await self._session.flush()
+                    record.findings = [
+                        finding_to_record(finding, evaluation_id=record.id)
+                        for finding in evaluation.findings
+                    ]
+                    await self._session.flush()
+            except SQLAlchemyError:
+                emit_failed(self._runtime.metrics, summary, "supersede_failed")
+                operation.failed("supersede_failed")
+                raise
+            operation.succeeded("superseded")
+            return await self._require_stored(record.id)

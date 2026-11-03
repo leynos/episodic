@@ -27,7 +27,7 @@ from episodic.canonical.storage import (
     SqlAlchemyQaArtefactStore,
     SqlAlchemyUnitOfWork,
     UnitOfWorkRuntime,
-    qa_artefacts,
+    qa_artefact_outcomes,
 )
 from episodic.canonical.storage.qa_artefact_mappers import evaluation_to_record
 from tests.canonical_storage._qa_artefact_support import (
@@ -37,7 +37,10 @@ from tests.canonical_storage._qa_artefact_support import (
     create_ingestion_job,
     make_evaluation,
 )
-from tests.canonical_storage._workflow_checkpoint_support import RecordingMetrics
+from tests.canonical_storage._workflow_checkpoint_support import (
+    RecordingMetrics,
+    StepClock,
+)
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -321,6 +324,7 @@ async def test_recording_emits_bounded_metrics_and_safe_log(
             clock=lambda: NOW,
             uuid_factory=uuid.uuid7,
             metrics=metrics,
+            monotonic_clock=StepClock(),
         )
     )
     events: list[tuple[str, str, dict[str, object]]] = []
@@ -328,7 +332,7 @@ async def test_recording_emits_bounded_metrics_and_safe_log(
     def record_log_event(level: str, message: str, **fields: object) -> None:
         events.append((level, message, fields))
 
-    monkeypatch.setattr(qa_artefacts, "_log_event", record_log_event)
+    monkeypatch.setattr(qa_artefact_outcomes, "_log_event", record_log_event)
     first = make_evaluation(
         episode_id,
         idempotency_key="observed",
@@ -374,6 +378,7 @@ async def test_recording_failure_emits_bounded_metric_and_reraises(
             clock=lambda: NOW,
             uuid_factory=uuid.uuid7,
             metrics=metrics,
+            monotonic_clock=StepClock(),
         )
     )
     orphan = make_evaluation(uuid.uuid7(), idempotency_key="orphan")

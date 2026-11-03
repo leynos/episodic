@@ -18,6 +18,22 @@
       }),
     ]),
     'latencies': list([
+      dict({
+        'labels': dict({
+          'evaluator': 'pedante',
+          'outcome': 'recorded',
+        }),
+        'name': 'qa_artefact.record.latency_ms',
+        'value': 1.0,
+      }),
+      dict({
+        'labels': dict({
+          'evaluator': 'pedante',
+          'outcome': 'replayed',
+        }),
+        'name': 'qa_artefact.record.latency_ms',
+        'value': 1.0,
+      }),
     ]),
   })
 # ---
