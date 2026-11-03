@@ -195,7 +195,17 @@ def _emit(
             stack_info=False,
         )
     else:
-        method(message, exc_info=exc_info, stack_info=False)
+        try:
+            method(message, exc_info=exc_info, stack_info=False)
+        except (AttributeError, TypeError):  # fmt: skip
+            if level != logging.DEBUG:
+                raise
+            typ.cast("_SupportsLogMethod", backend).log(
+                level,
+                message,
+                exc_info=exc_info,
+                stack_info=False,
+            )
 
 
 def _make_log_wrapper(
