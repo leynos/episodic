@@ -1480,6 +1480,40 @@ Stop and escalate when any of these is reached.
     its 30 reasoned exceptions), `markdownlint`, `nixie`, `check-migrations`,
     and `make test` (2067 passed, 1 skipped, 67 snapshots). The focused suites
     for the eight affected modules reported 65 passed.
+  - **Formal-review round (head `714cf785`).** The first hosted CodeRabbit
+    review after readiness raised six findings, all verified against source and
+    repaired together:
+    - The replay guard accepted only
+      `uq_qa_evaluations_episode_idempotency_key`, but a retry of the same
+      evaluation object also repeats its identifier, and PostgreSQL reports
+      `qa_evaluations_pkey` for that insert. The guard now accepts either
+      constraint as a replay candidate and then matches the row on
+      `(episode_id, idempotency_key)`; a primary-key collision that names no
+      such row still raises, under the distinct `conflict_without_row`
+      category. `test_recording_the_same_object_twice_replays` fails with the
+      narrowed set and passes with the repair, and
+      `test_identifier_collision_with_another_key_is_not_a_replay` pins the
+      rejection.
+    - ADR 025 and the developers' guide said the blocking *severity* set
+      obliges a policy bump; the rule reads `support_level`, so both now say
+      support-level set.
+    - The developers' guide's QA test-scope list credited
+      `tests/test_qa_artefact_service.py` with the PGlite repository coverage
+      and omitted the `tests/canonical_storage/` adapter suites,
+      `tests/test_qa_artefact_ports.py`,
+      `tests/test_qa_artefact_api_schema_version.py`, and
+      `tests/test_qa_artefact_observability.py`; the list now names them.
+    - `test_chrono_crosshair_contracts_pass` checked only
+      `episodic/qa/chrono.py`, so CI — which runs pytest without
+      `make crosshair` — never checked the rubric-score contract. It now names
+      both modules and allows 120 s for the ~18 s warm run.
+    - The identifier-factory test could not distinguish the injected factory
+      from a direct `uuid.uuid7()` call, because both yield unique version-7
+      identifiers. It now materializes the expected identifiers and asserts the
+      exact assignment, evaluation first and findings in order.
+    - The rubric-score cases could not see a signed zero, because
+      `Decimal("-0.0000") == Decimal("0.0000")`. A dedicated case asserts
+      `not stored.is_signed()`.
 
 ## Surprises & discoveries
 

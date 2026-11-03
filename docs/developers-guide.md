@@ -1770,8 +1770,8 @@ Maintainer rules:
   would otherwise raise `ValueError` and surface as a `500`.
 - `compliance_policy_version` versions the decision rule that produced
   `compliance_status` and `QaFinding.is_blocking`. Changing the blocking
-  severity set, or any evaluator's outcome-to-status mapping, obliges a bump
-  and leaves historical rows as statements about the older policy.
+  support-level set, or any evaluator's outcome-to-status mapping, obliges a
+  bump and leaves historical rows as statements about the older policy.
 - Stored rows are never rewritten by a version bump. The single exception is an
   `errored` artefact, which a later successful recording under the same
   idempotency key supersedes in place, keeping its identifier.
@@ -1811,7 +1811,10 @@ Maintainer rules:
   public estimator behaviour backed by `_compute_estimated_seconds(...)` so the
   CrossHair gate has property-test coverage beside symbolic verification. The
   same module includes the `pytest.mark.crosshair` subprocess gate for
-  `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py`.
+  `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py
+  episodic/canonical/qa_artefact_validation.py`,
+  which is the only place CI checks those contracts because CI runs pytest
+  without `make crosshair`.
 - Chrono behavioural tests do not launch Vidai Mock because Chrono has no
   inference-service boundary in roadmap item `2.2.6`.
 - QA artefact tests are split by concern: `tests/test_qa_artefact_domain.py`
@@ -1820,11 +1823,21 @@ Maintainer rules:
   `tests/test_qa_artefact_recording_properties.py` for the generative
   statements, `tests/test_qa_artefact_rubric_score.py` for the four-decimal
   contract, `tests/test_qa_artefact_idempotency_key.py` for the key,
-  `tests/test_qa_artefact_service.py` for the repository against PGlite, and
+  `tests/test_qa_artefact_service.py` for the recording and query services,
+  `tests/test_qa_artefact_ports.py` for the persistence request value,
   `tests/test_qa_artefact_serializers.py` and `tests/test_qa_artefact_api.py`
-  for the HTTP representation. The behavioural scenario lives in
-  `tests/features/qa_artefact_retrieval.feature` with steps in
-  `tests/steps/test_qa_artefact_retrieval_steps.py`.
+  for the HTTP representation, `tests/test_qa_artefact_api_schema_version.py`
+  for the unsupported-version response, and
+  `tests/test_qa_artefact_observability.py` for the route spans and metrics.
+  The PGlite-backed adapter suites live in `tests/canonical_storage/`:
+  `test_qa_artefacts.py` for the store's own contracts,
+  `test_qa_artefact_constraints.py` for the database constraints,
+  `test_qa_artefact_ordering.py` and `test_qa_artefact_properties.py` for the
+  ordering and count invariants, `test_qa_artefact_replay.py` for replay and
+  supersession, `test_qa_artefact_failure_handling.py` for failed recordings,
+  and `test_qa_artefact_migration.py` for the migration round trip. The
+  behavioural scenario lives in `tests/features/qa_artefact_retrieval.feature`
+  with steps in `tests/steps/test_qa_artefact_retrieval_steps.py`.
 - Snapshot output that carries incidental identifiers passes through
   `tests.snapshot_redaction.redact_snapshot_uuids` so the `ambrleaks` gate does
   not treat a fixture UUID as a leak. The QA artefact serializers and the CLI

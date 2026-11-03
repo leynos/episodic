@@ -45,6 +45,19 @@ def test_rubric_score_is_stored_at_the_four_decimal_precision(
     )
 
 
+def test_negative_zero_is_normalized_to_an_unsigned_zero() -> None:
+    """A negative score that rounds to zero is stored without its sign.
+
+    ``Decimal("-0.0000") == Decimal("0.0000")``, so the equality assertion
+    above cannot see the sign; a signed zero would also serialize as
+    ``-0.0000`` rather than the ``0.0000`` the column holds.
+    """
+    stored = summary(rubric_score=decimal.Decimal("-0.00004")).rubric_score
+
+    assert stored is not None, "an accepted score must not be dropped"
+    assert not stored.is_signed(), "a rounded zero kept its negative sign"
+
+
 def test_rubric_score_round_trips_through_its_stored_precision() -> None:
     """Reading a stored score back into the model leaves it unchanged."""
     stored = summary(rubric_score=decimal.Decimal("0.12345")).rubric_score

@@ -2,9 +2,11 @@
 
 Covers ``INV-REPLAY-IDEMPOTENT`` and ``INV-ERRORED-SUPERSEDED``: replaying a
 key returns the artefact the first recording created, an errored artefact is
-superseded in place, and only the idempotency constraint counts as a replay.
+superseded in place, and only the episode/idempotency-key and primary-key
+constraints count as replay candidates.
 """
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -99,6 +101,93 @@ async def test_replay_returns_the_first_recording(
     assert stored_repeat.summary_record.id == first.summary_record.id, (
         "a replay should return the identifier created by the first recording"
     )
+
+
+@pytest.mark.asyncio
+async def test_recording_the_same_object_twice_replays(
+    session_factory: SessionFactory,
+) -> None:
+    """A retry of the same evaluation object returns the stored artefact.
+
+    The retry repeats the identifier as well as the episode and key, so
+    PostgreSQL may report the primary-key violation rather than the
+    episode/idempotency-key one. Both name a replay candidate.
+    """
+    episode_id = await create_episode(session_factory)
+    evaluation = make_evaluation(
+        episode_id,
+        idempotency_key="same-object",
+        options=EvaluationOptions(severities=(QaFindingSeverity.LOW,)),
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        stored_first = await uow.qa_artefacts.record_evaluation(evaluation)
+        stored_repeat = await uow.qa_artefacts.record_evaluation(evaluation)
+        await uow.commit()
+
+    assert stored_repeat == stored_first, (
+        "a retry of the same object should return the stored artefact"
+    )
+    async with session_factory() as session:
+        assert await count_rows(session, QaEvaluationRecord) == 1, (
+            "a retry of the same object should not create a second evaluation row"
+        )
+        assert await count_rows(session, QaFindingRecord) == 1, (
+            "a retry of the same object should not create a second finding row"
+        )
+
+
+@pytest.mark.asyncio
+async def test_identifier_collision_with_another_key_is_not_a_replay(
+    session_factory: SessionFactory,
+) -> None:
+    """A primary-key collision outside the episode and key is rejected.
+
+    Accepting the primary key as a replay candidate must not turn an unrelated
+    identifier collision into a silent replay of somebody else's artefact.
+    """
+    episode_id = await create_episode(session_factory)
+    stored = make_evaluation(
+        episode_id,
+        idempotency_key="first-key",
+        options=EvaluationOptions(severities=(QaFindingSeverity.LOW,)),
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.qa_artefacts.record_evaluation(stored)
+        await uow.commit()
+
+    # The same identifier under a different key: only the primary key rejects
+    # the insert, and the episode/key lookup finds no row to replay.
+    colliding = dc.replace(
+        stored,
+        summary_record=dc.replace(stored.summary_record, idempotency_key="other-key"),
+    )
+    metrics = RecordingMetrics()
+    async with session_factory() as session:
+        store = SqlAlchemyQaArtefactStore(
+            session,
+            runtime=QaArtefactStorageRuntime(
+                clock=lambda: REPLAYED_AT,
+                uuid_factory=uuid.uuid7,
+                metrics=metrics,
+            ),
+        )
+        with pytest.raises(IntegrityError) as exc_info:
+            await store.record_evaluation(colliding)
+        assert await session.scalar(sa.text("SELECT 1")) == 1, (
+            "an unrelated identifier collision should leave the session usable"
+        )
+        await session.rollback()
+
+    assert constraint_name(exc_info.value) == "qa_evaluations_pkey", (
+        "the rejected constraint should be the evaluation's primary key"
+    )
+    assert metrics.counters == [
+        (
+            "qa_evaluation_record_failed",
+            {"evaluator": "pedante", "error_category": "conflict_without_row"},
+        )
+    ], "an identifier collision outside the episode and key is not a replay"
 
 
 @pytest.mark.parametrize(

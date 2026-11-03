@@ -117,11 +117,11 @@ would become justified if an evaluator ever reported partial results.
 - Stored rows are never rewritten by a bump.
 
 `compliance_policy_version` versions the *decision rule* that produced
-`compliance_status` and `QaFinding.is_blocking`. Changing the blocking severity
-set, or any evaluator's outcome-to-status mapping, obliges a bump. Because
-`code` preserves the raw signal, historical rows can be re-derived by a
-backfill; without the policy version there would be no way to distinguish a
-re-derivable row from an authoritative one.
+`compliance_status` and `QaFinding.is_blocking`. Changing the blocking
+support-level set, or any evaluator's outcome-to-status mapping, obliges a
+bump. Because `code` preserves the raw signal, historical rows can be
+re-derived by a backfill; without the policy version there would be no way to
+distinguish a re-derivable row from an authoritative one.
 
 ### Immutability and the one exception
 

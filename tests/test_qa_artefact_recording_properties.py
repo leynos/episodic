@@ -169,8 +169,12 @@ def test_only_the_documented_blocking_levels_make_a_result_non_compliant(
 
 def test_finding_identifiers_come_from_the_injected_factory() -> None:
     """Findings take application-side UUIDv7 identifiers, not derived ones."""
-    # One identifier for the evaluation, then one per finding.
-    issued = iter(uuid.uuid7() for _ in range(4))
+    # One identifier for the evaluation, then one per finding. Materialising
+    # them lets the test assert the exact assignment: a projection that called
+    # ``uuid.uuid7()`` itself would still produce unique version-7 identifiers,
+    # so only equality with these values can tell the two apart.
+    expected = [uuid.uuid7() for _ in range(4)]
+    issued = iter(expected)
     target = QaEvaluationTarget(
         episode_id=EPISODE_ID,
         tei_content_hash=TEI_CONTENT_HASH,
@@ -193,8 +197,10 @@ def test_finding_identifiers_come_from_the_injected_factory() -> None:
 
     evaluation = evaluation_from_pedante(pedante_result(*findings), target=target)
 
+    assert evaluation.summary_record.id == expected[0], (
+        "the evaluation did not take the factory's first identifier"
+    )
     identifiers = [finding.id for finding in evaluation.findings]
-    assert len(set(identifiers)) == len(findings), "finding identifiers collided"
-    assert all(identifier.version == 7 for identifier in identifiers), (
-        "a finding identifier is not a UUIDv7"
+    assert identifiers == expected[1:], (
+        "the findings did not take the factory's identifiers in order"
     )

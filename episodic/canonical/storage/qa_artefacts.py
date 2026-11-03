@@ -38,10 +38,18 @@ if typ.TYPE_CHECKING:
 
     from .qa_artefact_storage_runtime import QaArtefactStorageRuntime
 
-# Only this constraint reports a replay. Narrowing matters because the caller's
-# unit of work may hold unrelated pending work that this flush also sends, and a
-# broad catch would roll it back to our savepoint and call the result a replay.
+# Only these constraints can report a replay. Narrowing matters because the
+# caller's unit of work may hold unrelated pending work that this flush also
+# sends, and a broad catch would roll it back to our savepoint and call the
+# result a replay.
 _IDEMPOTENCY_CONSTRAINT = "uq_qa_evaluations_episode_idempotency_key"
+_PRIMARY_KEY_CONSTRAINT = "qa_evaluations_pkey"
+# A retry of the same evaluation object repeats its identifier as well as its
+# episode and key, so PostgreSQL may report the primary-key violation instead of
+# the episode/idempotency-key one. Both are replay candidates; the row is then
+# matched on the episode and key, which is what separates a retry from an
+# unrelated identifier collision.
+_REPLAY_CONSTRAINTS = frozenset({_IDEMPOTENCY_CONSTRAINT, _PRIMARY_KEY_CONSTRAINT})
 
 
 def _evaluation_filters(
@@ -91,8 +99,9 @@ class SqlAlchemyQaArtefactStore:
         Raises
         ------
         sqlalchemy.exc.IntegrityError
-            A constraint other than the episode/idempotency-key uniqueness
-            constraint rejected the rows; the caller's transaction is intact.
+            A constraint outside the replay set rejected the rows, or the
+            primary key collided on an identifier belonging to a different
+            episode or idempotency key; the caller's transaction is intact.
         sqlalchemy.exc.SQLAlchemyError
             The database rejected the statement for another reason.
         """  # ruff: ignore[docstring-extraneous-exception]  # The flush's integrity error is re-raised, not constructed here.
@@ -211,7 +220,7 @@ class SqlAlchemyQaArtefactStore:
         # lock, two concurrent replays can both read the same errored artefact;
         # the loser then replaces findings the winner already replaced and
         # collides on their ordinal instead of replaying the committed result.
-        if constraint_name(err) != _IDEMPOTENCY_CONSTRAINT:
+        if constraint_name(err) not in _REPLAY_CONSTRAINTS:
             self._emit_failed(summary, "integrity_violation")
             raise err
         record = await self._select_with_findings(
@@ -223,7 +232,12 @@ class SqlAlchemyQaArtefactStore:
             )
             .with_for_update()
         )
-        if record is None:  # pragma: no cover - the unique violation proves a row.
+        if record is None:
+            # The identifier collision named a row outside this episode and
+            # key, so this is not a replay and the caller must see it. The
+            # category stays distinct from ``integrity_violation`` so a
+            # constraint that should have been rejected before the lookup is
+            # still visible in the metrics.
             self._emit_failed(summary, "conflict_without_row")
             raise err
         if self._should_supersede(record, evaluation):
