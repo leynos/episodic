@@ -17,7 +17,7 @@ from episodic.observability import (
 class _RecordingLogger:
     """Capture structured logger events without process-wide configuration."""
 
-    events: list[tuple[str, dict[str, str]]] = dc.field(default_factory=list)
+    events: list[tuple[str, dict[str, object]]] = dc.field(default_factory=list)
 
     def log(
         self,
@@ -33,7 +33,7 @@ class _RecordingLogger:
         assert level == 20, "structured observability events must be INFO logs"
         payload = json.loads(message)
         event = typ.cast("str", payload.pop("event"))
-        self.events.append((event, typ.cast("dict[str, str]", payload)))
+        self.events.append((event, typ.cast("dict[str, object]", payload)))
 
 
 def test_recording_tracer_preserves_span_details_and_completion() -> None:
@@ -113,7 +113,7 @@ def test_structured_log_metrics_emits_latency_and_value_events() -> None:
         {
             "metric_name": "generation_run.duration_ms",
             "value": "123.45",
-            "operation": "generation_run.execute",
+            "labels": {"operation": "generation_run.execute"},
         },
     )
     expected_value_event = (
@@ -121,7 +121,7 @@ def test_structured_log_metrics_emits_latency_and_value_events() -> None:
         {
             "metric_name": "generation_run.queue_depth",
             "value": "2.0",
-            "operation": "generation_run.execute",
+            "labels": {"operation": "generation_run.execute"},
         },
     )
 
@@ -130,19 +130,36 @@ def test_structured_log_metrics_emits_latency_and_value_events() -> None:
     )
 
 
-def test_structured_log_metrics_accepts_reserved_parameter_labels() -> None:
-    """Metric labels cannot collide with the event helper's parameters."""
+def test_structured_log_metrics_preserves_reserved_parameter_labels() -> None:
+    """Labels stay namespaced so reserved event fields cannot replace them."""
     recorder = _RecordingLogger()
     metrics = StructuredLogMetrics(logger=LoggerHandle(recorder))
+    labels = {
+        "event": "label-event",
+        "logger": "label-logger",
+        "metric_name": "label-metric",
+        "value": "label-value",
+    }
 
     metrics.increment_counter(
         "requests",
-        labels={"event": "label-event", "logger": "label-logger"},
+        labels=labels,
     )
+    metrics.observe_value("queue_depth", 2.0, labels=labels)
 
-    assert recorder.events == [
-        ("metric_counter", {"metric_name": "requests", "logger": "label-logger"})
-    ], "reserved helper parameter names must remain valid metric labels"
+    expected_events = [
+        (
+            "metric_counter",
+            {"metric_name": "requests", "labels": labels},
+        ),
+        (
+            "metric_value",
+            {"metric_name": "queue_depth", "value": "2.0", "labels": labels},
+        ),
+    ]
+    assert recorder.events == expected_events, (
+        "reserved event fields must remain distinct from metric labels"
+    )
 
 
 def test_noop_tracer_supports_synchronous_span_contexts() -> None:

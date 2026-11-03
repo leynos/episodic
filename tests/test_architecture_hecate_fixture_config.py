@@ -176,6 +176,12 @@ def test_external_logging_fixture_config_enforces_the_port_boundary(
     assert _group_prefixes(config, "logging_port") == [f"{package}.logging"], (
         "logging port must match before generic fixture groups"
     )
+    group_names = _group_names(config)
+    assert (
+        group_names.index("logging_port")
+        < group_names.index("logging_backend")
+        < group_names.index("external_libraries")
+    ), "logging groups must precede the broad external-library group"
     assert _group_prefixes(config, "logging_backend") == ["femtologging"], (
         "femtologging must have a dedicated backend group"
     )

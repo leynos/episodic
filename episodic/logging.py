@@ -22,6 +22,7 @@ from femtologging import basicConfig
 from femtologging import get_logger as _get_femtologger
 
 from episodic._logging_types import (
+    _ConvenienceMethod,
     _LogCall,
     _SupportsConvenienceLog,
 )
@@ -126,6 +127,28 @@ class LoggerHandle:
         self._logger = logger
 
 
+class _LogWrapper(typ.Protocol):
+    """Callable surface shared by the level-specific logging wrappers."""
+
+    def __call__(
+        self,
+        logger: LoggerHandle,
+        template: str,
+        *args: object,
+        exc_info: object | None = None,
+    ) -> None:
+        """Emit one formatted message through the logging port."""
+
+
+class _LogWrapperConfig(typ.NamedTuple):
+    """Bind the public name and backend dispatch for one logging wrapper."""
+
+    name: str
+    level: int
+    convenience_method: _ConvenienceMethod
+    default_exc_info: object | None = None
+
+
 def get_logger(name: str) -> LoggerHandle:
     """Return an opaque logging-port handle for *name*.
 
@@ -175,115 +198,96 @@ def _emit(
         method(message, exc_info=exc_info, stack_info=False)
 
 
-def log_debug(
-    logger: LoggerHandle,
-    template: str,
-    *args: object,
-    exc_info: object | None = None,
-) -> None:
-    """Format and emit a DEBUG log message through the port.
+def _make_log_wrapper(
+    config: _LogWrapperConfig,
+    *,
+    summary: str,
+) -> _LogWrapper:
+    """Build a documented public wrapper bound to one backend level."""
 
-    Parameters
-    ----------
-    logger : LoggerHandle
-        Opaque handle returned by :func:`get_logger`.
-    template : str
-        Percent-style format string for the log message.
-    *args : object
-        Arguments interpolated into the template.
-    exc_info : object | None, optional
-        Exception information to attach to the log record.
-    """
-    _emit(logger, _LogCall(logging.DEBUG, "debug", template, args, exc_info))
+    def emit(
+        logger: LoggerHandle,
+        template: str,
+        *args: object,
+        exc_info: object | None = config.default_exc_info,
+    ) -> None:
+        _emit(
+            logger,
+            _LogCall(
+                config.level,
+                config.convenience_method,
+                template,
+                args,
+                exc_info,
+            ),
+        )
 
-
-def log_info(
-    logger: LoggerHandle,
-    template: str,
-    *args: object,
-    exc_info: object | None = None,
-) -> None:
-    """Format and emit an INFO log message.
-
-    Parameters
-    ----------
-    logger : LoggerHandle
-        Opaque handle returned by :func:`get_logger`.
-    template : str
-        Percent-style format string for the log message.
-    *args : object
-        Arguments interpolated into the template.
-    exc_info : object | None, optional
-        Exception info to attach to the log record.
-    """
-    _emit(logger, _LogCall(logging.INFO, "info", template, args, exc_info))
-
-
-def log_warning(
-    logger: LoggerHandle,
-    template: str,
-    *args: object,
-    exc_info: object | None = None,
-) -> None:
-    """Format and emit a WARNING log message.
-
-    Parameters
-    ----------
-    logger : LoggerHandle
-        Opaque handle returned by :func:`get_logger`.
-    template : str
-        Percent-style format string for the log message.
-    *args : object
-        Arguments interpolated into the template.
-    exc_info : object | None, optional
-        Exception info to attach to the log record.
-    """
-    _emit(logger, _LogCall(logging.WARNING, "warning", template, args, exc_info))
+    emit.__name__ = config.name
+    emit.__qualname__ = config.name
+    exception_description = "Exception information to attach to the log record."
+    if config.default_exc_info is True:
+        exception_description += " Defaults to ``True`` to record the active exception."
+    emit.__doc__ = (
+        f"{summary}\n\n"
+        "Parameters\n"
+        "----------\n"
+        "logger : LoggerHandle\n"
+        "    Opaque handle returned by :func:`get_logger`.\n"
+        "template : str\n"
+        "    Percent-style format string for the log message.\n"
+        "*args : object\n"
+        "    Arguments interpolated into the template.\n"
+        "exc_info : object | None, optional\n"
+        f"    {exception_description}\n\n"
+        "Returns\n"
+        "-------\n"
+        "None\n"
+        "    This wrapper emits the message without returning a value."
+    )
+    return emit
 
 
-def log_error(
-    logger: LoggerHandle,
-    template: str,
-    *args: object,
-    exc_info: object | None = None,
-) -> None:
-    """Format and emit an ERROR log message.
-
-    Parameters
-    ----------
-    logger : LoggerHandle
-        Opaque handle returned by :func:`get_logger`.
-    template : str
-        Percent-style format string for the log message.
-    *args : object
-        Arguments interpolated into the template.
-    exc_info : object | None, optional
-        Exception info to attach to the log record.
-    """
-    _emit(logger, _LogCall(logging.ERROR, "error", template, args, exc_info))
-
-
-def log_exception(
-    logger: LoggerHandle,
-    template: str,
-    *args: object,
-    exc_info: object | None = True,
-) -> None:
-    """Format and emit an exception record with traceback information.
-
-    Parameters
-    ----------
-    logger : LoggerHandle
-        Opaque handle returned by :func:`get_logger`.
-    template : str
-        Percent-style format string for the log message.
-    *args : object
-        Arguments interpolated into the template.
-    exc_info : object | None, optional
-        Exception information to attach. Defaults to ``True`` so the active
-        exception is recorded.
-    """
-    _emit(logger, _LogCall(logging.ERROR, "exception", template, args, exc_info))
+log_debug: _LogWrapper = _make_log_wrapper(
+    _LogWrapperConfig(
+        name="log_debug",
+        level=logging.DEBUG,
+        convenience_method="debug",
+    ),
+    summary="Format and emit a DEBUG message through the logging port.",
+)
+log_info: _LogWrapper = _make_log_wrapper(
+    _LogWrapperConfig(
+        name="log_info",
+        level=logging.INFO,
+        convenience_method="info",
+    ),
+    summary="Format and emit an INFO message through the logging port.",
+)
+log_warning: _LogWrapper = _make_log_wrapper(
+    _LogWrapperConfig(
+        name="log_warning",
+        level=logging.WARNING,
+        convenience_method="warning",
+    ),
+    summary="Format and emit a WARNING message through the logging port.",
+)
+log_error: _LogWrapper = _make_log_wrapper(
+    _LogWrapperConfig(
+        name="log_error",
+        level=logging.ERROR,
+        convenience_method="error",
+    ),
+    summary="Format and emit an ERROR message through the logging port.",
+)
+log_exception: _LogWrapper = _make_log_wrapper(
+    _LogWrapperConfig(
+        name="log_exception",
+        level=logging.ERROR,
+        convenience_method="exception",
+        default_exc_info=True,
+    ),
+    summary="Format and emit an exception message with traceback data.",
+)
 
 
 # Keep the raw backend private to this module. The public structured-event

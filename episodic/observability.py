@@ -174,7 +174,7 @@ class StructuredLogMetrics:
     ) -> None:
         """Emit one bounded counter observation."""
         _emit_structured_event(
-            self.logger, "metric_counter", metric_name=name, **labels
+            self.logger, "metric_counter", metric_name=name, labels=dict(labels)
         )
 
     def observe_latency_ms(
@@ -211,7 +211,7 @@ class StructuredLogMetrics:
             event_name,
             metric_name=name,
             value=str(value),
-            **labels,
+            labels=dict(labels),
         )
 
 

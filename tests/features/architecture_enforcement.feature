@@ -53,4 +53,4 @@ Feature: Architecture enforcement
     Then the architecture check fails
     And the architecture diagnostic mentions "ARCH001"
     And the architecture diagnostic mentions "api"
-    And the architecture diagnostic mentions "femtologging"
+    And the architecture report contains a violation of "femtologging" imported by fixture module "api"

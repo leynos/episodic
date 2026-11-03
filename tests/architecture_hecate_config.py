@@ -15,6 +15,7 @@ assert result.returncode == 1
 ```
 """
 
+import json
 import subprocess  # ruff: ignore[suspicious-subprocess-import]  # Tests exercise the Hecate CLI contract.
 import sys
 import typing as typ
@@ -53,6 +54,24 @@ class HecateInvocationError(RuntimeError):
             else f"failed to invoke Hecate for {context}"
         )
         super().__init__(message)
+
+
+def has_violation(
+    stdout: str,
+    *,
+    importer: str,
+    imported: str,
+    rule_id: str | None = None,
+) -> bool:
+    """Match a structured Hecate violation by import edge and optional rule."""
+    report = typ.cast("dict[str, object]", json.loads(stdout))
+    violations = typ.cast("list[dict[str, object]]", report["violations"])
+    return any(
+        violation.get("importer") == importer
+        and violation.get("imported") == imported
+        and (rule_id is None or violation.get("rule_id") == rule_id)
+        for violation in violations
+    )
 
 
 def write_fixture_config(

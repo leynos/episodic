@@ -12,14 +12,13 @@ contract.
 from __future__ import annotations
 
 import dataclasses as dc
-import json
 import subprocess  # ruff: ignore[suspicious-subprocess-import, typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
-import typing as typ
 from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 
 import pytest
 from architecture_hecate_config import (
     LOGGING_PORT_FIXTURE,
+    has_violation,
     run_hecate_fixture_check,
     write_fixture_config,
 )
@@ -154,14 +153,27 @@ def architecture_diagnostic_mentions(
     completed_process = context.completed_process
     assert completed_process is not None, "checker did not run"
     output = f"{completed_process.stdout}\n{completed_process.stderr}"
-    if context.package_name == LOGGING_PORT_FIXTURE and expected_text == "femtologging":
-        report = typ.cast("dict[str, object]", json.loads(completed_process.stdout))
-        violations = typ.cast("list[dict[str, object]]", report["violations"])
-        assert any(
-            violation.get("imported") == expected_text
-            and violation.get("importer")
-            == f"tests.fixtures.architecture.{LOGGING_PORT_FIXTURE}.api"
-            for violation in violations
-        ), f"expected imported module {expected_text!r} in {output!r}"
-        return
     assert expected_text in output, f"expected {expected_text!r} in {output!r}"
+
+
+@then(
+    parsers.parse(
+        'the architecture report contains a violation of "{imported}" '
+        'imported by fixture module "{module_name}"'
+    )
+)
+def architecture_report_contains_violation(
+    context: ArchitectureContext,
+    imported: str,
+    module_name: str,
+) -> None:
+    """Assert a structured Hecate violation matches the expected import edge."""
+    completed_process = context.completed_process
+    assert completed_process is not None, "checker did not run"
+    importer = f"tests.fixtures.architecture.{context.package_name}.{module_name}"
+    assert has_violation(
+        completed_process.stdout,
+        importer=importer,
+        imported=imported,
+        rule_id="ARCH001",
+    ), f"expected ARCH001 for {importer} importing {imported}"

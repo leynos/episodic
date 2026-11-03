@@ -1233,6 +1233,18 @@ make check-architecture
 `[tool.hecate]` from `pyproject.toml` and reports diagnostics as `ARCH001` with
 the importer, imported module, and dependency direction.
 
+The `logging_port` and `logging_backend` groups precede `external_libraries`,
+so first-match prefix selection keeps `femtologging` restricted to the port.
+The production policy tracks third-party imports with
+`include_external_packages = true`; fixture tests assert the ordering to guard
+against a broad prefix shadowing the logging rule.
+
+Direct logger-method calls are also rejected by two checks. `LoggerHandle`
+omits backend level methods, so `ty` reports a type error for direct calls. A
+production-tree scanner rejects standard-library `logging` imports outside
+`episodic.logging`, including aliased imports that a receiver-name pattern
+would miss.
+
 The enforced groups are:
 
 - `logging_port`: the public `episodic.logging` seam used by every package.
@@ -1312,6 +1324,20 @@ same prefix Hecate will classify in production. Use
 Celery task checks, and `orchestration/_checkpoint_payload.py` for checkpoint
 payload checks. Snapshot JSON diagnostics only after normalizing workspace
 paths.
+
+### Targeted type checking
+
+`make typecheck` checks the configured project paths with the pinned `ty`
+version. `TY_VERSION` selects that version; `make typecheck-path` checks one
+explicit fixture or module using `TY_CHECK_PATH`:
+
+```shell
+make typecheck-path TY_CHECK_PATH=tests/fixtures/typecheck/logging_handle_direct_call.py
+```
+
+`TY_CHECK_PATH` is required. If it is empty, the target exits with status 2
+before invoking `ty`; negative fixtures stay outside the regular
+`make typecheck` scope and can be checked in isolation.
 
 ### TEI payload compression
 
@@ -2730,6 +2756,9 @@ production tree so a regression reports every offending file. The port group
 does not allow the broad `external_libraries` group, keeping its dependencies
 limited to its backend and private type support.
 
+The architectural decision and its consequences are recorded in
+[ADR-025](adr/adr-025-central-logging-port.md).
+
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:
 
@@ -2795,13 +2824,24 @@ The `force` parameter is forwarded directly to `femtologging.basicConfig`.
 
 ### Internal protocol interfaces
 
-Two private Protocol types define the logger surface consumed by helper
-functions:
+Two private Protocol types define the backend logger surface wrapped by
+`LoggerHandle`. `_SupportsConvenienceLog` lives in `episodic/_logging_types.py`;
+`_SupportsLogMethod` lives in `episodic/logging.py`:
 
-- `_SupportsConvenienceLog` — objects exposing the three stdlib-style
-  convenience methods:
+- `_SupportsConvenienceLog` — objects exposing the five stdlib-style
+  convenience methods (`debug`, `info`, `warning`, `error`, `exception`):
 
   ```python
+  def debug(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
+
+
   def info(
       self,
       message: str,
@@ -2830,6 +2870,16 @@ functions:
       exc_info: object | None = None,
       stack_info: bool = False,
   ) -> None: ...
+
+
+  def exception(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
   ```
 
 - `_SupportsLogMethod` — objects exposing the generic stdlib-style entry
@@ -2851,13 +2901,10 @@ functions:
 
 In every signature, the message (and `level` plus message for `log`) are
 positional-only before `/`, and `exc_info` and `stack_info` are keyword-only
-after `*`. Adapter authors must implement the full surface — including the
-`exc_info` and `stack_info` keyword-only parameters — for the helpers to call
-them correctly.
-
-Custom logger adapters passed to `log_info`, `log_warning`, or `log_error` must
-satisfy `_SupportsConvenienceLog`. Code that calls `log_at_level` must satisfy
-`_SupportsLogMethod`.
+after `*`. Backend adapters stored inside `LoggerHandle` must implement the
+full surface, including both keyword-only parameters. Call sites obtain a
+`LoggerHandle` from `get_logger` and pass it to the public logging helpers;
+they do not pass a backend adapter directly.
 
 ## Asyncio task utilities
 

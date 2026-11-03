@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from architecture_hecate_config import (
     LOGGING_PORT_FIXTURE,
+    has_violation,
     run_hecate_fixture_check,
     run_hecate_production_check,
     write_fixture_config,
@@ -229,14 +230,12 @@ def test_checker_rejects_femtologging_outside_logging_port(
 
     rendered = _render_process(completed_process)
     assert completed_process.returncode == 1, rendered
-    report = typ.cast("dict[str, object]", json.loads(completed_process.stdout))
-    violations = typ.cast("list[dict[str, object]]", report["violations"])
     expected_importer = _fixture_module(LOGGING_PORT_FIXTURE, "api")
-    assert any(
-        violation.get("rule_id") == "ARCH001"
-        and violation.get("importer") == expected_importer
-        and violation.get("imported") == "femtologging"
-        for violation in violations
+    assert has_violation(
+        completed_process.stdout,
+        rule_id="ARCH001",
+        importer=expected_importer,
+        imported="femtologging",
     ), f"expected ARCH001 for {expected_importer} importing femtologging in {rendered}"
 
 
