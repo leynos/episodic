@@ -555,9 +555,9 @@ full_name = [
     "alembic.versions.20260624_000010_add_generation_run_tables._drop_generation_events_table",
     "alembic.versions.20261020_000014_add_review_checkpoints._drop_enums",
     "alembic.versions.20261020_000014_add_review_checkpoints._drop_review_checkpoints_table",
-    "alembic.versions.20261031_000014_add_qa_artefact_tables._drop_enums",
-    "alembic.versions.20261031_000014_add_qa_artefact_tables._drop_qa_evaluations_table",
-    "alembic.versions.20261031_000014_add_qa_artefact_tables._drop_qa_findings_table",
+    "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_enums",
+    "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_qa_evaluations_table",
+    "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_qa_findings_table",
 ]
 reason = "Alembic invokes these downgrade helpers when an operator rolls migration revisions back."
 

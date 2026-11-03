@@ -7,8 +7,8 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision = "20261031_000014"
-down_revision = "20261010_000013"
+revision = "20261031_000016"
+down_revision = "20261020_000015"
 branch_labels = None
 depends_on = None
 

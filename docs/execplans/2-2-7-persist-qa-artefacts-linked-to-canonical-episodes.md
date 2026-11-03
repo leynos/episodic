@@ -114,7 +114,7 @@ Stop and escalate when any of these is reached.
   (`docs/episodic-podcast-generation-system-design.md`, Data Model and Storage
   section), whereas this plan proposes `qa_evaluations` + `qa_findings` with
   compliance as a column. Severity: medium. Likelihood: high (it is a
-  deliberate deviation). Mitigation: record the deviation in ADR 024, update
+  deliberate deviation). Mitigation: record the deviation in ADR 025, update
   the design document's Data Model bullet in the same change, and trace it in
   `Conformance basis`.
 - Risk: `episodic/qa/__init__.py` unconditionally imports the LangGraph
@@ -127,7 +127,7 @@ Stop and escalate when any of these is reached.
 - Risk: `ERRORED` has **no production producer** in this slice, because
   evaluators are not wired into the run path. It is exercised only by the
   recording service's failure entry point and by tests. Severity: low.
-  Likelihood: certain. Mitigation: state this plainly in ADR 024 and in the
+  Likelihood: certain. Mitigation: state this plainly in ADR 025 and in the
   developers' guide rather than implying an end-to-end producer exists. The
   status is still worth modelling now because adding a PostgreSQL enum value
   later is a two-deploy operation (`ALTER TYPE ... ADD VALUE` cannot use the
@@ -136,7 +136,7 @@ Stop and escalate when any of these is reached.
   today. Severity: low. Likelihood: high. Mitigation: the column is nullable,
   is exercised directly by repository round-trip and property tests (where the
   repository, not an evaluator, is the unit under test), and the absence of a
-  producer is stated explicitly in the developers' guide and ADR 024.
+  producer is stated explicitly in the developers' guide and ADR 025.
 - Risk: `make check-migrations` cannot verify what this schema most depends on.
   `episodic/canonical/storage/migration_check.py` uses Alembic
   `compare_metadata`, which does **not** compare `CHECK` constraints or foreign
@@ -684,7 +684,7 @@ Stop and escalate when any of these is reached.
     limit): one finding, upheld and repaired. The plan still asserted the
     superseded unauthenticated-404 contract in four places — the "Where things
     are today" authorization bullet, the `EP-M4` conformance check, the
-    `HTTP contract (EP-M4)` section (which also instructed ADR 024 to record
+    `HTTP contract (EP-M4)` section (which also instructed ADR 025 to record
     that divergence), and the `EP-M5` CLI contract. All four now state the
     401-from-middleware / 404-for-an-authenticated-non-owner split recorded in
     the Decision log. The review confirmed the round-2 repairs correct and
@@ -834,14 +834,14 @@ Stop and escalate when any of these is reached.
     `2026-11-01T02:05`. The next review therefore started after that cooldown,
     not at the 18-minute mark the earlier note predicted.
   - Self-found gap, repaired at `886cc69e` (2026-11-01): reconciling the plan
-    and ADR 024 for `EP-M6` showed that no reader checked the stored
+    and ADR 025 for `EP-M6` showed that no reader checked the stored
     `artefact_schema_version`, although the plan's versioning semantics and
     the ADR both require a loud failure. `UnsupportedQaArtefactSchemaError` is
     now raised by the record mapper when a row is newer than this release
     reads, and both retrieval routes answer `422
     qa_artefact_schema_unsupported`; the detail route checks episode ownership
     first, so a foreign caller still sees the ordinary 404. The same change
-    documented the persistence contract and the CLI boundary (ADR 024, ADR
+    documented the persistence contract and the CLI boundary (ADR 025, ADR
     025), updated the design document, both guides, `docs/contents.md`, and
     the roadmap (`63203c7c`).
   - Gate sweep 8 (schema and documentation commits, scrutineer, exclusive,
@@ -857,7 +857,7 @@ Stop and escalate when any of these is reached.
     `/tmp/coderabbit-epm6-ToCZYc/coderabbit-review.out`. Repair commit
     `7e8f9890`.
   - Milestone CLI review round 5 at `7e8f9890` (exit 0, `review_completed`):
-    one finding, upheld and repaired. ADR 025 said the `cyclopts` version "is
+    one finding, upheld and repaired. ADR 026 said the `cyclopts` version "is
     pinned", but the manifest declares the bounded range `>=4.25.2,<5`; the
     ADR now says bounded. Evidence
     `/tmp/coderabbit-epm6-PZn2pL/coderabbit-review.out`. Repair commit
@@ -939,27 +939,27 @@ Stop and escalate when any of these is reached.
     `make markdownlint` pass. The same sweep repaired a spelling violation the
     plan itself carried (an `-ise` spelling of *serialize*), which the
     spelling gate rejected.
-  - Implementation (2026-11-01, commit `63203c7c`): ADR 024 records the
+  - Implementation (2026-11-01, commit `63203c7c`): ADR 025 records the
     persistence contract — the unified table with a findings child, the
     compliance taxonomy, both version columns and what each bump obliges, the
     single errored-supersession exception, cost correlation rather than
     duplication, the retention posture, the two-deploy note for extending the
-    evaluator enum, and the considered alternatives. ADR 025 records the CLI
+    evaluator enum, and the considered alternatives. ADR 026 records the CLI
     boundary — REST client rather than database client, `cyclopts` as a bounded
     runtime dependency, the dedicated Hecate group, authentication through
     `--token` or the environment, the output and exit-code policy, and the
     provisional noun structure. Both ADRs are indexed in `docs/contents.md`.
     The design document's *Data Model and Storage* bullet now names
-    `qa_evaluations` and its `qa_findings` children and links ADR 024;
+    `qa_evaluations` and its `qa_findings` children and links ADR 025;
     `docs/developers-guide.md` gains the QA-artefact persistence subsection and
     a *Command-line interface* section; `docs/users-guide.md` names both
     retrieval routes and gives a CLI worked example; `docs/roadmap.md` marks
     `2.2.7` `[x]` with the delivered outcome in the neighbouring style.
-    ADR 024 also names ADR 001's follow-on obligation for versioning guarantees
+    ADR 025 also names ADR 001's follow-on obligation for versioning guarantees
     as discharged.
   - Conformance check, run against the tree at `b246a428` plus the
     documentation repair above:
-    - Every deviation in `Decision log` is recorded in ADR 024, ADR 025, or the
+    - Every deviation in `Decision log` is recorded in ADR 025, ADR 026, or the
       design document; the qualitative deviations without an ADR home (the
       rubric-quantization rule and the deferred-implementation retention rule)
       are recorded in `docs/developers-guide.md`, which the milestones named.
@@ -967,7 +967,7 @@ Stop and escalate when any of these is reached.
       feature file, ADR, and design-document section exists at the path given.
     - ADR 001's open item — record versioning and compatibility guarantees in a
       follow-on ADR if evaluator results are persisted or exposed — is
-      discharged by ADR 024, which now says so and links back.
+      discharged by ADR 025, which now says so and links back.
     - `docs/roadmap.md` item `2.2.7` is `[x]`, and the design document's *Data
       Model and Storage* bullet names the tables actually created.
   - Acceptance evidence `EV-M6-docs`: `make check-fmt`, `make markdownlint`, and
@@ -1057,8 +1057,8 @@ Stop and escalate when any of these is reached.
       now lists it under `execplans/`, before the `2.2.7` REST-endpoints entry.
     - F2 and F3 (partly upheld, repaired): the prerequisite list said ADR 018
       discharges ADR 001's closing item. ADR 018 is the reference-binding
-      versioning record and does not mention that item; ADR 024 records itself
-      as the follow-on, so the reference now says ADR 024. The same finding
+      versioning record and does not mention that item; ADR 025 records itself
+      as the follow-on, so the reference now says ADR 025. The same finding
       asked for the colliding ADR 015 documents to be renumbered. Rejected as
       out of scope: the collision predates this branch — the three `adr-015-*`
       files landed on `main` in June 2026 — and the path this plan cites
@@ -1088,7 +1088,7 @@ Stop and escalate when any of these is reached.
     `CliError` and its exit-coded subclasses, and
     `episodic/cli/responses.py` owns the status-code-to-error translation.
     `client.py` is 312 lines and holds only the `httpx` client and its option
-    resolution; the developers' guide, ADR 025, and this plan's module list
+    resolution; the developers' guide, ADR 026, and this plan's module list
     name the new files.
   - Post-delivery CodeRabbit CLI review round 16 at `a54223c7` (`coderabbit`
     0.9.2, exit 0, `review_completed`, 81 reviewed paths, no rate limit). Five
@@ -1195,7 +1195,7 @@ Stop and escalate when any of these is reached.
     per deleted run. The partial index
     `ix_qa_evaluations_generation_run_id` is now created in the migration,
     declared in `QaEvaluationRecord.__table_args__`, and dropped by the
-    downgrade, and ADR 024 states the rationale. Because this is the first
+    downgrade, and ADR 025 states the rationale. Because this is the first
     migration change since the round-13 sweep, the repair is re-swept with
     `check-migrations` included.
   - Gate evidence on the round-19 repair, pinned at `3e13bf0a`, seven targets
@@ -1276,7 +1276,7 @@ Stop and escalate when any of these is reached.
     `minor` documentation finding, upheld and repaired: this plan's *Database
     schema (EP-M2)* section still created two indexes and said "Two indexes",
     and the *Performance* criterion repeated the count, even though round 19
-    delivered `ix_qa_evaluations_generation_run_id` and ADR 024 and the
+    delivered `ix_qa_evaluations_generation_run_id` and ADR 025 and the
     migration both record it. The SQL block now carries the partial index, the
     prose explains why it has no sort key and why the `WHERE` clause keeps it
     small, and the *Performance* criterion counts three indexes and says what
@@ -1407,9 +1407,25 @@ Stop and escalate when any of these is reached.
       The live walkthrough therefore migrated with `postgresql+psycopg://`.
       This predates item 2.2.7 and is outside its scope; it is recorded in
       *Surprises & discoveries* rather than fixed here.
+- Rebase onto the PR target (2026-11-03): the branch was replayed from
+  `a78273d3` onto `origin/main` at `d7d8fde0` (71 commits, one dropped as
+  empty). Main had landed `20261020_000014`, `20261020_000015`, and ADR 024
+  while this plan was in review, so the QA artefact migration was renumbered
+  `20261031_000014` → `20261031_000016` (chained off `20261020_000015`) and
+  the two ADRs moved 024/025 → 025/026. `alembic heads` reports the single
+  head `20261031_000016`; `tests/canonical_storage/test_qa_artefact_migration.py`
+  and `tests/test_pricing_snapshot_constraint_migration.py` pass (17 passed,
+  2 snapshots). The dropped commit is recorded under *Surprises & discoveries*.
 
 ## Surprises & discoveries
 
+- Observation (2026-11-03): the commit `356361f9 Refresh generated typos
+  configuration` replayed empty during the rebase onto `d7d8fde0`, because
+  main already carries the identical `typos.toml` (`git diff --quiet d7d8fde0
+  -- typos.toml` is clean). It was dropped with `git rebase --skip` rather than
+  kept as an empty commit. Impact: the rebased series has 70 commits where the
+  original had 71; no tracked content is lost, and `make spelling` still
+  regenerates the same file.
 - Observation: the `qa_findings` unique constraint on
   `(evaluation_id, ordinal)` makes a `WHERE evaluation_id = ...` query return
   rows in ordinal order even with no `ORDER BY`, because that index is the
@@ -1499,7 +1515,7 @@ Stop and escalate when any of these is reached.
   around lines 93 and 290); `generation_events.generation_run_id` is `NOT NULL`
   with no episode foreign key. QA recording happens after a run completes, or
   with no run at all. Impact: rules out the "just use the event log"
-  alternative on evidence, not taste. Record it in ADR 024 so the question is
+  alternative on evidence, not taste. Record it in ADR 025 so the question is
   not reopened.
 - Observation: no repository test runs one contract suite over both an
   in-memory fake and a SQL adapter. Evidence:
@@ -1537,10 +1553,20 @@ Stop and escalate when any of these is reached.
 - Observation (execution, 2026-10-29): ADR numbers 018 and 019 were already
   taken — `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` and
   `docs/adr/adr-019-episode-tei-revision-history.md` — and the highest existing
-  ADR is 023. Impact: the two ADRs this plan creates are **024**
-  (`adr-024-qa-artefact-persistence-contract.md`) and **025**
-  (`adr-025-cli-client-boundary.md`). This revision renumbers every reference;
+  ADR is 023. Impact: the two ADRs this plan creates are **025**
+  (`adr-025-qa-artefact-persistence-contract.md`) and **026**
+  (`adr-026-cli-client-boundary.md`). This revision renumbers every reference;
   no design decision changed.
+- Observation (execution, 2026-11-03): the branch was rebased onto
+  `origin/main` at `d7d8fde0`, which had landed ADR 024 (review checkpoint
+  persistence) and Alembic revisions `20261020_000014` and `20261020_000015`
+  while this plan was in review. Impact: the two ADRs this plan creates moved
+  from 024/025 to **025** (`adr-025-qa-artefact-persistence-contract.md`) and
+  **026** (`adr-026-cli-client-boundary.md`), and the QA artefact migration
+  moved from `20261031_000014` to `20261031_000016`, chained off
+  `20261020_000015`. Every reference in this plan was renumbered in the same
+  pass; no design decision changed. Progress entries written before the rebase
+  describe the pre-rebase numbering, and their evidence is unchanged.
 - Observation (execution, 2026-10-29): the barrel slimming is sufficient on its
   own. `episodic/qa/pedante/__init__.py` imports `.evaluator`, which imports
   `episodic.llm`, but `episodic/llm/__init__.py` re-exports only
@@ -1694,7 +1720,7 @@ Stop and escalate when any of these is reached.
   the roadmap (Anthem, item `2.2.4`, unimplemented). Building a second table
   for a producer that does not exist is speculative generality, and it would
   make the roadmap's own requirement — "retrieval … filtered by evaluator and
-  compliance status" — a union query across two tables. Recorded as ADR 024;
+  compliance status" — a union query across two tables. Recorded as ADR 025;
   the design document's Data Model bullet is updated in the same change.
   Date/Author: 2026-08-23, planning agent. **Deviation status: accepted.** This
   is a deviation from `TDD-DATA`, which names `qa_findings` and
@@ -1702,14 +1728,14 @@ Stop and escalate when any of these is reached.
   `RM-2.2.7-b`. Downstream impact: `EP-M2`'s schema, `EP-M4`'s filter contract,
   and the design document's Data Model bullet, which `EP-M6` must rewrite to
   name the tables actually created. Upstream document changes required:
-  `docs/episodic-podcast-generation-system-design.md` plus a new ADR 024.
+  `docs/episodic-podcast-generation-system-design.md` plus a new ADR 025.
   Accepted by leynos, 2026-08-23. `EP-M6` may not be marked complete until both
   upstream edits have landed.
 - Decision: keep a child `qa_findings` table rather than a JSONB findings array
   on the evaluation row. Rationale: roadmap items `4.4.1` and `4.4.2` aggregate
   findings across evaluators and drive refinement turns from individual
   findings, so findings need stable identifiers and cross-episode queryability
-  within two roadmap items. Recorded with its trade-off in ADR 024: if `EP-M2`
+  within two roadmap items. Recorded with its trade-off in ADR 025: if `EP-M2`
   proves the child table costly, collapsing to a JSONB array is a legitimate
   retreat. Date/Author: 2026-08-23, planning agent.
 - Decision: store `compliance_status` rather than deriving it at read time.
@@ -1733,7 +1759,7 @@ Stop and escalate when any of these is reached.
   `running` have no representable state. `superseded` is handled by the
   errored-supersession rule below plus ordering by `evaluated_at`. A single
   column keeps the roadmap's "filtered by … compliance status" unambiguous. The
-  split is recorded in ADR 024 as the considered alternative, together with the
+  split is recorded in ADR 025 as the considered alternative, together with the
   trigger that would justify it: an evaluator that reports partial results.
   Date/Author: 2026-08-23, planning agent.
 - Decision: `not_applicable` means "this evaluator renders no compliance
@@ -1742,7 +1768,7 @@ Stop and escalate when any of these is reached.
   thresholds land, Chrono rows recorded under `compliance_policy_version = 1`
   remain accurate *for that policy*; new rows carry a later policy version and
   a real verdict. Without the policy version this would be a mislabelling that
-  forces a backfill; with it, it is a versioned statement. ADR 024 must state
+  forces a backfill; with it, it is a versioned statement. ADR 025 must state
   the semantics in exactly these words. Date/Author: 2026-08-23, planning agent.
 - Decision: do not store token usage on the QA artefact. Correlate to the cost
   ledger through `generation_run_id` plus the `provider_response_id` carried in
@@ -1767,7 +1793,7 @@ Stop and escalate when any of these is reached.
   alongside the web console, and `docs/episodic-tui-api-design.md` fixes the
   authentication, error, and pagination contracts that clients use. A CLI that
   opened its own unit of work would create a second persistence entry point
-  with its own authorization story. Recorded as ADR 025, which also gives
+  with its own authorization story. Recorded as ADR 026, which also gives
   `episodic.cli` its own Hecate group so the boundary is enforced rather than
   merely intended. Date/Author: 2026-08-23, planning agent.
 - Decision: ship only `episodic qa evaluations list` in this slice; do not add
@@ -1775,7 +1801,7 @@ Stop and escalate when any of these is reached.
   which `list` satisfies. `GET /v1/qa-evaluations/{evaluation_id}` still serves
   the Terminal User Interface (TUI) client. Roadmap item `4.6.1` extends the
   CLI; the top-level noun structure is provisional until a second command group
-  lands, and ADR 025 says so. Date/Author: 2026-08-23, planning agent.
+  lands, and ADR 026 says so. Date/Author: 2026-08-23, planning agent.
 - Decision: populate the `qa_evaluator` enum with all six evaluators named in
   the design document (Pedante, Bromide, Chiltern, Anthem, Caesura, Chrono)
   even though four are unimplemented. Rationale: `ALTER TYPE ... ADD VALUE`
@@ -1794,7 +1820,7 @@ Stop and escalate when any of these is reached.
   2026-08-23, planning agent.
 - Decision (pre-authorized escalation): if `EP-M5` exceeds 6 production
   modules or 500 net production lines, stop and split the CLI **bootstrap** —
-  `episodic/cli/__init__.py`, `app.py`, `client.py`, `rendering.py`, ADR 025,
+  `episodic/cli/__init__.py`, `app.py`, `client.py`, `rendering.py`, ADR 026,
   the `[project.scripts]` change, the `cyclopts` promotion, and the users'
   guide *Getting Started* section — into a new roadmap addendum item `2.2.8`,
   "Bootstrap the first-party CLI client", and mark `2.2.7` as requiring it.
@@ -1954,12 +1980,20 @@ Stop and escalate when any of these is reached.
   implementation agent. **Deviation status: accepted** — the change is
   test-structure only and touches no production behaviour.
 - Decision: the QA artefact migration is
-  `alembic/versions/20261031_000014_add_qa_artefact_tables.py`, with
-  `revision = "20261031_000014"` and `down_revision = "20261010_000013"`.
+  `alembic/versions/20261031_000016_add_qa_artefact_tables.py`, with
+  `revision = "20261031_000016"` and `down_revision = "20261020_000015"`.
   Rationale: the milestone entry asks for the filename and revision to be
   re-dated to the day the migration is written, and `alembic heads` reports
   this revision as the only head. Date/Author: 2026-10-31, implementation
   agent. **Deviation status: none** — the re-dating is what the plan requires.
+  **Revised 2026-11-03:** the branch was rebased onto `origin/main` at
+  `d7d8fde0`, which had meanwhile landed `20261020_000014` and
+  `20261020_000015`. The original `20261031_000014` therefore collided with a
+  landed revision and was renumbered to `20261031_000016`, chained off
+  `20261020_000015`. The date prefix is unchanged; only the sequence number
+  moved. The two ADRs this plan introduces were renumbered from 024/025 to
+  025/026 for the same reason: main landed ADR 025 (review checkpoint
+  persistence).
 - Decision: supersession replaces findings in two flushes — delete, then
   insert — rather than assigning a fresh collection. Rationale: see the
   flush-ordering observation above; the single-flush form cannot satisfy the
@@ -2292,7 +2326,7 @@ REST API and a first-party CLI.
   placeholder tables the design originally carried.
 - ADR 001's open item — record the versioning and compatibility guarantees
   that apply once evaluator results are persisted or exposed — is discharged by
-  ADR 024, which names the two version columns, the reader-side schema check,
+  ADR 025, which names the two version columns, the reader-side schema check,
   and the single errored-supersession exception as those guarantees and links
   back to ADR 001.
 - `docs/roadmap.md` item `2.2.7` is `[x]`.
@@ -2318,7 +2352,7 @@ REST API and a first-party CLI.
   the column nulls on run-history purge, so a purge scanned the whole table
   once per deleted run. The partial index `ix_qa_evaluations_generation_run_id`
   now covers the non-null values in the migration, the model, and the
-  downgrade, and ADR 024's retention posture records why. Round 20's single
+  downgrade, and ADR 025's retention posture records why. Round 20's single
   minor finding corrected the deferred-implementation example: the developers'
   guide, this plan, and the six Skylos whitelist reasons credited the LangGraph
   graph builders to roadmap items `2.2.5` and `2.2.6`, but `2.2.5` is the
@@ -2603,7 +2637,7 @@ RM-2.2.7-a  -> TDD-DATA -> EP-M2 -> tests/canonical_storage/test_qa_artefacts.py
 RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_records_pedante_result
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)
 RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_cli_retrieval.feature (CLI scenarios)
-ADR-001(open item) -> EP-M6 -> docs/adr/adr-024-qa-artefact-persistence-contract.md
+ADR-001(open item) -> EP-M6 -> docs/adr/adr-025-qa-artefact-persistence-contract.md
 TDD-DATA(deviation, accepted 2026-08-23) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
 ```
 
@@ -2898,7 +2932,7 @@ list endpoint equals `len(findings)` returned by the detail endpoint.
 
 **INV-ENUM-TAXONOMY.** The value sets of `QaEvaluator`, `QaComplianceStatus`,
 and `QaFindingSeverity` are exactly those documented in the system design
-document and ADR 024.
+document and ADR 025.
 
 - Method: parameterized test against literal expected sets.
 - Rationale: the enums are persisted as PostgreSQL types; drift between code
@@ -3170,7 +3204,7 @@ fenced blocks.
      - `inbound_adapter`: `episodic.api.resources.qa_artefacts`.
      - New group `cli`, declared last: `prefixes = ["episodic.cli"]`,
        `allowed = ["cli", "domain_ports"]`. This is what actually enforces
-       ADR 025 — without it, `inbound_adapter` would let the CLI import the
+       ADR 026 — without it, `inbound_adapter` would let the CLI import the
        application services and the API package.
      Do **not** add `episodic.llm`; use `episodic.llm.ports`, which is already
      grouped. Hecate's re-export index resolves
@@ -3243,8 +3277,8 @@ fenced blocks.
     `__aenter__` and document it in the class docstring's `Attributes`.
   - `episodic/canonical/unit_of_work_protocols.py` — declare
     `qa_artefacts: QaArtefactRepository`.
-  - `alembic/versions/20261031_000014_add_qa_artefact_tables.py` — handwritten
-    migration with `down_revision = "20261010_000013"`. The filename and
+  - `alembic/versions/20261031_000016_add_qa_artefact_tables.py` — handwritten
+    migration with `down_revision = "20261020_000015"`. The filename and
     `revision` are dated to the day it was written; `alembic heads` reports it
     as the only head.
 - Acceptance evidence: `uv run pytest tests/canonical_storage -q` passes and
@@ -3412,7 +3446,7 @@ fenced blocks.
   describe the new behaviour, and the roadmap entry is marked done.
 - Requirements and gaps: `ADR-001` open item; `TDD-DATA` deviation.
 - Files added or changed:
-  - `docs/adr/adr-024-qa-artefact-persistence-contract.md` — new, following the
+  - `docs/adr/adr-025-qa-artefact-persistence-contract.md` — new, following the
     ADR template in `docs/documentation-style-guide.md`. Must cover: the
     unified `qa_evaluations` + `qa_findings` model; the compliance-status
     taxonomy and the exact meaning of `not_applicable`;
@@ -3425,7 +3459,7 @@ fenced blocks.
     `RunAlreadyTerminal` evidence), a JSONB findings array, a
     `lifecycle_status` plus `verdict` split, and derive-at-read compliance.
     Note that extending `qa_evaluator` later is a two-deploy operation.
-  - `docs/adr/adr-025-cli-client-boundary.md` — new. Covers the CLI as a REST
+  - `docs/adr/adr-026-cli-client-boundary.md` — new. Covers the CLI as a REST
     client, the `cyclopts` choice, the dedicated Hecate group that enforces the
     boundary, authentication via `--token`/environment, output-format policy,
     and an explicit statement that the top-level command noun structure is
@@ -3433,7 +3467,7 @@ fenced blocks.
   - `docs/episodic-podcast-generation-system-design.md` — replace the
     `qa_findings` and `brand_compliance_results` bullet in *Data Model and
     Storage* with the tables actually created; add a QA-artefact paragraph to
-    *Quality Assurance Stack* referencing ADR 024.
+    *Quality Assurance Stack* referencing ADR 025.
   - `docs/developers-guide.md` — extend *Quality-assurance evaluators* with a
     QA-artefact persistence subsection (module layout, maintainer rules, the
     versioning obligations, the fact that no evaluator populates `rubric_score`
@@ -3625,7 +3659,7 @@ class QaArtefactRepository(typ.Protocol):
 Return `tuple[list[...], int]` to match the repository's existing paged-listing
 convention (see `episodic/canonical/reference_documents/documents.py`).
 
-### Versioning semantics (EP-M1, formalized in ADR 024)
+### Versioning semantics (EP-M1, formalized in ADR 025)
 
 `artefact_schema_version` versions the **shape of the payload fields** —
 `evaluator_metadata`, `QaFinding.details`, and the interpretation of
@@ -4065,7 +4099,7 @@ each one mirrors: `episodic/canonical/storage/generation_runs.py` is 358 lines,
 | `episodic/canonical/storage/qa_artefact_mappers.py`          | 90–130        | none expected                                                                                                                |
 | `episodic/canonical/storage/qa_artefact_storage_runtime.py`  | 50–60         | none expected                                                                                                                |
 | `episodic/canonical/storage/qa_artefacts.py`                 | 350–450       | split reads into `qa_artefact_queries.py` (get, list, `_evaluation_filters`, count), leaving the savepoint write path behind |
-| `alembic/versions/20261031_000014_add_qa_artefact_tables.py` | 180–230       | none expected                                                                                                                |
+| `alembic/versions/20261031_000016_add_qa_artefact_tables.py` | 180–230       | none expected                                                                                                                |
 | `episodic/canonical/qa_artefact_recording.py`                | 250–320       | split per evaluator once Bromide or Anthem land                                                                              |
 | `episodic/canonical/qa_artefact_service.py`                  | 150–200       | none expected                                                                                                                |
 | `episodic/api/resources/qa_artefacts.py`                     | 200–280       | see below                                                                                                                    |
@@ -4380,7 +4414,7 @@ idempotency key gains a derivation rule, artefacts gain a documented
 errored-supersession exception, `rubric_score` gains a JSON representation, the
 store gains metrics and structured logging and a constraint-name-narrowed
 exception handler, the index set is rebuilt around the actual queries, and
-`episodic.cli` gains its own Hecate group so ADR 025 is enforced rather than
+`episodic.cli` gains its own Hecate group so ADR 026 is enforced rather than
 merely intended. The verification plan drops an infeasible
 `RuleBasedStateMachine` and a precedent that does not exist, replaces two
 negative controls that would have failed for the wrong reason, and adds seven

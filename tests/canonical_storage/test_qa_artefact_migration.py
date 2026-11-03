@@ -31,8 +31,8 @@ if typ.TYPE_CHECKING:
 else:
     type SessionFactory = object
 
-_QA_REVISION = "20261031_000014"
-_PREVIOUS_REVISION = "20261010_000013"
+_QA_REVISION = "20261031_000016"
+_PREVIOUS_REVISION = "20261020_000015"
 _TABLES = ("qa_evaluations", "qa_findings")
 _ENUMS = ("qa_evaluator", "qa_compliance_status", "qa_finding_severity")
 
