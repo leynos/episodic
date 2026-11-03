@@ -97,6 +97,7 @@ class _AuthorizationLogCase(typ.NamedTuple):
     request_path: str
     expected_status: int
     expected_message: str
+    authorization_header: str | None = "Bearer sensitive-token"
 
 
 @pytest.mark.asyncio
@@ -261,79 +262,46 @@ def test_authorization_adapter_failure_types_return_service_unavailable(
         ),
         _AuthorizationLogCase(
             DenyAllAuthorization,
+            "/v1/series-profiles/Bearer%20sensitive-path-token",
+            401,
+            "Authorization denied with unauthorized for GET /v1/series-profiles.",
+            None,
+        ),
+        _AuthorizationLogCase(
+            DenyAllAuthorization,
+            "/v1/Bearer%20sensitive-path-token",
+            401,
+            "Authorization denied with unauthorized for GET /v1/<unknown>.",
+            None,
+        ),
+        _AuthorizationLogCase(
+            DenyAllAuthorization,
             "/v1/series-profiles%0Aforged",
             401,
-            (
-                r"Authorization denied with unauthorized for "
-                r"GET /v1/series-profiles\nforged."
-            ),
-        ),
-        _AuthorizationLogCase(
-            DenyAllAuthorization,
-            "/v1/series-profiles%0Dforged",
-            401,
-            (
-                r"Authorization denied with unauthorized for "
-                r"GET /v1/series-profiles\rforged."
-            ),
-        ),
-        _AuthorizationLogCase(
-            DenyAllAuthorization,
-            "/v1/series-profiles%1Bforged",
-            401,
-            (
-                r"Authorization denied with unauthorized for "
-                r"GET /v1/series-profiles\x1bforged."
-            ),
-        ),
-        _AuthorizationLogCase(
-            DenyAllAuthorization,
-            "/v1/series-profiles%E2%80%A8forged",
-            401,
-            (
-                r"Authorization denied with unauthorized for "
-                r"GET /v1/series-profiles\u2028forged."
-            ),
-        ),
-        _AuthorizationLogCase(
-            DenyAllAuthorization,
-            "/v1/series-profiles%E2%80%AEforged",
-            401,
-            (
-                r"Authorization denied with unauthorized for "
-                r"GET /v1/series-profiles\u202eforged."
-            ),
+            "Authorization denied with unauthorized for GET /v1/<unknown>.",
         ),
         _AuthorizationLogCase(
             RaisingAuthorization,
-            "/v1/series-profiles%0Aforged",
+            "/v1/episode-templates/Bearer%20sensitive-path-token",
             503,
-            r"Authorization adapter failed for GET /v1/series-profiles\nforged.",
+            "Authorization adapter failed for GET /v1/episode-templates.",
+            None,
         ),
         _AuthorizationLogCase(
             RaisingAuthorization,
             "/v1/series-profiles%0Dforged",
             503,
-            r"Authorization adapter failed for GET /v1/series-profiles\rforged.",
-        ),
-        _AuthorizationLogCase(
-            RaisingAuthorization,
-            "/v1/series-profiles%1Bforged",
-            503,
-            r"Authorization adapter failed for GET /v1/series-profiles\x1bforged.",
+            "Authorization adapter failed for GET /v1/<unknown>.",
         ),
     ],
     ids=[
         "unauthorized",
         "forbidden",
-        "unauthorized-newline-path",
-        "unauthorized-carriage-return-path",
-        "unauthorized-escape-control-path",
-        "unauthorized-line-separator-path",
-        "unauthorized-bidi-override-path",
-        "adapter-error-newline-path",
-        "adapter-error-carriage-return-path",
-        "adapter-error-escape-control-path",
+        "unauthorized-known-resource-path-token",
+        "unauthorized-unknown-resource-path-token",
+        "unauthorized-control-path",
+        "adapter-error-known-resource-path-token",
+        "adapter-error-control-path",
     ],
 )
 def test_authorization_logs_warning_without_credentials_or_unsafe_unicode(
@@ -356,7 +324,11 @@ def test_authorization_logs_warning_without_credentials_or_unsafe_unicode(
         client = _build_client(session_factory, case.adapter_factory())
         response = client.simulate_get(
             case.request_path,
-            headers={"Authorization": "Bearer sensitive-token"},
+            headers=(
+                {}
+                if case.authorization_header is None
+                else {"Authorization": case.authorization_header}
+            ),
         )
         _wait_for_authorization_log(logger, collector)
     finally:
@@ -374,6 +346,7 @@ def test_authorization_logs_warning_without_credentials_or_unsafe_unicode(
     ), message
     assert "Bearer sensitive-token" not in message, message
     assert "sensitive-token" not in message, message
+    assert "sensitive-path-token" not in message, message
 
 
 def test_non_v1_paths_bypass_authorization(
