@@ -14,7 +14,20 @@ DIRECT_CALL_FIXTURE = (
     / "logging_handle_direct_call.py"
 )
 DIRECT_LOGGER_CALL_PATTERN = re.compile(
-    r"\b(?:logger|_log|_logger|effective_log)\.(?:debug|info|warning|error|critical|log)\("
+    r"\b(?:logger|_log|_logger|effective_log)\."
+    r"(?:debug|info|warning|warn|error|exception|critical|fatal|log|isEnabledFor)\("
+)
+DIRECT_LOGGER_METHODS = (
+    "debug",
+    "info",
+    "warning",
+    "warn",
+    "error",
+    "exception",
+    "critical",
+    "fatal",
+    "log",
+    "isEnabledFor",
 )
 
 
@@ -55,4 +68,17 @@ def test_production_logger_calls_use_the_logging_port() -> None:
 
     assert not offending_paths, (
         f"Logger level methods bypass the logging port in: {sorted(offending_paths)!r}"
+    )
+
+
+def test_direct_logger_call_pattern_covers_backend_method_surface() -> None:
+    """The scanner recognises all level and status methods removed from handles."""
+    unmatched_methods = {
+        method
+        for method in DIRECT_LOGGER_METHODS
+        if not DIRECT_LOGGER_CALL_PATTERN.search(f"logger.{method}(")
+    }
+
+    assert not unmatched_methods, (
+        f"direct-call scanner omits logger methods: {sorted(unmatched_methods)!r}"
     )

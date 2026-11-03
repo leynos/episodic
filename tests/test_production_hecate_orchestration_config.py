@@ -112,6 +112,9 @@ def test_production_logging_backend_is_restricted_to_logging_port() -> None:
     assert group_by_name["logging_internals"]["allowed"] == ["logging_internals"], (
         "private logging types must not import the backend or application layers"
     )
+    assert "external_libraries" not in typ.cast(
+        "list[str]", group_by_name["logging_port"]["allowed"]
+    ), "the logging port must remain isolated from unrelated third-party packages"
     allowed_backend_groups = [
         typ.cast("str", group["name"])
         for group in groups

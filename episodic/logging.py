@@ -302,7 +302,7 @@ def _serialize_log_field(value: object) -> object:
             return str(value)
 
 
-def format_log_event(event_name: str, **fields: object) -> str:
+def format_log_event(event_name: str, /, **fields: object) -> str:
     """Serialize one structured event as stable JSON text.
 
     The event name takes precedence over an ``event`` key in ``fields``.

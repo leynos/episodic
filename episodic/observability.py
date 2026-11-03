@@ -36,6 +36,7 @@ if typ.TYPE_CHECKING:
 def _emit_structured_event(
     logger: LoggerHandle,
     event: str,
+    /,
     **fields: object,
 ) -> None:
     """Emit one JSON-encoded observability event through the logging port."""

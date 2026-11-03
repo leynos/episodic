@@ -945,7 +945,6 @@ allowed = [
     "logging_port",
     "logging_backend",
     "logging_internals",
-    "external_libraries",
 ]
 
 [[tool.hecate.groups]]

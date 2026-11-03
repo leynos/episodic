@@ -2725,7 +2725,9 @@ The import boundary is enforced by Hecate's `logging_port` and
 `logging_backend` groups. The direct-call boundary has two independent gates:
 the opaque `LoggerHandle` is rejected by `ty` when code accesses `.info` or
 another level method, and `tests/test_logging_port_enforcement.py` scans the
-production tree so a regression reports every offending file.
+production tree so a regression reports every offending file. The port group
+does not allow the broad `external_libraries` group, keeping its dependencies
+limited to its backend and private type support.
 
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:

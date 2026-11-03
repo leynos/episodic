@@ -130,6 +130,21 @@ def test_structured_log_metrics_emits_latency_and_value_events() -> None:
     )
 
 
+def test_structured_log_metrics_accepts_reserved_parameter_labels() -> None:
+    """Metric labels cannot collide with the event helper's parameters."""
+    recorder = _RecordingLogger()
+    metrics = StructuredLogMetrics(logger=LoggerHandle(recorder))
+
+    metrics.increment_counter(
+        "requests",
+        labels={"event": "label-event", "logger": "label-logger"},
+    )
+
+    assert recorder.events == [
+        ("metric_counter", {"metric_name": "requests", "logger": "label-logger"})
+    ], "reserved helper parameter names must remain valid metric labels"
+
+
 def test_noop_tracer_supports_synchronous_span_contexts() -> None:
     """No-op tracing leaves synchronous operation control flow unchanged."""
     with NoopTracer().start_span("generation_run.admission", attributes={}):

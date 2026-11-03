@@ -111,6 +111,7 @@ def test_log_event_normalizes_non_json_structured_fields(
         "info",
         "generation.failed",
         event_id=event_id,
+        event_name="provider-supplied-name",
         occurred_at=occurred_at,
         state=_EventState.READY,
         error=RuntimeError("provider unavailable"),
@@ -119,6 +120,7 @@ def test_log_event_normalizes_non_json_structured_fields(
     expected_payload = {
         "error": "provider unavailable",
         "event": "generation.failed",
+        "event_name": "provider-supplied-name",
         "event_id": str(event_id),
         "occurred_at": "2026-08-03T12:30:00+00:00",
         "state": "ready",
