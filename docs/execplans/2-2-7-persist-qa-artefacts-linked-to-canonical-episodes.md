@@ -1563,10 +1563,11 @@ Stop and escalate when any of these is reached.
       `supersede_failed`. Only an evaluator and an outcome reach a span or a
       metric.
     - `CliRuntime` gained `tracer`, `metrics`, and `clock`; `main` and
-      `build_app` accept and forward them, and `QaApiClient.list_evaluations`
-      opens one `cli.qa_evaluations.list` span with outcomes `success`,
-      `api_error`, `rate_limited`, `transport_failure`, and `invalid_url`.
-      The defaults stay no-op, so output and exit codes are unchanged.
+      `build_app` accept one `CliSinks` bundle and forward it, and
+      `QaApiClient.list_evaluations` opens one `cli.qa_evaluations.list` span
+      with outcomes `success`, `api_error`, `rate_limited`,
+      `transport_failure`, and `invalid_url`. The defaults stay no-op, so
+      output and exit codes are unchanged.
     - `episodic.operation_observation` joins the `domain_ports` Hecate group,
       because `episodic.cli` and the storage adapter may import only those
       prefixes.
@@ -1602,6 +1603,15 @@ Stop and escalate when any of these is reached.
       and the focused suites pass: 15 cases for the fixed store and CLI
       observability tests, 37 for the duplication-gate and environment-wiring
       tests.
+    - The hosted CodeScene review of the published head `e2e1a4d5` named four
+      code-health findings, all introduced by the remediation and all cleared
+      by refactoring rather than suppression. `main` carried five parameters,
+      so the three sinks became one `CliSinks` bundle; `QaApiClient`'s request
+      and decode moved into `_fetch`, leaving one try/except boundary that
+      maps the same bounded categories; `SqlAlchemyUnitOfWork.__aenter__`
+      handed its constructor list to three cohesive `_open_*_stores` helpers;
+      and the CLI observability test now builds one expected observation value
+      instead of repeating the same assertion block in every case.
 
 ## Surprises & discoveries
 

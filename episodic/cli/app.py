@@ -17,14 +17,7 @@ from episodic.cli.client import (
     DEFAULT_TIMEOUT_SECONDS,
     TOKEN_ENV,
     CliRuntime,
-)
-from episodic.observability import (
-    MetricsPort,
-    MonotonicClockPort,
-    NoopMetrics,
-    NoopTracer,
-    PerfCounterClock,
-    TracerPort,
+    CliSinks,
 )
 
 if typ.TYPE_CHECKING:
@@ -74,9 +67,7 @@ class CliApplication:
 def build_app(
     transport: httpx.BaseTransport | None = None,
     *,
-    tracer: TracerPort | None = None,
-    metrics: MetricsPort | None = None,
-    clock: MonotonicClockPort | None = None,
+    sinks: CliSinks | None = None,
 ) -> CliApplication:
     """Assemble the CLI command tree.
 
@@ -85,24 +76,21 @@ def build_app(
     transport : httpx.BaseTransport | None
         Transport the HTTP client uses. Tests inject a mock or bridging
         transport; production leaves it unset so httpx uses the network.
-    tracer : TracerPort | None
-        Span sink for API calls. ``None`` selects the no-op tracer.
-    metrics : MetricsPort | None
-        Latency sink for API calls. ``None`` selects the no-op sink.
-    clock : MonotonicClockPort | None
-        Elapsed-time source for API-call latency. ``None`` selects the
-        performance-counter clock.
+    sinks : CliSinks | None
+        Observability sinks for API calls. ``None`` selects the no-op tracer,
+        no-op metrics sink, and performance-counter clock.
 
     Returns
     -------
     CliApplication
         Root application together with the runtime its commands share.
     """
+    resolved = CliSinks() if sinks is None else sinks
     runtime = CliRuntime(
         transport=transport,
-        tracer=NoopTracer() if tracer is None else tracer,
-        metrics=NoopMetrics() if metrics is None else metrics,
-        clock=PerfCounterClock() if clock is None else clock,
+        tracer=resolved.tracer,
+        metrics=resolved.metrics,
+        clock=resolved.clock,
     )
     app = cyclopts.App(
         name=APP_NAME,

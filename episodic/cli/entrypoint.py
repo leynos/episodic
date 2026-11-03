@@ -19,23 +19,16 @@ if typ.TYPE_CHECKING:
 
     import httpx
 
-    from episodic.observability import (
-        MetricsPort,
-        MonotonicClockPort,
-        TracerPort,
-    )
+    from episodic.cli.client import CliSinks
 
 USAGE_EXIT_CODE = 2
 
 
-# pylint: disable-next=too-many-arguments  # Each injectable sink is a seam.
-def main(  # ruff: ignore[too-many-arguments]  # Each injectable sink is a seam.
+def main(
     argv: cabc.Sequence[str] | None = None,
     *,
     transport: httpx.BaseTransport | None = None,
-    tracer: TracerPort | None = None,
-    metrics: MetricsPort | None = None,
-    clock: MonotonicClockPort | None = None,
+    sinks: CliSinks | None = None,
 ) -> int:
     """Run the CLI and return its process exit code.
 
@@ -46,13 +39,9 @@ def main(  # ruff: ignore[too-many-arguments]  # Each injectable sink is a seam.
     transport : httpx.BaseTransport | None
         Transport the HTTP client uses. Tests inject a mock or bridging
         transport; production leaves it unset so httpx uses the network.
-    tracer : TracerPort | None
-        Span sink for API calls. ``None`` selects the no-op tracer.
-    metrics : MetricsPort | None
-        Latency sink for API calls. ``None`` selects the no-op sink.
-    clock : MonotonicClockPort | None
-        Elapsed-time source for API-call latency. ``None`` selects the
-        performance-counter clock.
+    sinks : CliSinks | None
+        Observability sinks for API calls. ``None`` selects the no-op tracer,
+        no-op metrics sink, and performance-counter clock.
 
     Returns
     -------
@@ -67,12 +56,7 @@ def main(  # ruff: ignore[too-many-arguments]  # Each injectable sink is a seam.
     2
     """
     tokens = list(sys.argv[1:] if argv is None else argv)
-    application = build_app(
-        transport,
-        tracer=tracer,
-        metrics=metrics,
-        clock=clock,
-    )
+    application = build_app(transport, sinks=sinks)
     try:
         rendered = application.run(tokens)
     except CliError as error:

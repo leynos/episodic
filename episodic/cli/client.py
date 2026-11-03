@@ -52,6 +52,30 @@ class ClientOptions:
     timeout: float = DEFAULT_TIMEOUT_SECONDS
 
 
+@dc.dataclass(frozen=True, slots=True)
+class CliSinks:
+    """Observability sinks one CLI invocation reports to.
+
+    Every sink has a no-op or stdlib default, so a production invocation
+    constructs ``CliSinks()`` and a test passes its recording doubles. Grouping
+    them keeps the invocation entry point's parameter list bounded as sinks are
+    added.
+
+    Attributes
+    ----------
+    tracer : TracerPort
+        Span sink for each API call.
+    metrics : MetricsPort
+        Latency sink for each API call.
+    clock : MonotonicClockPort
+        Elapsed-time source for the latency observations.
+    """
+
+    tracer: TracerPort = dc.field(default_factory=NoopTracer)
+    metrics: MetricsPort = dc.field(default_factory=NoopMetrics)
+    clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
+
+
 @dc.dataclass(slots=True)
 class CliRuntime:
     """State the meta launcher fills before a command runs.
@@ -228,7 +252,6 @@ class QaApiClient:
             If the API throttled the request.
         """
         options = self._runtime.options
-        url = f"{options.base_url.rstrip('/')}{query.path()}"
         observation = OperationObservation(
             tracer=self._runtime.tracer,
             metrics=self._runtime.metrics,
@@ -237,12 +260,7 @@ class QaApiClient:
         )
         with observation:
             try:
-                with httpx.Client(
-                    transport=self._runtime.transport,
-                    timeout=options.timeout,
-                    headers=self._authorization(),
-                ) as client:
-                    response = client.get(url, params=query.params())
+                page = self._fetch(query)
             except httpx.InvalidURL as error:
                 observation.failed("invalid_url")
                 invalid = f"Invalid Episodic API URL {options.base_url}: {error}"
@@ -256,11 +274,6 @@ class QaApiClient:
                     f"Cannot reach the Episodic API at {options.base_url}: {detail}"
                 )
                 raise ApiUnavailableError(unreachable) from error
-            try:
-                page = decode_page(
-                    response,
-                    token_configured=options.token is not None,
-                )
             except RateLimitedError:
                 observation.failed("rate_limited")
                 raise
@@ -269,6 +282,18 @@ class QaApiClient:
                 raise
             observation.succeeded("success")
             return page
+
+    def _fetch(self, query: QaEvaluationQuery) -> dict[str, object]:
+        """Send the request and decode the page; failures propagate untranslated."""
+        options = self._runtime.options
+        url = f"{options.base_url.rstrip('/')}{query.path()}"
+        with httpx.Client(
+            transport=self._runtime.transport,
+            timeout=options.timeout,
+            headers=self._authorization(),
+        ) as client:
+            response = client.get(url, params=query.params())
+        return decode_page(response, token_configured=options.token is not None)
 
     def _authorization(self) -> dict[str, str]:
         """Return the authorization header, omitting an unset token."""

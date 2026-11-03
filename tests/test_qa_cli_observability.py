@@ -6,10 +6,13 @@ records, and the latency observation it emits. The HTTP boundary is stubbed, so
 the assertions describe the CLI's own instrumentation rather than a server's.
 """
 
+import dataclasses as dc
+
 import httpx
 import pytest
 
 from episodic.cli import main
+from episodic.cli.client import CliSinks
 from episodic.observability import RecordedSpan, RecordingTracer
 from tests.canonical_storage._workflow_checkpoint_support import (
     RecordingMetrics,
@@ -20,81 +23,73 @@ from tests.qa_cli_fixtures import PAGE, canned, list_arguments
 pytestmark = pytest.mark.usefixtures("clean_environment")
 
 _SPAN = "cli.qa_evaluations.list"
+_Latency = tuple[str, float, dict[str, str]]
 
 
-def _span(outcome: str, *, failure_category: str | None = None) -> RecordedSpan:
-    """Return the completed client span an outcome produces."""
-    attributes = {"operation": _SPAN, "outcome": outcome}
-    if failure_category is not None:
-        attributes["failure_category"] = failure_category
-    return RecordedSpan(name=_SPAN, attributes=attributes, is_completed=True)
+@dc.dataclass(frozen=True, slots=True)
+class _Observation:
+    """Everything one CLI invocation made visible to the sinks."""
+
+    exit_code: int
+    spans: list[RecordedSpan]
+    latencies: list[_Latency]
 
 
-def _latency(
-    outcome: str,
-    *,
-    failure_category: str | None = None,
-) -> tuple[str, float, dict[str, str]]:
-    """Return the one-millisecond latency ``StepClock`` produces."""
-    labels = {"outcome": outcome}
-    if failure_category is not None:
-        labels["failure_category"] = failure_category
-    return (f"{_SPAN}.latency_ms", 1.0, labels)
-
-
-def _run(
-    transport: httpx.BaseTransport,
-    *arguments: str,
-) -> tuple[int, RecordingTracer, RecordingMetrics]:
+def _observe(transport: httpx.BaseTransport, *arguments: str) -> _Observation:
     """Run the CLI with recording sinks and return its observations."""
     tracer = RecordingTracer()
     metrics = RecordingMetrics()
     exit_code = main(
         list(arguments),
         transport=transport,
-        tracer=tracer,
-        metrics=metrics,
-        clock=StepClock(),
+        sinks=CliSinks(tracer=tracer, metrics=metrics, clock=StepClock()),
     )
-    return exit_code, tracer, metrics
+    return _Observation(exit_code, tracer.spans, metrics.latencies)
 
 
-def test_successful_listing_records_one_client_span(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def _expected(
+    exit_code: int,
+    outcome: str,
+    *,
+    failure_category: str | None = None,
+) -> _Observation:
+    """Return the one-span, one-latency observation an outcome should produce."""
+    attributes = {"operation": _SPAN, "outcome": outcome}
+    labels = {"outcome": outcome}
+    if failure_category is not None:
+        attributes["failure_category"] = failure_category
+        labels["failure_category"] = failure_category
+    return _Observation(
+        exit_code=exit_code,
+        spans=[RecordedSpan(name=_SPAN, attributes=attributes, is_completed=True)],
+        latencies=[(f"{_SPAN}.latency_ms", 1.0, labels)],
+    )
+
+
+def test_successful_listing_records_one_client_span() -> None:
     """A served page is one successful client span and one latency."""
     transport, _ = canned(PAGE)
 
-    exit_code, tracer, metrics = _run(transport, *list_arguments())
-
-    capsys.readouterr()
-    assert exit_code == 0, "a served page should exit successfully"
-    assert tracer.spans == [_span("success")], tracer.spans
-    assert metrics.latencies == [_latency("success")], metrics.latencies
+    assert _observe(transport, *list_arguments()) == _expected(0, "success"), (
+        "a served page should record one successful span"
+    )
 
 
-def test_error_envelope_marks_the_span_failed(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_error_envelope_marks_the_span_failed() -> None:
     """An error envelope is a bounded ``api_error`` failure."""
     transport, _ = canned(
         {"code": "qa_evaluation_not_found", "message": "QA evaluation not found."},
         status=404,
     )
 
-    exit_code, tracer, metrics = _run(transport, *list_arguments())
+    observed = _observe(transport, *list_arguments())
 
-    capsys.readouterr()
-    assert exit_code == 1, "an API error envelope should exit 1"
-    assert tracer.spans == [_span("failed", failure_category="api_error")], tracer.spans
-    assert metrics.latencies == [_latency("failed", failure_category="api_error")], (
-        metrics.latencies
+    assert observed == _expected(1, "failed", failure_category="api_error"), (
+        "an error envelope should record an api_error span"
     )
 
 
-def test_throttled_request_marks_the_span_failed(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_throttled_request_marks_the_span_failed() -> None:
     """A throttle is a bounded ``rate_limited`` failure."""
     transport, _ = canned(
         {"code": "rate_limited", "message": "Too many requests."},
@@ -102,21 +97,14 @@ def test_throttled_request_marks_the_span_failed(
         headers={"Retry-After": "30"},
     )
 
-    exit_code, tracer, metrics = _run(transport, *list_arguments())
+    observed = _observe(transport, *list_arguments())
 
-    capsys.readouterr()
-    assert exit_code == 4, "a throttled request should exit 4"
-    assert tracer.spans == [_span("failed", failure_category="rate_limited")], (
-        tracer.spans
-    )
-    assert metrics.latencies == [_latency("failed", failure_category="rate_limited")], (
-        metrics.latencies
+    assert observed == _expected(4, "failed", failure_category="rate_limited"), (
+        "a throttle should record a rate_limited span"
     )
 
 
-def test_transport_failure_marks_the_span_failed(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_transport_failure_marks_the_span_failed() -> None:
     """An unreachable API is a bounded ``transport_failure``."""
     transport = httpx.MockTransport(
         lambda request: (_ for _ in ()).throw(
@@ -124,37 +112,25 @@ def test_transport_failure_marks_the_span_failed(
         )
     )
 
-    exit_code, tracer, metrics = _run(transport, *list_arguments())
+    observed = _observe(transport, *list_arguments())
 
-    capsys.readouterr()
-    assert exit_code == 3, "an unreachable API should exit 3"
-    assert tracer.spans == [_span("failed", failure_category="transport_failure")], (
-        tracer.spans
+    assert observed == _expected(3, "failed", failure_category="transport_failure"), (
+        "an unreachable API should record a transport_failure span"
     )
-    assert metrics.latencies == [
-        _latency("failed", failure_category="transport_failure")
-    ], metrics.latencies
 
 
-def test_unusable_transport_url_marks_the_span_failed(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_unusable_transport_url_marks_the_span_failed() -> None:
     """A URL only httpx rejects is a bounded ``invalid_url`` failure."""
     transport, recorded = canned(PAGE)
 
-    exit_code, tracer, metrics = _run(
+    observed = _observe(
         transport,
         "--base-url",
         "http://api.example.test:not-a-port",
         *list_arguments(),
     )
 
-    capsys.readouterr()
-    assert exit_code == 2, "an invalid URL should exit 2"
+    assert observed == _expected(2, "failed", failure_category="invalid_url"), (
+        "a rejected URL should record an invalid_url span"
+    )
     assert recorded.seen == [], "an invalid URL must send no request"
-    assert tracer.spans == [_span("failed", failure_category="invalid_url")], (
-        tracer.spans
-    )
-    assert metrics.latencies == [_latency("failed", failure_category="invalid_url")], (
-        metrics.latencies
-    )
