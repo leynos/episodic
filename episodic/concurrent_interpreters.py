@@ -9,13 +9,12 @@ import asyncio
 import collections.abc as cabc
 import concurrent.futures as cf
 import dataclasses as dc
-import json
 import os
 import threading
 import time
 import typing as typ
 
-from episodic.logging import get_logger, log_exception, log_info
+from episodic.logging import format_log_event, get_logger, log_exception, log_info
 from episodic.metrics_ports import (
     BoundedValueMetricsPort,
     NoopBoundedValueMetrics,
@@ -43,7 +42,7 @@ def _log_event(
     **fields: object,
 ) -> None:
     """Emit one executor event as a stable JSON message."""
-    message = json.dumps({"event": event, **fields}, sort_keys=True)
+    message = format_log_event(event, **fields)
     if is_exception:
         log_exception(_log, "%s", message)
     else:

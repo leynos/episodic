@@ -24,11 +24,10 @@ subtype with ``dict[str, str]`` labels for feature ports such as
 """
 
 import dataclasses as dc
-import json
 import time
 import typing as typ
 
-from episodic.logging import LoggerHandle, get_logger, log_info
+from episodic.logging import LoggerHandle, format_log_event, get_logger, log_info
 
 if typ.TYPE_CHECKING:
     from collections import abc as cabc
@@ -40,7 +39,7 @@ def _emit_structured_event(
     **fields: object,
 ) -> None:
     """Emit one JSON-encoded observability event through the logging port."""
-    log_info(logger, "%s", json.dumps({"event": event, **fields}, sort_keys=True))
+    log_info(logger, "%s", format_log_event(event, **fields))
 
 
 class MetricsPort(typ.Protocol):

@@ -114,16 +114,7 @@ def architecture_fixture_package(
 @when("the architecture checker runs")
 def architecture_checker_runs(context: ArchitectureContext, tmp_path: Path) -> None:
     """Run the architecture checker through its command-line entrypoint."""
-    policy_variant = (
-        "external_logging"
-        if context.package_name == LOGGING_PORT_FIXTURE
-        else "default"
-    )
-    config_path = write_fixture_config(
-        tmp_path,
-        context.package_name,
-        policy_variant=policy_variant,
-    )
+    config_path = write_fixture_config(tmp_path, context.package_name)
     context.completed_process = run_hecate_fixture_check(
         context.package_name,
         config_path,
@@ -159,4 +150,8 @@ def architecture_diagnostic_mentions(
     completed_process = context.completed_process
     assert completed_process is not None, "checker did not run"
     output = f"{completed_process.stdout}\n{completed_process.stderr}"
-    assert expected_text in output, f"expected {expected_text!r} in {output!r}"
+    diagnostic = output
+    if context.package_name == LOGGING_PORT_FIXTURE and expected_text == "femtologging":
+        fixture_package = f"tests.fixtures.architecture.{context.package_name}"
+        diagnostic = diagnostic.replace(fixture_package, "")
+    assert expected_text in diagnostic, f"expected {expected_text!r} in {output!r}"

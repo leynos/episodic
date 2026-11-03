@@ -941,7 +941,12 @@ include_external_packages = true
 [[tool.hecate.groups]]
 name = "logging_port"
 prefixes = ["episodic.logging"]
-allowed = ["logging_port", "logging_backend", "external_libraries"]
+allowed = [
+    "logging_port",
+    "logging_backend",
+    "logging_internals",
+    "external_libraries",
+]
 
 [[tool.hecate.groups]]
 name = "logging_backend"
@@ -949,17 +954,30 @@ prefixes = ["femtologging"]
 allowed = ["logging_port"]
 
 [[tool.hecate.groups]]
+name = "logging_internals"
+prefixes = ["episodic._logging_types"]
+allowed = ["logging_internals"]
+
+[[tool.hecate.groups]]
+name = "external_workers"
+prefixes = ["celery", "kombu"]
+allowed = [
+    "composition_root",
+    "external_workers",
+    "inbound_adapter",
+    "orchestration_tasks",
+]
+
+[[tool.hecate.groups]]
 name = "external_libraries"
 prefixes = [
     "alembic",
     "asyncpg",
-    "celery",
     "eventlet",
     "falcon",
     "gevent",
     "granian",
     "httpx",
-    "kombu",
     "langgraph",
     "openai",
     "psycopg",
@@ -980,6 +998,7 @@ allowed = [
     "composition_root",
     "domain_ports",
     "external_libraries",
+    "external_workers",
     "inbound_adapter",
     "logging_port",
     "orchestration",
@@ -1028,7 +1047,7 @@ prefixes = [
     "episodic.orchestration._types",
     "episodic.worker.workloads",
 ]
-allowed = ["domain_ports", "external_libraries", "logging_port"]
+allowed = ["domain_ports", "logging_port"]
 
 [[tool.hecate.groups]]
 name = "orchestration_checkpoint"
@@ -1043,7 +1062,6 @@ prefixes = [
 allowed = [
     "orchestration_checkpoint",
     "domain_ports",
-    "external_libraries",
     "logging_port",
 ]
 
@@ -1059,7 +1077,6 @@ allowed = [
     "orchestration_nodes",
     "domain_ports",
     "orchestration_checkpoint",
-    "external_libraries",
     "logging_port",
 ]
 
@@ -1101,7 +1118,7 @@ allowed = [
     "orchestration_tasks",
     "application",
     "domain_ports",
-    "external_libraries",
+    "external_workers",
     "logging_port",
 ]
 
@@ -1116,6 +1133,7 @@ allowed = [
     "application",
     "domain_ports",
     "external_libraries",
+    "external_workers",
     "logging_port",
 ]
 

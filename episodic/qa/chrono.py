@@ -32,13 +32,12 @@ runtime policy.
 
 import asyncio
 import dataclasses as dc
-import json
 import re
 import typing as typ
 
 import tei_rapporteur as _tei
 
-from episodic.logging import get_logger, log_debug, log_warning
+from episodic.logging import format_log_event, get_logger, log_debug, log_warning
 from episodic.metrics_ports import BoundedMetricsPort, NoopBoundedMetrics
 from episodic.observability import MonotonicClockPort, PerfCounterClock
 
@@ -258,12 +257,9 @@ class ChronoRuntimeEstimator:
             log_debug(
                 _log,
                 "%s",
-                json.dumps(
-                    {
-                        "event": "chrono_no_spoken_words",
-                        "input_character_count": len(request.script_tei_xml),
-                    },
-                    sort_keys=True,
+                format_log_event(
+                    "chrono_no_spoken_words",
+                    input_character_count=len(request.script_tei_xml),
                 ),
             )
         labels = {"outcome": "success"}

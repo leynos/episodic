@@ -59,7 +59,7 @@ def write_fixture_config(
     tmp_path: Path,
     package_name: str,
     *,
-    policy_variant: FixturePolicyVariant = "default",
+    policy_variant: FixturePolicyVariant | None = None,
 ) -> Path:
     """Write a Hecate config for one architecture fixture package.
 
@@ -69,6 +69,9 @@ def write_fixture_config(
         Temporary directory where the generated TOML file is written.
     package_name : str
         Directory name of the fixture package under `tests/fixtures/architecture`.
+    policy_variant : FixturePolicyVariant | None, optional
+        Fixture policy to render. By default, the femtologging boundary fixture
+        uses `external_logging` and other fixtures use `default`.
 
     Returns
     -------
@@ -82,12 +85,17 @@ def write_fixture_config(
     from a package barrel as an import of the package module itself.
     """
     package = f"tests.fixtures.architecture.{package_name}"
+    selected_policy = policy_variant
+    if selected_policy is None:
+        selected_policy = (
+            "external_logging" if package_name == LOGGING_PORT_FIXTURE else "default"
+        )
     config_path = tmp_path / f"{package_name}-hecate.toml"
     config_path.write_text(
         _fixture_config(
             package,
             treats_package_barrel_as_outbound=package_name == BARREL_OUTBOUND_FIXTURE,
-            policy_variant=policy_variant,
+            policy_variant=selected_policy,
         ),
         encoding="utf-8",
     )

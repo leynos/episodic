@@ -1240,6 +1240,10 @@ The enforced groups are:
   `logging_port` may import.
 - `external_libraries`: approved third-party libraries, tracked as import
   edges alongside the internal groups.
+- `external_workers`: Celery and Kombu, which only worker tasks, worker
+  topology, and the runtime composition root may import.
+- `logging_internals`: private logger backend protocols used by the port. This
+  group has no dependency on the femtologging backend.
 - `domain_ports`: canonical domain types, canonical ports, ingestion ports,
   canonical constraint names, and LLM ports.
 - `application`: canonical services, profile/template workflows,
@@ -1273,10 +1277,16 @@ The enforced groups are:
 `include_external_packages = true` makes Hecate classify third-party import
 edges. The groups are ordered by first matching prefix: keep `logging_port` and
 `logging_backend` before the broad `external_libraries` group so the latter
-cannot silently permit direct femtologging imports. Keep `composition_root`,
-`orchestration_nodes`, and `orchestration_tasks` before their broader adapter
-prefixes. When adding a new port or adapter, update `[tool.hecate]` in
-`pyproject.toml` in the same change as the package.
+cannot silently permit direct femtologging imports. `logging_internals` has a
+self-only policy and keeps private logging types out of the backend boundary.
+Keep `external_workers` before `external_libraries` so Celery and Kombu retain
+their narrower allowed groups. The `domain_ports`, `orchestration_checkpoint`,
+`orchestration_nodes`, and `orchestration_tasks` groups must not allow the
+broad external group. `orchestration_tasks` receives only the worker-specific
+external group. Keep `composition_root`, `orchestration_nodes`, and
+`orchestration_tasks` before their broader episodic prefixes. When adding a new
+port or adapter, update `[tool.hecate]` in `pyproject.toml` in the same change
+as the package.
 
 `episodic.worker.workloads.WorkloadClass` is the canonical worker workload
 contract that task modules may import without pulling in the Celery app or
@@ -2705,8 +2715,11 @@ Keep `configure_logging(...)` as the local configuration seam. `log_exception`
 records exception information by default; the other wrappers accept optional
 `exc_info` explicitly when a caller needs it.
 
-Use `log_event(...)` for structured event fields; it serializes those fields
-into the message while preserving the event name and exception metadata.
+Use `log_event(...)` for structured event fields on the port's configured
+logger. When an event must use a caller's `LoggerHandle`, use
+`format_log_event(event, **fields)` to build the stable JSON message, then emit
+it through the matching `log_*` wrapper. Both paths normalize enum values,
+dates, times, and other non-JSON values consistently.
 
 The import boundary is enforced by Hecate's `logging_port` and
 `logging_backend` groups. The direct-call boundary has two independent gates:

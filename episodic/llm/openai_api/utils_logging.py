@@ -8,10 +8,9 @@ configuration-validation and budget-enforcement helpers in the sibling
 """
 
 import contextvars
-import json
 
 from episodic.llm.ports import LLMProviderOperation
-from episodic.logging import LoggerHandle, getLogger, log_error
+from episodic.logging import LoggerHandle, format_log_event, getLogger, log_error
 
 _log: LoggerHandle = getLogger(__name__)
 
@@ -36,8 +35,4 @@ def _operation_label(operation: LLMProviderOperation | str | None) -> str:
 def _log_error_event(message: str, **fields: object) -> None:
     """Emit one JSON-encoded ERROR event with bounded diagnostic fields."""
     effective_log = _log_override.get() or _log
-    log_error(
-        effective_log,
-        "%s",
-        json.dumps({"event": message, **fields}, sort_keys=True),
-    )
+    log_error(effective_log, "%s", format_log_event(message, **fields))

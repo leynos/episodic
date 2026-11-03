@@ -187,7 +187,20 @@ def render_default_fixture_config(
     *,
     treats_package_barrel_as_outbound: bool,
 ) -> str:
-    """Render the unchanged internal-only fixture policy."""
+    """Render the unchanged internal-only fixture policy.
+
+    Parameters
+    ----------
+    package : str
+        Dotted import name for the architecture fixture package.
+    treats_package_barrel_as_outbound : bool
+        Whether to classify the fixture package barrel as an outbound adapter.
+
+    Returns
+    -------
+    str
+        TOML configuration for the fixture's internal-only dependency policy.
+    """
     package_barrel = f', "{package}"' if treats_package_barrel_as_outbound else ""
     outbound_prefixes = f'"{package}.storage", "{package}.adapter"{package_barrel}'
     return _DEFAULT_FIXTURE_CONFIG_TEMPLATE.format(
@@ -208,5 +221,17 @@ def render_default_fixture_config(
 
 
 def render_external_logging_fixture_config(package: str) -> str:
-    """Render a fixture policy that rejects backend imports outside logging."""
+    """Render a fixture policy that rejects backend imports outside logging.
+
+    Parameters
+    ----------
+    package : str
+        Dotted import name for the architecture fixture package.
+
+    Returns
+    -------
+    str
+        TOML configuration that permits femtologging only from the fixture's
+        logging port.
+    """
     return _EXTERNAL_LOGGING_FIXTURE_CONFIG_TEMPLATE.format(package=package)

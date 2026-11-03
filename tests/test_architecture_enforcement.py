@@ -211,19 +211,21 @@ def test_checker_reports_fixture_boundary_violations(
     tmp_path: Path,
 ) -> None:
     """Forbidden fixture imports produce stable architecture diagnostics."""
-    policy_variant = (
-        "external_logging" if package_name == LOGGING_PORT_FIXTURE else "default"
-    )
-    config_path = write_fixture_config(
-        tmp_path, package_name, policy_variant=policy_variant
-    )
+    config_path = write_fixture_config(tmp_path, package_name)
 
     completed_process = run_hecate_fixture_check(package_name, config_path)
 
     rendered = f"{completed_process.stdout}\n{completed_process.stderr}"
     assert completed_process.returncode == 1, rendered
     for expected_message_part in expected_message_parts:
-        assert expected_message_part in rendered, (
+        diagnostic = rendered
+        if (
+            package_name == LOGGING_PORT_FIXTURE
+            and expected_message_part == "femtologging"
+        ):
+            fixture_package = f"tests.fixtures.architecture.{package_name}"
+            diagnostic = diagnostic.replace(fixture_package, "")
+        assert expected_message_part in diagnostic, (
             f"expected {expected_message_part!r} in {rendered!r}"
         )
 

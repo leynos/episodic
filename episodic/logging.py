@@ -21,6 +21,11 @@ import warnings
 from femtologging import basicConfig
 from femtologging import get_logger as _get_femtologger
 
+from episodic._logging_types import (
+    _LogCall,
+    _SupportsConvenienceLog,
+)
+
 
 class LogLevel(enum.StrEnum):
     """Supported log levels for femtologging.
@@ -89,61 +94,6 @@ def configure_logging(
     return (normalized, used_default)
 
 
-# _SupportsLog is private because callers can rely on structural typing instead.
-class _SupportsConvenienceLog(typ.Protocol):
-    """Protocol for loggers supporting stdlib-like femtologging methods."""
-
-    def debug(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: object | None = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Emit a DEBUG-level log record."""
-
-    def info(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: object | None = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Emit an INFO-level log record."""
-
-    def warning(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: object | None = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Emit a WARNING-level log record."""
-
-    def error(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: object | None = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Emit an ERROR-level log record."""
-
-    def exception(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: object | None = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Emit an ERROR-level record with exception information."""
-
-
 class _SupportsLogMethod(typ.Protocol):
     """Protocol for loggers exposing the stdlib-style `log` entry point."""
 
@@ -160,23 +110,6 @@ class _SupportsLogMethod(typ.Protocol):
 
 
 type _CompatibleLogger = _SupportsConvenienceLog | _SupportsLogMethod
-type _ConvenienceMethod = typ.Literal[
-    "debug",
-    "info",
-    "warning",
-    "error",
-    "exception",
-]
-
-
-class _LogCall(typ.NamedTuple):
-    """One formatted log request ready for backend dispatch."""
-
-    level: int
-    convenience_method: _ConvenienceMethod
-    template: str
-    args: tuple[object, ...]
-    exc_info: object | None
 
 
 class LoggerHandle:
@@ -194,7 +127,18 @@ class LoggerHandle:
 
 
 def get_logger(name: str) -> LoggerHandle:
-    """Return an opaque logging-port handle for *name*."""
+    """Return an opaque logging-port handle for *name*.
+
+    Parameters
+    ----------
+    name : str
+        Logger name, normally ``__name__``.
+
+    Returns
+    -------
+    LoggerHandle
+        Handle accepted by the ``log_*`` helpers.
+    """
     return LoggerHandle(typ.cast("_CompatibleLogger", _get_femtologger(name)))
 
 
@@ -237,7 +181,19 @@ def log_debug(
     *args: object,
     exc_info: object | None = None,
 ) -> None:
-    """Format and emit a DEBUG log message through the port."""
+    """Format and emit a DEBUG log message through the port.
+
+    Parameters
+    ----------
+    logger : LoggerHandle
+        Opaque handle returned by :func:`get_logger`.
+    template : str
+        Percent-style format string for the log message.
+    *args : object
+        Arguments interpolated into the template.
+    exc_info : object | None, optional
+        Exception information to attach to the log record.
+    """
     _emit(logger, _LogCall(logging.DEBUG, "debug", template, args, exc_info))
 
 
@@ -313,7 +269,20 @@ def log_exception(
     *args: object,
     exc_info: object | None = True,
 ) -> None:
-    """Format and emit an exception record with traceback information."""
+    """Format and emit an exception record with traceback information.
+
+    Parameters
+    ----------
+    logger : LoggerHandle
+        Opaque handle returned by :func:`get_logger`.
+    template : str
+        Percent-style format string for the log message.
+    *args : object
+        Arguments interpolated into the template.
+    exc_info : object | None, optional
+        Exception information to attach. Defaults to ``True`` so the active
+        exception is recorded.
+    """
     _emit(logger, _LogCall(logging.ERROR, "exception", template, args, exc_info))
 
 
@@ -331,6 +300,34 @@ def _serialize_log_field(value: object) -> object:
             return value.isoformat()
         case _:
             return str(value)
+
+
+def format_log_event(event_name: str, **fields: object) -> str:
+    """Serialize one structured event as stable JSON text.
+
+    The event name takes precedence over an ``event`` key in ``fields``.
+    Common non-JSON values, including enums and date/time objects, use the
+    same normalization as :func:`log_event`.
+
+    Parameters
+    ----------
+    event_name : str
+        Event name to store in the JSON ``"event"`` field.
+    **fields : object
+        Additional event fields to serialize.
+
+    Returns
+    -------
+    str
+        A sorted JSON object containing the event name and fields.
+
+    Examples
+    --------
+    >>> format_log_event("generation.started", workflow_id="workflow-42")
+    '{"event": "generation.started", "workflow_id": "workflow-42"}'
+    """
+    payload = {**fields, "event": event_name}
+    return json.dumps(payload, default=_serialize_log_field, sort_keys=True)
 
 
 def log_event(level: str, message: str, **fields: object) -> None:
@@ -362,23 +359,22 @@ def log_event(level: str, message: str, **fields: object) -> None:
         key: value for key, value in fields.items() if key not in allowed_kwargs
     }
     if extra_fields:
-        payload = {**extra_fields, "event": message}
         log_method(
-            json.dumps(payload, default=_serialize_log_field, sort_keys=True),
+            format_log_event(message, **extra_fields),
             **allowed_kwargs,
         )
         return
     try:
         log_method(message, **allowed_kwargs)
     except TypeError:
-        payload = {"event": message}
-        log_method(json.dumps(payload, sort_keys=True), **allowed_kwargs)
+        log_method(format_log_event(message), **allowed_kwargs)
 
 
 __all__ = (
     "LogLevel",
     "LoggerHandle",
     "configure_logging",
+    "format_log_event",
     "getLogger",
     "get_logger",
     "log_debug",

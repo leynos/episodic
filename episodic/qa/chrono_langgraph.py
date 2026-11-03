@@ -22,12 +22,11 @@ remains independent of LangGraph.
 """
 
 import dataclasses as dc
-import json
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
 
-from episodic.logging import get_logger, log_error, log_exception
+from episodic.logging import format_log_event, get_logger, log_error, log_exception
 
 from .chrono import (  # ruff: ignore[typing-only-first-party-import]  # LangGraph evaluates state annotations at runtime.
     ChronoEvaluationRequest,
@@ -71,12 +70,9 @@ def build_chrono_graph(
             log_error(
                 _log,
                 "%s",
-                json.dumps(
-                    {
-                        "event": "chrono_graph_request_missing",
-                        "has_chrono_result": state.chrono_result is not None,
-                    },
-                    sort_keys=True,
+                format_log_event(
+                    "chrono_graph_request_missing",
+                    has_chrono_result=state.chrono_result is not None,
                 ),
             )
             msg = "chrono_request"
@@ -87,14 +83,9 @@ def build_chrono_graph(
             log_exception(
                 _log,
                 "%s",
-                json.dumps(
-                    {
-                        "event": "chrono_graph_evaluation_failed",
-                        "input_character_count": len(
-                            state.chrono_request.script_tei_xml
-                        ),
-                    },
-                    sort_keys=True,
+                format_log_event(
+                    "chrono_graph_evaluation_failed",
+                    input_character_count=len(state.chrono_request.script_tei_xml),
                 ),
             )
             raise
