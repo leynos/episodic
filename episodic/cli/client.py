@@ -79,9 +79,12 @@ class CliRuntime:
             # ``httpx`` raises ``UnicodeEncodeError`` while building the client
             # for a value a header cannot carry, and that is not an
             # ``httpx.HTTPError``, so it would escape ``main`` as a traceback.
+            # Surrounding whitespace is printable but h11 rejects it, and the
+            # resulting protocol error quotes the header, so reject it here
+            # rather than letting the token reach standard error.
             invalid = (
-                "The API token must be printable ASCII; "
-                "check --token or EPISODIC_API_TOKEN"
+                "The API token must be printable ASCII with no surrounding "
+                "whitespace; check --token or EPISODIC_API_TOKEN"
             )
             raise InvalidConfigError(invalid)
         resolved_url = (
@@ -104,7 +107,16 @@ def _first_present(*values: str | None) -> str | None:
 
 def _is_header_safe(token: str) -> bool:
     """Return whether ``token`` can travel as an HTTP header value."""
-    return token.isascii() and token.isprintable()
+    # ``isprintable()`` accepts a space, but h11 refuses trailing whitespace in
+    # a field value and quotes the rejected bytes in its error message.
+    return token.isascii() and token.isprintable() and token == token.strip()
+
+
+def _redact(text: str, secret: str | None) -> str:
+    """Return ``text`` with ``secret`` masked so an error cannot echo it."""
+    if not secret:
+        return text
+    return text.replace(secret, "[redacted]")
 
 
 def _validated_base_url(base_url: str, *, token: str | None) -> str:
@@ -333,8 +345,11 @@ class QaApiClient:
             invalid = f"Invalid Episodic API URL {options.base_url}: {error}"
             raise InvalidConfigError(invalid) from error
         except httpx.HTTPError as error:
+            # A protocol error can quote the header it rejected, so mask the
+            # configured token before the text reaches standard error.
+            detail = _redact(str(error), options.token)
             unreachable = (
-                f"Cannot reach the Episodic API at {options.base_url}: {error}"
+                f"Cannot reach the Episodic API at {options.base_url}: {detail}"
             )
             raise ApiUnavailableError(unreachable) from error
         return decode_page(

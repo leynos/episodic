@@ -31,6 +31,7 @@ from episodic.canonical.qa_artefacts import (
 from episodic.canonical.storage import QaFindingRecord, SqlAlchemyUnitOfWork
 from tests.canonical_storage._qa_artefact_support import (
     EvaluationOptions,
+    collect_page_ids,
     create_episode,
     make_evaluation,
 )
@@ -160,10 +161,11 @@ async def test_findings_read_back_in_emission_order(
     ):
         event("severities out of taxonomy order")
 
-    # Insertion order usually survives a sequential scan, so relocate a middle
-    # row in the heap before reading to make an unordered query observable.
+    # Insertion order usually survives a sequential scan, so relocate the first
+    # row in the heap before reading. Relocating the first row rather than a
+    # middle one makes an unordered query observable even for two findings.
     if evaluation.findings:
-        relocated = evaluation.findings[len(evaluation.findings) // 2].id
+        relocated = evaluation.findings[0].id
         async with factory() as session:
             await session.execute(
                 sa
@@ -212,6 +214,14 @@ async def test_listing_applies_every_filter_and_counts_the_same_set(
                 compliance_status=status,
             )
         )
+        narrow_page, narrow_total = await uow.qa_artefacts.list_evaluations(
+            QaEvaluationListRequest(
+                episode_id=episode_id,
+                pagination=Pagination(limit=1, offset=0),
+                evaluator=evaluator,
+                compliance_status=status,
+            )
+        )
 
     expected = _matching_evaluation_ids(
         stored,
@@ -225,6 +235,35 @@ async def test_listing_applies_every_filter_and_counts_the_same_set(
     assert total == len(expected), (
         "the total should count the filtered set, not the page length"
     )
+    assert len(narrow_page) <= 1, "a one-row page should honour its limit"
+    assert narrow_total == len(expected), (
+        "the total must not be computed from the page it accompanies"
+    )
+
+
+@pytest.mark.asyncio
+async def test_total_is_independent_of_the_page_size(
+    session_factory: SessionFactory,
+) -> None:
+    """A two-row page still reports the unpaged size of the matching set."""
+    factory = session_factory
+    episode_id = await create_episode(factory)
+    specs = [
+        (QaEvaluator.PEDANTE, QaComplianceStatus.COMPLIANT, offset)
+        for offset in range(6)
+    ]
+    await _store_corpus(factory, episode_id, specs)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        page, total = await uow.qa_artefacts.list_evaluations(
+            QaEvaluationListRequest(
+                episode_id=episode_id,
+                pagination=Pagination(limit=2, offset=0),
+            )
+        )
+
+    assert len(page) == 2, "the page should honour its two-row limit"
+    assert total == 6, "the total should count every match, not the page length"
 
 
 @given(
@@ -246,7 +285,7 @@ async def test_pages_partition_the_ordered_listing(
         (QaEvaluator.PEDANTE, QaComplianceStatus.COMPLIANT, 0),
         (QaEvaluator.BROMIDE, QaComplianceStatus.ERRORED, 0),
     ]
-    await _store_corpus(factory, episode_id, [*tied, *specs])
+    stored = await _store_corpus(factory, episode_id, [*tied, *specs])
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         full, total = await uow.qa_artefacts.list_evaluations(
@@ -255,20 +294,29 @@ async def test_pages_partition_the_ordered_listing(
                 pagination=Pagination(limit=100, offset=0),
             )
         )
-        collected: list[uuid.UUID] = []
-        offset = 0
-        while offset < total:
-            page, _ = await uow.qa_artefacts.list_evaluations(
-                QaEvaluationListRequest(
-                    episode_id=episode_id,
-                    pagination=Pagination(limit=page_size, offset=offset),
-                )
-            )
-            assert len(page) <= page_size, "a page should honour its limit"
-            collected.extend(summary.id for summary in page)
-            offset += page_size
+        collected = await collect_page_ids(
+            uow,
+            episode_id,
+            page_size=page_size,
+            total=total,
+        )
 
-    expected = [summary.id for summary in full]
+    # Sort the recorded rows here, not through the query under test, so the
+    # expected order is an independent oracle for evaluated_at DESC, id DESC.
+    expected = [
+        item.summary_record.id
+        for item in sorted(
+            stored,
+            key=lambda item: (
+                item.summary_record.evaluated_at,
+                item.summary_record.id,
+            ),
+            reverse=True,
+        )
+    ]
+    assert [summary.id for summary in full] == expected, (
+        "the listing should order by evaluated_at descending, then id descending"
+    )
     assert collected == expected, (
         "concatenated pages should reproduce the full ordered listing"
     )

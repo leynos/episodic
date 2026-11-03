@@ -22,6 +22,8 @@ from episodic.canonical.domain import (
     SeriesProfile,
     TeiHeader,
 )
+from episodic.canonical.pagination import Pagination
+from episodic.canonical.qa_artefact_ports import QaEvaluationListRequest
 from episodic.canonical.qa_artefacts import (
     QA_ARTEFACT_SCHEMA_VERSION,
     QA_COMPLIANCE_POLICY_VERSION,
@@ -254,3 +256,50 @@ def make_evaluation(
         ),
         findings=findings,
     )
+
+
+async def collect_page_ids(
+    uow: SqlAlchemyUnitOfWork,
+    episode_id: uuid.UUID,
+    *,
+    page_size: int,
+    total: int,
+) -> list[uuid.UUID]:
+    """Return every identifier the listing's consecutive pages emit.
+
+    Parameters
+    ----------
+    uow : SqlAlchemyUnitOfWork
+        Unit of work to read the listing through.
+    episode_id : uuid.UUID
+        Episode whose evaluations are paged over.
+    page_size : int
+        Number of rows requested per page.
+    total : int
+        Unpaged number of matching evaluations, from the caller's first read.
+
+    Returns
+    -------
+    list[uuid.UUID]
+        Every matching identifier, exactly once, in listing order.
+
+    Raises
+    ------
+    ValueError
+        If a page returns more rows than its limit.
+    """
+    collected: list[uuid.UUID] = []
+    offset = 0
+    while offset < total:
+        page, _ = await uow.qa_artefacts.list_evaluations(
+            QaEvaluationListRequest(
+                episode_id=episode_id,
+                pagination=Pagination(limit=page_size, offset=offset),
+            )
+        )
+        if len(page) > page_size:
+            msg = f"a page of {len(page)} rows exceeds the limit {page_size}"
+            raise ValueError(msg)
+        collected.extend(summary.id for summary in page)
+        offset += page_size
+    return collected

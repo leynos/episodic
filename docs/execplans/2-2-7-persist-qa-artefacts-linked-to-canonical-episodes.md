@@ -1345,8 +1345,85 @@ Stop and escalate when any of these is reached.
     validators already listed. A local `cs delta` reports every touched file at
     code health 10.00 with no new issue.
 
+  - Hosted assessment follow-up round 27 at `8a721efd`, answering CodeRabbit's
+    substantive reply (comment `6561465087`, assessment
+    `2-2-7-8a721efd-cca-1`). Fixed, in one coherent repair:
+    - **Credential disclosure (major).** h11 rejects a header value with
+      trailing whitespace and quotes the rejected bytes in
+      `LocalProtocolError`; `httpx` wraps it as an `HTTPError`, and the CLI's
+      transport-error path printed the message verbatim, so a token such as
+      `Bearer <token>` reached standard error. `_is_header_safe` now also
+      requires `token == token.strip()`, the message names the real
+      requirement, and `_redact` masks the configured token in any transport
+      error text before it is shown. `tests/test_qa_cli_credentials.py` proves
+      both the `--token` and `EPISODIC_API_TOKEN` variants exit 2 without
+      dispatching a request, and that a transport error naming the token shows
+      `[redacted]` instead.
+    - **Independent pagination oracle.** The expected order is now computed in
+      the test by sorting the recorded rows on
+      `(evaluated_at, id)` descending, rather than by reading the order back
+      through the query under test.
+    - **Rubric PEP 316 obligation.** `_normalize_rubric_score` now carries the
+      contract the plan promised: a bounded precondition over the accepted
+      rounding window, and postconditions that the result keeps the
+      absence/value agreement, lies in the unit interval, and stays within
+      `_RUBRIC_TOLERANCE` of the input. `make crosshair` now checks this module
+      alongside `episodic/qa/chrono.py`.
+    - **Migration round-trip.** `tests/canonical_storage/test_qa_artefact_migration.py`
+      downgrades `20261031_000014` to `20261010_000013` inside the migrated
+      py-pglite engine, asserts the revision, tables, and enum types are gone,
+      upgrades back, asserts they return, and then records and reloads an
+      evaluation through `SqlAlchemyUnitOfWork`.
+    - **Live PostgreSQL walkthrough.** A disposable rootless podman PostgreSQL
+      17 container (`episodic-qa-e2e`, port 15439) was migrated, seeded with an
+      owned episode and a one-finding non-compliant Pedante evaluation, and
+      served by granian (`episodic.api.runtime:create_app_from_env`, port
+      18080). `curl` against `GET /v1/episodes/{episode_id}/qa-evaluations`
+      returned `{"total": 1, "first": "pedante", "findings": 1}`; the detail
+      route `GET /v1/qa-evaluations/{evaluation_id}` returned the recorded id,
+      `evaluator: pedante`, `compliance_status: non_compliant`,
+      `finding_count: 1`, and one finding. The installed CLI over real HTTP
+      printed the expected table and `1 of 1 evaluations` with exit 0, and an
+      `EPISODIC_API_TOKEN` with a trailing space exited 2 with the new message
+      and without echoing the token. The server and container were then
+      stopped and removed.
+    - **Negative controls.** Every control named in *Verification plan* was run
+      once against the delivered code and reverted; the record is in
+      *Negative-control record* below. Two controls exposed weak tests rather
+      than weak production code, and the tests were strengthened before the
+      controls were accepted: the filter property always paged with `limit=100`
+      over a corpus of at most 14, so computing `total` from the page could not
+      fail, and the findings-order property could not observe a missing
+      `ORDER BY` because the `(evaluation_id, ordinal)` unique index makes the
+      findings query naturally ordinal-ordered. A deterministic
+      `total`-independence case, a narrow-page assertion in the property, a
+      deterministic five-finding relocation case, and a mapper-level
+      out-of-order test were added; the corresponding controls now fail for the
+      intended reason.
+    - **Surprise: asyncpg at migration `20261013`.** Applying the migration
+      chain through asyncpg fails at `20261010_000013`, because
+      `pg_constraint.contype` arrives as `b'u'` rather than `'u'`, so
+      `_validated_constraint_name` reports the constraint name as malformed.
+      The live walkthrough therefore migrated with `postgresql+psycopg://`.
+      This predates item 2.2.7 and is outside its scope; it is recorded in
+      *Surprises & discoveries* rather than fixed here.
+
 ## Surprises & discoveries
 
+- Observation: the `qa_findings` unique constraint on
+  `(evaluation_id, ordinal)` makes a `WHERE evaluation_id = ...` query return
+  rows in ordinal order even with no `ORDER BY`, because that index is the
+  natural access path. Removing both the relationship's `order_by` and the
+  mapper's Python sort did not make the persistence ordering test fail against
+  py-pglite, so the plan's original control for `INV-FINDING-ORDER` was not
+  observable through the adapter. The invariant is still enforced twice, and a
+  mapper-level test that reverses the loaded relationship list now makes the
+  Python sort's contribution directly falsifiable.
+- Observation: `pg_constraint.contype` is a PostgreSQL `"char"` column. asyncpg
+  returns it as `bytes` (`b'u'`), while psycopg returns `str` (`'u'`). Migration
+  `20261010_000013` compares it against `"u"`, so an asyncpg-driven
+  `alembic upgrade` fails with a malformed-constraint-name error. Any future
+  migration runner must either use psycopg or normalize the value.
 - Observation: `Session.begin_nested()` flushes pending state unconditionally
   before it opens the `SAVEPOINT`, whatever the session's `autoflush` setting
   says. This plan asserted the opposite for several rounds. An in-memory
@@ -2617,8 +2694,9 @@ and contains no clock reading, no random value, and no attempt counter.
   would defeat replay entirely and no other obligation would notice.
 - Domain: all six evaluators; run identifier present and absent; two policy
   versions; two content hashes.
-- Artefact: `tests/test_qa_artefact_recording.py`.
-- Evidence: `uv run pytest tests/test_qa_artefact_recording.py -q`.
+- Artefact: `tests/test_qa_artefact_idempotency_key.py` (split out of
+  `tests/test_qa_artefact_recording.py` during implementation).
+- Evidence: `uv run pytest tests/test_qa_artefact_idempotency_key.py -q`.
 - Non-vacuity: the "changing any input changes the key" half fails for a minter
   that returns a constant; the "equal inputs, equal key" half fails for a
   minter that folds in a clock. Both halves are required. Negative control:
@@ -2631,15 +2709,22 @@ order the evaluator emitted them, with `ordinal` values exactly `0..n-1`.
   SQLAlchemy adapter using the py-pglite fixtures.
 - Rationale: PostgreSQL returns rows in unspecified order absent `ORDER BY`.
 - Domain: 0–12 findings per evaluation, mixed severities.
-- Artefact: `tests/canonical_storage/test_qa_artefact_properties.py`.
+- Artefact: `tests/canonical_storage/test_qa_artefact_properties.py` and
+  `tests/canonical_storage/test_qa_artefact_ordering.py`.
 - Evidence:
-  `uv run pytest tests/canonical_storage/test_qa_artefact_properties.py -q`.
+  `uv run pytest tests/canonical_storage/test_qa_artefact_properties.py -q` and
+  `uv run pytest tests/canonical_storage/test_qa_artefact_ordering.py -q`.
 - Non-vacuity: include an evaluation whose severities sort differently from
   emission order, so an accidental `ORDER BY severity` is rejected. Because
   insert-in-order plus a seq-scan usually *reproduces* insertion order, force
-  physical disorder: after insert, `UPDATE` one middle row's `summary` so
-  PostgreSQL relocates it in the heap, then read back. Negative control: drop
-  `ORDER BY ordinal` from the adapter query and confirm failure.
+  physical disorder: after insert, `UPDATE` a row's `summary` so PostgreSQL
+  relocates it in the heap, then read back. The deterministic cases pin a
+  five-finding relocation and a relationship list supplied in reverse, so both
+  the query ordering and the mapper's Python sort are exercised. Negative
+  control: remove the mapper's sort and confirm the mapper case fails. Removing
+  the `ORDER BY` alone is not observable against py-pglite, because the
+  `(evaluation_id, ordinal)` unique index supplies ordinal order on its own;
+  see *Surprises & discoveries*.
 
 **INV-REPLAY-IDEMPOTENT.** Recording twice with the same
 `(episode_id, idempotency_key)` creates exactly one `qa_evaluations` row and
@@ -2742,9 +2827,12 @@ that same set — not the page length.
 - Non-vacuity: classify with `hypothesis.event()` and require corpora that
   produce (a) a row matching the evaluator filter but not the compliance
   filter, (b) the converse, and (c) a row matching both. Without the
-  conjunction the test passes trivially. Negative control: drop the compliance
-  predicate from the adapter's `WHERE` clause and confirm failure; separately,
-  compute `total` from the paged result and confirm failure.
+  conjunction the test passes trivially. The property also requests a one-row
+  page and compares its total with the filtered population, and a deterministic
+  six-row case pages two rows, so a `total` derived from the page cannot pass.
+  Negative control: drop the compliance predicate from the adapter's `WHERE`
+  clause and confirm failure; separately, compute `total` from the paged result
+  and confirm failure.
 
 **INV-PAGINATION-PARTITION.** For a fixed filter and the canonical ordering
 (`evaluated_at DESC, id DESC`), concatenating pages
@@ -2851,6 +2939,33 @@ evaluations are deterministic given the same API payload.
 - Evidence: `uv run pytest tests/test_qa_cli.py -q`.
 - Non-vacuity: include an empty page and pages with 0 and 3 findings, so a
   renderer that always prints a fixed header row fails.
+
+### Negative-control record
+
+Every control below was applied once to the delivered code on 2026-11-01,
+observed to fail for the intended reason, and reverted; `git status --short` and
+`git diff --quiet` confirmed a clean tree after each revert. Commands are the
+focused suites named by the obligation.
+
+| Obligation                     | Mutation                                                             | Observed failure                                                                                                                                                                                                                                                                                |
+| ------------------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INV-BLOCKING-SET`             | Removed `CITATION_ABSENT` from `_BLOCKING_SUPPORT_LEVELS`            | `1` parameterized case plus the drift guard failed                                                                                                                                                                                                                                              |
+| `INV-ENUM-TAXONOMY`            | Added an `EXTRA` member to `QaEvaluator`                             | One taxonomy case failed                                                                                                                                                                                                                                                                        |
+| `INV-COMPLIANCE-BLOCKING`      | Made `compliance_status_for_pedante` always return `COMPLIANT`       | Two property cases failed                                                                                                                                                                                                                                                                       |
+| `INV-MAPPING-FIDELITY`         | Swapped `subject_id` and `subject_text` in the projection            | One case failed                                                                                                                                                                                                                                                                                 |
+| `INV-KEY-DETERMINISM`          | Appended `time.time_ns()` to the key                                 | Eight cases failed, including `test_key_ignores_the_clock_reading`                                                                                                                                                                                                                              |
+| `INV-FINDING-ORDER`            | Removed the relationship `order_by`, then the mapper sort, then both | All three runs passed: the unique index supplies the order, so the adapter-level control is not observable; the mapper-order test in `tests/canonical_storage/test_qa_artefact_ordering.py` failed with `ValueError: findings must carry consecutive ordinals` when the mapper sort was removed |
+| `INV-REPLAY-IDEMPOTENT`        | Returned the caller's candidate from the replay path                 | Nine cases failed, including "a replay should return the identifier created first"                                                                                                                                                                                                              |
+| `INV-CONSTRAINT-ENFORCED`      | Removed the rubric-score `CHECK` from the migration                  | Two `DID NOT RAISE IntegrityError` failures                                                                                                                                                                                                                                                     |
+| `INV-EPISODE-LINK`             | Changed the run foreign key to `ON DELETE CASCADE`                   | `test_deleting_generation_run_keeps_evaluation` failed                                                                                                                                                                                                                                          |
+| `INV-FILTER-SOUND` (predicate) | Removed the compliance-status predicate                              | One property case failed                                                                                                                                                                                                                                                                        |
+| `INV-FILTER-SOUND` (`total`)   | Computed `total` as `len(summaries)`                                 | Initially passed because the property paged with `limit=100`; after the narrow-page and deterministic cases were added, two cases failed on "the total must not be computed from the page it accompanies"                                                                                       |
+| `INV-PAGINATION-PARTITION`     | Removed `id DESC` from the `ORDER BY`                                | One case failed with two distinct counterexamples                                                                                                                                                                                                                                               |
+| Pagination oracle              | Reversed the test's own sort (`reverse=False`)                       | One case failed on the ordering assertion                                                                                                                                                                                                                                                       |
+| Rubric PEP 316 contract        | Tightened the tolerance postcondition to `<= 0`                      | `crosshair check --analysis_kind=PEP316` exited 1, reporting the post false for `Decimal('-1E-1000000')`                                                                                                                                                                                        |
+| Credential redaction           | Passed the transport error text through unchanged                    | The regression test failed and showed the token in the message                                                                                                                                                                                                                                  |
+| Token whitespace               | Removed `token == token.strip()` from `_is_header_safe`              | Three cases failed, including both whitespace parameters                                                                                                                                                                                                                                        |
+| Migration downgrade            | Dropped the enum types before the tables                             | `DependentObjectsStillExist: cannot drop type qa_finding_severity`                                                                                                                                                                                                                              |
 
 ### Axioms
 

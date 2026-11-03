@@ -17,6 +17,11 @@ if typ.TYPE_CHECKING:
 # Rubric scores are stored as NUMERIC(5, 4), so the unit interval is enforced
 # on the rounded value that would actually be persisted.
 _RUBRIC_QUANTUM = decimal.Decimal("0.0001")
+# Scores just outside the unit interval still round into it, so this window is
+# the accepted domain the CrossHair contract below quantifies over.
+_RUBRIC_TOLERANCE = decimal.Decimal("0.00005")
+_RUBRIC_LOW = -_RUBRIC_TOLERANCE
+_RUBRIC_HIGH = decimal.Decimal(1) + _RUBRIC_TOLERANCE
 # Quantize under a fixed context. The caller's context may carry a narrow
 # precision or an enabled Inexact trap, either of which would reject a score
 # the column can hold.
@@ -87,6 +92,11 @@ def _require_decimal_score(score: object) -> None:
         # past the interval check below and later fail an ordering comparison.
         msg = "rubric_score must be a finite decimal."
         raise ValueError(msg)
+    if not _RUBRIC_LOW <= score <= _RUBRIC_HIGH:
+        # Anything outside this window cannot round into the stored unit
+        # interval, so reject it before quantizing.
+        msg = "rubric_score must lie within the accepted rounding window."
+        raise ValueError(msg)
 
 
 def _rounded_unit_score(score: decimal.Decimal) -> decimal.Decimal:
@@ -114,7 +124,19 @@ def _require_unit_interval(rounded: decimal.Decimal) -> None:
 def _normalize_rubric_score(
     score: decimal.Decimal | None,
 ) -> decimal.Decimal | None:
-    """Return *score* at the stored precision, rejecting unusable values."""
+    """Return *score* at the stored precision, rejecting unusable values.
+
+    pre: score is None or (score.is_finite() and _RUBRIC_LOW <= score <= _RUBRIC_HIGH)
+    post: (score is None) == (__return__ is None)
+    post: __return__ is None or 0 <= __return__ <= 1
+    post: __return__ is None or abs(__return__ - score) <= _RUBRIC_TOLERANCE
+
+    Returns
+    -------
+    decimal.Decimal | None
+        ``None`` when *score* is ``None``, otherwise the score rounded to four
+        decimal places with any negative zero replaced by zero.
+    """
     if score is None:
         return None
     _require_decimal_score(score)

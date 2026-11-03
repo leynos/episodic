@@ -174,8 +174,8 @@ def test_rejected_invocation_does_not_echo_secrets(
 
 @pytest.mark.parametrize(
     "token",
-    ["placeholder-café", "placeholder\tvalue"],
-    ids=["non-ascii", "control-character"],
+    ["placeholder-café", "placeholder\tvalue", "placeholder ", " placeholder"],
+    ids=["non-ascii", "control-character", "trailing-space", "leading-space"],
 )
 def test_unusable_token_is_a_usage_error(
     capsys: pytest.CaptureFixture[str],
@@ -191,6 +191,7 @@ def test_unusable_token_is_a_usage_error(
     assert recorded.seen == [], recorded.seen
     assert "printable ASCII" in captured.err, captured.err
     assert "placeholder" not in captured.err, captured.err
+    assert "placeholder" not in captured.out, captured.out
 
 
 def test_unreachable_api_maps_to_exit_three(
