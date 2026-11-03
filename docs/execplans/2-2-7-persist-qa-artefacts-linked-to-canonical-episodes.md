@@ -1453,9 +1453,14 @@ Stop and escalate when any of these is reached.
     `false when calling _normalize_rubric_score(Decimal('0.0010')) (which
     returns Decimal('0'))` at the tolerance postcondition, so the contract is
     non-vacuous against the implementation as well as against a mutated
-    specification. The analysis runs under CPython 3.14.7's default decimal
-    context (precision 28, no traps); the contract is not claimed to hold
-    under a caller-installed low-precision or trapping context.
+    specification. The analysis runs under CPython 3.14.7 with the standard
+    default decimal context (`prec=28`, `ROUND_HALF_EVEN`), whose enabled traps
+    are `InvalidOperation`, `DivisionByZero` and `Overflow`; `Inexact`,
+    `Rounded`, `Underflow`, `Subnormal`, `FloatOperation` and `Clamped` are not
+    trapped. The fixed `decimal.Context(prec=28)` that `_rounded_unit_score`
+    enters for the quantize carries the same trap set, so the contract is not
+    claimed to hold under a caller-installed low-precision context or one that
+    enables `Inexact`.
   - **Test doubles for the identifier factory.** Making findings take the
     injected factory exposed that four test doubles returned one fixed
     identifier for every call, so every finding shared the evaluation's
@@ -1469,6 +1474,12 @@ Stop and escalate when any of these is reached.
     sequence per evaluation. The single-use `_pedante_findings` wrapper was
     also removed, bringing `qa_artefact_recording.py` back under the 400-line
     module ceiling.
+  - **Gate evidence for the repair head.** The committed tree at `b57892d6`
+    passed `check-fmt`, `typecheck` (`ty 0.0.32`), `lint` (Hecate, Ruff, Pylint
+    10.00/10, both df12 stages, ambrleaks, Skylos, and the duplication gate with
+    its 30 reasoned exceptions), `markdownlint`, `nixie`, `check-migrations`,
+    and `make test` (2067 passed, 1 skipped, 67 snapshots). The focused suites
+    for the eight affected modules reported 65 passed.
 
 ## Surprises & discoveries
 
