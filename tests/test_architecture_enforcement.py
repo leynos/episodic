@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from architecture_hecate_config import (
     LOGGING_PORT_FIXTURE,
+    diagnostic_for_expectation,
     run_hecate_fixture_check,
     run_hecate_production_check,
     write_fixture_config,
@@ -218,13 +219,11 @@ def test_checker_reports_fixture_boundary_violations(
     rendered = f"{completed_process.stdout}\n{completed_process.stderr}"
     assert completed_process.returncode == 1, rendered
     for expected_message_part in expected_message_parts:
-        diagnostic = rendered
-        if (
-            package_name == LOGGING_PORT_FIXTURE
-            and expected_message_part == "femtologging"
-        ):
-            fixture_package = f"tests.fixtures.architecture.{package_name}"
-            diagnostic = diagnostic.replace(fixture_package, "")
+        diagnostic = diagnostic_for_expectation(
+            package_name,
+            expected_message_part,
+            rendered,
+        )
         assert expected_message_part in diagnostic, (
             f"expected {expected_message_part!r} in {rendered!r}"
         )

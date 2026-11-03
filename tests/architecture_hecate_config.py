@@ -33,6 +33,34 @@ HECATE_TIMEOUT_SECONDS = 60
 type FixturePolicyVariant = typ.Literal["default", "external_logging"]
 
 
+def diagnostic_for_expectation(
+    package_name: str,
+    expected_text: str,
+    rendered: str,
+) -> str:
+    """Normalize a fixture diagnostic for one expected substring.
+
+    Parameters
+    ----------
+    package_name : str
+        Directory name of the fixture package under `tests/fixtures/architecture`.
+    expected_text : str
+        Diagnostic substring asserted by the caller.
+    rendered : str
+        Combined standard output and standard error from Hecate.
+
+    Returns
+    -------
+    str
+        Rendered diagnostic, with the fixture package prefix removed only when
+        checking the `femtologging` backend name.
+    """
+    if package_name != LOGGING_PORT_FIXTURE or expected_text != "femtologging":
+        return rendered
+    fixture_package = f"tests.fixtures.architecture.{package_name}"
+    return rendered.replace(fixture_package, "")
+
+
 class HecateInvocationError(RuntimeError):
     """Raised when the Hecate CLI process cannot be started or captured."""
 

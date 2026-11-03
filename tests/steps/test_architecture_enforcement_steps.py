@@ -17,7 +17,7 @@ from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]  #
 
 import pytest
 from architecture_hecate_config import (
-    LOGGING_PORT_FIXTURE,
+    diagnostic_for_expectation,
     run_hecate_fixture_check,
     write_fixture_config,
 )
@@ -150,8 +150,9 @@ def architecture_diagnostic_mentions(
     completed_process = context.completed_process
     assert completed_process is not None, "checker did not run"
     output = f"{completed_process.stdout}\n{completed_process.stderr}"
-    diagnostic = output
-    if context.package_name == LOGGING_PORT_FIXTURE and expected_text == "femtologging":
-        fixture_package = f"tests.fixtures.architecture.{context.package_name}"
-        diagnostic = diagnostic.replace(fixture_package, "")
+    diagnostic = diagnostic_for_expectation(
+        context.package_name,
+        expected_text,
+        output,
+    )
     assert expected_text in diagnostic, f"expected {expected_text!r} in {output!r}"
