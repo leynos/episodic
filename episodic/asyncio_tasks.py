@@ -96,17 +96,13 @@ def _validate_task_metadata(
 def _validate_task_create_kwargs(
     kwargs: cabc.Mapping[str, object],
 ) -> TaskCreateKwargs:
-    """Validate task-creation kwargs, including optional metadata."""
+    """Validate accepted task-creation kwargs and return a typed payload."""
     unexpected_keys = set(kwargs) - _TASK_CREATE_KWARGS_KEYS
     if unexpected_keys:
         keys = ", ".join(sorted(unexpected_keys, key=repr))
         msg = f"Unsupported task creation kwargs: {keys}"
         raise TypeError(msg)
-    validated_kwargs = typ.cast("TaskCreateKwargs", dict(kwargs))
-    metadata = validated_kwargs.get("metadata")
-    if metadata is not None:
-        validated_kwargs["metadata"] = _validate_task_metadata(metadata)
-    return validated_kwargs
+    return typ.cast("TaskCreateKwargs", dict(kwargs))
 
 
 def _create_with_optional_metadata[T](
@@ -146,6 +142,9 @@ def create_task[T](
 ) -> asyncio.Task[T]:
     """Create an asyncio task with optional task-factory metadata."""
     task_kwargs = _validate_task_create_kwargs(kwargs)
+    metadata = task_kwargs.get("metadata")
+    if metadata is not None:
+        task_kwargs["metadata"] = _validate_task_metadata(metadata)
     loop = asyncio.get_running_loop()
     loop_task_creator = typ.cast(
         "cabc.Callable[..., asyncio.Task[T]]",
@@ -167,6 +166,9 @@ def create_task_in_group[T](
 ) -> asyncio.Task[T]:
     """Create a task in `task_group` with optional task-factory metadata."""
     task_kwargs = _validate_task_create_kwargs(kwargs)
+    metadata = task_kwargs.get("metadata")
+    if metadata is not None:
+        task_kwargs["metadata"] = _validate_task_metadata(metadata)
     loop = asyncio.get_running_loop()
     group_task_creator = typ.cast(
         "cabc.Callable[..., asyncio.Task[T]]",

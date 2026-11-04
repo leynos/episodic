@@ -53,7 +53,7 @@ def _validate_readiness_probe(
     if not name.strip():
         msg = f"{label} must define a non-empty name."
         raise ValueError(msg)
-    validate_async_callable(getattr(probe, "check", None), label)
+    validate_async_callable(getattr(probe, "check", None), f"{label} check")
 
 
 def _validate_authorization_port(port: object) -> None:

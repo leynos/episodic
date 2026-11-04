@@ -62,35 +62,26 @@ __all__ = [
 # Serialise concurrent schema resets under pytest-xdist. Workers sharing one
 # py-pglite process must go through this lock before dropping `public`.
 _schema_reset_lock = asyncio.Lock()
-_PGLITE_ENGINE_READINESS_TIMEOUT_SECONDS = 30.0
 
 
 async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
     """Wait for the helper-managed py-pglite engine to accept connections."""
     max_attempts = 30
     delay_seconds = 0.1
-    try:
-        async with asyncio.timeout(_PGLITE_ENGINE_READINESS_TIMEOUT_SECONDS):
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    async with engine.connect() as connection:
-                        await connection.execute(sa.text("SELECT 1"))
-                except sa_exc.OperationalError as exc:
-                    if attempt == max_attempts:
-                        msg = (
-                            f"py-pglite engine not ready after {max_attempts} "
-                            f"attempts ({delay_seconds}s apart)"
-                        )
-                        raise RuntimeError(msg) from exc
-                    await asyncio.sleep(delay_seconds)
-                else:
-                    return
-    except TimeoutError as exc:
-        msg = (
-            "py-pglite engine readiness check timed out after "
-            f"{_PGLITE_ENGINE_READINESS_TIMEOUT_SECONDS:g} seconds"
-        )
-        raise RuntimeError(msg) from exc
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.connect() as connection:
+                await connection.execute(sa.text("SELECT 1"))
+        except sa_exc.OperationalError as exc:
+            if attempt == max_attempts:
+                msg = (
+                    f"py-pglite engine not ready after {max_attempts} "
+                    f"attempts ({delay_seconds}s apart)"
+                )
+                raise RuntimeError(msg) from exc
+            await asyncio.sleep(delay_seconds)
+        else:
+            return
 
 
 async def _reset_public_schema(engine: AsyncEngine) -> None:
