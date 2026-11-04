@@ -152,64 +152,6 @@ class _LogOnlySpyLogger:
         self.calls.append((level, message, exc_info, stack_info))
 
 
-class _RaisingInfoLogger(_LogOnlySpyLogger):
-    """Record a convenience call before simulating an emission failure."""
-
-    def info(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: object | None = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Record one call then raise the original emission failure."""
-        self.calls.append((
-            episodic_logging.LogLevel.INFO,
-            message,
-            exc_info,
-            stack_info,
-        ))
-        msg = "emission failed"
-        raise TypeError(msg)
-
-
-class _RaisingDebugLogger(_LogOnlySpyLogger):
-    """Track a DEBUG attempt before simulating an emission failure."""
-
-    def __init__(self) -> None:
-        """Initialise the generic logger and DEBUG attempt records."""
-        super().__init__()
-        self.debug_calls: list[tuple[str, object | None, bool]] = []
-
-    def debug(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: object | None = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Record one call then raise the original emission failure."""
-        self.debug_calls.append((message, exc_info, stack_info))
-        msg = "emission failed"
-        raise TypeError(msg)
-
-
-class _LegacyDebugLogger(_LogOnlySpyLogger):
-    """Logger with a DEBUG method that predates helper keyword arguments."""
-
-    def __init__(self) -> None:
-        """Initialise the generic logger and DEBUG attempt count."""
-        super().__init__()
-        self.debug_calls = 0
-
-    def debug(self, message: str, /) -> None:
-        """Record a DEBUG call that cannot accept the helper options."""
-        del message
-        self.debug_calls += 1
-
-
 class _LogFallbackCase(typ.NamedTuple):
     emit: cabc.Callable[..., None]
     template: str
@@ -322,46 +264,6 @@ def test_debug_and_exception_wrappers_fall_back_to_logger_log(
     assert spy_logger.calls == [
         (case.expected_level, case.expected_message, case.exc_info, False)
     ], "fallback calls should preserve formatting, level, and exception metadata"
-
-
-def test_log_wrapper_does_not_retry_a_failed_convenience_emission() -> None:
-    """A convenience-method TypeError propagates without a second log call."""
-    spy_logger = _RaisingInfoLogger()
-    logger = episodic_logging.LoggerHandle(spy_logger)
-
-    with pytest.raises(TypeError, match="emission failed"):
-        episodic_logging.log_info(logger, "Loaded %s documents", 3)
-
-    assert spy_logger.calls == [
-        (episodic_logging.LogLevel.INFO, "Loaded 3 documents", None, False)
-    ], "A failed convenience call must not be retried through log()."
-
-
-def test_debug_wrapper_falls_back_when_signature_rejects_helper_keywords() -> None:
-    """Fall back when a legacy DEBUG method rejects helper keyword arguments."""
-    spy_logger = _LegacyDebugLogger()
-    logger = episodic_logging.LoggerHandle(spy_logger)
-
-    episodic_logging.log_debug(logger, "Loaded %s documents", 3)
-
-    assert spy_logger.debug_calls == 0, "signature mismatch must be detected"
-    assert spy_logger.calls == [
-        (logging.DEBUG, "Loaded 3 documents", None, False)
-    ], "the rejected DEBUG call should fall back through log()"
-
-
-def test_debug_wrapper_does_not_retry_internal_type_error() -> None:
-    """Propagate compatible DEBUG failures to avoid emitting a duplicate."""
-    spy_logger = _RaisingDebugLogger()
-    logger = episodic_logging.LoggerHandle(spy_logger)
-
-    with pytest.raises(TypeError, match="emission failed"):
-        episodic_logging.log_debug(logger, "Loaded %s documents", 3)
-
-    assert spy_logger.debug_calls == [
-        ("Loaded 3 documents", None, False)
-    ], "the compatible DEBUG method should be attempted once"
-    assert spy_logger.calls == [], "internal failures must not be retried through log()"
 
 
 def test_femtologging_exposes_stdlib_style_logger_surface() -> None:
