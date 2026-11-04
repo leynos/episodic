@@ -7,9 +7,31 @@ import typing as typ
 
 import falcon
 
-from episodic.logging import get_logger, log_debug, log_warning
+from episodic.logging import get_logger, log_warning
 
 logger = get_logger(__name__)
+
+_AUTHORIZATION_LOG_RESOURCE_LABELS = {
+    "episode-templates": "/v1/episode-templates",
+    "episodes": "/v1/episodes",
+    "generation-runs": "/v1/generation-runs",
+    "ingestion-jobs": "/v1/ingestion-jobs",
+    "reference-bindings": "/v1/reference-bindings",
+    "reference-document-revisions": "/v1/reference-document-revisions",
+    "series-profiles": "/v1/series-profiles",
+    "uploads": "/v1/uploads",
+}
+_UNKNOWN_AUTHORIZATION_LOG_RESOURCE = "/v1/<unknown>"
+_AUTHORIZATION_LOG_METHODS = frozenset({
+    "DELETE",
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+})
+_OTHER_AUTHORIZATION_LOG_METHOD = "<other>"
 
 
 class AuthorizationDecision(enum.StrEnum):
@@ -111,13 +133,15 @@ class AuthorizationMiddleware:
         )
         try:
             result = _authorization_result(await self._authorization.decide(context))
-        except OSError, RuntimeError, TypeError, ValueError:
+        except (OSError, RuntimeError, TypeError, ValueError) as error:  # fmt: skip
+            # Adapter exception text may contain credentials from its context.
+            failure_category = self._authorization_failure_category(error)
             log_warning(
                 logger,
-                "Authorization adapter failed for %s %s.",
-                context.method,
-                context.path,
-                exc_info=True,
+                "Authorization adapter failed with %s for %s %s.",
+                failure_category,
+                _authorization_method_label(context.method),
+                _authorization_route_label(context.path),
             )
             resp.media = {
                 "code": "service_unavailable",
@@ -158,6 +182,21 @@ class AuthorizationMiddleware:
                 resp.status = falcon.HTTP_503
         resp.complete = True
 
+    @staticmethod
+    def _authorization_failure_category(error: Exception) -> str:
+        """Return a fixed label for a caught authorization adapter failure."""
+        match error:
+            case OSError():
+                return "os_error"
+            case RuntimeError():
+                return "runtime_error"
+            case TypeError():
+                return "type_error"
+            case ValueError():
+                return "value_error"
+            case _:
+                return "unknown_error"
+
 
 def _authorization_result(
     outcome: AuthorizationDecision | AuthorizationResult,
@@ -168,15 +207,44 @@ def _authorization_result(
     return AuthorizationResult(decision=outcome)
 
 
+def _authorization_route_label(path: str) -> str:
+    """Return an allow-listed route root without client-controlled path values."""
+    if not path.startswith("/v1/"):
+        return _UNKNOWN_AUTHORIZATION_LOG_RESOURCE
+    resource = path.removeprefix("/v1/").partition("/")[0]
+    return _AUTHORIZATION_LOG_RESOURCE_LABELS.get(
+        resource,
+        _UNKNOWN_AUTHORIZATION_LOG_RESOURCE,
+    )
+
+
+def _authorization_method_label(method: str) -> str:
+    """Return a standard HTTP method name, or a fixed placeholder."""
+    return (
+        method
+        if method in _AUTHORIZATION_LOG_METHODS
+        else _OTHER_AUTHORIZATION_LOG_METHOD
+    )
+
+
+def _authorization_decision_label(decision: object) -> str:
+    """Return a fixed label for known authorization decisions."""
+    match decision:
+        case AuthorizationDecision() as known_decision:
+            return known_decision.value
+        case _:
+            return "unknown"
+
+
 def _log_authorization_denial(
     decision: AuthorizationDecision,
     context: AuthorizationContext,
 ) -> None:
     """Log non-permit decisions without recording credential material."""
-    log_debug(
+    log_warning(
         logger,
         "Authorization denied with %s for %s %s.",
-        decision,
-        context.method,
-        context.path,
+        _authorization_decision_label(decision),
+        _authorization_method_label(context.method),
+        _authorization_route_label(context.path),
     )

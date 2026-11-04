@@ -773,6 +773,16 @@ Authorization scaffold:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
   `503`, so policy-backend outages are not reported as resource failures.
+- Denial and adapter-failure warning records include only a fixed decision or
+  failure-category label, an allow-listed standard HTTP method or the `<other>`
+  placeholder, and an allow-listed resource root for recognized `/v1/`
+  resources. Malformed adapter decisions use the fixed label `unknown`. Dynamic
+  and unrecognized path segments are omitted because URLs can carry
+  credentials. The adapter still receives the unmodified
+  `AuthorizationContext.path`. Adapter-failure categories are scoped to these
+  authorization audit warnings; they do not form a general exception taxonomy.
+  Warnings omit exception metadata, which could contain the raw authorization
+  header.
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
 
@@ -2742,6 +2752,12 @@ Keep `configure_logging(...)` as the local configuration seam. `log_exception`
 records exception information by default; the other wrappers accept optional
 `exc_info` explicitly when a caller needs it.
 
+The wrappers fall back to the backend's generic `log` method when a level
+method is absent. If a DEBUG call raises `TypeError` and signature inspection
+shows that its method rejects the helper's keyword arguments, `log_debug`
+retries through `log()`. A `TypeError` from a compatible DEBUG method and
+errors from other emission methods propagate without a retry.
+
 Use `log_event(...)` for structured event fields on the port's configured
 logger. When an event must use a caller's `LoggerHandle`, use
 `format_log_event(event, **fields)` to build the stable JSON message, then emit
@@ -2758,6 +2774,11 @@ limited to its backend and private type support.
 
 The architectural decision and its consequences are recorded in
 [ADR-025](adr/adr-025-central-logging-port.md).
+
+Authorization warnings log only a standard HTTP method or `<other>`, and an
+allow-listed resource root for `/v1/` requests. Dynamic and unrecognized path
+segments are omitted because URLs can carry credentials. The authorization
+adapter still receives the original path through `AuthorizationContext`.
 
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:
@@ -2898,6 +2919,10 @@ Two private Protocol types define the backend logger surface wrapped by
   ```
 
   `level` accepts an `int | LogLevel` value.
+
+`episodic/_logging_types.py` also owns the private wrapper configuration and
+signature predicate used by the port's DEBUG compatibility fallback. These
+internals exist only for backend dispatch and are not a second logging API.
 
 In every signature, the message (and `level` plus message for `log`) are
 positional-only before `/`, and `exc_info` and `stack_info` are keyword-only

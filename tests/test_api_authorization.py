@@ -3,9 +3,7 @@
 import typing as typ
 
 import pytest
-from falcon import testing
 
-from episodic.api import create_app
 from episodic.api.authorization import (
     AuthorizationContext,
     AuthorizationDecision,
@@ -13,39 +11,16 @@ from episodic.api.authorization import (
     AuthorizationResult,
     StaticBearerTokenAuthorization,
 )
-from tests.fixtures.api import build_api_dependencies
+from tests.fixtures.authorization import (
+    DenyAllAuthorization,
+    ForbidSeriesProfilesAuthorization,
+    RaisingAuthorization,
+    build_authorization_test_client,
+)
 
 if typ.TYPE_CHECKING:
+    from falcon import testing
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-
-class DenyAllAuthorization:
-    """Authorization adapter that rejects every request as unauthenticated."""
-
-    async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
-        """Return an unauthenticated decision for any context."""
-        del context
-        return AuthorizationDecision.UNAUTHORIZED
-
-
-class ForbidSeriesProfilesAuthorization:
-    """Authorization adapter that forbids the series-profile collection."""
-
-    async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
-        """Forbid the series-profile collection and permit other routes."""
-        if context.path == "/v1/series-profiles":
-            return AuthorizationDecision.FORBIDDEN
-        return AuthorizationDecision.PERMIT
-
-
-class RaisingAuthorization:
-    """Authorization adapter that simulates an unavailable policy service."""
-
-    async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
-        """Raise instead of returning a decision."""
-        del context
-        msg = "authorization backend unavailable"
-        raise RuntimeError(msg)
 
 
 @pytest.mark.asyncio
@@ -84,21 +59,6 @@ async def test_static_bearer_authorization_parses_scheme_and_token(
         assert result.principal_id == "configured-principal", result
     else:
         assert result.principal_id is None, result
-
-
-def _build_client(
-    session_factory: async_sessionmaker[AsyncSession],
-    authorization: AuthorizationPort,
-) -> testing.TestClient:
-    """Build a canonical API client with an authorization adapter."""
-    return testing.TestClient(
-        create_app(
-            build_api_dependencies(
-                session_factory,
-                authorization=authorization,
-            )
-        )
-    )
 
 
 def test_default_authorization_permits_v1_without_header(
@@ -152,7 +112,7 @@ def test_authorization_decision_serializes_to_canonical_envelope(
     expected_payload: dict[str, object],
 ) -> None:
     """Each non-permit decision returns the matching error envelope."""
-    client = _build_client(session_factory, adapter_factory())
+    client = build_authorization_test_client(session_factory, adapter_factory())
 
     response = client.simulate_get("/v1/series-profiles")
 
@@ -167,11 +127,37 @@ def test_authorization_decision_serializes_to_canonical_envelope(
     )
 
 
+@pytest.mark.parametrize(
+    "exception_type",
+    [OSError, RuntimeError, TypeError, ValueError],
+    ids=["os-error", "runtime-error", "type-error", "value-error"],
+)
+def test_authorization_adapter_failure_types_return_service_unavailable(
+    session_factory: async_sessionmaker[AsyncSession],
+    exception_type: type[Exception],
+) -> None:
+    """Every handled adapter failure returns the canonical 503 envelope."""
+    client = build_authorization_test_client(
+        session_factory,
+        RaisingAuthorization(error_type=exception_type),
+    )
+
+    response = client.simulate_get("/v1/series-profiles")
+
+    assert response.status_code == 503, response.status_code
+    payload = typ.cast("dict[str, object]", response.json)
+    assert payload == {
+        "code": "service_unavailable",
+        "message": "Authorization service is unavailable.",
+        "details": {},
+    }, payload
+
+
 def test_non_v1_paths_bypass_authorization(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Non-`/v1` operator endpoints bypass API authorization."""
-    client = _build_client(session_factory, DenyAllAuthorization())
+    client = build_authorization_test_client(session_factory, DenyAllAuthorization())
 
     response = client.simulate_get("/health/live")
 

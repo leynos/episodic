@@ -37,6 +37,24 @@ class _SpyLogger:
         """Append a normalised call tuple to the record list."""
         self.calls.append((level, message, exc_info, stack_info))
 
+    # @codescene(disable:"Code Duplication") Keep explicit protocol spy (2026-11-04).
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
+    def debug(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record a DEBUG-level call."""
+        self._record(
+            episodic_logging.LogLevel.DEBUG,
+            message,
+            exc_info=exc_info,
+            stack_info=stack_info,
+        )
+
     # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def info(
         self,
@@ -134,28 +152,6 @@ class _LogOnlySpyLogger:
         self.calls.append((level, message, exc_info, stack_info))
 
 
-class _RaisingInfoLogger(_LogOnlySpyLogger):
-    """Record a convenience call before simulating an emission failure."""
-
-    def info(
-        self,
-        message: str,
-        /,
-        *,
-        exc_info: object | None = None,
-        stack_info: bool = False,
-    ) -> None:
-        """Record one call then raise the original emission failure."""
-        self.calls.append((
-            episodic_logging.LogLevel.INFO,
-            message,
-            exc_info,
-            stack_info,
-        ))
-        msg = "emission failed"
-        raise TypeError(msg)
-
-
 class _LogFallbackCase(typ.NamedTuple):
     emit: cabc.Callable[..., None]
     template: str
@@ -173,6 +169,7 @@ def test_log_wrappers_delegate_through_convenience_methods(
     logger = episodic_logging.LoggerHandle(spy_logger)
     err = RuntimeError("boom")
 
+    episodic_logging.log_debug(logger, "Loaded %s documents", 3)
     episodic_logging.log_info(logger, "Loaded %s documents", 3)
     episodic_logging.log_warning(logger, "Potential issue in %s", "ingestion")
     episodic_logging.log_error(
@@ -186,7 +183,14 @@ def test_log_wrappers_delegate_through_convenience_methods(
     )
 
 
-def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
+@pytest.mark.parametrize(
+    "wrapper",
+    [episodic_logging.log_debug, episodic_logging.log_info],
+    ids=["debug", "info"],
+)
+def test_log_wrappers_raise_type_error_on_mismatched_format(
+    wrapper: cabc.Callable[..., None],
+) -> None:
     """Compatibility helpers should propagate `TypeError` from formatting."""
     spy_logger = _SpyLogger()
     logger = episodic_logging.LoggerHandle(spy_logger)
@@ -195,7 +199,7 @@ def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
         TypeError,
         match=r"not enough arguments for format string",
     ):
-        episodic_logging.log_info(logger, "Loaded %s documents for %s", 3)
+        wrapper(logger, "Loaded %s documents for %s", 3)
 
     assert spy_logger.calls == [], (  # pylint: disable=use-implicit-booleaness-not-comparison  # The explicit empty-list comparison documents the expected collection value.
         "expected no log calls after TypeError"
@@ -260,19 +264,6 @@ def test_debug_and_exception_wrappers_fall_back_to_logger_log(
     assert spy_logger.calls == [
         (case.expected_level, case.expected_message, case.exc_info, False)
     ], "fallback calls should preserve formatting, level, and exception metadata"
-
-
-def test_log_wrapper_does_not_retry_a_failed_convenience_emission() -> None:
-    """A convenience-method TypeError propagates without a second log call."""
-    spy_logger = _RaisingInfoLogger()
-    logger = episodic_logging.LoggerHandle(spy_logger)
-
-    with pytest.raises(TypeError, match="emission failed"):
-        episodic_logging.log_info(logger, "Loaded %s documents", 3)
-
-    assert spy_logger.calls == [
-        (episodic_logging.LogLevel.INFO, "Loaded 3 documents", None, False)
-    ], "A failed convenience call must not be retried through log()."
 
 
 def test_femtologging_exposes_stdlib_style_logger_surface() -> None:

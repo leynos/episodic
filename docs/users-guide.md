@@ -398,6 +398,15 @@ access. Requests for resources owned by another principal use the same
 not-found response as requests for resources that do not exist. Health
 endpoints are not covered by this `/v1` authorization requirement.
 
+The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
+`403 Forbidden`, respectively. The service records each decision through the
+application logging port at `WARNING`. Each record contains the fixed decision
+label, an allow-listed HTTP method, and an allow-listed resource root. Invalid
+adapter decisions use `unknown`; other method tokens use `<other>`. Dynamic and
+unrecognized path segments are omitted because URLs can carry credentials.
+Records exclude the `Authorization` header and bearer token. Adapter-failure
+warnings use a fixed category and omit exception details.
+
 ### Migration note for the next minor release
 
 Before upgrading to the next minor release, apply the new Alembic revisions.
@@ -558,6 +567,13 @@ from episodic.logging import get_logger, log_info
 logger = get_logger(__name__)
 log_info(logger, "Started workflow %s", "workflow-42")
 ```
+
+`episodic.logging.log_debug(logger, template, *args, exc_info=None)` formats a
+message with percent-style arguments and emits it at `DEBUG`. It calls
+`logger.debug` when available and falls back to the logger's generic `log`
+method when `debug` is absent or its inspectable signature rejects the helper's
+keyword arguments. The optional `exc_info` value is forwarded to the logger. A
+`TypeError` not identified as a signature mismatch propagates without a retry.
 
 ### Worker runtime
 
