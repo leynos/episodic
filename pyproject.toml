@@ -911,10 +911,6 @@ unit = "episodic/asyncio_tasks.py"
 reason = "Thin public wrappers over one task-creation path differing only in the create_task callable; kept explicit for API ergonomics and typing."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/generation/tei_payload.py::require_payload_object", "episodic/generation/tei_payload.py::require_payload_list"]
-reason = "Keep the public object and list validators explicit because they preserve distinct result types and shape-specific domain names while delegating validation to shared helpers."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/generation/draft_script_types.py", "episodic/generation/guest_bios_models.py"]
 reason = "Generation-tool model modules import the same episodic.llm budget and usage types; the shared block is the port surface, not logic."
 

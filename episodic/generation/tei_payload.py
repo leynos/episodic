@@ -18,6 +18,23 @@ Example:
 
 import typing as typ
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+
+def _require_payload_field[T](
+    value: object,
+    field_name: str,
+    validator: cabc.Callable[..., T],
+) -> T:
+    """Apply the shared TEI payload error context through a typed validator."""
+    return validator(
+        value,
+        field_name,
+        error_cls=ValueError,
+        prefix="TEI payload field",
+    )
+
 
 def _format_type_error_message(
     field_name: str,
@@ -135,12 +152,7 @@ def require_payload_object(value: object, field_name: str) -> dict[str, object]:
     dict[str, object]
         The validated TEI payload mapping.
     """
-    return require_mapping(
-        value,
-        field_name,
-        error_cls=ValueError,
-        prefix="TEI payload field",
-    )
+    return _require_payload_field(value, field_name, require_mapping)
 
 
 def require_payload_list(value: object, field_name: str) -> list[object]:
@@ -158,12 +170,7 @@ def require_payload_list(value: object, field_name: str) -> list[object]:
     list[object]
         The validated TEI payload list.
     """
-    return require_sequence(
-        value,
-        field_name,
-        error_cls=ValueError,
-        prefix="TEI payload field",
-    )
+    return _require_payload_field(value, field_name, require_sequence)
 
 
 def body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
