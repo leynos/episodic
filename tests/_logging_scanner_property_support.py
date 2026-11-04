@@ -6,6 +6,20 @@ import hypothesis.strategies as st
 
 
 class ScannerSource(typ.NamedTuple):
+    """Generated source and independent expectations for one scanner case.
+
+    Attributes
+    ----------
+    source : str
+        Python source containing generated imports, aliases and a logger call.
+    has_stdlib_logging_import : bool
+        Whether the generated import statement names the absolute stdlib
+        ``logging`` package or one of its submodules.
+    should_find_logger_call : bool
+        Whether the generated final call uses a recognised logger-level
+        method on a handle returned by an imported logger factory.
+    """
+
     source: str
     has_stdlib_logging_import: bool
     should_find_logger_call: bool
@@ -174,7 +188,16 @@ def _logger_call_statements(
 
 @st.composite
 def scanner_sources(draw: st.DrawFn) -> ScannerSource:
-    """Generate source plus an oracle independent from the AST scanner."""
+    """Generate scanner source and expectations from the source model.
+
+    Returns
+    -------
+    SearchStrategy[ScannerSource]
+        Hypothesis strategy that generates absolute or relative imports,
+        factory and logger aliases, varied assignment targets, and a final
+        recognised or unrecognised logger method call. Expected classifications
+        come from the generated source shape rather than the AST scanner.
+    """
     suffix = draw(st.integers(min_value=0, max_value=999))
     imports = _scanner_import(draw, suffix)
     call_statements, method = _logger_call_statements(
