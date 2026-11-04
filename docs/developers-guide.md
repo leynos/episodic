@@ -773,10 +773,10 @@ Authorization scaffold:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
   `503`, so policy-backend outages are not reported as resource failures.
-- Denial and adapter-failure warnings escape Unicode control and formatting
-  characters and line and paragraph separators in the logged request path.
-  Carriage returns and line feeds appear as visible `\r` and `\n` sequences.
-  The adapter still receives the unmodified `AuthorizationContext.path`.
+- Denial and adapter-failure warning records include only an allow-listed
+  resource root for recognized `/v1/` resources. Dynamic and unrecognized path
+  segments are omitted because URLs can carry credentials. The adapter still
+  receives the unmodified `AuthorizationContext.path`.
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
 
@@ -2747,8 +2747,10 @@ records exception information by default; the other wrappers accept optional
 `exc_info` explicitly when a caller needs it.
 
 The wrappers fall back to the backend's generic `log` method when a level
-method is absent. `log_debug` also falls back when the backend's `debug` method
-raises `AttributeError` or `TypeError`; other emission errors propagate.
+method is absent. If a DEBUG call raises `TypeError` and signature inspection
+shows that its method rejects the helper's keyword arguments, `log_debug`
+retries through `log()`. A `TypeError` from a compatible DEBUG method and errors
+from other emission methods propagate without a retry.
 
 Use `log_event(...)` for structured event fields on the port's configured
 logger. When an event must use a caller's `LoggerHandle`, use
