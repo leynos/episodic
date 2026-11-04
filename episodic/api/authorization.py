@@ -32,6 +32,12 @@ _AUTHORIZATION_LOG_METHODS = frozenset({
     "PUT",
 })
 _OTHER_AUTHORIZATION_LOG_METHOD = "<other>"
+_AUTHORIZATION_FAILURE_CATEGORIES: dict[type[Exception], str] = {
+    OSError: "os_error",
+    RuntimeError: "runtime_error",
+    TypeError: "type_error",
+    ValueError: "value_error",
+}
 
 
 class AuthorizationDecision(enum.StrEnum):
@@ -133,10 +139,16 @@ class AuthorizationMiddleware:
         )
         try:
             result = _authorization_result(await self._authorization.decide(context))
-        except (OSError, RuntimeError, TypeError, ValueError):  # fmt: skip
+        except (OSError, RuntimeError, TypeError, ValueError) as error:  # fmt: skip
+            # Adapter exception text may contain credentials from its context.
+            failure_category = _AUTHORIZATION_FAILURE_CATEGORIES.get(
+                type(error),
+                "unknown_error",
+            )
             log_warning(
                 logger,
-                "Authorization adapter failed for %s %s.",
+                "Authorization adapter failed with %s for %s %s.",
+                failure_category,
                 _authorization_method_label(context.method),
                 _authorization_route_label(context.path),
             )

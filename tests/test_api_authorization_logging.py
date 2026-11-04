@@ -128,9 +128,59 @@ def test_authorization_adapter_failure_does_not_log_exception_metadata(
 
     assert response.status_code == 503, response.status_code
     backend.warning.assert_called_once_with(
-        "Authorization adapter failed for GET /v1/series-profiles.",
+        "Authorization adapter failed with runtime_error for GET /v1/series-profiles.",
         exc_info=None,
         stack_info=False,
+    )
+    assert authorization_header not in repr(backend.warning.call_args), (
+        "authorization header must not reach the warning logger"
+    )
+
+
+@pytest.mark.parametrize(
+    ("exception_type", "expected_category"),
+    [
+        (OSError, "os_error"),
+        (RuntimeError, "runtime_error"),
+        (TypeError, "type_error"),
+        (ValueError, "value_error"),
+    ],
+    ids=["os-error", "runtime-error", "type-error", "value-error"],
+)
+def test_authorization_adapter_failure_logs_fixed_category(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+    exception_type: type[Exception],
+    expected_category: str,
+) -> None:
+    """Adapter warnings identify known failures without logging their details."""
+    backend = mock.Mock()
+    logger = episodic_logging.LoggerHandle(
+        typ.cast("episodic_logging._CompatibleLogger", backend)
+    )
+    monkeypatch.setattr(authorization_module, "logger", logger)
+    authorization_header = "Bearer sensitive-token"
+    client = build_authorization_test_client(
+        session_factory,
+        RaisingAuthorization(error_type=exception_type),
+    )
+
+    response = client.simulate_get(
+        "/v1/series-profiles",
+        headers={"Authorization": authorization_header},
+    )
+
+    assert response.status_code == 503, response.status_code
+    backend.warning.assert_called_once_with(
+        f"Authorization adapter failed with {expected_category} for GET "
+        "/v1/series-profiles.",
+        exc_info=None,
+        stack_info=False,
+    )
+    assert "authorization backend unavailable" not in repr(
+        backend.warning.call_args
+    ), (
+        "exception message must not reach the warning logger"
     )
     assert authorization_header not in repr(backend.warning.call_args), (
         "authorization header must not reach the warning logger"
@@ -183,21 +233,23 @@ def test_authorization_adapter_failure_does_not_log_exception_metadata(
             RaisingAuthorization,
             "/v1/episode-templates/Bearer%20sensitive-path-token",
             503,
-            "Authorization adapter failed for GET /v1/episode-templates.",
+            "Authorization adapter failed with runtime_error for GET "
+            "/v1/episode-templates.",
             None,
         ),
         _AuthorizationLogCase(
             RaisingAuthorization,
             "/v1/series-profiles",
             503,
-            "Authorization adapter failed for <other> /v1/series-profiles.",
+            "Authorization adapter failed with runtime_error for <other> "
+            "/v1/series-profiles.",
             request_method="FORGED-AUDIT-ENTRY",
         ),
         _AuthorizationLogCase(
             RaisingAuthorization,
             "/v1/series-profiles%0Dforged",
             503,
-            "Authorization adapter failed for GET /v1/<unknown>.",
+            "Authorization adapter failed with runtime_error for GET /v1/<unknown>.",
         ),
     ],
     ids=[
