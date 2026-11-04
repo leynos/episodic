@@ -1,6 +1,7 @@
 """Falcon resources for source-intake uploads and ingestion jobs."""
 
 import typing as typ
+from functools import partial
 
 import falcon
 
@@ -52,6 +53,9 @@ from episodic.canonical.source_intake_service import (
     list_ingestion_jobs,
     register_upload,
 )
+from episodic.logging import get_logger, log_error
+
+_emit_unmapped_api_error = partial(log_error, get_logger(__name__))
 
 if typ.TYPE_CHECKING:
     from episodic.api.types import UowFactory
@@ -122,7 +126,10 @@ class UploadsResource:
                     ),
                 )
             except SourceIntakeError as exc:
-                raise map_source_intake_error(exc) from exc
+                raise map_source_intake_error(
+                    exc,
+                    emit_error=_emit_unmapped_api_error,
+                ) from exc
             return IdempotentResponse(falcon.HTTP_201, serialize_upload(upload))
 
         result = await run_idempotent(
@@ -157,7 +164,10 @@ class UploadResource:
                 upload = await get_upload(uow, parsed_upload_id)
                 _require_upload_owner(upload.owner_principal_id, principal_id(req))
             except SourceIntakeError as exc:
-                raise map_source_intake_error(exc) from exc
+                raise map_source_intake_error(
+                    exc,
+                    emit_error=_emit_unmapped_api_error,
+                ) from exc
         resp.media = serialize_upload(upload)
         resp.status = falcon.HTTP_200
 
@@ -200,7 +210,10 @@ class IngestionJobsResource:
                         ),
                     )
                 except SourceIntakeError as exc:
-                    raise map_source_intake_error(exc) from exc
+                    raise map_source_intake_error(
+                        exc,
+                        emit_error=_emit_unmapped_api_error,
+                    ) from exc
             return IdempotentResponse(falcon.HTTP_201, serialize_ingestion_job(job))
 
         result = await run_idempotent(
@@ -259,7 +272,10 @@ class IngestionJobResource:
                 job = await get_ingestion_job_status(uow, parsed_job_id)
                 _require_ingestion_job_owner(job, principal_id(req))
             except SourceIntakeError as exc:
-                raise map_source_intake_error(exc) from exc
+                raise map_source_intake_error(
+                    exc,
+                    emit_error=_emit_unmapped_api_error,
+                ) from exc
         next_poll = None
         if job.intake_state is IntakeState.AWAITING_SOURCES:
             next_poll = 5
@@ -297,7 +313,10 @@ class IngestionJobSourcesResource:
                     _require_ingestion_job_owner(job, principal_id(req))
                     source = await attach_source_to_ingestion_job(uow, attach_request)
                 except SourceIntakeError as exc:
-                    raise map_source_intake_error(exc) from exc
+                    raise map_source_intake_error(
+                        exc,
+                        emit_error=_emit_unmapped_api_error,
+                    ) from exc
             return IdempotentResponse(
                 falcon.HTTP_201,
                 serialize_ingestion_job_source(source),
@@ -333,7 +352,10 @@ class IngestionJobSourcesResource:
                     pagination,
                 )
             except SourceIntakeError as exc:
-                raise map_source_intake_error(exc) from exc
+                raise map_source_intake_error(
+                    exc,
+                    emit_error=_emit_unmapped_api_error,
+                ) from exc
         resp.media = {
             "items": [serialize_ingestion_job_source(source) for source in page.items],
             "limit": page.pagination.limit,

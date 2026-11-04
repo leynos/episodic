@@ -11,6 +11,7 @@ import logging
 import traceback
 import typing as typ
 import uuid
+from functools import partial
 
 import falcon
 import pytest
@@ -21,6 +22,7 @@ from episodic.api.handlers import handle_get_entity
 from episodic.canonical.profile_templates.types import ProfileTemplateError
 from episodic.canonical.reference_documents.types import ReferenceDocumentError
 from episodic.canonical.source_intake_errors import SourceIntakeError
+from episodic.logging import log_error
 from tests.fixtures.api_errors import API_ERROR_TEST_LOGGER_NAME as _TEST_LOGGER_NAME
 
 if typ.TYPE_CHECKING:
@@ -135,7 +137,7 @@ class _UnmappedMapperCase:
     """Describe one error mapper's unmapped fallback contract."""
 
     exception: Exception
-    mapper: cabc.Callable[[Exception], falcon.HTTPError]
+    mapper: cabc.Callable[[Exception, cabc.Callable[..., None]], falcon.HTTPError]
     expected_message: str
 
 
@@ -187,8 +189,9 @@ def _stable_mapper_snapshot(
                     "Unexpected profile/template failure: " + _TEST_CREDENTIAL,
                     entity_id=_TEST_ENTITY_ID,
                 ),
-                lambda exc: api_errors.map_profile_template_error(
-                    typ.cast("ProfileTemplateError", exc)
+                lambda exc, emit_error: api_errors.map_profile_template_error(
+                    typ.cast("ProfileTemplateError", exc),
+                    emit_error=emit_error,
                 ),
                 (
                     "Unmapped profile/template error: "
@@ -204,9 +207,10 @@ def _stable_mapper_snapshot(
                 _UnexpectedReferenceDocumentError(
                     "Unexpected reference failure: " + _TEST_CREDENTIAL
                 ),
-                lambda exc: api_errors.map_reference_error(
+                lambda exc, emit_error: api_errors.map_reference_error(
                     typ.cast("ReferenceDocumentError", exc),
                     context="reference-document",
+                    emit_error=emit_error,
                 ),
                 (
                     "Unmapped reference error: "
@@ -220,8 +224,9 @@ def _stable_mapper_snapshot(
                 _UnexpectedSourceIntakeError(
                     "Unexpected source-intake failure: " + _TEST_CREDENTIAL
                 ),
-                lambda exc: api_errors.map_source_intake_error(
-                    typ.cast("SourceIntakeError", exc)
+                lambda exc, emit_error: api_errors.map_source_intake_error(
+                    typ.cast("SourceIntakeError", exc),
+                    emit_error=emit_error,
                 ),
                 "Unmapped source-intake error: type=_UnexpectedSourceIntakeError",
             ),
@@ -248,7 +253,7 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
             ReferenceDocumentError,
             SourceIntakeError,
         ) as raised:
-            result = case.mapper(raised)
+            result = case.mapper(raised, partial(log_error, spy_logger))
 
     assert isinstance(result, falcon.HTTPInternalServerError), (
         "unmapped domain errors must return HTTP 500"
@@ -283,7 +288,10 @@ def test_unmapped_profile_error_response_redacts_exception_text(
         try:
             raise exc
         except ProfileTemplateError as raised:
-            mapped_error = api_errors.map_profile_template_error(raised)
+            mapped_error = api_errors.map_profile_template_error(
+                raised,
+                emit_error=partial(log_error, spy_logger),
+            )
 
     response = falcon.Response()
     api_errors.serialize_http_error(

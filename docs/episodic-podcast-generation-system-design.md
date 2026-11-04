@@ -2191,19 +2191,26 @@ Error contract:
 
 ### API logging
 
+Shared Falcon envelope construction and serialization live in
+`episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
+exceptions onto that contract.
+
 Only unmapped domain exceptions that the API error mappers convert to HTTP 500
-are logged. The mappers use `episodic.logging.log_error` at `ERROR` with
-detached `exc_info` containing a synthetic redacted exception and no live
-traceback. Sanitized source-frame metadata records the filename, function, and
-line without retaining frames or locals. The profile-template mapper includes
-the exception type, known error code, and UUID entity ID; unrecognized code or
-identifier values are redacted. The reference mapper includes its context and
-exception type; the source-intake mapper includes only the exception type.
-These diagnostics omit the original exception message and chained causes
-because they may contain credentials. Unmapped HTTP 500 envelopes use a generic
-message instead of returning exception text. Mapped 400, 404, and 409 outcomes
-are expected results and are not logged by the mappers. REST resource modules
-add no per-handler logs.
+are logged. Each mapper receives an explicit `emit_error` callback from its API
+boundary; that boundary binds the callback to `episodic.logging.log_error`. The
+mapper module has no global logger, and the callback is used only for an
+unmapped error. These errors are logged at `ERROR` with detached `exc_info`
+containing a synthetic redacted exception and no live traceback. Sanitized
+source-frame metadata records the filename, function, and line without
+retaining frames or locals. The profile-template mapper includes the exception
+type, known error code, and UUID entity ID; unrecognized code or identifier
+values are redacted. The reference mapper includes its context and exception
+type; the source-intake mapper includes only the exception type. These
+diagnostics omit the original exception message and chained causes because they
+may contain credentials. Unmapped HTTP 500 envelopes use a generic message
+instead of returning exception text. Mapped 400, 404, and 409 outcomes are
+expected results and are not logged by the mappers. REST resource modules add
+no per-handler logs.
 
 Request-level logging and correlation are a separate boundary. Roadmap item
 4.1.3 plans to add request correlation across HTTP, tasks, and outbound

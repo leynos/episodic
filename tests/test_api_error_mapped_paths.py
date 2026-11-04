@@ -23,6 +23,7 @@ from episodic.canonical.reference_documents.types import (
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from episodic.api._error_logging import _UnmappedErrorEmitter
     from episodic.canonical.profile_templates.types import ProfileTemplateError
 from episodic.canonical.source_intake_errors import (
     IngestionJobNotFoundError,
@@ -40,27 +41,43 @@ class _MappedErrorCase:
     """Describe one expected domain-error mapping."""
 
     exception: Exception
-    mapper: cabc.Callable[[Exception], falcon.HTTPError]
+    mapper: cabc.Callable[[Exception, _UnmappedErrorEmitter], falcon.HTTPError]
     expected_type: type[falcon.HTTPError]
     expected_code: str
 
 
-def _map_profile_error(exc: Exception) -> falcon.HTTPError:
+def _map_profile_error(
+    exc: Exception,
+    emit_error: _UnmappedErrorEmitter,
+) -> falcon.HTTPError:
     """Map one profile/template error case."""
-    return api_errors.map_profile_template_error(typ.cast("ProfileTemplateError", exc))
+    return api_errors.map_profile_template_error(
+        typ.cast("ProfileTemplateError", exc),
+        emit_error=emit_error,
+    )
 
 
-def _map_reference_error(exc: Exception) -> falcon.HTTPError:
+def _map_reference_error(
+    exc: Exception,
+    emit_error: _UnmappedErrorEmitter,
+) -> falcon.HTTPError:
     """Map one reference-document error case."""
     return api_errors.map_reference_error(
         typ.cast("ReferenceDocumentError", exc),
         context="reference-document",
+        emit_error=emit_error,
     )
 
 
-def _map_source_intake_error(exc: Exception) -> falcon.HTTPError:
+def _map_source_intake_error(
+    exc: Exception,
+    emit_error: _UnmappedErrorEmitter,
+) -> falcon.HTTPError:
     """Map one source-intake error case."""
-    return api_errors.map_source_intake_error(typ.cast("SourceIntakeError", exc))
+    return api_errors.map_source_intake_error(
+        typ.cast("SourceIntakeError", exc),
+        emit_error=emit_error,
+    )
 
 
 @pytest.mark.parametrize(
@@ -178,13 +195,11 @@ def _map_source_intake_error(exc: Exception) -> falcon.HTTPError:
 )
 def test_mapped_domain_errors_do_not_log(
     case: _MappedErrorCase,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Expected 400, 404 and 409 outcomes return their mappings without logs."""
-    spy_logger = mock.Mock()
-    monkeypatch.setattr(api_errors, "logger", spy_logger)
+    emit_error = mock.Mock()
 
-    result = case.mapper(case.exception)
+    result = case.mapper(case.exception, emit_error)
 
     assert isinstance(result, case.expected_type), (
         f"expected {case.expected_type.__name__}, got {type(result).__name__}"
@@ -192,7 +207,7 @@ def test_mapped_domain_errors_do_not_log(
     assert typ.cast("typ.Any", result).envelope_code == case.expected_code, (
         f"expected envelope code {case.expected_code!r}"
     )
-    spy_logger.error.assert_not_called()
+    emit_error.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -212,7 +227,10 @@ def test_mapped_profile_errors_omit_untrusted_entity_ids(
     exception: ProfileTemplateError,
 ) -> None:
     """Mapped profile errors do not return non-UUID identifiers to clients."""
-    result = api_errors.map_profile_template_error(exception)
+    result = api_errors.map_profile_template_error(
+        exception,
+        emit_error=_ignore_error_log,
+    )
 
     assert typ.cast("typ.Any", result).envelope_details == {}, (
         "mapped error details must omit non-UUID entity identifiers"
@@ -226,9 +244,14 @@ def test_mapped_profile_error_uses_safe_caller_entity_id() -> None:
 
     result = api_errors.map_profile_template_error(
         exception,
+        emit_error=_ignore_error_log,
         entity_id=caller_entity_id,
     )
 
     assert typ.cast("typ.Any", result).envelope_details == {
         "entity_id": caller_entity_id,
     }, "mapped errors must fall back to the safe caller entity ID"
+
+
+def _ignore_error_log(*_args: object, **_kwargs: object) -> None:
+    """Provide a no-op emitter for expected mapped outcomes."""
