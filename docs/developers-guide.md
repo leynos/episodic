@@ -847,13 +847,16 @@ Authorization scaffold:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
   `503`, so policy-backend outages are not reported as resource failures.
-- Denial and adapter-failure warning records include only an allow-listed
-  standard HTTP method or the `<other>` placeholder, plus an allow-listed
-  resource root for recognized `/v1/` resources. Dynamic and unrecognized path
-  segments are omitted because URLs can carry credentials. The adapter still
-  receives the unmodified `AuthorizationContext.path`. Adapter-failure warnings
-  include a fixed category for the caught exception family and do not attach
-  exception metadata, which could contain the raw authorization header.
+- Denial and adapter-failure warning records include only a fixed decision or
+  failure-category label, an allow-listed standard HTTP method or the `<other>`
+  placeholder, and an allow-listed resource root for recognized `/v1/`
+  resources. Malformed adapter decisions use the fixed label `unknown`. Dynamic
+  and unrecognized path segments are omitted because URLs can carry
+  credentials. The adapter still receives the unmodified
+  `AuthorizationContext.path`. Adapter-failure categories are scoped to these
+  authorization audit warnings; they do not form a general exception taxonomy.
+  Warnings omit exception metadata, which could contain the raw authorization
+  header.
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
 
