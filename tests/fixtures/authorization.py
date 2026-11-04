@@ -55,7 +55,20 @@ def build_authorization_test_client(
     session_factory: async_sessionmaker[AsyncSession],
     authorization: AuthorizationPort,
 ) -> testing.TestClient:
-    """Build a canonical API client with an authorization adapter."""
+    """Build a canonical API client with an authorization adapter.
+
+    Parameters
+    ----------
+    session_factory : async_sessionmaker[AsyncSession]
+        Session factory wired into the API dependencies.
+    authorization : AuthorizationPort
+        Adapter used to decide requests to protected endpoints.
+
+    Returns
+    -------
+    testing.TestClient
+        Client configured with the supplied authorization adapter.
+    """
     return testing.TestClient(
         create_app(
             build_api_dependencies(
