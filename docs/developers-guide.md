@@ -3128,8 +3128,8 @@ test of the adapter.
 The wrappers fall back to the backend's generic `log` method when a level
 method is absent. If a DEBUG call raises `TypeError` and signature inspection
 shows that its method rejects the helper's keyword arguments, `log_debug`
-retries through `log()`. A `TypeError` from a compatible DEBUG method and errors
-from other emission methods propagate without a retry.
+retries through `log()`. A `TypeError` from a compatible DEBUG method and
+errors from other emission methods propagate without a retry.
 
 Use `log_event(...)` for structured event fields on the port's configured
 logger. When an event must use a caller's `LoggerHandle`, use
@@ -3292,6 +3292,10 @@ Two private Protocol types define the backend logger surface wrapped by
   ```
 
   `level` accepts an `int | LogLevel` value.
+
+`episodic/_logging_types.py` also owns the private wrapper configuration and
+signature predicate used by the port's DEBUG compatibility fallback. These
+internals exist only for backend dispatch and are not a second logging API.
 
 In every signature, the message (and `level` plus message for `log`) are
 positional-only before `/`, and `exc_info` and `stack_info` are keyword-only

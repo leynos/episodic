@@ -1,7 +1,5 @@
 """Authorization adapters and client builders for API tests."""
 
-from __future__ import annotations
-
 import typing as typ
 
 from falcon import testing
