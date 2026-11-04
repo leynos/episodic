@@ -2,6 +2,7 @@
 
 import traceback
 import typing as typ
+from functools import partial
 from unittest import mock
 
 import falcon
@@ -12,6 +13,7 @@ from hypothesis import strategies as st
 from episodic.api import _error_logging
 from episodic.api import errors as api_errors
 from episodic.canonical.profile_templates.types import ProfileTemplateError
+from episodic.logging import log_error
 
 _TEST_CREDENTIAL = "test-only-secret-marker"
 _TEST_CAUSE_CREDENTIAL = "test-only-cause-secret-marker"
@@ -65,7 +67,10 @@ def test_profile_template_error_redacts_credential_metadata(
     try:
         raise exc from RuntimeError(_TEST_CAUSE_CREDENTIAL)
     except ProfileTemplateError as raised:
-        mapped_error = api_errors.map_profile_template_error(raised)
+        mapped_error = api_errors.map_profile_template_error(
+            raised,
+            emit_error=partial(log_error, spy_logger),
+        )
 
     assert isinstance(mapped_error, falcon.HTTPInternalServerError), (
         "unmapped profile/template errors must return HTTP 500"
@@ -137,7 +142,10 @@ def test_unmapped_error_bounds_logged_source_frames(
     try:
         _raise_profile_template_error(30, exc)
     except ProfileTemplateError as raised:
-        api_errors.map_profile_template_error(raised)
+        api_errors.map_profile_template_error(
+            raised,
+            emit_error=partial(log_error, spy_logger),
+        )
 
     exc_info = spy_logger.calls[0][2]
     assert isinstance(exc_info, tuple), "error logs must include exception info"
@@ -180,14 +188,20 @@ def test_profile_error_logging_redacts_generated_untrusted_values(
         exc.__cause__ = RuntimeError("chained cause:" + credential)
 
     spy = mock.Mock()
-    with mock.patch.object(api_errors, "logger", spy):
-        if has_traceback:
-            try:
-                raise exc
-            except ProfileTemplateError as raised:
-                mapped_error = api_errors.map_profile_template_error(raised)
-        else:
-            mapped_error = api_errors.map_profile_template_error(exc)
+    emit_error = partial(log_error, spy)
+    if has_traceback:
+        try:
+            raise exc
+        except ProfileTemplateError as raised:
+            mapped_error = api_errors.map_profile_template_error(
+                raised,
+                emit_error=emit_error,
+            )
+    else:
+        mapped_error = api_errors.map_profile_template_error(
+            exc,
+            emit_error=emit_error,
+        )
 
     assert isinstance(mapped_error, falcon.HTTPInternalServerError), (
         "unmapped profile errors must return HTTP 500"

@@ -1,10 +1,12 @@
 """Build credential-safe diagnostics for unmapped HTTP error logging.
 
-Mappers use ``_log_unmapped_error`` with the logging port and safe, percent-style
-fields. Its emitted ``exc_info`` is detached: it contains neither the original
-exception nor its traceback frames, locals, source lines, or source message.
-Source locations are limited to 20 frame labels. Profile metadata permits only
-known codes and normalized canonical UUID entity IDs; other values are redacted.
+Mappers receive an explicit ``emit_error`` callback from the API boundary and
+use ``_log_unmapped_error`` with safe, percent-style fields. The boundary binds
+that callback to the logging port; the mapper module has no global logger. Its
+emitted ``exc_info`` is detached: it contains neither the original exception
+nor its traceback frames, locals, source lines, or source message. Source
+locations are limited to 20 frame labels. Profile metadata permits only known
+codes and normalized canonical UUID entity IDs; other values are redacted.
 
 For example, a mapper can pass ``exc.__traceback__`` and the exception type to
 ``_log_unmapped_error``; the helper emits only the redacted diagnostic.
@@ -17,10 +19,22 @@ import uuid
 from collections import deque
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import types
 
     from episodic.canonical.profile_templates.types import ProfileTemplateError
+
+
+class _UnmappedErrorEmitter(typ.Protocol):
+    """Limit mapper dependencies to the ERROR logging operation they need."""
+
+    def __call__(
+        self,
+        template: str,
+        /,
+        *args: object,
+        exc_info: object | None = None,
+    ) -> None: ...
+
 
 _SAFE_PROFILE_TEMPLATE_LOG_CODES = frozenset({
     "profile_template_error",
@@ -69,7 +83,7 @@ def _safe_profile_template_entity_id(entity_id: object | None) -> str | None:
 
 
 def _log_unmapped_profile_template_error(
-    emit_error: cabc.Callable[..., None],
+    emit_error: _UnmappedErrorEmitter,
     source_exception: ProfileTemplateError,
     entity_id: object | None,
 ) -> None:
@@ -118,7 +132,7 @@ def _safe_source_frame_metadata(
 
 
 def _log_unmapped_error(
-    emit_error: cabc.Callable[..., None],
+    emit_error: _UnmappedErrorEmitter,
     source_traceback: types.TracebackType | None,
     template: str,
     *args: object,

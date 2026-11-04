@@ -1453,20 +1453,26 @@ Implementation notes:
 
 ### API error and request logging
 
+Shared Falcon envelope construction and serialization live in
+`episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
+exceptions onto that contract.
+
 The API error mappers log only unmapped domain exceptions that become HTTP 500
-responses. They use the `episodic.logging` port at `ERROR` with detached
-`exc_info` containing a synthetic redacted exception and no live traceback.
-Sanitized source-frame metadata records the filename, function, and line
-without retaining frames or locals. The profile-template mapper records the
-exception type, known error code, and UUID entity ID; unrecognized code or
-identifier values are redacted. The reference mapper records its context and
-exception type; the source-intake mapper records only the exception type. The
-original exception message and chained causes are omitted because they may
-contain credentials. Unmapped HTTP 500 envelopes use a generic message rather
-than returning exception text. Expected mapped 400, 404, and 409 outcomes are
-not logged by the mappers, and resource modules add no per-handler logs.
-Request-level logging and correlation remain planned in roadmap item 4.1.3 and
-are not yet guaranteed. See the
+responses. Each mapper receives an explicit `emit_error` callback from its API
+boundary; the boundary binds that callback to the `episodic.logging` port. The
+mapper module has no global logger, and mapped errors do not invoke the
+callback. Unmapped errors use `ERROR` with detached `exc_info` containing a
+synthetic redacted exception and no live traceback. Sanitized source-frame
+metadata records the filename, function, and line without retaining frames or
+locals. The profile-template mapper records the exception type, known error
+code, and UUID entity ID; unrecognized code or identifier values are redacted.
+The reference mapper records its context and exception type; the source-intake
+mapper records only the exception type. The original exception message and
+chained causes are omitted because they may contain credentials. Unmapped HTTP
+500 envelopes use a generic message rather than returning exception text.
+Expected mapped 400, 404, and 409 outcomes are not logged by the mappers, and
+resource modules add no per-handler logs. Request-level logging and correlation
+remain planned in roadmap item 4.1.3 and are not yet guaranteed. See the
 [API logging](episodic-podcast-generation-system-design.md#api-logging) section
 of the system design for the request-correlation boundary.
 
