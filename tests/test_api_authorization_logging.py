@@ -92,6 +92,18 @@ class _AuthorizationHeaderFailure:
         raise RuntimeError(header if header is not None else "missing header")
 
 
+class _InvalidDecisionAuthorization:
+    """Authorization adapter that returns an unsafe, invalid decision value."""
+
+    async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
+        """Return an invalid label to test the middleware logging boundary."""
+        del context
+        return typ.cast(
+            "AuthorizationDecision",
+            "forged\nBearer sensitive-token",
+        )
+
+
 class _AuthorizationLogCase(typ.NamedTuple):
     """Inputs and expected output for one authorization log assertion."""
 
@@ -208,6 +220,12 @@ def test_authorization_adapter_failure_logs_fixed_category(
             "Authorization denied with forbidden for GET /v1/series-profiles.",
         ),
         _AuthorizationLogCase(
+            _InvalidDecisionAuthorization,
+            "/v1/series-profiles",
+            503,
+            "Authorization denied with unknown for GET /v1/series-profiles.",
+        ),
+        _AuthorizationLogCase(
             DenyAllAuthorization,
             "/v1/series-profiles",
             401,
@@ -260,6 +278,7 @@ def test_authorization_adapter_failure_logs_fixed_category(
     ids=[
         "unauthorized",
         "forbidden",
+        "unknown-decision",
         "unauthorized-custom-method",
         "unauthorized-known-resource-path-token",
         "unauthorized-unknown-resource-path-token",
