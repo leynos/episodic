@@ -1476,6 +1476,10 @@ remain planned in roadmap item 4.1.3 and are not yet guaranteed. See the
 [API logging](episodic-podcast-generation-system-design.md#api-logging) section
 of the system design for the request-correlation boundary.
 
+The reference-document resource module binds its fixed diagnostic context and
+emitter in one private mapper helper shared by its routes. Keep that binding
+local to the module because other resource families have different contexts.
+
 ### Internal service-module decomposition
 
 Canonical service modules that exceeded the 400-line limit have been split into
