@@ -45,10 +45,11 @@ domain-specific validation remains with the domain type it guards.
 `validate_callable(callback, attribute_name, allow_none=False)` checks a
 runtime callback and can explicitly allow an absent optional callback.
 `validate_async_callable(callback, attribute_name)` builds on that check and
-requires the callback to return an awaitable. The health port uses async
-validation in `ProbeHealthObserver.from_checks`; the API dependency boundary
-uses it for readiness probes, authorization decisions, and shutdown hooks. Keep
-this module free of adapter imports so the dependency direction remains inward.
+requires a coroutine function or an object with an async `__call__`. The health
+port uses async validation in `ProbeHealthObserver.from_checks`; the API
+dependency boundary uses it for readiness probes, authorization decisions, and
+shutdown hooks. Keep this module free of adapter imports so the dependency
+direction remains inward.
 
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
