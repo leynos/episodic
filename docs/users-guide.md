@@ -464,10 +464,9 @@ endpoints are not covered by this `/v1` authorization requirement.
 The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
 `403 Forbidden` and are recorded through the application logging port at
 `WARNING`. Each denial record contains only the decision, HTTP method, and
-request path; it excludes the `Authorization` header and bearer token.
-The logged path escapes Unicode control and formatting characters and line
-and paragraph separators. Carriage returns and line feeds appear as visible
-`\r` and `\n` sequences.
+an allow-listed resource root. Dynamic and unrecognized path segments are
+omitted because URLs can carry credentials. Records exclude the
+`Authorization` header and bearer token.
 
 ### Migration note for the next minor release
 

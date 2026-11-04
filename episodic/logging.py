@@ -13,6 +13,7 @@ Configure logging and emit a message:
 
 import datetime as dt
 import enum
+import inspect
 import json
 import logging
 import typing as typ
@@ -173,6 +174,26 @@ def _format_message(template: str, args: tuple[object, ...]) -> str:
     return template % args if args else template
 
 
+def _method_rejects_logging_call(
+    method: object,
+    message: str,
+    *,
+    exc_info: object | None,
+) -> bool:
+    """Return whether an inspectable method rejects the helper arguments."""
+    if not callable(method):
+        return False
+    try:
+        signature = inspect.signature(method)
+    except (TypeError, ValueError):
+        return False
+    try:
+        signature.bind(message, exc_info=exc_info, stack_info=False)
+    except TypeError:
+        return True
+    return False
+
+
 def _emit(
     logger: LoggerHandle,
     log_call: _LogCall,
@@ -194,18 +215,20 @@ def _emit(
             exc_info=exc_info,
             stack_info=False,
         )
-    else:
-        try:
-            method(message, exc_info=exc_info, stack_info=False)
-        except (AttributeError, TypeError):  # fmt: skip
-            if level != logging.DEBUG:
-                raise
-            typ.cast("_SupportsLogMethod", backend).log(
-                level,
-                message,
-                exc_info=exc_info,
-                stack_info=False,
-            )
+        return
+    try:
+        method(message, exc_info=exc_info, stack_info=False)
+    except TypeError:
+        if level != logging.DEBUG or not _method_rejects_logging_call(
+            method,
+            message,
+            exc_info=exc_info,
+        ):
+            raise
+        log_method = getattr(backend, "log", None)
+        if not callable(log_method):
+            raise
+        log_method(level, message, exc_info=exc_info, stack_info=False)
 
 
 def _make_log_wrapper(
