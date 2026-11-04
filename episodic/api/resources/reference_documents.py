@@ -41,6 +41,17 @@ if typ.TYPE_CHECKING:
     from episodic.api.types import JsonPayload, UowFactory
 
 
+def _map_reference_document_error(
+    exc: ReferenceDocumentError,
+) -> falcon.HTTPError:
+    """Map resource errors with this module's fixed context and emitter."""
+    return map_reference_error(
+        exc,
+        context="reference-document",
+        emit_error=_emit_unmapped_api_error,
+    )
+
+
 def _require_fields(payload: JsonPayload, *fields: str) -> None:
     """Raise HTTPBadRequest if any required field is absent from payload."""
     missing = next((f for f in fields if f not in payload), None)
@@ -102,11 +113,7 @@ class ReferenceDocumentsResource:
             async with self._uow_factory() as uow:
                 document = await create_reference_document(uow, data=data)
         except ReferenceDocumentError as exc:
-            raise map_reference_error(
-                exc,
-                context="reference-document",
-                emit_error=_emit_unmapped_api_error,
-            ) from exc
+            raise _map_reference_document_error(exc) from exc
 
         resp.media = serialize_reference_document(document)
         resp.status = falcon.HTTP_201
@@ -136,11 +143,7 @@ class ReferenceDocumentsResource:
                     ),
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(
-                exc,
-                context="reference-document",
-                emit_error=_emit_unmapped_api_error,
-            ) from exc
+            raise _map_reference_document_error(exc) from exc
 
         resp.media = {
             "items": [serialize_reference_document(item) for item in documents],
@@ -176,11 +179,7 @@ class ReferenceDocumentResource:
                     owner_series_profile_id=str(parse_uuid(profile_id, "profile_id")),
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(
-                exc,
-                context="reference-document",
-                emit_error=_emit_unmapped_api_error,
-            ) from exc
+            raise _map_reference_document_error(exc) from exc
 
         resp.media = serialize_reference_document(document)
         resp.status = falcon.HTTP_200
@@ -212,11 +211,7 @@ class ReferenceDocumentResource:
                     request=request,
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(
-                exc,
-                context="reference-document",
-                emit_error=_emit_unmapped_api_error,
-            ) from exc
+            raise _map_reference_document_error(exc) from exc
 
         resp.media = serialize_reference_document(updated)
         resp.status = falcon.HTTP_200
@@ -257,11 +252,7 @@ class ReferenceDocumentRevisionsResource:
                     data=data,
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(
-                exc,
-                context="reference-document",
-                emit_error=_emit_unmapped_api_error,
-            ) from exc
+            raise _map_reference_document_error(exc) from exc
 
         resp.media = serialize_reference_document_revision(revision)
         resp.status = falcon.HTTP_201
@@ -291,11 +282,7 @@ class ReferenceDocumentRevisionsResource:
                     ),
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(
-                exc,
-                context="reference-document",
-                emit_error=_emit_unmapped_api_error,
-            ) from exc
+            raise _map_reference_document_error(exc) from exc
 
         resp.media = {
             "items": [
@@ -339,11 +326,7 @@ class ReferenceDocumentRevisionResource:
                     ),
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(
-                exc,
-                context="reference-document",
-                emit_error=_emit_unmapped_api_error,
-            ) from exc
+            raise _map_reference_document_error(exc) from exc
 
         resp.media = serialize_reference_document_revision(revision)
         resp.status = falcon.HTTP_200
