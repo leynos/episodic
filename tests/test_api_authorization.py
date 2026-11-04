@@ -1,7 +1,5 @@
 """Authorization middleware tests for canonical REST endpoints."""
 
-from __future__ import annotations
-
 import typing as typ
 
 import pytest

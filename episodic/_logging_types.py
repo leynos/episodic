@@ -1,5 +1,6 @@
-"""Private backend protocols shared by the logging port."""
+"""Private protocols and dispatch support used by the logging port."""
 
+import inspect
 import typing as typ
 
 
@@ -74,3 +75,32 @@ class _LogCall(typ.NamedTuple):
     template: str
     args: tuple[object, ...]
     exc_info: object | None
+
+
+class _LogWrapperConfig(typ.NamedTuple):
+    """Bind the public name and backend dispatch for one logging wrapper."""
+
+    name: str
+    level: int
+    convenience_method: _ConvenienceMethod
+    default_exc_info: object | None = None
+
+
+def _method_rejects_logging_call(
+    method: object,
+    message: str,
+    *,
+    exc_info: object | None,
+) -> bool:
+    """Return whether an inspectable method rejects the helper arguments."""
+    if not callable(method):
+        return False
+    try:
+        signature = inspect.signature(method)
+    except (TypeError, ValueError):  # fmt: skip
+        return False
+    try:
+        signature.bind(message, exc_info=exc_info, stack_info=False)
+    except TypeError:
+        return True
+    return False

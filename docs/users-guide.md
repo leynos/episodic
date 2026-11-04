@@ -466,9 +466,9 @@ The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
 application logging port at `WARNING`. Each record contains the decision, an
 allow-listed HTTP method, and an allow-listed resource root. Other method
 tokens are recorded as `<other>`. Dynamic and unrecognized path segments are
-omitted because URLs can carry credentials. Records exclude the
-`Authorization` header and bearer token.
-Adapter-failure warnings use a fixed category and omit exception details.
+omitted because URLs can carry credentials. Records exclude the `Authorization`
+header and bearer token. Adapter-failure warnings use a fixed category and omit
+exception details.
 
 ### Migration note for the next minor release
 

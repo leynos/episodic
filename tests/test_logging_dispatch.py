@@ -8,13 +8,18 @@ import pytest
 
 from episodic import logging as episodic_logging
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 
 class _LogOnlyBackend:
     """Collect records sent through a backend's generic log method."""
 
     def __init__(self) -> None:
-        """Initialise an empty list of emitted records."""
-        self.calls: list[tuple[int, str, object | None, bool]] = []
+        """Initialize an empty list of emitted records."""
+        self.calls: list[
+            tuple[int | episodic_logging.LogLevel, str, object | None, bool]
+        ] = []
 
     def log(
         self,
@@ -33,7 +38,7 @@ class _LegacyDebugBackend(_LogOnlyBackend):
     """Collect a generic call beside an older DEBUG method signature."""
 
     def __init__(self) -> None:
-        """Initialise generic logging and the DEBUG attempt count."""
+        """Initialize generic logging and the DEBUG attempt count."""
         super().__init__()
         self.debug_calls = 0
 
@@ -47,7 +52,7 @@ class _FailingDebugBackend(_LogOnlyBackend):
     """Record a compatible DEBUG call before raising an emission error."""
 
     def __init__(self) -> None:
-        """Initialise generic logging and the DEBUG attempt count."""
+        """Initialize generic logging and the DEBUG attempt count."""
         super().__init__()
         self.debug_calls = 0
 
@@ -76,7 +81,7 @@ class _FailingDebugBackend(_LogOnlyBackend):
     ids=["info", "warning", "error"],
 )
 def test_non_debug_helpers_do_not_retry_failed_convenience_methods(
-    wrapper: typ.Callable[..., None],
+    wrapper: cabc.Callable[..., None],
     method_name: str,
 ) -> None:
     """Propagate emission failures without a second generic log call."""
@@ -106,9 +111,9 @@ def test_debug_falls_back_when_signature_rejects_helper_keywords() -> None:
     episodic_logging.log_debug(logger, "Loaded %s documents", 3)
 
     assert backend.debug_calls == 0, "signature mismatch must fail before method entry"
-    assert backend.calls == [
-        (logging.DEBUG, "Loaded 3 documents", None, False)
-    ], "a rejected DEBUG call should fall back through log()"
+    assert backend.calls == [(logging.DEBUG, "Loaded 3 documents", None, False)], (
+        "a rejected DEBUG call should fall back through log()"
+    )
 
 
 def test_debug_preserves_internal_type_error_without_retry() -> None:
@@ -120,11 +125,12 @@ def test_debug_preserves_internal_type_error_without_retry() -> None:
         episodic_logging.log_debug(logger, "Loaded %s documents", 3)
 
     assert backend.debug_calls == 1, "the compatible DEBUG method should be attempted"
-    assert backend.calls == [], "internal failures must not retry through log()"
+    assert not backend.calls, "internal failures must not retry through log()"
 
 
 def test_debug_preserves_signature_error_without_generic_fallback() -> None:
     """Keep the original signature error when no generic log method exists."""
+
     class _DebugOnlyBackend:
         """Expose a legacy DEBUG method without the generic fallback."""
 
