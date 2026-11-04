@@ -462,9 +462,10 @@ not-found response as requests for resources that do not exist. Health
 endpoints are not covered by this `/v1` authorization requirement.
 
 The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
-`403 Forbidden` and are recorded through the application logging port at
-`WARNING`. Each denial record contains only the decision, HTTP method, and
-an allow-listed resource root. Dynamic and unrecognized path segments are
+`403 Forbidden`, respectively. The service records each decision through the
+application logging port at `WARNING`. Each record contains the decision, an
+allow-listed HTTP method, and an allow-listed resource root. Other method
+tokens are recorded as `<other>`. Dynamic and unrecognized path segments are
 omitted because URLs can carry credentials. Records exclude the
 `Authorization` header and bearer token.
 

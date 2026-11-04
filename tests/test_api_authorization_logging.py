@@ -102,6 +102,7 @@ class _AuthorizationLogCase(typ.NamedTuple):
     expected_status: int
     expected_message: str
     authorization_header: str | None = "Bearer sensitive-token"
+    request_method: str = "GET"
 
 
 def test_authorization_adapter_failure_does_not_log_exception_metadata(
@@ -153,6 +154,13 @@ def test_authorization_adapter_failure_does_not_log_exception_metadata(
         ),
         _AuthorizationLogCase(
             DenyAllAuthorization,
+            "/v1/series-profiles",
+            401,
+            "Authorization denied with unauthorized for <other> /v1/series-profiles.",
+            request_method="FORGED-AUDIT-ENTRY",
+        ),
+        _AuthorizationLogCase(
+            DenyAllAuthorization,
             "/v1/series-profiles/Bearer%20sensitive-path-token",
             401,
             "Authorization denied with unauthorized for GET /v1/series-profiles.",
@@ -180,6 +188,13 @@ def test_authorization_adapter_failure_does_not_log_exception_metadata(
         ),
         _AuthorizationLogCase(
             RaisingAuthorization,
+            "/v1/series-profiles",
+            503,
+            "Authorization adapter failed for <other> /v1/series-profiles.",
+            request_method="FORGED-AUDIT-ENTRY",
+        ),
+        _AuthorizationLogCase(
+            RaisingAuthorization,
             "/v1/series-profiles%0Dforged",
             503,
             "Authorization adapter failed for GET /v1/<unknown>.",
@@ -188,10 +203,12 @@ def test_authorization_adapter_failure_does_not_log_exception_metadata(
     ids=[
         "unauthorized",
         "forbidden",
+        "unauthorized-custom-method",
         "unauthorized-known-resource-path-token",
         "unauthorized-unknown-resource-path-token",
         "unauthorized-control-path",
         "adapter-error-known-resource-path-token",
+        "adapter-error-custom-method",
         "adapter-error-control-path",
     ],
 )
@@ -209,8 +226,9 @@ def test_authorization_logs_warning_without_credentials_or_unsafe_unicode(
         session_factory,
         case.adapter_factory(),
     )
-    response = client.simulate_get(
-        case.request_path,
+    response = client.simulate_request(
+        path=case.request_path,
+        method=case.request_method,
         headers=(
             {}
             if case.authorization_header is None

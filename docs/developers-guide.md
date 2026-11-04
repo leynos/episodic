@@ -848,6 +848,7 @@ Authorization scaffold:
 - Authorization adapter failures short-circuit with `service_unavailable` and
   `503`, so policy-backend outages are not reported as resource failures.
 - Denial and adapter-failure warning records include only an allow-listed
+  standard HTTP method or the `<other>` placeholder, plus an allow-listed
   resource root for recognized `/v1/` resources. Dynamic and unrecognized path
   segments are omitted because URLs can carry credentials. The adapter still
   receives the unmodified `AuthorizationContext.path`. Adapter failures do not
@@ -3146,10 +3147,10 @@ limited to its backend and private type support.
 The architectural decision and its consequences are recorded in
 [ADR-025](adrs/adr-0025-central-logging-port.md).
 
-Authorization warnings log only an allow-listed resource root for `/v1/`
-requests. Dynamic and unrecognized path segments are omitted because URLs can
-carry credentials. The authorization adapter still receives the original path
-through `AuthorizationContext`.
+Authorization warnings log only a standard HTTP method or `<other>`, and an
+allow-listed resource root for `/v1/` requests. Dynamic and unrecognized path
+segments are omitted because URLs can carry credentials. The authorization
+adapter still receives the original path through `AuthorizationContext`.
 
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:
