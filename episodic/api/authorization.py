@@ -22,6 +22,16 @@ _AUTHORIZATION_LOG_RESOURCE_LABELS = {
     "uploads": "/v1/uploads",
 }
 _UNKNOWN_AUTHORIZATION_LOG_RESOURCE = "/v1/<unknown>"
+_AUTHORIZATION_LOG_METHODS = frozenset({
+    "DELETE",
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+})
+_OTHER_AUTHORIZATION_LOG_METHOD = "<other>"
 
 
 class AuthorizationDecision(enum.StrEnum):
@@ -127,7 +137,7 @@ class AuthorizationMiddleware:
             log_warning(
                 logger,
                 "Authorization adapter failed for %s %s.",
-                context.method,
+                _authorization_method_label(context.method),
                 _authorization_route_label(context.path),
             )
             resp.media = {
@@ -190,6 +200,15 @@ def _authorization_route_label(path: str) -> str:
     )
 
 
+def _authorization_method_label(method: str) -> str:
+    """Return a standard HTTP method name, or a fixed placeholder."""
+    return (
+        method
+        if method in _AUTHORIZATION_LOG_METHODS
+        else _OTHER_AUTHORIZATION_LOG_METHOD
+    )
+
+
 def _log_authorization_denial(
     decision: AuthorizationDecision,
     context: AuthorizationContext,
@@ -199,6 +218,6 @@ def _log_authorization_denial(
         logger,
         "Authorization denied with %s for %s %s.",
         decision,
-        context.method,
+        _authorization_method_label(context.method),
         _authorization_route_label(context.path),
     )
