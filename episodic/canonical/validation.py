@@ -49,7 +49,7 @@ def validate_callable(
 
 
 def validate_async_callable(callback: object, attribute_name: str) -> None:
-    """Require a coroutine function for callbacks invoked with ``await``.
+    """Require a coroutine function or an object with an async ``__call__``.
 
     Parameters
     ----------
@@ -61,7 +61,7 @@ def validate_async_callable(callback: object, attribute_name: str) -> None:
     Raises
     ------
     TypeError
-        If the callback is not callable or would not return an awaitable.
+        If the callback is not callable or is not declared async.
 
     Examples
     --------
