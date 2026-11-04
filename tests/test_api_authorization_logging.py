@@ -138,12 +138,21 @@ def test_authorization_adapter_failure_does_not_log_exception_metadata(
 @pytest.mark.parametrize(
     ("exception_type", "expected_category"),
     [
+        (ConnectionError, "os_error"),
         (OSError, "os_error"),
         (RuntimeError, "runtime_error"),
+        (TimeoutError, "os_error"),
         (TypeError, "type_error"),
         (ValueError, "value_error"),
     ],
-    ids=["os-error", "runtime-error", "type-error", "value-error"],
+    ids=[
+        "connection-error",
+        "os-error",
+        "runtime-error",
+        "timeout-error",
+        "type-error",
+        "value-error",
+    ],
 )
 def test_authorization_adapter_failure_logs_fixed_category(
     session_factory: async_sessionmaker[AsyncSession],

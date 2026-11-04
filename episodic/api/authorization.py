@@ -142,10 +142,11 @@ class AuthorizationMiddleware:
             result = _authorization_result(await self._authorization.decide(context))
         except (OSError, RuntimeError, TypeError, ValueError) as error:  # fmt: skip
             # Adapter exception text may contain credentials from its context.
-            failure_category = _AUTHORIZATION_FAILURE_CATEGORIES.get(
-                type(error),
-                "unknown_error",
-            )
+            failure_category = "unknown_error"
+            for exception_type, category in _AUTHORIZATION_FAILURE_CATEGORIES.items():
+                if isinstance(error, exception_type):
+                    failure_category = category
+                    break
             log_warning(
                 logger,
                 "Authorization adapter failed with %s for %s %s.",
