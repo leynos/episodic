@@ -32,12 +32,6 @@ _AUTHORIZATION_LOG_METHODS = frozenset({
     "PUT",
 })
 _OTHER_AUTHORIZATION_LOG_METHOD = "<other>"
-_AUTHORIZATION_FAILURE_CATEGORIES: dict[type[Exception], str] = {
-    OSError: "os_error",
-    RuntimeError: "runtime_error",
-    TypeError: "type_error",
-    ValueError: "value_error",
-}
 
 
 class AuthorizationDecision(enum.StrEnum):
@@ -141,11 +135,7 @@ class AuthorizationMiddleware:
             result = _authorization_result(await self._authorization.decide(context))
         except (OSError, RuntimeError, TypeError, ValueError) as error:  # fmt: skip
             # Adapter exception text may contain credentials from its context.
-            failure_category = "unknown_error"
-            for exception_type, category in _AUTHORIZATION_FAILURE_CATEGORIES.items():
-                if isinstance(error, exception_type):
-                    failure_category = category
-                    break
+            failure_category = self._authorization_failure_category(error)
             log_warning(
                 logger,
                 "Authorization adapter failed with %s for %s %s.",
@@ -192,6 +182,21 @@ class AuthorizationMiddleware:
                 resp.status = falcon.HTTP_503
         resp.complete = True
 
+    @staticmethod
+    def _authorization_failure_category(error: Exception) -> str:
+        """Return a fixed label for a caught authorization adapter failure."""
+        match error:
+            case OSError():
+                return "os_error"
+            case RuntimeError():
+                return "runtime_error"
+            case TypeError():
+                return "type_error"
+            case ValueError():
+                return "value_error"
+            case _:
+                return "unknown_error"
+
 
 def _authorization_result(
     outcome: AuthorizationDecision | AuthorizationResult,
@@ -222,6 +227,15 @@ def _authorization_method_label(method: str) -> str:
     )
 
 
+def _authorization_decision_label(decision: object) -> str:
+    """Return a fixed label for known authorization decisions."""
+    match decision:
+        case AuthorizationDecision() as known_decision:
+            return known_decision.value
+        case _:
+            return "unknown"
+
+
 def _log_authorization_denial(
     decision: AuthorizationDecision,
     context: AuthorizationContext,
@@ -230,7 +244,7 @@ def _log_authorization_denial(
     log_warning(
         logger,
         "Authorization denied with %s for %s %s.",
-        decision,
+        _authorization_decision_label(decision),
         _authorization_method_label(context.method),
         _authorization_route_label(context.path),
     )
