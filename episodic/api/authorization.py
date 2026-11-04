@@ -130,7 +130,6 @@ class AuthorizationMiddleware:
                 "Authorization adapter failed for %s %s.",
                 context.method,
                 _authorization_route_label(context.path),
-                exc_info=True,
             )
             resp.media = {
                 "code": "service_unavailable",
