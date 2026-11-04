@@ -1,16 +1,9 @@
-"""Verify diagnostics for API errors that lack dedicated HTTP mappings.
+"""Verify central serialization diagnostics for unmapped API errors."""
 
-The examples isolate each mapper's unexpected-exception branch, confirming that
-it preserves the internal-error envelope and emits one error record with
-detached exception information through the logging port.
-"""
-
-import asyncio
 import dataclasses as dc
 import logging
 import traceback
 import typing as typ
-import uuid
 from functools import partial
 
 import falcon
@@ -18,7 +11,6 @@ import pytest
 from falcon import testing as falcon_testing
 
 from episodic.api import errors as api_errors
-from episodic.api.handlers import handle_get_entity
 from episodic.canonical.profile_templates.types import ProfileTemplateError
 from episodic.canonical.reference_documents.types import ReferenceDocumentError
 from episodic.canonical.source_intake_errors import SourceIntakeError
@@ -30,7 +22,7 @@ if typ.TYPE_CHECKING:
 
     from syrupy.assertion import SnapshotAssertion
 
-    from tests.fixtures.api_errors import EmptyUnitOfWorkFactory, SpyLogger
+    from tests.fixtures.api_errors import SpyLogger
 
 _TEST_CREDENTIAL = "test-only-secret-marker"
 _TEST_CAUSE_CREDENTIAL = "test-only-cause-secret-marker"
@@ -118,7 +110,7 @@ def _assert_spy_logger_call(
     assert len(spy_logger.calls) == 1, "each unmapped error must log once"
     level, message, exc_info = spy_logger.calls[0]
     assert (level, message) == ("ERROR", expected_message), (
-        "the mapper must log one ERROR with its safe metadata"
+        "the serializer must emit one ERROR with safe metadata"
     )
     assert isinstance(exc_info, tuple), (
         "the logging port must receive detached exception information"
@@ -137,7 +129,7 @@ class _UnmappedMapperCase:
     """Describe one error mapper's unmapped fallback contract."""
 
     exception: Exception
-    mapper: cabc.Callable[[Exception, cabc.Callable[..., None]], falcon.HTTPError]
+    mapper: cabc.Callable[[Exception], falcon.HTTPError]
     expected_message: str
 
 
@@ -189,9 +181,8 @@ def _stable_mapper_snapshot(
                     "Unexpected profile/template failure: " + _TEST_CREDENTIAL,
                     entity_id=_TEST_ENTITY_ID,
                 ),
-                lambda exc, emit_error: api_errors.map_profile_template_error(
+                lambda exc: api_errors.map_profile_template_error(
                     typ.cast("ProfileTemplateError", exc),
-                    emit_error=emit_error,
                 ),
                 (
                     "Unmapped profile/template error: "
@@ -207,10 +198,9 @@ def _stable_mapper_snapshot(
                 _UnexpectedReferenceDocumentError(
                     "Unexpected reference failure: " + _TEST_CREDENTIAL
                 ),
-                lambda exc, emit_error: api_errors.map_reference_error(
+                lambda exc: api_errors.map_reference_error(
                     typ.cast("ReferenceDocumentError", exc),
                     context="reference-document",
-                    emit_error=emit_error,
                 ),
                 (
                     "Unmapped reference error: "
@@ -224,9 +214,8 @@ def _stable_mapper_snapshot(
                 _UnexpectedSourceIntakeError(
                     "Unexpected source-intake failure: " + _TEST_CREDENTIAL
                 ),
-                lambda exc, emit_error: api_errors.map_source_intake_error(
+                lambda exc: api_errors.map_source_intake_error(
                     typ.cast("SourceIntakeError", exc),
-                    emit_error=emit_error,
                 ),
                 "Unmapped source-intake error: type=_UnexpectedSourceIntakeError",
             ),
@@ -240,12 +229,12 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     caplog: pytest.LogCaptureFixture,
     snapshot: SnapshotAssertion,
 ) -> None:
-    """Each unmapped mapper preserves its envelope and logs detached error info."""
+    """Mappers attach diagnostics for the central serializer to emit."""
 
     def raise_case_exception() -> None:
         _raise_with_credential_cause(case.exception)
 
-    with caplog.at_level(logging.ERROR, logger=_TEST_LOGGER_NAME):
+    with caplog.at_level(logging.ERROR):
         try:
             raise_case_exception()
         except (
@@ -253,13 +242,23 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
             ReferenceDocumentError,
             SourceIntakeError,
         ) as raised:
-            result = case.mapper(raised, partial(log_error, spy_logger))
+            result = case.mapper(raised)
+
+    assert caplog.records == [], "mappers must not emit log records"
 
     assert isinstance(result, falcon.HTTPInternalServerError), (
         "unmapped domain errors must return HTTP 500"
     )
     assert _envelope_code(result) == "internal_error", (
         "unmapped domain errors must use the internal-error envelope"
+    )
+    assert spy_logger.calls == [], "mappers must not emit logs"
+    response = falcon.Response()
+    api_errors.serialize_http_error(
+        falcon_testing.create_req(),
+        response,
+        result,
+        emit_error=partial(log_error, spy_logger),
     )
     _assert_spy_logger_call(spy_logger, case.exception, case.expected_message)
     _assert_detached_exception_info_logged(caplog, case.exception)
@@ -284,20 +283,21 @@ def test_unmapped_profile_error_response_redacts_exception_text(
         code="internal_error",
     )
 
-    with caplog.at_level(logging.ERROR, logger=_TEST_LOGGER_NAME):
+    with caplog.at_level(logging.ERROR):
         try:
             raise exc
         except ProfileTemplateError as raised:
-            mapped_error = api_errors.map_profile_template_error(
-                raised,
-                emit_error=partial(log_error, spy_logger),
-            )
+            mapped_error = api_errors.map_profile_template_error(raised)
+
+    assert caplog.records == [], "mappers must not emit log records"
+    assert spy_logger.calls == [], "mappers must not emit logs"
 
     response = falcon.Response()
     api_errors.serialize_http_error(
         falcon_testing.create_req(),
         response,
         mapped_error,
+        emit_error=partial(log_error, spy_logger),
     )
 
     assert response.media == {
@@ -316,59 +316,3 @@ def test_unmapped_profile_error_response_redacts_exception_text(
     assert stable_response == snapshot, (
         "the generic profile error response must match the stable snapshot"
     )
-
-
-def test_shared_profile_handler_maps_unmapped_service_error(
-    spy_logger: SpyLogger,
-    empty_uow_factory: EmptyUnitOfWorkFactory,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Unmapped service errors reach the shared mapper with detached error info."""
-    entity_id = uuid.uuid4()
-    exc = _UnexpectedProfileTemplateError(
-        "Unexpected profile/template service failure: " + _TEST_CREDENTIAL,
-        code="internal_error",
-    )
-
-    async def fail_service(
-        _uow: object,
-        *,
-        entity_id: uuid.UUID,
-    ) -> tuple[object, int]:
-        del entity_id
-        await asyncio.sleep(0)
-        raise exc
-
-    def serialize(_entity: object, _revision: int) -> dict[str, object]:
-        raise AssertionError
-
-    with (
-        caplog.at_level(logging.ERROR, logger=_TEST_LOGGER_NAME),
-        pytest.raises(falcon.HTTPInternalServerError) as mapped_error,
-    ):
-        asyncio.run(
-            handle_get_entity(
-                empty_uow_factory,
-                str(entity_id),
-                "profile_id",
-                fail_service,
-                serialize,
-            )
-        )
-
-    assert _envelope_code(mapped_error.value) == "internal_error", (
-        "unmapped profile service errors must use the internal-error envelope"
-    )
-    assert _envelope_details(mapped_error.value) == {}, (
-        "unmapped profile errors must not expose entity metadata in the envelope"
-    )
-    _assert_spy_logger_call(
-        spy_logger,
-        exc,
-        (
-            "Unmapped profile/template error: "
-            "type=_UnexpectedProfileTemplateError code=internal_error "
-            f"entity_id={entity_id}"
-        ),
-    )
-    _assert_detached_exception_info_logged(caplog, exc)

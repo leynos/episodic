@@ -1,6 +1,7 @@
 """Verify unmapped profile errors reach the shared handler fallback."""
 
 import asyncio
+import logging
 import typing as typ
 import uuid
 
@@ -122,21 +123,24 @@ async def _run_handler(
     "handler_name",
     ["get-entity", "get-history", "update-entity", "create-entity"],
 )
-def test_shared_handlers_log_unmapped_profile_errors(
+def test_shared_handlers_defer_unmapped_profile_logs_to_serializer(
     handler_name: str,
     spy_logger: SpyLogger,
     empty_uow_factory: EmptyUnitOfWorkFactory,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Every shared profile handler routes its unmapped errors to the mapper."""
+    """Shared profile handlers attach errors without emitting logs."""
     source_exception = _UnexpectedProfileTemplateError(
         "Service failure.",
         entity_id=str(_ENTITY_ID),
     )
-    with pytest.raises(falcon.HTTPInternalServerError) as raised_error:
+    with (
+        caplog.at_level(logging.ERROR),
+        pytest.raises(falcon.HTTPInternalServerError) as raised_error,
+    ):
         asyncio.run(
             _run_handler(
-                _HandlerCase(handler_name, source_exception),
-                empty_uow_factory,
+                _HandlerCase(handler_name, source_exception), empty_uow_factory
             )
         )
 
@@ -147,21 +151,8 @@ def test_shared_handlers_log_unmapped_profile_errors(
     assert envelope.envelope_details == {}, (
         "unmapped profile errors must not expose exception-derived details"
     )
-    assert len(spy_logger.calls) == 1, "each handler error must be logged once"
-    level, message, exc_info = spy_logger.calls[0]
-    assert level == "ERROR", "unmapped profile errors must log at ERROR"
-    assert "_UnexpectedProfileTemplateError" in message, (
-        "logs must identify the exception type"
+    assert getattr(raised_error.value, "unmapped_error_diagnostic", None) is not None, (
+        "unmapped failures must carry safe metadata to the central serializer"
     )
-    assert isinstance(exc_info, tuple), "logs must carry detached exception info"
-    logged_exception = typ.cast("BaseException", exc_info[1])
-    assert logged_exception is not source_exception, (
-        "the log must not retain the source service exception"
-    )
-    assert logged_exception.__cause__ is None, (
-        "the log must omit chained exception causes"
-    )
-    assert logged_exception.__context__ is None, (
-        "the log must omit implicit exception contexts"
-    )
-    assert exc_info[2] is None, "the log must not retain source traceback frames"
+    assert spy_logger.calls == [], "query handlers must not emit logs"
+    assert not caplog.records, "query handlers must not emit log records"

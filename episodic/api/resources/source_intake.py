@@ -1,7 +1,6 @@
 """Falcon resources for source-intake uploads and ingestion jobs."""
 
 import typing as typ
-from functools import partial
 
 import falcon
 
@@ -53,9 +52,6 @@ from episodic.canonical.source_intake_service import (
     list_ingestion_jobs,
     register_upload,
 )
-from episodic.logging import get_logger, log_error
-
-_emit_unmapped_api_error = partial(log_error, get_logger(__name__))
 
 if typ.TYPE_CHECKING:
     from episodic.api.types import UowFactory
@@ -128,7 +124,6 @@ class UploadsResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
-                    emit_error=_emit_unmapped_api_error,
                 ) from exc
             return IdempotentResponse(falcon.HTTP_201, serialize_upload(upload))
 
@@ -166,7 +161,6 @@ class UploadResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
-                    emit_error=_emit_unmapped_api_error,
                 ) from exc
         resp.media = serialize_upload(upload)
         resp.status = falcon.HTTP_200
@@ -212,7 +206,6 @@ class IngestionJobsResource:
                 except SourceIntakeError as exc:
                     raise map_source_intake_error(
                         exc,
-                        emit_error=_emit_unmapped_api_error,
                     ) from exc
             return IdempotentResponse(falcon.HTTP_201, serialize_ingestion_job(job))
 
@@ -274,7 +267,6 @@ class IngestionJobResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
-                    emit_error=_emit_unmapped_api_error,
                 ) from exc
         next_poll = None
         if job.intake_state is IntakeState.AWAITING_SOURCES:
@@ -315,7 +307,6 @@ class IngestionJobSourcesResource:
                 except SourceIntakeError as exc:
                     raise map_source_intake_error(
                         exc,
-                        emit_error=_emit_unmapped_api_error,
                     ) from exc
             return IdempotentResponse(
                 falcon.HTTP_201,
@@ -354,7 +345,6 @@ class IngestionJobSourcesResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
-                    emit_error=_emit_unmapped_api_error,
                 ) from exc
         resp.media = {
             "items": [serialize_ingestion_job_source(source) for source in page.items],

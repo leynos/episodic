@@ -17,7 +17,7 @@ from .authorization import (
     AuthorizationPort,
     PermitAll,
 )
-from .dependencies import ApiDependencies, ReadinessProbe
+from .dependencies import ApiDependencies, ReadinessProbe, UnmappedErrorEmitter
 
 __all__ = [
     "ApiDependencies",
@@ -26,5 +26,6 @@ __all__ = [
     "AuthorizationPort",
     "PermitAll",
     "ReadinessProbe",
+    "UnmappedErrorEmitter",
     "create_app",
 ]

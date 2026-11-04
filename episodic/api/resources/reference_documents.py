@@ -1,7 +1,6 @@
 """Falcon resources for reusable reference-document endpoints."""
 
 import typing as typ
-from functools import partial
 
 import falcon
 
@@ -33,9 +32,6 @@ from episodic.canonical.reference_documents import (
     list_reference_documents_paged,
     update_reference_document,
 )
-from episodic.logging import get_logger, log_error
-
-_emit_unmapped_api_error = partial(log_error, get_logger(__name__))
 
 if typ.TYPE_CHECKING:
     from episodic.api.types import JsonPayload, UowFactory
@@ -44,11 +40,10 @@ if typ.TYPE_CHECKING:
 def _map_reference_document_error(
     exc: ReferenceDocumentError,
 ) -> falcon.HTTPError:
-    """Map resource errors with this module's fixed context and emitter."""
+    """Map resource errors with this module's fixed context."""
     return map_reference_error(
         exc,
         context="reference-document",
-        emit_error=_emit_unmapped_api_error,
     )
 
 

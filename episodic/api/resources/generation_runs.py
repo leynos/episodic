@@ -3,7 +3,6 @@
 import datetime as dt
 import typing as typ
 import uuid
-from functools import partial
 
 import falcon
 
@@ -44,7 +43,6 @@ from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotF
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.source_intake_service import SourceIntakeError
 from episodic.generation.launcher import GenerationRunAdmissionError
-from episodic.logging import get_logger, log_error
 from episodic.observability import NoopTracer
 
 if typ.TYPE_CHECKING:
@@ -53,8 +51,6 @@ if typ.TYPE_CHECKING:
     from episodic.api.types import UowFactory
     from episodic.generation.launcher import GenerationRunLauncher
     from episodic.observability import SpanHandle, TracerPort
-
-_emit_unmapped_api_error = partial(log_error, get_logger(__name__))
 
 __all__ = [
     "GenerationRunEventsResource",
@@ -273,7 +269,6 @@ class GenerationRunsResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
-                    emit_error=_emit_unmapped_api_error,
                 ) from exc
             except DraftScriptPersistenceError as exc:
                 raise _generation_input_error(str(exc)) from exc

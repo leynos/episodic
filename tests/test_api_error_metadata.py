@@ -36,23 +36,25 @@ class _HasEnvelopeCode(typ.Protocol):
     envelope_code: str
 
 
-def test_unmapped_error_without_traceback_logs_unavailable_source_frames() -> None:
+def test_unmapped_error_without_traceback_records_unavailable_source_frames() -> None:
     """Missing source traceback metadata stays explicit and detached."""
-    emit_error = mock.Mock()
-
-    _error_logging._log_unmapped_error(
-        emit_error,
+    diagnostic = _error_logging._unmapped_error_diagnostic(
         None,
         "Unmapped error: type=%s",
         "UnexpectedAPIError",
     )
 
-    emit_error.assert_called_once()
-    assert "Source frames: unavailable" in str(
-        emit_error.call_args.kwargs["exc_info"][1]
-    ), "missing source tracebacks must be represented as unavailable"
-    assert emit_error.call_args.kwargs["exc_info"][2] is None, (
+    assert "Source frames: unavailable" in str(diagnostic.exc_info[1]), (
+        "missing source tracebacks must be represented as unavailable"
+    )
+    assert diagnostic.exc_info[2] is None, (
         "detached exception info must never retain traceback frames"
+    )
+    assert diagnostic.template == "Unmapped error: type=%s", (
+        "diagnostics must preserve the safe message template"
+    )
+    assert diagnostic.args == ("UnexpectedAPIError",), (
+        "diagnostics must preserve only the safe formatted arguments"
     )
 
 
@@ -69,7 +71,6 @@ def test_profile_template_error_redacts_credential_metadata(
     except ProfileTemplateError as raised:
         mapped_error = api_errors.map_profile_template_error(
             raised,
-            emit_error=partial(log_error, spy_logger),
         )
 
     assert isinstance(mapped_error, falcon.HTTPInternalServerError), (
@@ -78,7 +79,15 @@ def test_profile_template_error_redacts_credential_metadata(
     assert (
         typ.cast("_HasEnvelopeCode", mapped_error).envelope_code == "internal_error"
     ), "unmapped profile/template errors must not expose an untrusted code"
-    assert len(spy_logger.calls) == 1, "unmapped errors must log once"
+    assert spy_logger.calls == [], "mappers must not emit logs"
+    response = falcon.Response()
+    api_errors.serialize_http_error(
+        falcon_testing.create_req(),
+        response,
+        mapped_error,
+        emit_error=partial(log_error, spy_logger),
+    )
+    assert len(spy_logger.calls) == 1, "the serializer must log unmapped errors once"
     level, message, exc_info = spy_logger.calls[0]
     assert level == "ERROR", "unmapped errors must be logged at ERROR"
     assert message == (
@@ -104,12 +113,6 @@ def test_profile_template_error_redacts_credential_metadata(
     )
     assert _TEST_CAUSE_CREDENTIAL not in str(logged_exception), (
         "logs must omit credential-like chained exception text"
-    )
-    response = falcon.Response()
-    api_errors.serialize_http_error(
-        falcon_testing.create_req(),
-        response,
-        mapped_error,
     )
     assert response.media == {
         "code": "internal_error",
@@ -142,10 +145,16 @@ def test_unmapped_error_bounds_logged_source_frames(
     try:
         _raise_profile_template_error(30, exc)
     except ProfileTemplateError as raised:
-        api_errors.map_profile_template_error(
-            raised,
-            emit_error=partial(log_error, spy_logger),
-        )
+        mapped_error = api_errors.map_profile_template_error(raised)
+
+    assert spy_logger.calls == [], "mappers must not emit logs"
+    response = falcon.Response()
+    api_errors.serialize_http_error(
+        falcon_testing.create_req(),
+        response,
+        mapped_error,
+        emit_error=partial(log_error, spy_logger),
+    )
 
     exc_info = spy_logger.calls[0][2]
     assert isinstance(exc_info, tuple), "error logs must include exception info"
@@ -193,20 +202,21 @@ def test_profile_error_logging_redacts_generated_untrusted_values(
         try:
             raise exc
         except ProfileTemplateError as raised:
-            mapped_error = api_errors.map_profile_template_error(
-                raised,
-                emit_error=emit_error,
-            )
+            mapped_error = api_errors.map_profile_template_error(raised)
     else:
-        mapped_error = api_errors.map_profile_template_error(
-            exc,
-            emit_error=emit_error,
-        )
+        mapped_error = api_errors.map_profile_template_error(exc)
 
     assert isinstance(mapped_error, falcon.HTTPInternalServerError), (
         "unmapped profile errors must return HTTP 500"
     )
-    assert spy.error.call_count == 1, "unmapped profile errors must emit one ERROR log"
+    assert spy.error.call_count == 0, "mappers must not emit logs"
+    api_errors.serialize_http_error(
+        falcon_testing.create_req(),
+        falcon.Response(),
+        mapped_error,
+        emit_error=emit_error,
+    )
+    assert spy.error.call_count == 1, "the serializer must emit one ERROR log"
     logged_message = typ.cast("str", spy.error.call_args.args[0])
     assert credential not in logged_message, "metadata values must be redacted"
     logged_exc_info = typ.cast(

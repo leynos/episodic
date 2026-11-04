@@ -1,17 +1,14 @@
-"""Build credential-safe diagnostics for unmapped HTTP error logging.
+"""Build and emit credential-safe diagnostics for unmapped HTTP errors.
 
-Mappers receive an explicit ``emit_error`` callback from the API boundary and
-use ``_log_unmapped_error`` with safe, percent-style fields. The boundary binds
-that callback to the logging port; the mapper module has no global logger. Its
-emitted ``exc_info`` is detached: it contains neither the original exception
+Mappers create immutable diagnostic metadata without logging. The central
+Falcon error serializer emits that metadata through its injected logging port.
+The detached exception information contains neither the original exception
 nor its traceback frames, locals, source lines, or source message. Source
 locations are limited to 20 frame labels. Profile metadata permits only known
-codes and normalized canonical UUID entity IDs; other values are redacted.
-
-For example, a mapper can pass ``exc.__traceback__`` and the exception type to
-``_log_unmapped_error``; the helper emits only the redacted diagnostic.
+codes and canonical UUID entity IDs; other values are redacted.
 """
 
+import dataclasses as dc
 import pathlib as pl
 import traceback
 import typing as typ
@@ -23,17 +20,16 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.profile_templates.types import ProfileTemplateError
 
+    from .dependencies import UnmappedErrorEmitter
 
-class _UnmappedErrorEmitter(typ.Protocol):
-    """Limit mapper dependencies to the ERROR logging operation they need."""
 
-    def __call__(
-        self,
-        template: str,
-        /,
-        *args: object,
-        exc_info: object | None = None,
-    ) -> None: ...
+@dc.dataclass(frozen=True, slots=True)
+class _UnmappedErrorDiagnostic:
+    """Carry safe message fields and detached exception info to serialization."""
+
+    template: str
+    args: tuple[object, ...]
+    exc_info: tuple[type[BaseException], BaseException, None]
 
 
 _SAFE_PROFILE_TEMPLATE_LOG_CODES = frozenset({
@@ -82,18 +78,16 @@ def _safe_profile_template_entity_id(entity_id: object | None) -> str | None:
     return None
 
 
-def _log_unmapped_profile_template_error(
-    emit_error: _UnmappedErrorEmitter,
+def _profile_template_error_diagnostic(
     source_exception: ProfileTemplateError,
     entity_id: object | None,
-) -> None:
-    """Log profile-template metadata only after applying its safe-value policy."""
+) -> _UnmappedErrorDiagnostic:
+    """Build safe profile-template diagnostics without retaining source values."""
     safe_code, safe_entity_id = _safe_profile_template_log_metadata(
         source_exception.code,
         entity_id,
     )
-    _log_unmapped_error(
-        emit_error,
+    return _unmapped_error_diagnostic(
         source_exception.__traceback__,
         "Unmapped profile/template error: type=%s code=%s entity_id=%s",
         type(source_exception).__name__,
@@ -131,17 +125,28 @@ def _safe_source_frame_metadata(
     return " <- ".join(frame_labels)
 
 
-def _log_unmapped_error(
-    emit_error: _UnmappedErrorEmitter,
+def _unmapped_error_diagnostic(
     source_traceback: types.TracebackType | None,
     template: str,
     *args: object,
-) -> None:
-    """Log detached exception information and safe source locations."""
+) -> _UnmappedErrorDiagnostic:
+    """Build detached exception information and safe source locations."""
     frame_metadata = _safe_source_frame_metadata(source_traceback)
     del source_traceback
     redacted = _RedactedMapperError(
         f"Original exception message redacted. Source frames: {frame_metadata}"
     )
     safe_exception_info = (type(redacted), redacted, None)
-    emit_error(template, *args, exc_info=safe_exception_info)
+    return _UnmappedErrorDiagnostic(template, args, safe_exception_info)
+
+
+def _emit_unmapped_error_diagnostic(
+    emit_error: UnmappedErrorEmitter,
+    diagnostic: _UnmappedErrorDiagnostic,
+) -> None:
+    """Emit a sanitized diagnostic at the central API error boundary."""
+    emit_error(
+        diagnostic.template,
+        *diagnostic.args,
+        exc_info=diagnostic.exc_info,
+    )
