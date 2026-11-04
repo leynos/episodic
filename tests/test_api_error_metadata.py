@@ -2,7 +2,6 @@
 
 import traceback
 import typing as typ
-from functools import partial
 from unittest import mock
 
 import falcon
@@ -13,7 +12,6 @@ from hypothesis import strategies as st
 from episodic.api import _error_logging
 from episodic.api import errors as api_errors
 from episodic.canonical.profile_templates.types import ProfileTemplateError
-from episodic.logging import log_error
 
 _TEST_CREDENTIAL = "test-only-secret-marker"
 _TEST_CAUSE_CREDENTIAL = "test-only-cause-secret-marker"
@@ -71,7 +69,7 @@ def test_profile_template_error_redacts_credential_metadata(
     except ProfileTemplateError as raised:
         mapped_error = api_errors.map_profile_template_error(
             raised,
-            emit_error=partial(log_error, spy_logger),
+            emit_error=spy_logger,
         )
 
     assert isinstance(mapped_error, falcon.HTTPInternalServerError), (
@@ -102,7 +100,7 @@ def test_profile_template_error_redacts_credential_metadata(
         "error logs must include detached exception information"
     )
     assert len(exc_info) == 3, "detached exception information must be a triple"
-    logged_exception = typ.cast("BaseException", exc_info[1])
+    logged_exception = exc_info[1]
     assert logged_exception is not exc, "logs must not retain the source exception"
     assert exc_info[2] is None, "logs must not retain source traceback frames"
     assert logged_exception.__cause__ is None, "logs must omit chained causes"
@@ -146,7 +144,7 @@ def test_unmapped_error_bounds_logged_source_frames(
     except ProfileTemplateError as raised:
         mapped_error = api_errors.map_profile_template_error(
             raised,
-            emit_error=partial(log_error, spy_logger),
+            emit_error=spy_logger,
         )
 
     response = falcon.Response()
@@ -158,7 +156,7 @@ def test_unmapped_error_bounds_logged_source_frames(
 
     exc_info = spy_logger.calls[0][2]
     assert isinstance(exc_info, tuple), "error logs must include exception info"
-    logged_exception = typ.cast("BaseException", exc_info[1])
+    logged_exception = exc_info[1]
     frame_summary = str(logged_exception).partition("Source frames: ")[2]
     frame_labels = frame_summary.split(" <- ")
     assert len(frame_labels) == 21, "logs must cap source frames at 20 plus marker"
@@ -197,7 +195,7 @@ def test_profile_error_logging_redacts_generated_untrusted_values(
         exc.__cause__ = RuntimeError("chained cause:" + credential)
 
     spy = mock.Mock()
-    emit_error = partial(log_error, spy)
+    emit_error = spy
     if has_traceback:
         try:
             raise exc
@@ -215,17 +213,19 @@ def test_profile_error_logging_redacts_generated_untrusted_values(
     assert isinstance(mapped_error, falcon.HTTPInternalServerError), (
         "unmapped profile errors must return HTTP 500"
     )
-    assert spy.error.call_count == 1, "the mapper must emit one ERROR log"
+    assert spy.call_count == 1, "the mapper must emit one ERROR log"
     api_errors.serialize_http_error(
         falcon_testing.create_req(),
         falcon.Response(),
         mapped_error,
     )
-    logged_message = typ.cast("str", spy.error.call_args.args[0])
+    logged_arguments = spy.call_args.args
+    logged_template = typ.cast("str", logged_arguments[0])
+    logged_message = logged_template % logged_arguments[1:]
     assert credential not in logged_message, "metadata values must be redacted"
     logged_exc_info = typ.cast(
         "tuple[type[BaseException], BaseException, types.TracebackType | None]",
-        spy.error.call_args.kwargs["exc_info"],
+        spy.call_args.kwargs["exc_info"],
     )
     formatted_traceback = "".join(traceback.format_exception(*logged_exc_info))
     assert credential not in formatted_traceback, (

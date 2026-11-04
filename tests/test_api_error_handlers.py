@@ -1,10 +1,8 @@
 """Verify unmapped profile errors reach the shared handler fallback."""
 
 import asyncio
-import logging
 import typing as typ
 import uuid
-from functools import partial
 
 import falcon
 import pytest
@@ -23,7 +21,6 @@ from episodic.api.handlers import (
 from episodic.api.helpers import build_profile_update_request
 from episodic.canonical.pagination import Pagination
 from episodic.canonical.profile_templates.types import ProfileTemplateError
-from episodic.logging import log_error
 
 if typ.TYPE_CHECKING:
     from episodic.api.dependencies import UnmappedErrorEmitter
@@ -135,22 +132,18 @@ def test_shared_handlers_emit_unmapped_errors_through_injected_port(
     handler_name: str,
     spy_logger: SpyLogger,
     empty_uow_factory: EmptyUnitOfWorkFactory,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Shared handlers pass the logging port to profile-error mappers."""
     source_exception = _UnexpectedProfileTemplateError(
         "Service failure.",
         entity_id=str(_ENTITY_ID),
     )
-    with (
-        caplog.at_level(logging.ERROR),
-        pytest.raises(falcon.HTTPInternalServerError) as raised_error,
-    ):
+    with pytest.raises(falcon.HTTPInternalServerError) as raised_error:
         asyncio.run(
             _run_handler(
                 _HandlerCase(handler_name, source_exception),
                 empty_uow_factory,
-                partial(log_error, spy_logger),
+                spy_logger,
             )
         )
 
@@ -163,4 +156,3 @@ def test_shared_handlers_emit_unmapped_errors_through_injected_port(
     )
     assert len(spy_logger.calls) == 1, "unmapped mapper paths must log exactly once"
     assert spy_logger.calls[0][0] == "ERROR", "unmapped paths must log at ERROR"
-    assert len(caplog.records) == 1, "the injected logging port must emit one record"

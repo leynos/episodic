@@ -1,10 +1,8 @@
 """Verify mapper diagnostics for unmapped API errors."""
 
 import dataclasses as dc
-import logging
 import traceback
 import typing as typ
-from functools import partial
 
 import falcon
 import pytest
@@ -14,8 +12,6 @@ from episodic.api import errors as api_errors
 from episodic.canonical.profile_templates.types import ProfileTemplateError
 from episodic.canonical.reference_documents.types import ReferenceDocumentError
 from episodic.canonical.source_intake_errors import SourceIntakeError
-from episodic.logging import log_error
-from tests.fixtures.api_errors import API_ERROR_TEST_LOGGER_NAME as _TEST_LOGGER_NAME
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -65,33 +61,32 @@ def _raise_with_credential_cause(exc: Exception) -> typ.NoReturn:
 
 
 def _assert_detached_exception_info_logged(
-    caplog: pytest.LogCaptureFixture,
+    spy_logger: SpyLogger,
     exc: Exception,
 ) -> None:
     """Verify detached exception info cannot retain source frames or secrets."""
-    records = [record for record in caplog.records if record.name == _TEST_LOGGER_NAME]
-    assert len(records) == 1, "each unmapped error must emit one log record"
-    record = records[0]
-    assert record.exc_info is not None, "error log must include exception information"
-    formatted_traceback = "".join(traceback.format_exception(*record.exc_info))
-    logged_content = record.getMessage() + formatted_traceback
+    assert len(spy_logger.calls) == 1, "each unmapped error must emit one log record"
+    _, message, exc_info = spy_logger.calls[0]
+    assert isinstance(exc_info, tuple), "error log must include exception information"
+    formatted_traceback = "".join(traceback.format_exception(*exc_info))
+    logged_content = message + formatted_traceback
     assert _TEST_CREDENTIAL not in logged_content, (
         "logs must not include credential-like exception text"
     )
     assert _TEST_CAUSE_CREDENTIAL not in logged_content, (
         "logs must not include credential-like chained exception text"
     )
-    logged_exception = record.exc_info[1]
+    logged_exception = exc_info[1]
     assert logged_exception is not None, "error log must include an exception value"
     assert logged_exception is not exc, "logs must not retain the source exception"
     assert logged_exception.__cause__ is None, "logs must omit chained causes"
     assert logged_exception.__context__ is None, (
         "logs must omit implicit exception chains"
     )
-    assert record.exc_info[2] is None, (
+    assert exc_info[2] is None, (
         "log records must not retain a traceback that can expose caller locals"
     )
-    assert type(exc).__name__ in record.getMessage(), (
+    assert type(exc).__name__ in message, (
         "the safe log message must identify the source exception type"
     )
     assert "Original exception message redacted." in formatted_traceback, (
@@ -230,7 +225,6 @@ def _stable_mapper_snapshot(
 def test_unmapped_error_mappers_log_and_return_internal_error(
     case: _UnmappedMapperCase,
     spy_logger: SpyLogger,
-    caplog: pytest.LogCaptureFixture,
     snapshot: SnapshotAssertion,
 ) -> None:
     """Mappers emit detached diagnostics through their injected port."""
@@ -238,17 +232,17 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     def raise_case_exception() -> None:
         _raise_with_credential_cause(case.exception)
 
-    with caplog.at_level(logging.ERROR):
-        try:
-            raise_case_exception()
-        except (
-            ProfileTemplateError,
-            ReferenceDocumentError,
-            SourceIntakeError,
-        ) as raised:
-            result = case.mapper(raised, partial(log_error, spy_logger))
-
-    assert len(caplog.records) == 1, "unmapped mappers must emit one log record"
+    try:
+        raise_case_exception()
+    except (
+        ProfileTemplateError,
+        ReferenceDocumentError,
+        SourceIntakeError,
+    ) as raised:
+        result = case.mapper(
+            raised,
+            spy_logger,
+        )
 
     assert isinstance(result, falcon.HTTPInternalServerError), (
         "unmapped domain errors must return HTTP 500"
@@ -257,7 +251,7 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
         "unmapped domain errors must use the internal-error envelope"
     )
     _assert_spy_logger_call(spy_logger, case.exception, case.expected_message)
-    _assert_detached_exception_info_logged(caplog, case.exception)
+    _assert_detached_exception_info_logged(spy_logger, case.exception)
     assert (
         _stable_mapper_snapshot(
             case,
@@ -270,7 +264,6 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
 
 def test_unmapped_profile_error_response_redacts_exception_text(
     spy_logger: SpyLogger,
-    caplog: pytest.LogCaptureFixture,
     snapshot: SnapshotAssertion,
 ) -> None:
     """An unmapped profile error must not expose its message to clients."""
@@ -279,16 +272,13 @@ def test_unmapped_profile_error_response_redacts_exception_text(
         code="internal_error",
     )
 
-    with caplog.at_level(logging.ERROR):
-        try:
-            raise exc
-        except ProfileTemplateError as raised:
-            mapped_error = api_errors.map_profile_template_error(
-                raised,
-                emit_error=partial(log_error, spy_logger),
-            )
-
-    assert len(caplog.records) == 1, "the mapper must emit one error log"
+    try:
+        raise exc
+    except ProfileTemplateError as raised:
+        mapped_error = api_errors.map_profile_template_error(
+            raised,
+            emit_error=spy_logger,
+        )
 
     response = falcon.Response()
     api_errors.serialize_http_error(
@@ -306,6 +296,7 @@ def test_unmapped_profile_error_response_redacts_exception_text(
         "serialized responses must not expose credential-like exception text"
     )
     assert len(spy_logger.calls) == 1, "unmapped errors must log once"
+    _assert_detached_exception_info_logged(spy_logger, exc)
     stable_response = {
         "status": mapped_error.status,
         "envelope": response.media,
@@ -328,7 +319,7 @@ def test_unmapped_mapper_emits_before_returning_error(
     except SourceIntakeError as raised:
         mapped_error = api_errors.map_source_intake_error(
             raised,
-            emit_error=partial(log_error, spy_logger),
+            emit_error=spy_logger,
         )
 
     assert isinstance(mapped_error, falcon.HTTPInternalServerError), (

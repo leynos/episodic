@@ -1,8 +1,6 @@
 """Shared fixtures for API error logging and handler tests."""
 
 import dataclasses as dc
-import logging
-import types
 import typing as typ
 
 import pytest
@@ -19,37 +17,41 @@ class EmptyUnitOfWorkFactory(typ.Protocol):
         ...
 
 
-API_ERROR_TEST_LOGGER_NAME = "test.episodic.api.errors"
-type ExcInfo = (
-    bool
-    | BaseException
-    | tuple[type[BaseException], BaseException, types.TracebackType | None]
-    | tuple[None, None, None]
-    | None
-)
+type DetachedExcInfo = tuple[type[BaseException], BaseException, None]
+
+
+def _is_detached_exc_info(value: object | None) -> typ.TypeGuard[DetachedExcInfo]:
+    """Return whether a captured mapper diagnostic is a detached exception triple."""
+    if not isinstance(value, tuple) or len(value) != 3:
+        return False
+    exception_type, exception, traceback_value = value
+    return (
+        isinstance(exception_type, type)
+        and issubclass(exception_type, BaseException)
+        and isinstance(exception, BaseException)
+        and traceback_value is None
+    )
 
 
 @dc.dataclass(slots=True)
 class SpyLogger:
-    """Capture error calls and forward them for caplog assertions."""
+    """Capture calls made to the injected error emitter."""
 
-    calls: list[tuple[str, str, object]] = dc.field(default_factory=list)
+    calls: list[tuple[str, str, DetachedExcInfo]] = dc.field(default_factory=list)
 
-    def error(
+    def __call__(
         self,
-        message: str,
+        template: str,
         /,
-        *,
-        exc_info: ExcInfo = None,
-        stack_info: bool = False,
+        *args: object,
+        exc_info: object | None = None,
     ) -> None:
-        """Record one ERROR call and forward it to the test logger."""
+        """Record one sanitized error-port call for API boundary assertions."""
+        message = template % args if args else template
+        if not _is_detached_exc_info(exc_info):
+            msg = "API mapper emitter must receive detached exception information."
+            raise AssertionError(msg)
         self.calls.append(("ERROR", message, exc_info))
-        logging.getLogger(API_ERROR_TEST_LOGGER_NAME).error(
-            message,
-            exc_info=exc_info,
-            stack_info=stack_info,
-        )
 
 
 class EmptyUnitOfWork:
