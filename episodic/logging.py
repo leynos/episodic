@@ -13,7 +13,6 @@ Configure logging and emit a message:
 
 import datetime as dt
 import enum
-import inspect
 import json
 import logging
 import typing as typ
@@ -23,8 +22,9 @@ from femtologging import basicConfig
 from femtologging import get_logger as _get_femtologger
 
 from episodic._logging_types import (
-    _ConvenienceMethod,
     _LogCall,
+    _LogWrapperConfig,
+    _method_rejects_logging_call,
     _SupportsConvenienceLog,
 )
 
@@ -141,15 +141,6 @@ class _LogWrapper(typ.Protocol):
         """Emit one formatted message through the logging port."""
 
 
-class _LogWrapperConfig(typ.NamedTuple):
-    """Bind the public name and backend dispatch for one logging wrapper."""
-
-    name: str
-    level: int
-    convenience_method: _ConvenienceMethod
-    default_exc_info: object | None = None
-
-
 def get_logger(name: str) -> LoggerHandle:
     """Return an opaque logging-port handle for *name*.
 
@@ -172,26 +163,6 @@ getLogger = get_logger  # ruff: ignore[mixed-case-variable-in-global-scope]  # P
 def _format_message(template: str, args: tuple[object, ...]) -> str:
     """Format a log message template."""
     return template % args if args else template
-
-
-def _method_rejects_logging_call(
-    method: object,
-    message: str,
-    *,
-    exc_info: object | None,
-) -> bool:
-    """Return whether an inspectable method rejects the helper arguments."""
-    if not callable(method):
-        return False
-    try:
-        signature = inspect.signature(method)
-    except (TypeError, ValueError):
-        return False
-    try:
-        signature.bind(message, exc_info=exc_info, stack_info=False)
-    except TypeError:
-        return True
-    return False
 
 
 def _emit(

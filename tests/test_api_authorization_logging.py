@@ -1,7 +1,5 @@
 """Authorization warning tests for redaction and log-safe paths."""
 
-from __future__ import annotations
-
 import time
 import typing as typ
 import unicodedata
@@ -10,8 +8,8 @@ from unittest import mock
 import femtologging
 import pytest
 
-from episodic.api import authorization as authorization_module
 from episodic import logging as episodic_logging
+from episodic.api import authorization as authorization_module
 from tests.fixtures.authorization import (
     DenyAllAuthorization,
     ForbidSeriesProfilesAuthorization,
@@ -37,7 +35,7 @@ class _AuthorizationLogCollector:
     """Collect authorization log records through the femtologging protocol."""
 
     def __init__(self) -> None:
-        """Initialise an empty authorization-record collection."""
+        """Initialize an empty authorization-record collection."""
         self.records: list[tuple[str, str, str]] = []
 
     def handle(self, logger_name: str, level: str, message: str) -> None:
@@ -177,9 +175,7 @@ def test_authorization_adapter_failure_logs_fixed_category(
         exc_info=None,
         stack_info=False,
     )
-    assert "authorization backend unavailable" not in repr(
-        backend.warning.call_args
-    ), (
+    assert "authorization backend unavailable" not in repr(backend.warning.call_args), (
         "exception message must not reach the warning logger"
     )
     assert authorization_header not in repr(backend.warning.call_args), (
