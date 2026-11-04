@@ -1,5 +1,6 @@
 """Tests for fallback and failure behaviour at the logging port."""
 
+import functools
 import logging
 import typing as typ
 from unittest import mock
@@ -71,6 +72,35 @@ class _FailingDebugBackend(_LogOnlyBackend):
         raise TypeError(msg)
 
 
+def _debug_without_logging_options(message: str, /) -> None:
+    """Represent a decorated method's narrower wrapped signature."""
+    del message
+
+
+class _DecoratedFailingDebugBackend(_LogOnlyBackend):
+    """Record one decorated DEBUG call before raising an emission error."""
+
+    def __init__(self) -> None:
+        """Initialize generic logging and the DEBUG attempt count."""
+        super().__init__()
+        self.debug_calls = 0
+
+    @functools.wraps(_debug_without_logging_options)
+    def debug(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record the accepted DEBUG call, then raise an internal error."""
+        self.debug_calls += 1
+        self.calls.append((logging.DEBUG, message, exc_info, stack_info))
+        msg = "decorated debug emission failed"
+        raise TypeError(msg)
+
+
 @pytest.mark.parametrize(
     ("wrapper", "method_name"),
     [
@@ -126,6 +156,20 @@ def test_debug_preserves_internal_type_error_without_retry() -> None:
 
     assert backend.debug_calls == 1, "the compatible DEBUG method should be attempted"
     assert not backend.calls, "internal failures must not retry through log()"
+
+
+def test_debug_does_not_retry_decorated_method_after_internal_type_error() -> None:
+    """Avoid duplicate records when a decorated DEBUG method fails internally."""
+    backend = _DecoratedFailingDebugBackend()
+    logger = episodic_logging.LoggerHandle(backend)
+
+    with pytest.raises(TypeError, match="decorated debug emission failed"):
+        episodic_logging.log_debug(logger, "Loaded %s documents", 3)
+
+    assert backend.debug_calls == 1, "the decorated DEBUG method should be attempted"
+    assert backend.calls == [(logging.DEBUG, "Loaded 3 documents", None, False)], (
+        "an internal failure must not duplicate the record through log()"
+    )
 
 
 def test_debug_preserves_signature_error_without_generic_fallback() -> None:
