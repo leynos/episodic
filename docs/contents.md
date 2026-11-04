@@ -127,6 +127,8 @@ or delivery planning.
   adr/adr-024-review-checkpoint-persistence.md)
   - durable review checkpoints, compare-and-set transitions, and why the SQL
     stores compose rather than inherit.
+- [ADR 025: Central logging port](adr/adr-025-central-logging-port.md)
+  - logging ownership, backend boundary, and direct-call enforcement.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 

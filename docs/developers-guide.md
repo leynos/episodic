@@ -1233,8 +1233,30 @@ make check-architecture
 `[tool.hecate]` from `pyproject.toml` and reports diagnostics as `ARCH001` with
 the importer, imported module, and dependency direction.
 
+The `logging_port` and `logging_backend` groups precede `external_libraries`,
+so first-match prefix selection keeps `femtologging` restricted to the port.
+The production policy tracks third-party imports with
+`include_external_packages = true`; fixture tests assert the ordering to guard
+against a broad prefix shadowing the logging rule.
+
+Direct logger-method calls are also rejected by two checks. `LoggerHandle`
+omits backend level methods, so `ty` reports a type error for direct calls. A
+production-tree scanner rejects standard-library `logging` imports outside
+`episodic.logging`, including aliased imports that a receiver-name pattern
+would miss.
+
 The enforced groups are:
 
+- `logging_port`: the public `episodic.logging` seam used by every package.
+- `logging_backend`: the `femtologging` implementation, which only
+  `logging_port` may import.
+- `external_libraries`: approved third-party libraries, tracked as import
+  edges alongside the internal groups.
+- `external_workers`: Celery and Kombu, restricted to the `composition_root`,
+  `orchestration_tasks`, and `inbound_adapter` groups. The latter includes
+  Falcon API modules and worker topology.
+- `logging_internals`: private logger backend protocols used by the port. This
+  group has no dependency on the femtologging backend.
 - `domain_ports`: canonical domain types, canonical ports, ingestion ports,
   canonical constraint names, and LLM ports.
 - `application`: canonical services, profile/template workflows,
@@ -1265,11 +1287,19 @@ The enforced groups are:
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
 
-When adding a new port or adapter, update `[tool.hecate]` in `pyproject.toml`
-in the same change as the package. Keep specific prefixes before broader
-prefixes because Hecate uses first-match group ordering: `composition_root`
-before adapter prefixes, `orchestration_nodes` before the broad `orchestration`
-prefix, and `orchestration_tasks` before worker adapter prefixes.
+`include_external_packages = true` makes Hecate classify third-party import
+edges. The groups are ordered by first matching prefix: keep `logging_port` and
+`logging_backend` before the broad `external_libraries` group so the latter
+cannot silently permit direct femtologging imports. `logging_internals` has a
+self-only policy and keeps private logging types out of the backend boundary.
+Keep `external_workers` before `external_libraries` so Celery and Kombu retain
+their narrower allowed groups. The `domain_ports`, `orchestration_checkpoint`,
+`orchestration_nodes`, and `orchestration_tasks` groups must not allow the
+broad external group. `orchestration_tasks` receives only the worker-specific
+external group. Keep `composition_root`, `orchestration_nodes`, and
+`orchestration_tasks` before their broader episodic prefixes. When adding a new
+port or adapter, update `[tool.hecate]` in `pyproject.toml` in the same change
+as the package.
 
 `episodic.worker.workloads.WorkloadClass` is the canonical worker workload
 contract that task modules may import without pulling in the Celery app or
@@ -1294,6 +1324,20 @@ same prefix Hecate will classify in production. Use
 Celery task checks, and `orchestration/_checkpoint_payload.py` for checkpoint
 payload checks. Snapshot JSON diagnostics only after normalizing workspace
 paths.
+
+### Targeted type checking
+
+`make typecheck` checks the configured project paths with the pinned `ty`
+version. `TY_VERSION` selects that version; `make typecheck-path` checks one
+explicit fixture or module using `TY_CHECK_PATH`:
+
+```shell
+make typecheck-path TY_CHECK_PATH=tests/fixtures/typecheck/logging_handle_direct_call.py
+```
+
+`TY_CHECK_PATH` is required. If it is empty, the target exits with status 2
+before invoking `ty`; negative fixtures stay outside the regular
+`make typecheck` scope and can be checked in isolation.
 
 ### TEI payload compression
 
@@ -2682,18 +2726,38 @@ normalizer.
 
 ## Logging
 
-Structured logging uses femtologging v0.1.0-style logger methods. Import
-`get_logger` (or `getLogger` when matching stdlib naming) from
-`episodic.logging`, then emit via `logger.info(...)`, `logger.warning(...)`,
-`logger.error(...)`, or `logger.exception(...)`.
+`episodic.logging` is the project's logging port. Call sites obtain a
+`LoggerHandle` through `get_logger` (or the stdlib-compatible `getLogger`
+alias) and emit through `log_debug`, `log_info`, `log_warning`, `log_error`, or
+`log_exception`. Pass percent-style templates and arguments to the port; it
+eagerly formats the final message for femtologging.
 
-Keep `episodic.logging.configure_logging(...)` as the local configuration seam.
-The legacy `log_info`, `log_warning`, and `log_error` helpers remain available
-for compatibility. Use logger methods for ordinary messages and
-`episodic.logging.log_event(...)` for structured event payloads. Femtologging
-still expects pre-formatted messages rather than stdlib
-`logger.info("%s", value)` lazy formatting, so build the final string before
-calling the method.
+The handle deliberately exposes no level methods. The raw femtologging logger
+is an implementation detail, not a public surface: logging behaviour that
+crosses package boundaries must pass through the port. This gives each call
+site a stable emission contract while allowing the port to attach the request
+correlation identifier and future common fields consistently.
+
+Keep `configure_logging(...)` as the local configuration seam. `log_exception`
+records exception information by default; the other wrappers accept optional
+`exc_info` explicitly when a caller needs it.
+
+Use `log_event(...)` for structured event fields on the port's configured
+logger. When an event must use a caller's `LoggerHandle`, use
+`format_log_event(event, **fields)` to build the stable JSON message, then emit
+it through the matching `log_*` wrapper. Both paths normalize enum values,
+dates, times, and other non-JSON values consistently.
+
+The import boundary is enforced by Hecate's `logging_port` and
+`logging_backend` groups. The direct-call boundary has two independent gates:
+the opaque `LoggerHandle` is rejected by `ty` when code accesses `.info` or
+another level method, and `tests/test_logging_port_enforcement.py` scans the
+production tree so a regression reports every offending file. The port group
+does not allow the broad `external_libraries` group, keeping its dependencies
+limited to its backend and private type support.
+
+The architectural decision and its consequences are recorded in
+[ADR-025](adr/adr-025-central-logging-port.md).
 
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:
@@ -2760,13 +2824,24 @@ The `force` parameter is forwarded directly to `femtologging.basicConfig`.
 
 ### Internal protocol interfaces
 
-Two private Protocol types define the logger surface consumed by helper
-functions:
+Two private Protocol types define the backend logger surface wrapped by
+`LoggerHandle`. `_SupportsConvenienceLog` lives in `episodic/_logging_types.py`;
+`_SupportsLogMethod` lives in `episodic/logging.py`:
 
-- `_SupportsConvenienceLog` — objects exposing the three stdlib-style
-  convenience methods:
+- `_SupportsConvenienceLog` — objects exposing the five stdlib-style
+  convenience methods (`debug`, `info`, `warning`, `error`, `exception`):
 
   ```python
+  def debug(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
+
+
   def info(
       self,
       message: str,
@@ -2795,6 +2870,16 @@ functions:
       exc_info: object | None = None,
       stack_info: bool = False,
   ) -> None: ...
+
+
+  def exception(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
   ```
 
 - `_SupportsLogMethod` — objects exposing the generic stdlib-style entry
@@ -2816,13 +2901,10 @@ functions:
 
 In every signature, the message (and `level` plus message for `log`) are
 positional-only before `/`, and `exc_info` and `stack_info` are keyword-only
-after `*`. Adapter authors must implement the full surface — including the
-`exc_info` and `stack_info` keyword-only parameters — for the helpers to call
-them correctly.
-
-Custom logger adapters passed to `log_info`, `log_warning`, or `log_error` must
-satisfy `_SupportsConvenienceLog`. Code that calls `log_at_level` must satisfy
-`_SupportsLogMethod`.
+after `*`. Backend adapters stored inside `LoggerHandle` must implement the
+full surface, including both keyword-only parameters. Call sites obtain a
+`LoggerHandle` from `get_logger` and pass it to the public logging helpers;
+they do not pass a backend adapter directly.
 
 ## Asyncio task utilities
 

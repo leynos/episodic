@@ -45,12 +45,17 @@ def test_production_config_classifies_orchestration_in_strict_order() -> None:
     assert group_by_name["orchestration_checkpoint"]["allowed"] == [
         "orchestration_checkpoint",
         "domain_ports",
+        "logging_port",
     ], "checkpoint dependencies must remain restricted"
     assert group_by_name["orchestration_nodes"]["allowed"] == [
         "orchestration_nodes",
         "domain_ports",
         "orchestration_checkpoint",
+        "logging_port",
     ], "node dependencies must remain restricted"
+    assert "external_libraries" not in typ.cast(
+        "list[str]", group_by_name["domain_ports"]["allowed"]
+    ), "domain ports must not depend on concrete third-party libraries"
 
     orchestration_group = group_by_name["orchestration"]
     assert orchestration_group["prefixes"] == ["episodic.orchestration"], (
@@ -62,6 +67,8 @@ def test_production_config_classifies_orchestration_in_strict_order() -> None:
         "domain_ports",
         "orchestration_checkpoint",
         "orchestration_nodes",
+        "external_libraries",
+        "logging_port",
     ], "broad orchestration must not permit adapter imports"
 
     orchestration_tasks_group = group_by_name["orchestration_tasks"]
@@ -73,12 +80,64 @@ def test_production_config_classifies_orchestration_in_strict_order() -> None:
         "orchestration_tasks",
         "application",
         "domain_ports",
+        "external_workers",
+        "logging_port",
     ], "worker tasks must not depend on adapters"
+    assert "external_libraries" not in typ.cast(
+        "list[str]", orchestration_tasks_group["allowed"]
+    ), "worker tasks must not depend on arbitrary third-party libraries"
 
     module_groups = _production_orchestration_module_groups(groups)
     assert module_groups == EXPECTED_PRODUCTION_ORCHESTRATION_GROUPS, (
         "every orchestration Python module must match its intended production group"
     )
+
+
+def test_production_logging_backend_is_restricted_to_logging_port() -> None:
+    """The production group order must not shadow the femtologging boundary."""
+    groups = _production_hecate_groups()
+    group_names = [typ.cast("str", group["name"]) for group in groups]
+    group_by_name = {typ.cast("str", group["name"]): group for group in groups}
+
+    assert (
+        group_names.index("logging_port")
+        < group_names.index("logging_backend")
+        < group_names.index("logging_internals")
+        < group_names.index("external_workers")
+        < group_names.index("external_libraries")
+    ), "logging groups must precede the broad external-library group"
+    assert group_by_name["logging_backend"]["allowed"] == ["logging_port"], (
+        "the backend group must have a valid non-empty policy"
+    )
+    assert group_by_name["logging_internals"]["allowed"] == ["logging_internals"], (
+        "private logging types must not import the backend or application layers"
+    )
+    assert "external_libraries" not in typ.cast(
+        "list[str]", group_by_name["logging_port"]["allowed"]
+    ), "the logging port must remain isolated from unrelated third-party packages"
+    allowed_backend_groups = [
+        typ.cast("str", group["name"])
+        for group in groups
+        if "logging_backend" in typ.cast("list[str]", group["allowed"])
+    ]
+    assert allowed_backend_groups == ["logging_port"], (
+        "only the logging port may import the femtologging backend"
+    )
+    assert set(
+        typ.cast("list[str]", group_by_name["external_workers"]["prefixes"])
+    ) == {
+        "celery",
+        "kombu",
+    }, "worker dependencies must have a specific group before external_libraries"
+    assert set(typ.cast("list[str]", group_by_name["external_workers"]["allowed"])) == {
+        "composition_root",
+        "external_workers",
+        "inbound_adapter",
+        "orchestration_tasks",
+    }, "worker dependencies must be limited to their consuming groups"
+    assert not {"celery", "kombu"}.intersection(
+        typ.cast("list[str]", group_by_name["external_libraries"]["prefixes"])
+    ), "worker dependencies must not fall through to the broad external group"
 
 
 def _production_hecate_groups() -> list[dict[str, object]]:

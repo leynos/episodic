@@ -1,8 +1,10 @@
 """Focused tests for synchronous tracing adapters."""
 
 import dataclasses as dc
+import json
 import typing as typ
 
+from episodic.logging import LoggerHandle, LogLevel
 from episodic.observability import (
     NoopTracer,
     RecordingTracer,
@@ -10,19 +12,28 @@ from episodic.observability import (
     StructuredLogTracer,
 )
 
-if typ.TYPE_CHECKING:
-    from collections import abc as cabc
-
 
 @dc.dataclass(slots=True)
 class _RecordingLogger:
     """Capture structured logger events without process-wide configuration."""
 
-    events: list[tuple[str, dict[str, str]]] = dc.field(default_factory=list)
+    events: list[tuple[str, dict[str, object]]] = dc.field(default_factory=list)
 
-    def info(self, message: str, /, *, extra: cabc.Mapping[str, str]) -> None:
+    def log(
+        self,
+        level: int | LogLevel,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
         """Record a structured INFO event."""
-        self.events.append((message, dict(extra)))
+        del exc_info, stack_info
+        assert level == 20, "structured observability events must be INFO logs"
+        payload = json.loads(message)
+        event = typ.cast("str", payload.pop("event"))
+        self.events.append((event, typ.cast("dict[str, object]", payload)))
 
 
 def test_recording_tracer_preserves_span_details_and_completion() -> None:
@@ -43,7 +54,8 @@ def test_recording_tracer_preserves_span_details_and_completion() -> None:
 
 def test_structured_log_tracer_allows_bounded_operation_attributes() -> None:
     """Structured spans retain only allow-listed bounded operation attributes."""
-    logger = _RecordingLogger()
+    recorder = _RecordingLogger()
+    logger = LoggerHandle(recorder)
     tracer = StructuredLogTracer(logger=logger)
 
     with tracer.start_span(
@@ -75,12 +87,13 @@ def test_structured_log_tracer_allows_bounded_operation_attributes() -> None:
             },
         ),
     ]
-    assert logger.events == expected_events, logger.events
+    assert recorder.events == expected_events, recorder.events
 
 
 def test_structured_log_metrics_emits_latency_and_value_events() -> None:
     """Structured metrics retain their event names and payload fields."""
-    logger = _RecordingLogger()
+    recorder = _RecordingLogger()
+    logger = LoggerHandle(recorder)
     metrics = StructuredLogMetrics(logger=logger)
     labels = {"operation": "generation_run.execute"}
 
@@ -100,7 +113,7 @@ def test_structured_log_metrics_emits_latency_and_value_events() -> None:
         {
             "metric_name": "generation_run.duration_ms",
             "value": "123.45",
-            "operation": "generation_run.execute",
+            "labels": {"operation": "generation_run.execute"},
         },
     )
     expected_value_event = (
@@ -108,12 +121,44 @@ def test_structured_log_metrics_emits_latency_and_value_events() -> None:
         {
             "metric_name": "generation_run.queue_depth",
             "value": "2.0",
-            "operation": "generation_run.execute",
+            "labels": {"operation": "generation_run.execute"},
         },
     )
 
-    assert logger.events == [expected_latency_event, expected_value_event], (
-        logger.events
+    assert recorder.events == [expected_latency_event, expected_value_event], (
+        recorder.events
+    )
+
+
+def test_structured_log_metrics_preserves_reserved_parameter_labels() -> None:
+    """Labels stay namespaced so reserved event fields cannot replace them."""
+    recorder = _RecordingLogger()
+    metrics = StructuredLogMetrics(logger=LoggerHandle(recorder))
+    labels = {
+        "event": "label-event",
+        "logger": "label-logger",
+        "metric_name": "label-metric",
+        "value": "label-value",
+    }
+
+    metrics.increment_counter(
+        "requests",
+        labels=labels,
+    )
+    metrics.observe_value("queue_depth", 2.0, labels=labels)
+
+    expected_events = [
+        (
+            "metric_counter",
+            {"metric_name": "requests", "labels": labels},
+        ),
+        (
+            "metric_value",
+            {"metric_name": "queue_depth", "value": "2.0", "labels": labels},
+        ),
+    ]
+    assert recorder.events == expected_events, (
+        "reserved event fields must remain distinct from metric labels"
     )
 
 

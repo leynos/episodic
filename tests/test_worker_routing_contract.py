@@ -5,6 +5,8 @@ import typing as typ
 
 import pytest
 
+from episodic.logging import LoggerHandle, LogLevel
+
 if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
 
@@ -16,11 +18,29 @@ class _FakeWorkerLogger:
     infos: list[str]
     exceptions: list[str]
 
-    def info(self, message: str) -> None:
+    def info(self, message: str, **kwargs: object) -> None:
+        del kwargs
         self.infos += [message]
 
-    def exception(self, message: str) -> None:
+    def exception(self, message: str, **kwargs: object) -> None:
+        del kwargs
         self.exceptions += [message]
+
+    def log(
+        self,
+        level: int | LogLevel,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record a fallback port emission by its level."""
+        del exc_info, stack_info
+        if level == 20:
+            self.infos += [message]
+        else:
+            self.exceptions += [message]
 
 
 def _runtime_environ() -> dict[str, str]:
@@ -114,7 +134,7 @@ def test_create_celery_app_logs_task_route_materialisation(
     from episodic.worker import runtime as runtime_module
 
     logger = _FakeWorkerLogger(infos=[], exceptions=[])
-    monkeypatch.setattr(runtime_module, "logger", logger)
+    monkeypatch.setattr(runtime_module, "logger", LoggerHandle(logger))
 
     create_celery_app(load_runtime_config(_runtime_environ()))
 
@@ -133,7 +153,7 @@ def test_create_celery_app_logs_task_route_validation_failures(
     from episodic.worker import runtime as runtime_module
 
     logger = _FakeWorkerLogger(infos=[], exceptions=[])
-    monkeypatch.setattr(runtime_module, "logger", logger)
+    monkeypatch.setattr(runtime_module, "logger", LoggerHandle(logger))
 
     with pytest.raises(
         TypeError,

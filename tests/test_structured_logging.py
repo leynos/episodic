@@ -111,6 +111,7 @@ def test_log_event_normalizes_non_json_structured_fields(
         "info",
         "generation.failed",
         event_id=event_id,
+        event_name="provider-supplied-name",
         occurred_at=occurred_at,
         state=_EventState.READY,
         error=RuntimeError("provider unavailable"),
@@ -119,10 +120,34 @@ def test_log_event_normalizes_non_json_structured_fields(
     expected_payload = {
         "error": "provider unavailable",
         "event": "generation.failed",
+        "event_name": "provider-supplied-name",
         "event_id": str(event_id),
         "occurred_at": "2026-08-03T12:30:00+00:00",
         "state": "ready",
     }
     assert json.loads(logger.messages[0]) == expected_payload, (
         "non-JSON fields must normalize to the expected event payload"
+    )
+
+
+def test_format_log_event_normalizes_non_json_fields() -> None:
+    """The message formatter shares the structured-event field serializer."""
+    event_id = uuid.UUID("12345678-1234-5678-1234-567812345678")
+    occurred_at = dt.datetime(2026, 8, 3, 12, 30, tzinfo=dt.UTC)
+
+    message = episodic_logging.format_log_event(
+        "generation.failed",
+        event_id=event_id,
+        occurred_at=occurred_at,
+        state=_EventState.READY,
+    )
+
+    expected_payload = {
+        "event": "generation.failed",
+        "event_id": str(event_id),
+        "occurred_at": "2026-08-03T12:30:00+00:00",
+        "state": "ready",
+    }
+    assert json.loads(message) == expected_payload, (
+        "formatter output must normalize non-JSON fields"
     )

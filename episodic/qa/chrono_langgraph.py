@@ -22,17 +22,18 @@ remains independent of LangGraph.
 """
 
 import dataclasses as dc
-import logging
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
+
+from episodic.logging import format_log_event, get_logger, log_error, log_exception
 
 from .chrono import (  # ruff: ignore[typing-only-first-party-import]  # LangGraph evaluates state annotations at runtime.
     ChronoEvaluationRequest,
     ChronoRuntimeEstimate,
 )
 
-_log = logging.getLogger(__name__)
+_log = get_logger(__name__)
 
 if typ.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -66,22 +67,26 @@ def build_chrono_graph(
         state: ChronoGraphState,
     ) -> dict[str, ChronoRuntimeEstimate]:
         if state.chrono_request is None:
-            _log.error(
-                "Chrono graph node missing required request; has_chrono_result=%s",
-                state.chrono_result is not None,
-                extra={"has_chrono_result": state.chrono_result is not None},
+            log_error(
+                _log,
+                "%s",
+                format_log_event(
+                    "chrono_graph_request_missing",
+                    has_chrono_result=state.chrono_result is not None,
+                ),
             )
             msg = "chrono_request"
             raise KeyError(msg)
         try:
             result = await evaluator.evaluate(state.chrono_request)
         except Exception:
-            _log.exception(
-                "Chrono graph node evaluation failed; input_character_count=%s",
-                len(state.chrono_request.script_tei_xml),
-                extra={
-                    "input_character_count": len(state.chrono_request.script_tei_xml)
-                },
+            log_exception(
+                _log,
+                "%s",
+                format_log_event(
+                    "chrono_graph_evaluation_failed",
+                    input_character_count=len(state.chrono_request.script_tei_xml),
+                ),
             )
             raise
         return {"chrono_result": result}

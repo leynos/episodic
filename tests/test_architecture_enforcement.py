@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 from architecture_hecate_config import (
+    LOGGING_PORT_FIXTURE,
+    has_violation,
     run_hecate_fixture_check,
     run_hecate_production_check,
     write_fixture_config,
@@ -212,6 +214,29 @@ def test_checker_reports_fixture_boundary_violations(
         assert expected_message_part in rendered, (
             f"expected {expected_message_part!r} in {rendered!r}"
         )
+
+
+def test_checker_rejects_femtologging_outside_logging_port(
+    tmp_path: Path,
+) -> None:
+    """The boundary reports the exact forbidden backend import structurally."""
+    config_path = write_fixture_config(tmp_path, LOGGING_PORT_FIXTURE)
+
+    completed_process = run_hecate_fixture_check(
+        LOGGING_PORT_FIXTURE,
+        config_path,
+        output_format="json",
+    )
+
+    rendered = _render_process(completed_process)
+    assert completed_process.returncode == 1, rendered
+    expected_importer = _fixture_module(LOGGING_PORT_FIXTURE, "api")
+    assert has_violation(
+        completed_process.stdout,
+        rule_id="ARCH001",
+        importer=expected_importer,
+        imported="femtologging",
+    ), f"expected ARCH001 for {expected_importer} importing femtologging in {rendered}"
 
 
 def test_checker_diagnostic_output_matches_snapshot(

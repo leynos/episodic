@@ -2,6 +2,7 @@
 
 import asyncio
 import dataclasses as dc
+import json
 import typing as typ
 
 import pytest
@@ -77,6 +78,26 @@ def _result() -> ChronoRuntimeEstimate:
     )
 
 
+def _capture_log_calls(
+    monkeypatch: pytest.MonkeyPatch,
+    method_name: typ.Literal["log_error", "log_exception"],
+) -> list[tuple[str, tuple[object, ...], dict[str, object]]]:
+    """Capture messages emitted through one patched Chrono logging wrapper."""
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    def capture(
+        logger: object,
+        msg: str,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        del logger
+        calls.append((msg, args, kwargs))
+
+    monkeypatch.setattr(f"episodic.qa.chrono_langgraph.{method_name}", capture)
+    return calls
+
+
 @pytest.mark.asyncio
 async def test_chrono_node_requires_chrono_request() -> None:
     """Graph node should require a chrono_request in graph state."""
@@ -94,24 +115,15 @@ async def test_chrono_node_logs_missing_request(
     """Graph node should log context before raising for missing input."""
     evaluator = _FakeChronoEvaluator(_result())
     graph = build_chrono_graph(evaluator)
-    errors: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
-
-    def capture_error(
-        msg: str,
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        errors.append((msg, args, kwargs))
-
-    monkeypatch.setattr("episodic.qa.chrono_langgraph._log.error", capture_error)
+    errors = _capture_log_calls(monkeypatch, "log_error")
     with pytest.raises(KeyError, match="chrono_request"):
         await graph.ainvoke(ChronoGraphState())
 
     assert errors == [
         (
-            "Chrono graph node missing required request; has_chrono_result=%s",
-            (False,),
-            {"extra": {"has_chrono_result": False}},
+            "%s",
+            ('{"event": "chrono_graph_request_missing", "has_chrono_result": false}',),
+            {},
         )
     ], "Expected values to match"
 
@@ -154,29 +166,25 @@ async def test_chrono_node_logs_evaluation_failure(
     """Graph node should log context before propagating evaluator failures."""
     graph = build_chrono_graph(_FailingChronoEvaluator(ValueError("bad TEI")))
     request = _request()
-    exceptions: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
-
-    def capture_exception(
-        msg: str,
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        exceptions.append((msg, args, kwargs))
-
-    monkeypatch.setattr(
-        "episodic.qa.chrono_langgraph._log.exception",
-        capture_exception,
-    )
+    exceptions = _capture_log_calls(monkeypatch, "log_exception")
     with pytest.raises(ValueError, match="bad TEI"):
         await graph.ainvoke(ChronoGraphState(chrono_request=request))
 
-    assert exceptions == [
+    expected_error_event = json.dumps(
+        {
+            "event": "chrono_graph_evaluation_failed",
+            "input_character_count": len(request.script_tei_xml),
+        },
+        sort_keys=True,
+    )
+    expected_exceptions = [
         (
-            "Chrono graph node evaluation failed; input_character_count=%s",
-            (len(request.script_tei_xml),),
-            {"extra": {"input_character_count": len(request.script_tei_xml)}},
+            "%s",
+            (expected_error_event,),
+            {},
         )
-    ], "Expected values to match"
+    ]
+    assert exceptions == expected_exceptions, "Expected values to match"
 
 
 @pytest.mark.asyncio

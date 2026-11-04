@@ -24,6 +24,7 @@ Accepted decision records:
 - [ADR 022: Orchestration architecture enforcement](adr/adr-022-orchestration-architecture-enforcement.md)
 - [ADR 018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md)
 - [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
+- [ADR 025: Central logging port](adr/adr-025-central-logging-port.md)
 
 ## Overview
 

@@ -46,3 +46,11 @@ Feature: Architecture enforcement
     Then the architecture check fails
     And the architecture diagnostic mentions "ARCH001"
     And the architecture diagnostic mentions "orchestration._checkpoint_payload"
+
+  Scenario: A direct femtologging import bypassing the logging port is rejected
+    Given the architecture fixture package "femtologging_outside_logging_port"
+    When the architecture checker runs
+    Then the architecture check fails
+    And the architecture diagnostic mentions "ARCH001"
+    And the architecture diagnostic mentions "api"
+    And the architecture report contains a violation of "femtologging" imported by fixture module "api"

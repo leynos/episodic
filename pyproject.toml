@@ -57,6 +57,9 @@ line-length = 88
 preview = true
 target-version = "py314"
 
+[tool.ty.src]
+exclude = ["tests/fixtures/typecheck/"]
+
 [tool.ruff.lint]
 select = [
     "F",        # Pyflakes rules
@@ -770,6 +773,11 @@ full_name = [
 reason = "Metrics and tracing adapters implement runtime-selected observability protocols and their bounded emission path."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = ["episodic.observability._emit_structured_event"]
+reason = "StructuredLogMetrics.increment_counter, StructuredLogMetrics._emit_value, _NoopSpan.__exit__, and StructuredLogTracer.start_span call this shared helper; Skylos flags it despite these local callers."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "variable"
 full_name = [
     "episodic.api.runtime.GRANIAN_FACTORY_TARGET",
@@ -899,10 +907,6 @@ members = ["episodic/api/resources/series_profiles.py::_get_serializer_fn", "epi
 reason = "Template Method hooks returning the profile serializer; each override exists to bind one concrete callable for its handler."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/logging.py::log_info", "episodic/logging.py::log_warning", "episodic/logging.py::log_error"]
-reason = "Level-specific wrappers over _log_at kept explicit so call sites name the level; the shared body is one delegating call plus its documented signature."
-
-[[tool.duplication_gate.allow]]
 unit = "episodic/asyncio_tasks.py"
 reason = "Thin public wrappers over one task-creation path differing only in the create_task callable; kept explicit for API ergonomics and typing."
 
@@ -928,6 +932,58 @@ reason = "Parallel implementations of one port: the in-memory checkpoint mixin a
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"
+include_external_packages = true
+
+[[tool.hecate.groups]]
+name = "logging_port"
+prefixes = ["episodic.logging"]
+allowed = [
+    "logging_port",
+    "logging_backend",
+    "logging_internals",
+]
+
+[[tool.hecate.groups]]
+name = "logging_backend"
+prefixes = ["femtologging"]
+allowed = ["logging_port"]
+
+[[tool.hecate.groups]]
+name = "logging_internals"
+prefixes = ["episodic._logging_types"]
+allowed = ["logging_internals"]
+
+[[tool.hecate.groups]]
+name = "external_workers"
+prefixes = ["celery", "kombu"]
+allowed = [
+    "composition_root",
+    "external_workers",
+    "inbound_adapter",
+    "orchestration_tasks",
+]
+
+[[tool.hecate.groups]]
+name = "external_libraries"
+prefixes = [
+    "alembic",
+    "asyncpg",
+    "eventlet",
+    "falcon",
+    "gevent",
+    "granian",
+    "httpx",
+    "langgraph",
+    "openai",
+    "psycopg",
+    "py_pglite",
+    "pydantic",
+    "sqlalchemy",
+    "tei_rapporteur",
+    "tenacity",
+    "yaml",
+]
+allowed = ["external_libraries"]
 
 [[tool.hecate.groups]]
 name = "composition_root"
@@ -936,7 +992,10 @@ allowed = [
     "application",
     "composition_root",
     "domain_ports",
+    "external_libraries",
+    "external_workers",
     "inbound_adapter",
+    "logging_port",
     "orchestration",
     "orchestration_checkpoint",
     "orchestration_nodes",
@@ -983,7 +1042,7 @@ prefixes = [
     "episodic.orchestration._types",
     "episodic.worker.workloads",
 ]
-allowed = ["domain_ports"]
+allowed = ["domain_ports", "logging_port"]
 
 [[tool.hecate.groups]]
 name = "orchestration_checkpoint"
@@ -995,7 +1054,11 @@ prefixes = [
     "episodic.orchestration._checkpoint_dto",
     "episodic.orchestration._payload_dto",
 ]
-allowed = ["orchestration_checkpoint", "domain_ports"]
+allowed = [
+    "orchestration_checkpoint",
+    "domain_ports",
+    "logging_port",
+]
 
 [[tool.hecate.groups]]
 name = "orchestration_nodes"
@@ -1005,7 +1068,12 @@ prefixes = [
     "episodic.orchestration._graph_state",
     "episodic.orchestration._usage",
 ]
-allowed = ["orchestration_nodes", "domain_ports", "orchestration_checkpoint"]
+allowed = [
+    "orchestration_nodes",
+    "domain_ports",
+    "orchestration_checkpoint",
+    "logging_port",
+]
 
 [[tool.hecate.groups]]
 name = "orchestration"
@@ -1016,6 +1084,8 @@ allowed = [
     "domain_ports",
     "orchestration_checkpoint",
     "orchestration_nodes",
+    "external_libraries",
+    "logging_port",
 ]
 
 [[tool.hecate.groups]]
@@ -1032,14 +1102,20 @@ prefixes = [
     "episodic.cost.recorder",
     "episodic.generation",
 ]
-allowed = ["application", "domain_ports"]
+allowed = ["application", "domain_ports", "external_libraries", "logging_port"]
 
 [[tool.hecate.groups]]
 name = "orchestration_tasks"
 prefixes = [
     "episodic.worker.tasks",
 ]
-allowed = ["orchestration_tasks", "application", "domain_ports"]
+allowed = [
+    "orchestration_tasks",
+    "application",
+    "domain_ports",
+    "external_workers",
+    "logging_port",
+]
 
 [[tool.hecate.groups]]
 name = "inbound_adapter"
@@ -1047,7 +1123,14 @@ prefixes = [
     "episodic.api",
     "episodic.worker.topology",
 ]
-allowed = ["inbound_adapter", "application", "domain_ports"]
+allowed = [
+    "inbound_adapter",
+    "application",
+    "domain_ports",
+    "external_libraries",
+    "external_workers",
+    "logging_port",
+]
 
 [[tool.hecate.groups]]
 name = "outbound_adapter"
@@ -1060,7 +1143,14 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
+allowed = [
+    "outbound_adapter",
+    "application",
+    "domain_ports",
+    "orchestration_checkpoint",
+    "external_libraries",
+    "logging_port",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]

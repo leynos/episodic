@@ -407,9 +407,15 @@ source limits and event cursor contract described in this guide. Generation-run
 pollers must also handle the terminal lifecycle contract: terminal responses
 have `current_node: null` and a populated `ended_at`.
 
+Python integrations that called level methods on the value returned by
+`episodic.logging.get_logger()` must migrate to the `log_*` wrappers. For
+example, replace `get_logger(__name__).info("Started")` with
+`log_info(get_logger(__name__), "Started")`; direct logger methods are no
+longer part of the supported surface.
+
 Structured events can be emitted with `episodic.logging.log_event`, which
-encodes event fields as JSON; existing logging calls remain available. See
-[Logging](#logging) for details.
+encodes event fields as JSON. See [Logging](#logging) for the supported
+emission helpers and structured-message interface.
 
 Health endpoints:
 
@@ -515,6 +521,16 @@ argument is case-insensitive, and the function returns a
 whether the default (`INFO`) was substituted because the input was absent or
 unrecognized.
 
+`get_logger(name)` (also available as `getLogger(name)`) returns an opaque
+`LoggerHandle`. Emit through `log_debug`, `log_info`, `log_warning`,
+`log_error`, or `log_exception`; pass the handle first, followed by a
+percent-style message template and its arguments. `log_exception` sets
+`exc_info=True` by default. Direct calls such as
+`get_logger(__name__).info(...)` are no longer supported. Use
+`format_log_event(event, **fields)` when a structured JSON message must use a
+particular handle; `log_event(level, message, **fields)` continues to emit
+through the port's configured logger.
+
 Use `episodic.logging.log_event(level, message, **fields)` to emit an event.
 Its signature is
 `log_event(level: str, message: str, **fields: object) -> None`. `level` is a
@@ -531,6 +547,16 @@ with a JSON object containing the event name.
 from episodic.logging import log_event
 
 log_event("info", "generation.started", workflow_id="workflow-42")
+```
+
+For example, a caller with an explicit logger handle can emit a formatted
+message through the port:
+
+```python
+from episodic.logging import get_logger, log_info
+
+logger = get_logger(__name__)
+log_info(logger, "Started workflow %s", "workflow-42")
 ```
 
 ### Worker runtime
