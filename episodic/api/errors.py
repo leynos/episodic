@@ -1,28 +1,12 @@
-"""Error-envelope helpers for Falcon resource adapters.
+"""Map domain exceptions to stable Falcon error envelopes.
 
-This module provides the stable JSON error envelope used by the canonical REST
-API: ``{"code": "...", "message": "...", "details": {...}}``. Resource
-adapters use these helpers to map domain exceptions to Falcon HTTP errors and
-attach envelope metadata before Falcon serialises the response.
-
-Examples
---------
->>> http_error(
-...     falcon.HTTPBadRequest(description="Invalid limit."),
-...     code="validation_error",
-... )
-HTTPBadRequest(...)
->>> validation_error("Invalid UUID.", field="profile_id", constraint="uuid")
-HTTPBadRequest(...)
->>> try:
-...     raise EntityNotFoundError("Profile not found.")
-... except EntityNotFoundError as exc:
-...     raise map_profile_template_error(exc, entity_id="profile-1") from exc
+Unmapped failures are logged through an injected port before their generic
+HTTP ``500`` is returned. Records use synthetic redacted exceptions and
+sanitized source metadata; profile/template records include only known codes
+and UUID identifiers.
 """
 
 import collections.abc as cabc
-import dataclasses as dc
-import http
 import typing as typ
 
 import falcon
@@ -48,150 +32,41 @@ from episodic.canonical.source_intake_service import (
     UploadSizeMismatchError,
 )
 
+from ._error_logging import (
+    _emit_unmapped_error_diagnostic,
+    _profile_template_error_diagnostic,
+    _safe_profile_template_entity_id,
+    _unmapped_error_diagnostic,
+)
+from .error_envelopes import (
+    ErrorEnvelope,
+    http_error,
+    serialize_http_error,
+    validation_error,
+)
+
 if typ.TYPE_CHECKING:
     from episodic.canonical.profile_templates.types import ProfileTemplateError
 
-    from .types import JsonPayload
+    from .dependencies import UnmappedErrorEmitter
 
 type _HttpErrorFactory = cabc.Callable[..., falcon.HTTPError]
 
-
-@dc.dataclass(frozen=True, slots=True)
-class ErrorEnvelope:
-    """Stable JSON error contract for REST clients."""
-
-    code: str
-    message: str
-    details: dict[str, object]
-
-    def as_json(self) -> JsonPayload:
-        """Return the envelope as a Falcon-serialisable payload.
-
-        Returns
-        -------
-        JsonPayload
-            Mapping with ``code``, ``message``, and ``details`` keys suitable
-            for assignment to ``falcon.Response.media``.
-        """
-        return {
-            "code": self.code,
-            "message": self.message,
-            "details": self.details,
-        }
-
-
-def http_error(
-    error: falcon.HTTPError,
-    *,
-    code: str,
-    details: dict[str, object] | None = None,
-) -> falcon.HTTPError:
-    """Attach API error-envelope metadata to a Falcon error.
-
-    Parameters
-    ----------
-    error : falcon.HTTPError
-        Falcon error instance to enrich.
-    code : str
-        Machine-readable error code returned in the envelope.
-    details : dict[str, object] | None
-        Optional field-level or domain-specific envelope details.
-
-    Returns
-    -------
-    falcon.HTTPError
-        The same error instance enriched with envelope metadata.
-
-    Examples
-    --------
-    >>> http_error(
-    ...     falcon.HTTPBadRequest(description="Invalid limit."),
-    ...     code="validation_error",
-    ...     details={"field": "limit", "constraint": "range"},
-    ... )
-    HTTPBadRequest(...)
-    """
-    error_with_metadata = typ.cast("typ.Any", error)
-    error_with_metadata.envelope_code = code
-    error_with_metadata.envelope_details = {} if details is None else details
-    return error
-
-
-def validation_error(
-    message: str,
-    *,
-    field: str | None = None,
-    constraint: str | None = None,
-) -> falcon.HTTPBadRequest:
-    """Build a validation error with optional field-level details.
-
-    Parameters
-    ----------
-    message : str
-        Human-readable validation failure message.
-    field : str | None
-        Optional request field associated with the validation failure.
-    constraint : str | None
-        Optional violated constraint name, such as ``uuid`` or ``range``.
-
-    Returns
-    -------
-    falcon.HTTPBadRequest
-        Falcon bad-request error enriched with ``validation_error`` metadata.
-
-    Examples
-    --------
-    >>> validation_error("Invalid UUID.", field="profile_id", constraint="uuid")
-    HTTPBadRequest(...)
-    """
-    details: dict[str, object] = {}
-    if field is not None:
-        details["field"] = field
-    if constraint is not None:
-        details["constraint"] = constraint
-    return typ.cast(
-        "falcon.HTTPBadRequest",
-        http_error(
-            falcon.HTTPBadRequest(description=message),
-            code="validation_error",
-            details=details,
-        ),
-    )
-
-
-def serialize_http_error(
-    req: falcon.Request,
-    resp: falcon.Response,
-    exc: falcon.HTTPError,
-) -> None:
-    """Serialize Falcon HTTP errors as the documented response envelope.
-
-    Wired through :meth:`falcon.asgi.App.set_error_serializer`. Falcon's
-    default error handler sets ``resp.status`` from ``exc.status`` before
-    invoking the serializer, so this function only needs to populate
-    ``resp.media`` with the ``{code, message, details}`` envelope. Falcon
-    accepts both sync and async serializers; a sync function keeps the
-    body free of unnecessary coroutine machinery.
-
-    Parameters
-    ----------
-    req : falcon.Request
-        Incoming request. Unused by this serializer.
-    resp : falcon.Response
-        Response populated with the error envelope.
-    exc : falcon.HTTPError
-        Falcon error raised by a resource, hook, or middleware component.
-    """
-    del req
-    code = _error_code(exc)
-    message = _error_message(exc)
-    details = _error_details(exc)
-    resp.media = ErrorEnvelope(code, message, details).as_json()
+__all__ = (
+    "ErrorEnvelope",
+    "http_error",
+    "map_profile_template_error",
+    "map_reference_error",
+    "map_source_intake_error",
+    "serialize_http_error",
+    "validation_error",
+)
 
 
 def map_profile_template_error(
     exc: ProfileTemplateError,
     *,
+    emit_error: UnmappedErrorEmitter,
     entity_id: object | None = None,
     expected_revision: int | None = None,
 ) -> falcon.HTTPError:
@@ -201,9 +76,11 @@ def map_profile_template_error(
     ----------
     exc : ProfileTemplateError
         Domain error raised by profile/template services.
+    emit_error : UnmappedErrorEmitter
+        Logging-port callback for credential-safe unmapped-error diagnostics.
     entity_id : object | None
-        Optional entity identifier to include in envelope details when the
-        exception does not already carry one.
+        Optional entity identifier to use when the exception does not carry a
+        safe identifier.
     expected_revision : int | None
         Optional optimistic-lock revision expected by the caller.
 
@@ -214,19 +91,23 @@ def map_profile_template_error(
 
     Examples
     --------
-    >>> try:
-    ...     raise EntityNotFoundError("Profile not found.")
-    ... except EntityNotFoundError as exc:
-    ...     raise map_profile_template_error(exc, entity_id="profile-1") from exc
+    >>> from functools import partial
+    >>> from episodic.logging import get_logger, log_error
+    >>> emit_error = partial(log_error, get_logger("api-errors.example"))
+    >>> map_profile_template_error(
+    ...     EntityNotFoundError("Profile not found."),
+    ...     emit_error=emit_error,
+    ... )
     """
+    safe_entity_id = _safe_profile_template_entity_id(exc.entity_id)
+    if safe_entity_id is None:
+        safe_entity_id = _safe_profile_template_entity_id(entity_id)
+    log_entity_id = safe_entity_id if safe_entity_id is not None else exc.entity_id
     details: dict[str, object] = {}
-    if exc.entity_id is not None:
-        details["entity_id"] = exc.entity_id
-    elif entity_id is not None:
-        details["entity_id"] = str(entity_id)
+    if safe_entity_id is not None:
+        details["entity_id"] = safe_entity_id
     if expected_revision is not None:
         details["expected_revision"] = expected_revision
-
     match exc:
         case EntityNotFoundError():
             return http_error(
@@ -241,10 +122,17 @@ def map_profile_template_error(
                 details=details,
             )
         case _:
+            diagnostic = _profile_template_error_diagnostic(
+                exc,
+                log_entity_id,
+            )
+            _emit_unmapped_error_diagnostic(emit_error, diagnostic)
             return http_error(
-                falcon.HTTPInternalServerError(description=str(exc)),
-                code=exc.code,
-                details=details,
+                falcon.HTTPInternalServerError(
+                    description="Unexpected profile/template error."
+                ),
+                code="internal_error",
+                details={},
             )
 
 
@@ -252,6 +140,7 @@ def map_reference_error(
     exc: ReferenceDocumentError,
     *,
     context: str,
+    emit_error: UnmappedErrorEmitter,
 ) -> falcon.HTTPError:
     """Map reusable reference-document domain errors to Falcon HTTP errors.
 
@@ -261,6 +150,8 @@ def map_reference_error(
         Domain error raised by reusable-reference services.
     context : str
         Short context label used for unexpected internal-error messages.
+    emit_error : UnmappedErrorEmitter
+        Logging-port callback for credential-safe unmapped-error diagnostics.
 
     Returns
     -------
@@ -270,10 +161,17 @@ def map_reference_error(
 
     Examples
     --------
+    >>> from functools import partial
+    >>> from episodic.logging import get_logger, log_error
+    >>> emit_error = partial(log_error, get_logger("api-errors.example"))
     >>> try:
     ...     raise ReferenceValidationError("Invalid reference document.")
     ... except ReferenceDocumentError as exc:
-    ...     raise map_reference_error(exc, context="reference-document") from exc
+    ...     raise map_reference_error(
+    ...         exc,
+    ...         context="reference-document",
+    ...         emit_error=emit_error,
+    ...     ) from exc
     """
     match exc:
         case ReferenceValidationError():
@@ -297,18 +195,61 @@ def map_reference_error(
                 code="conflict",
             )
     msg = f"Unexpected {context} error."
+    diagnostic = _unmapped_error_diagnostic(
+        exc.__traceback__,
+        "Unmapped reference error: context=%s type=%s",
+        context,
+        type(exc).__name__,
+    )
+    _emit_unmapped_error_diagnostic(emit_error, diagnostic)
     return http_error(
         falcon.HTTPInternalServerError(description=msg),
         code="internal_error",
     )
 
 
-def map_source_intake_error(exc: SourceIntakeError) -> falcon.HTTPError:
-    """Map source-intake application errors to enriched Falcon HTTP errors."""
+def map_source_intake_error(
+    exc: SourceIntakeError,
+    *,
+    emit_error: UnmappedErrorEmitter,
+) -> falcon.HTTPError:
+    """Map source-intake errors to Falcon errors with safe diagnostics.
+
+    Parameters
+    ----------
+    exc : SourceIntakeError
+        Error raised by a source-intake service.
+    emit_error : UnmappedErrorEmitter
+        Logging-port callback for credential-safe unmapped-error diagnostics.
+
+    Returns
+    -------
+    falcon.HTTPError
+        Falcon error enriched with the API envelope metadata.
+
+    Examples
+    --------
+    >>> from functools import partial
+    >>> from episodic.logging import get_logger, log_error
+    >>> emit_error = partial(log_error, get_logger("api-errors.example"))
+    >>> try:
+    ...     raise UploadNotReadyError("Upload is not ready.")
+    ... except SourceIntakeError as exc:
+    ...     raise map_source_intake_error(
+    ...         exc,
+    ...         emit_error=emit_error,
+    ...     ) from exc
+    """
     mapping = _source_intake_error_mapping()
     for error_type, factory, code in mapping:
         if isinstance(exc, error_type):
             return http_error(factory(description=str(exc)), code=code)
+    diagnostic = _unmapped_error_diagnostic(
+        exc.__traceback__,
+        "Unmapped source-intake error: type=%s",
+        type(exc).__name__,
+    )
+    _emit_unmapped_error_diagnostic(emit_error, diagnostic)
     return http_error(
         falcon.HTTPInternalServerError(description="Unexpected source-intake error."),
         code="internal_error",
@@ -328,53 +269,3 @@ def _source_intake_error_mapping() -> tuple[
         (UploadHashMismatchError, falcon.HTTPBadRequest, "upload_hash_mismatch"),
         (UploadSizeMismatchError, falcon.HTTPBadRequest, "upload_size_mismatch"),
     )
-
-
-def _error_code(exc: falcon.HTTPError) -> str:
-    """Return the envelope error code for an HTTP error."""
-    raw_code = getattr(exc, "envelope_code", None)
-    if isinstance(raw_code, str) and raw_code:
-        return raw_code
-    return _DEFAULT_CODES.get(_status_code(exc), "internal_error")
-
-
-def _error_message(exc: falcon.HTTPError) -> str:
-    """Return the envelope message for an HTTP error."""
-    if isinstance(exc.description, str) and exc.description:
-        return exc.description
-    if isinstance(exc.title, str) and exc.title:
-        return exc.title
-    try:
-        return http.HTTPStatus(_status_code(exc)).phrase
-    except ValueError:
-        return "An error occurred."
-
-
-def _error_details(exc: falcon.HTTPError) -> dict[str, object]:
-    """Return the envelope details for an HTTP error."""
-    raw_details = getattr(exc, "envelope_details", None)
-    if isinstance(raw_details, dict):
-        return raw_details
-    return {}
-
-
-def _status_code(exc: falcon.HTTPError) -> int:
-    """Return the numeric HTTP status code for an HTTP error."""
-    if isinstance(exc.status, int):
-        return exc.status
-    try:
-        return int(exc.status.split(" ", maxsplit=1)[0])
-    except IndexError, ValueError:  # parsed as tuple in Python 3
-        return 500
-
-
-_DEFAULT_CODES = {
-    400: "validation_error",
-    401: "unauthorized",
-    403: "forbidden",
-    404: "not_found",
-    405: "method_not_allowed",
-    409: "conflict",
-    422: "unprocessable_entity",
-    500: "internal_error",
-}

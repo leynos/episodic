@@ -41,13 +41,15 @@ Accepted design decisions relevant to current implementation work:
 The transport-free validators in `episodic.canonical.validation` belong to the
 canonical domain layer. They provide dependency-free, side-effect-free
 argument-shape checks that adapters may call at their boundaries;
-domain-specific validation remains with the domain type it guards. In
-particular, `validate_async_callable(callback, attribute_name)` requires a
-callable whose invocation returns an awaitable and raises `TypeError`
-otherwise. The health port uses it in `ProbeHealthObserver.from_checks`, while
-the API dependency boundary uses it for readiness probes, authorization
-decisions, and shutdown hooks. Keep this module free of adapter imports so the
-dependency direction remains inward.
+domain-specific validation remains with the domain type it guards.
+`validate_callable(callback, attribute_name, allow_none=False)` checks a
+runtime callback and can explicitly allow an absent optional callback.
+`validate_async_callable(callback, attribute_name)` builds on that check and
+requires a coroutine function or an object with an async `__call__`. The health
+port uses async validation in `ProbeHealthObserver.from_checks`; the API
+dependency boundary uses it for readiness probes, authorization decisions, and
+shutdown hooks. Keep this module free of adapter imports so the dependency
+direction remains inward.
 
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
@@ -732,6 +734,31 @@ REST error contract:
   Validation failures use `validation_error`, missing entities use `not_found`,
   stale revisions use `revision_conflict`, and remaining persistence conflicts
   use `conflict`.
+- `ApiDependencies.unmapped_error_emitter` optionally supplies the logging port
+  for unmapped API failures. When omitted, `create_app` binds the production
+  logger and injects it into the mappers.
+- Shared GET and history resource bases build typed handler requests and use a
+  private response helper to apply each handler's `(media, status)` result.
+  Keep that helper local to `resources/base.py`; concrete resources retain
+  endpoint-specific response assembly.
+
+The handler boundary in `episodic/api/handlers.py` uses frozen, slotted request
+objects: `GetEntityRequest`, `HistoryRequest`, `UpdateEntityRequest`, and
+`CreateEntityRequest`. Each request carries the endpoint inputs and its service
+and serializer callbacks alongside a `HandlerContext`. The context groups the
+unit-of-work factory with the `UnmappedErrorEmitter` logging port, which lets
+the handler pass the same mapper boundary through without importing a concrete
+logger. Handlers return a `(JsonPayload, Falcon status)` pair; resource methods
+assign those values to `resp.media` and `resp.status`. Shared GET and history
+resources use `_apply_handler_result` for that assignment, while create and
+update resources assign the pair directly.
+
+`GenerationRunsResource` receives its optional launcher, error emitter, clock,
+UUID factory, source-count limit, and tracer through
+`GenerationRunsResourceConfig`. The API composition root creates that config
+from `ApiDependencies` when registering the generation-run routes. Keep the
+construction seam in the config so tests can provide deterministic clocks and
+identifiers without changing resource behaviour.
 
 REST pagination and filter contract:
 
@@ -1450,6 +1477,37 @@ Implementation notes:
 - Inbound adapters map typed reusable-reference service errors to Falcon HTTP
   errors through `episodic/api/errors.py`, so callers receive the shared REST
   error envelope instead of Falcon's default `{title, description}` body.
+
+### API error and request logging
+
+Shared Falcon envelope construction and serialization live in
+`episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
+exceptions onto that contract.
+
+For an unmapped domain exception, each API error mapper emits one safe
+diagnostic through its injected logging port before returning the generic HTTP
+500 error. `create_app` passes `ApiDependencies.unmapped_error_emitter` to the
+mapper call paths and binds the production `episodic.logging` port when no
+callback is injected. Query handlers and REST resource methods do not emit logs
+themselves; the mapper owns the diagnostic at the error-mapping boundary.
+
+The diagnostic contains detached `exc_info` with a synthetic redacted exception
+and no live traceback. Sanitized source-frame metadata records the filename,
+function, and line without retaining frames or locals. The profile-template
+mapper records the exception type, known error code, and UUID entity ID;
+unrecognized code or identifier values are redacted. The reference mapper
+records its context and exception type; the source-intake mapper records only
+the exception type. Original exception messages and chained causes are omitted
+because they may contain credentials. The serializer returns a generic client
+message for unmapped HTTP 500 errors. Expected mapped 400, 404, and 409
+outcomes produce no error log. Request-level logging and correlation remain
+planned in roadmap item 4.1.3 and are not yet guaranteed. See the
+[API logging](episodic-podcast-generation-system-design.md#api-logging) section
+of the system design for the request-correlation boundary.
+
+The reference-document resource module keeps its fixed diagnostic context in a
+private mapper helper shared by its routes. The application composition root
+injects the same logging port into each mapper path.
 
 ### Internal service-module decomposition
 
@@ -2909,10 +2967,12 @@ they do not pass a backend adapter directly.
 ## Asyncio task utilities
 
 `episodic.asyncio_tasks` provides `create_task` and `create_task_in_group` as
-thin wrappers around `asyncio.TaskGroup.create_task`. Both helpers accept an
-optional set of extra keyword arguments that are validated by the internal
-`_validate_task_create_kwargs` helper before being forwarded to the underlying
-task-creation call.
+thin wrappers around `loop.create_task` and `TaskGroup.create_task`. Both
+helpers accept an optional set of extra keyword arguments that are validated by
+the internal `_validate_task_create_kwargs` helper before being forwarded to
+the underlying task-creation call. The helper validates accepted keys and
+nested metadata so the public wrappers share one validation path while binding
+their own task creator.
 
 `_validate_task_create_kwargs` accepts a `cabc.Mapping[str, object]` rather
 than a concrete `dict[str, object]`, so read-only mappings such as

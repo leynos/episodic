@@ -1,0 +1,78 @@
+# serializer version: 1
+# name: test_unmapped_error_mappers_log_and_return_internal_error[profile-template]
+  dict({
+    'envelope': dict({
+      'code': 'internal_error',
+      'details': dict({
+      }),
+      'message': 'Unexpected profile/template error.',
+    }),
+    'log': dict({
+      'exception': dict({
+        'cause': '<omitted>',
+        'context': '<omitted>',
+        'message': 'Original exception message redacted. Source frames: <source frames>',
+        'traceback': '<omitted>',
+        'type': '<detached exception>',
+      }),
+      'level': 'ERROR',
+      'message': 'Unmapped profile/template error: type=<exception type> code=profile_template_error entity_id=<uuid>',
+    }),
+    'status': '500 Internal Server Error',
+  })
+# ---
+# name: test_unmapped_error_mappers_log_and_return_internal_error[reference]
+  dict({
+    'envelope': dict({
+      'code': 'internal_error',
+      'details': dict({
+      }),
+      'message': 'Unexpected reference-document error.',
+    }),
+    'log': dict({
+      'exception': dict({
+        'cause': '<omitted>',
+        'context': '<omitted>',
+        'message': 'Original exception message redacted. Source frames: <source frames>',
+        'traceback': '<omitted>',
+        'type': '<detached exception>',
+      }),
+      'level': 'ERROR',
+      'message': 'Unmapped reference error: context=reference-document type=<exception type>',
+    }),
+    'status': '500 Internal Server Error',
+  })
+# ---
+# name: test_unmapped_error_mappers_log_and_return_internal_error[source-intake]
+  dict({
+    'envelope': dict({
+      'code': 'internal_error',
+      'details': dict({
+      }),
+      'message': 'Unexpected source-intake error.',
+    }),
+    'log': dict({
+      'exception': dict({
+        'cause': '<omitted>',
+        'context': '<omitted>',
+        'message': 'Original exception message redacted. Source frames: <source frames>',
+        'traceback': '<omitted>',
+        'type': '<detached exception>',
+      }),
+      'level': 'ERROR',
+      'message': 'Unmapped source-intake error: type=<exception type>',
+    }),
+    'status': '500 Internal Server Error',
+  })
+# ---
+# name: test_unmapped_profile_error_response_redacts_exception_text
+  dict({
+    'envelope': dict({
+      'code': 'internal_error',
+      'details': dict({
+      }),
+      'message': 'Unexpected profile/template error.',
+    }),
+    'status': '500 Internal Server Error',
+  })
+# ---

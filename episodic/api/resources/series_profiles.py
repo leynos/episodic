@@ -7,7 +7,10 @@ when wiring Falcon routes to canonical series-profile services.
 Examples
 --------
 >>> from episodic.api.resources.series_profiles import SeriesProfilesResource
->>> app.add_route("/v1/series-profiles", SeriesProfilesResource(uow_factory))
+>>> app.add_route(
+...     "/v1/series-profiles",
+...     SeriesProfilesResource(uow_factory, emit_error),
+... )
 """
 
 import typing as typ

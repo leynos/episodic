@@ -9,7 +9,7 @@ import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
-from episodic.canonical.validation import validate_async_callable
+from episodic.canonical.validation import validate_async_callable, validate_callable
 from episodic.observability import NoopMetrics, NoopTracer, PerfCounterClock
 
 from .authorization import AuthorizationPort, PermitAll
@@ -27,22 +27,33 @@ type ReadinessCheck = cabc.Callable[[], cabc.Coroutine[None, None, bool]]
 type ShutdownHook = cabc.Callable[[], cabc.Coroutine[None, None, None]]
 
 
+class UnmappedErrorEmitter(typ.Protocol):
+    """Narrow logging port used by unmapped API error mappers."""
+
+    def __call__(
+        self,
+        template: str,
+        /,
+        *args: object,
+        exc_info: object | None = None,
+    ) -> None:
+        """Emit one already-sanitized unmapped API error record."""
+
+
 def _validate_readiness_probe(
     probe: object,
     *,
     label: str = "ApiDependencies.readiness_probes entries",
 ) -> None:
     """Require a readiness-probe entry to have a non-empty name and async check."""
-    if not hasattr(probe, "name") or not isinstance(probe.name, str):  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
+    name = getattr(probe, "name", None)
+    if not isinstance(name, str):
         msg = f"{label} must define a string name."
         raise TypeError(msg)
-    if not probe.name.strip():  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
+    if not name.strip():
         msg = f"{label} must define a non-empty name."
         raise ValueError(msg)
-    if not hasattr(probe, "check"):
-        msg = f"{label} must define an async check."
-        raise TypeError(msg)
-    validate_async_callable(probe.check, label)  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
+    validate_async_callable(getattr(probe, "check", None), f"{label} check")
 
 
 def _validate_authorization_port(port: object) -> None:
@@ -70,7 +81,17 @@ class ReadinessProbe:
 
 @dc.dataclass(frozen=True, slots=True)
 class ApiDependencies:
-    """Group the ports and probes required by the Falcon API adapter."""
+    """Group the ports and probes required by the Falcon API adapter.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory used to create canonical units of work.
+    unmapped_error_emitter : UnmappedErrorEmitter | None
+        Optional logger callback injected into API error mappers. When omitted,
+        :func:`create_app` binds the production logging port at application
+        construction time.
+    """
 
     uow_factory: UowFactory
     object_store: ObjectStorePort | None = None
@@ -92,12 +113,18 @@ class ApiDependencies:
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
+    unmapped_error_emitter: UnmappedErrorEmitter | None = None
 
     def __post_init__(self) -> None:
         """Validate the dependency contract."""
         if not callable(self.uow_factory):
             msg = "ApiDependencies.uow_factory must be callable."
             raise TypeError(msg)
+        validate_callable(
+            self.unmapped_error_emitter,
+            "ApiDependencies.unmapped_error_emitter",
+            allow_none=True,
+        )
         _validate_authorization_port(self.authorization)
         object.__setattr__(self, "readiness_probes", tuple(self.readiness_probes))
         object.__setattr__(self, "shutdown_hooks", tuple(self.shutdown_hooks))

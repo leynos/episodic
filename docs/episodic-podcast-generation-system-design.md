@@ -2134,6 +2134,36 @@ Error contract:
 - `409 Conflict` for optimistic-lock mismatches and duplicate revision/binding
   writes that violate persistence constraints.
 
+### API logging
+
+Shared Falcon envelope construction and serialization live in
+`episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
+exceptions onto that contract.
+
+For an unmapped domain exception, each API error mapper emits one safe
+diagnostic through its injected logging port before returning the generic HTTP
+500 error. `create_app` passes the optional
+`ApiDependencies.unmapped_error_emitter` through every mapper path and binds
+the production `episodic.logging.log_error` callback when none is injected.
+Query handlers and REST resource methods do not emit logs themselves; the
+mapper owns the diagnostic at the error-mapping boundary.
+
+The diagnostic contains detached `exc_info` with a synthetic redacted exception
+and no live traceback. Sanitized source-frame metadata records the filename,
+function, and line without retaining frames or locals. The profile-template
+mapper includes the exception type, known error code, and UUID entity ID;
+unrecognized code or identifier values are redacted. The reference mapper
+includes its context and exception type; the source-intake mapper includes only
+the exception type. These diagnostics omit the original exception message and
+chained causes because they may contain credentials. The serializer returns a
+generic client message for unmapped HTTP 500 errors. Mapped 400, 404, and 409
+outcomes produce no error log. REST resource modules add no per-handler logs.
+
+Request-level logging and correlation are a separate boundary. Roadmap item
+4.1.3 plans to add request correlation across HTTP, tasks, and outbound
+provider calls; until that work is implemented, shared request identifiers for
+denial, error, and resource logs are not guaranteed.
+
 ADR 009 and `docs/episodic-tui-api-design.md` remain the source of truth for
 tokens, idempotency keys, retry headers, and full role-based access control.
 

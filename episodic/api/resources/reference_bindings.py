@@ -24,14 +24,20 @@ from episodic.canonical.reference_documents import (
 )
 
 if typ.TYPE_CHECKING:
+    from episodic.api.dependencies import UnmappedErrorEmitter
     from episodic.api.types import UowFactory
 
 
 class ReferenceBindingsResource:
     """Handle create/list endpoints for reusable reference bindings."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        emit_error: UnmappedErrorEmitter,
+    ) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Create one reusable reference binding."""
@@ -64,7 +70,11 @@ class ReferenceBindingsResource:
             async with self._uow_factory() as uow:
                 binding = await create_reference_binding(uow, data=data)
         except ReferenceDocumentError as exc:
-            raise map_reference_error(exc, context="reference-binding") from exc
+            raise map_reference_error(
+                exc,
+                context="reference-binding",
+                emit_error=self._emit_error,
+            ) from exc
 
         resp.media = serialize_reference_binding(binding)
         resp.status = falcon.HTTP_201
@@ -90,7 +100,11 @@ class ReferenceBindingsResource:
                     ),
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(exc, context="reference-binding") from exc
+            raise map_reference_error(
+                exc,
+                context="reference-binding",
+                emit_error=self._emit_error,
+            ) from exc
 
         resp.media = {
             "items": [serialize_reference_binding(item) for item in bindings],
@@ -104,8 +118,13 @@ class ReferenceBindingsResource:
 class ReferenceBindingResource:
     """Handle get endpoint for one reusable reference binding."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        emit_error: UnmappedErrorEmitter,
+    ) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_get(
         self,
@@ -123,7 +142,11 @@ class ReferenceBindingResource:
                     binding_id=str(parse_uuid(binding_id, "binding_id")),
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(exc, context="reference-binding") from exc
+            raise map_reference_error(
+                exc,
+                context="reference-binding",
+                emit_error=self._emit_error,
+            ) from exc
 
         resp.media = serialize_reference_binding(binding)
         resp.status = falcon.HTTP_200
