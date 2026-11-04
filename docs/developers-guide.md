@@ -771,6 +771,24 @@ REST error contract:
   Keep that helper local to `resources/base.py`; concrete resources retain
   endpoint-specific response assembly.
 
+The handler boundary in `episodic/api/handlers.py` uses frozen, slotted request
+objects: `GetEntityRequest`, `HistoryRequest`, `UpdateEntityRequest`, and
+`CreateEntityRequest`. Each request carries the endpoint inputs and its service
+and serializer callbacks alongside a `HandlerContext`. The context groups the
+unit-of-work factory with the `UnmappedErrorEmitter` logging port, which lets
+the handler pass the same mapper boundary through without importing a concrete
+logger. Handlers return a `(JsonPayload, Falcon status)` pair; resource methods
+assign those values to `resp.media` and `resp.status`. Shared GET and history
+resources use `_apply_handler_result` for that assignment, while create and
+update resources assign the pair directly.
+
+`GenerationRunsResource` receives its optional launcher, error emitter, clock,
+UUID factory, source-count limit, and tracer through
+`GenerationRunsResourceConfig`. The API composition root creates that config
+from `ApiDependencies` when registering the generation-run routes. Keep the
+construction seam in the config so tests can provide deterministic clocks and
+identifiers without changing resource behaviour.
+
 REST pagination and filter contract:
 
 - List resources parse pagination through `parse_pagination`. The shared
