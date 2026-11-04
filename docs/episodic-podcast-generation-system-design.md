@@ -2140,22 +2140,25 @@ Shared Falcon envelope construction and serialization live in
 `episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
 exceptions onto that contract.
 
-Only unmapped domain exceptions that the API error mappers convert to HTTP 500
-are logged. Each mapper receives an explicit `emit_error` callback from its API
-boundary; that boundary binds the callback to `episodic.logging.log_error`. The
-mapper module has no global logger, and the callback is used only for an
-unmapped error. These errors are logged at `ERROR` with detached `exc_info`
-containing a synthetic redacted exception and no live traceback. Sanitized
-source-frame metadata records the filename, function, and line without
-retaining frames or locals. The profile-template mapper includes the exception
-type, known error code, and UUID entity ID; unrecognized code or identifier
-values are redacted. The reference mapper includes its context and exception
-type; the source-intake mapper includes only the exception type. These
-diagnostics omit the original exception message and chained causes because they
-may contain credentials. Unmapped HTTP 500 envelopes use a generic message
-instead of returning exception text. Mapped 400, 404, and 409 outcomes are
-expected results and are not logged by the mappers. REST resource modules add
-no per-handler logs.
+The API error mappers remain pure. For an unmapped domain exception they attach
+safe diagnostic data to the generic HTTP 500 error without logging. The central
+Falcon error serializer emits that data through the optional
+`ApiDependencies.unmapped_error_emitter`; `create_app` binds the production
+`episodic.logging.log_error` callback when none is injected. Query handlers and
+REST resource methods do not emit per-handler logs, so each serialized unmapped
+response produces one `ERROR` record at the HTTP boundary.
+
+The diagnostic contains detached `exc_info` with a synthetic redacted exception
+and no live traceback. Sanitized source-frame metadata records the filename,
+function, and line without retaining frames or locals. The profile-template
+mapper includes the exception type, known error code, and UUID entity ID;
+unrecognized code or identifier values are redacted. The reference mapper
+includes its context and exception type; the source-intake mapper includes only
+the exception type. These diagnostics omit the original exception message and
+chained causes because they may contain credentials. The serializer returns a
+generic client message for unmapped HTTP 500 errors. Mapped 400, 404, and 409
+outcomes carry no diagnostic data and produce no error log. REST resource
+modules add no per-handler logs.
 
 Request-level logging and correlation are a separate boundary. Roadmap item
 4.1.3 plans to add request correlation across HTTP, tasks, and outbound

@@ -41,13 +41,14 @@ Accepted design decisions relevant to current implementation work:
 The transport-free validators in `episodic.canonical.validation` belong to the
 canonical domain layer. They provide dependency-free, side-effect-free
 argument-shape checks that adapters may call at their boundaries;
-domain-specific validation remains with the domain type it guards. In
-particular, `validate_async_callable(callback, attribute_name)` requires a
-callable whose invocation returns an awaitable and raises `TypeError`
-otherwise. The health port uses it in `ProbeHealthObserver.from_checks`, while
-the API dependency boundary uses it for readiness probes, authorization
-decisions, and shutdown hooks. Keep this module free of adapter imports so the
-dependency direction remains inward.
+domain-specific validation remains with the domain type it guards.
+`validate_callable(callback, attribute_name, allow_none=False)` checks a
+runtime callback and can explicitly allow an absent optional callback.
+`validate_async_callable(callback, attribute_name)` builds on that check and
+requires the callback to return an awaitable. The health port uses async
+validation in `ProbeHealthObserver.from_checks`; the API dependency boundary
+uses it for readiness probes, authorization decisions, and shutdown hooks. Keep
+this module free of adapter imports so the dependency direction remains inward.
 
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
@@ -732,6 +733,9 @@ REST error contract:
   Validation failures use `validation_error`, missing entities use `not_found`,
   stale revisions use `revision_conflict`, and remaining persistence conflicts
   use `conflict`.
+- `ApiDependencies.unmapped_error_emitter` optionally supplies the logging port
+  for unmapped API failures. When omitted, `create_app` binds the production
+  logger at the central Falcon error serializer.
 
 REST pagination and filter contract:
 
@@ -1457,28 +1461,32 @@ Shared Falcon envelope construction and serialization live in
 `episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
 exceptions onto that contract.
 
-The API error mappers log only unmapped domain exceptions that become HTTP 500
-responses. Each mapper receives an explicit `emit_error` callback from its API
-boundary; the boundary binds that callback to the `episodic.logging` port. The
-mapper module has no global logger, and mapped errors do not invoke the
-callback. Unmapped errors use `ERROR` with detached `exc_info` containing a
-synthetic redacted exception and no live traceback. Sanitized source-frame
-metadata records the filename, function, and line without retaining frames or
-locals. The profile-template mapper records the exception type, known error
-code, and UUID entity ID; unrecognized code or identifier values are redacted.
-The reference mapper records its context and exception type; the source-intake
-mapper records only the exception type. The original exception message and
-chained causes are omitted because they may contain credentials. Unmapped HTTP
-500 envelopes use a generic message rather than returning exception text.
-Expected mapped 400, 404, and 409 outcomes are not logged by the mappers, and
-resource modules add no per-handler logs. Request-level logging and correlation
-remain planned in roadmap item 4.1.3 and are not yet guaranteed. See the
+The API error mappers remain pure: for an unmapped domain exception they attach
+safe diagnostic data to the generic HTTP 500 error, without logging. The
+central Falcon error serializer emits that data through
+`ApiDependencies.unmapped_error_emitter`; `create_app` binds it to the
+`episodic.logging` port when no callback is injected. Query handlers and REST
+resource methods do not emit per-handler logs, so each serialized unmapped
+response produces one `ERROR` record at the HTTP boundary.
+
+The diagnostic contains detached `exc_info` with a synthetic redacted exception
+and no live traceback. Sanitized source-frame metadata records the filename,
+function, and line without retaining frames or locals. The profile-template
+mapper records the exception type, known error code, and UUID entity ID;
+unrecognized code or identifier values are redacted. The reference mapper
+records its context and exception type; the source-intake mapper records only
+the exception type. Original exception messages and chained causes are omitted
+because they may contain credentials. The serializer returns a generic client
+message for unmapped HTTP 500 errors. Expected mapped 400, 404, and 409
+outcomes carry no diagnostic data and produce no error log. Request-level
+logging and correlation remain planned in roadmap item 4.1.3 and are not yet
+guaranteed. See the
 [API logging](episodic-podcast-generation-system-design.md#api-logging) section
 of the system design for the request-correlation boundary.
 
-The reference-document resource module binds its fixed diagnostic context and
-emitter in one private mapper helper shared by its routes. Keep that binding
-local to the module because other resource families have different contexts.
+The reference-document resource module keeps its fixed diagnostic context in a
+private mapper helper shared by its routes; only the central serializer owns
+log emission.
 
 ### Internal service-module decomposition
 

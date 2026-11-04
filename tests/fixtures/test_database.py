@@ -121,3 +121,24 @@ async def test_reset_public_schema_serializes_concurrent_calls(
     assert counting_lock.enter_count == 2, "both resets must acquire the schema lock"
     assert counting_lock.exit_count == 2, "both resets must release the schema lock"
     assert counting_lock.max_active_count == 1, "schema resets must not overlap"
+
+
+@pytest.mark.asyncio
+async def test_wait_for_engine_ready_bounds_a_stalled_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hung readiness query must release startup for its retry path."""
+    monkeypatch.setattr(database, "_PGLITE_ENGINE_READINESS_TIMEOUT_SECONDS", 0.01)
+    connection = mock.AsyncMock()
+    connection.__aenter__.return_value = connection
+    connection.__aexit__.return_value = False
+
+    async def stall_query(_statement: object) -> None:
+        await asyncio.Event().wait()
+
+    connection.execute.side_effect = stall_query
+    engine = mock.Mock()
+    engine.connect.return_value = connection
+
+    with pytest.raises(RuntimeError, match="readiness check timed out"):
+        await database._wait_for_engine_ready(typ.cast("AsyncEngine", engine))

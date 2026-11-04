@@ -17,7 +17,6 @@ Examples
 
 import dataclasses as dc
 import typing as typ
-from functools import partial
 
 import falcon
 
@@ -25,12 +24,9 @@ from episodic.canonical.profile_templates import (
     RevisionConflictError,
 )
 from episodic.canonical.profile_templates.types import ProfileTemplateError
-from episodic.logging import get_logger, log_error
 
 from .errors import map_profile_template_error, validation_error
 from .helpers import parse_uuid
-
-_emit_unmapped_api_error = partial(log_error, get_logger(__name__))
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -94,7 +90,6 @@ async def handle_get_entity[EntityT](  # ruff: ignore[too-many-arguments, too-ma
     except ProfileTemplateError as exc:
         mapped_error = map_profile_template_error(
             exc,
-            emit_error=_emit_unmapped_api_error,
             entity_id=parsed_entity_id,
         )
         raise mapped_error from exc
@@ -156,7 +151,6 @@ async def handle_get_history[EntityT](
     except ProfileTemplateError as exc:
         mapped_error = map_profile_template_error(
             exc,
-            emit_error=_emit_unmapped_api_error,
             entity_id=parsed_entity_id,
         )
         raise mapped_error from exc
@@ -205,7 +199,6 @@ def _raise_mapped_update_error(
     """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # The mapper returns these concrete Falcon exceptions.
     raise map_profile_template_error(
         exc,
-        emit_error=_emit_unmapped_api_error,
         entity_id=entity_id,
         expected_revision=(
             expected_revision if isinstance(exc, RevisionConflictError) else None
@@ -336,7 +329,6 @@ async def handle_create_entity[EntityT](  # ruff: ignore[too-many-arguments]  # 
     except ProfileTemplateError as exc:
         raise map_profile_template_error(
             exc,
-            emit_error=_emit_unmapped_api_error,
         ) from exc
     except LookupError as exc:
         raise falcon.HTTPNotFound(description=str(exc)) from exc

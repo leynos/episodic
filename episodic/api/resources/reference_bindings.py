@@ -1,7 +1,6 @@
 """Falcon resources for reusable reference-binding endpoints."""
 
 import typing as typ
-from functools import partial
 
 import falcon
 
@@ -23,9 +22,6 @@ from episodic.canonical.reference_documents import (
     get_reference_binding,
     list_reference_bindings_paged,
 )
-from episodic.logging import get_logger, log_error
-
-_emit_unmapped_api_error = partial(log_error, get_logger(__name__))
 
 if typ.TYPE_CHECKING:
     from episodic.api.types import UowFactory
@@ -71,7 +67,6 @@ class ReferenceBindingsResource:
             raise map_reference_error(
                 exc,
                 context="reference-binding",
-                emit_error=_emit_unmapped_api_error,
             ) from exc
 
         resp.media = serialize_reference_binding(binding)
@@ -101,7 +96,6 @@ class ReferenceBindingsResource:
             raise map_reference_error(
                 exc,
                 context="reference-binding",
-                emit_error=_emit_unmapped_api_error,
             ) from exc
 
         resp.media = {
@@ -138,7 +132,6 @@ class ReferenceBindingResource:
             raise map_reference_error(
                 exc,
                 context="reference-binding",
-                emit_error=_emit_unmapped_api_error,
             ) from exc
 
         resp.media = serialize_reference_binding(binding)

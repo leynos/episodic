@@ -31,6 +31,17 @@ def test_api_dependencies_require_authorization_port() -> None:
         )
 
 
+def test_api_dependencies_require_callable_unmapped_error_emitter() -> None:
+    """Reject non-callable error emitters at the dependency boundary."""
+    from episodic.api import ApiDependencies
+
+    with pytest.raises(TypeError, match="unmapped_error_emitter"):
+        ApiDependencies(
+            uow_factory=scaffold_support.unexpected_uow_factory,
+            unmapped_error_emitter=typ.cast("typ.Any", object()),
+        )
+
+
 def test_readiness_probe_requires_async_check() -> None:
     """Reject sync readiness callbacks that would fail when awaited."""
     from episodic.api import ReadinessProbe
@@ -65,6 +76,10 @@ def test_api_dependencies_validate_readiness_probe_entries() -> None:
         "object",
         type("_NamelessProbe", (), {"check": check_database})(),
     )
+    checkless_probe = typ.cast(
+        "object",
+        type("_ChecklessProbe", (), {"name": "database"})(),
+    )
 
     with pytest.raises(TypeError, match="async callable"):
         ApiDependencies(
@@ -76,4 +91,10 @@ def test_api_dependencies_validate_readiness_probe_entries() -> None:
         ApiDependencies(
             uow_factory=scaffold_support.unexpected_uow_factory,
             readiness_probes=(typ.cast("ReadinessProbeType", nameless_probe),),
+        )
+
+    with pytest.raises(TypeError, match="must be callable"):
+        ApiDependencies(
+            uow_factory=scaffold_support.unexpected_uow_factory,
+            readiness_probes=(typ.cast("ReadinessProbeType", checkless_probe),),
         )

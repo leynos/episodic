@@ -13,6 +13,7 @@ app = create_app(dependencies)  # Returns a Falcon ASGI app with API routes.
 """
 
 import typing as typ
+from functools import partial
 
 from falcon import asgi
 
@@ -316,7 +317,10 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
         app.add_middleware(
             typ.cast("typ.Any", _ShutdownHooksMiddleware(dependencies.shutdown_hooks))
         )
-    app.set_error_serializer(serialize_http_error)
+    emit_error = dependencies.unmapped_error_emitter
+    if emit_error is None:
+        emit_error = partial(log_error, logger)
+    app.set_error_serializer(partial(serialize_http_error, emit_error=emit_error))
 
     uow_factory = dependencies.uow_factory
 

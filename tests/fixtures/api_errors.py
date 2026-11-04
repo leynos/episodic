@@ -4,18 +4,8 @@ import dataclasses as dc
 import logging
 import types
 import typing as typ
-from functools import partial
 
 import pytest
-
-from episodic.api import handlers as api_handlers
-from episodic.api.resources import (
-    generation_runs,
-    reference_bindings,
-    reference_documents,
-    source_intake,
-)
-from episodic.logging import log_error
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
@@ -74,19 +64,9 @@ class EmptyUnitOfWork:
 
 
 @pytest.fixture
-def spy_logger(monkeypatch: pytest.MonkeyPatch) -> SpyLogger:
-    """Inject a shared recording emitter at each API error boundary."""
-    spy = SpyLogger()
-    emit_error = partial(log_error, spy)
-    for module in (
-        api_handlers,
-        generation_runs,
-        reference_bindings,
-        reference_documents,
-        source_intake,
-    ):
-        monkeypatch.setattr(module, "_emit_unmapped_api_error", emit_error)
-    return spy
+def spy_logger() -> SpyLogger:
+    """Return a recording logger for explicit API-boundary injection."""
+    return SpyLogger()
 
 
 @pytest.fixture

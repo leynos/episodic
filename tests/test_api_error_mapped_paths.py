@@ -2,10 +2,10 @@
 
 import dataclasses as dc
 import typing as typ
-from unittest import mock
 
 import falcon
 import pytest
+from falcon import testing as falcon_testing
 
 from episodic.api import errors as api_errors
 from episodic.canonical.profile_templates import (
@@ -23,7 +23,6 @@ from episodic.canonical.reference_documents.types import (
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from episodic.api._error_logging import _UnmappedErrorEmitter
     from episodic.canonical.profile_templates.types import ProfileTemplateError
 from episodic.canonical.source_intake_errors import (
     IngestionJobNotFoundError,
@@ -41,43 +40,40 @@ class _MappedErrorCase:
     """Describe one expected domain-error mapping."""
 
     exception: Exception
-    mapper: cabc.Callable[[Exception, _UnmappedErrorEmitter], falcon.HTTPError]
+    mapper: cabc.Callable[[Exception], falcon.HTTPError]
     expected_type: type[falcon.HTTPError]
     expected_code: str
 
 
-def _map_profile_error(
-    exc: Exception,
-    emit_error: _UnmappedErrorEmitter,
-) -> falcon.HTTPError:
+def _map_profile_error(exc: Exception) -> falcon.HTTPError:
     """Map one profile/template error case."""
     return api_errors.map_profile_template_error(
         typ.cast("ProfileTemplateError", exc),
-        emit_error=emit_error,
     )
 
 
-def _map_reference_error(
-    exc: Exception,
-    emit_error: _UnmappedErrorEmitter,
-) -> falcon.HTTPError:
+def _map_reference_error(exc: Exception) -> falcon.HTTPError:
     """Map one reference-document error case."""
     return api_errors.map_reference_error(
         typ.cast("ReferenceDocumentError", exc),
         context="reference-document",
-        emit_error=emit_error,
     )
 
 
-def _map_source_intake_error(
-    exc: Exception,
-    emit_error: _UnmappedErrorEmitter,
-) -> falcon.HTTPError:
+def _map_source_intake_error(exc: Exception) -> falcon.HTTPError:
     """Map one source-intake error case."""
-    return api_errors.map_source_intake_error(
-        typ.cast("SourceIntakeError", exc),
-        emit_error=emit_error,
-    )
+    return api_errors.map_source_intake_error(typ.cast("SourceIntakeError", exc))
+
+
+def _fail_if_logged(
+    _template: str,
+    /,
+    *_args: object,
+    exc_info: object | None = None,
+) -> None:
+    """Fail if a mapped error unexpectedly reaches the logging boundary."""
+    del exc_info
+    pytest.fail("mapped errors must not log")
 
 
 @pytest.mark.parametrize(
@@ -197,9 +193,7 @@ def test_mapped_domain_errors_do_not_log(
     case: _MappedErrorCase,
 ) -> None:
     """Expected 400, 404 and 409 outcomes return their mappings without logs."""
-    emit_error = mock.Mock()
-
-    result = case.mapper(case.exception, emit_error)
+    result = case.mapper(case.exception)
 
     assert isinstance(result, case.expected_type), (
         f"expected {case.expected_type.__name__}, got {type(result).__name__}"
@@ -207,7 +201,16 @@ def test_mapped_domain_errors_do_not_log(
     assert typ.cast("typ.Any", result).envelope_code == case.expected_code, (
         f"expected envelope code {case.expected_code!r}"
     )
-    emit_error.assert_not_called()
+    response = falcon.Response()
+    api_errors.serialize_http_error(
+        falcon_testing.create_req(),
+        response,
+        result,
+        emit_error=_fail_if_logged,
+    )
+    assert getattr(result, "unmapped_error_diagnostic", None) is None, (
+        "mapped errors must not carry diagnostic data to the serializer"
+    )
 
 
 @pytest.mark.parametrize(
@@ -229,7 +232,6 @@ def test_mapped_profile_errors_omit_untrusted_entity_ids(
     """Mapped profile errors do not return non-UUID identifiers to clients."""
     result = api_errors.map_profile_template_error(
         exception,
-        emit_error=_ignore_error_log,
     )
 
     assert typ.cast("typ.Any", result).envelope_details == {}, (
@@ -244,14 +246,9 @@ def test_mapped_profile_error_uses_safe_caller_entity_id() -> None:
 
     result = api_errors.map_profile_template_error(
         exception,
-        emit_error=_ignore_error_log,
         entity_id=caller_entity_id,
     )
 
     assert typ.cast("typ.Any", result).envelope_details == {
         "entity_id": caller_entity_id,
     }, "mapped errors must fall back to the safe caller entity ID"
-
-
-def _ignore_error_log(*_args: object, **_kwargs: object) -> None:
-    """Provide a no-op emitter for expected mapped outcomes."""
