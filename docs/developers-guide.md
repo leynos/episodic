@@ -850,7 +850,8 @@ Authorization scaffold:
 - Denial and adapter-failure warning records include only an allow-listed
   resource root for recognized `/v1/` resources. Dynamic and unrecognized path
   segments are omitted because URLs can carry credentials. The adapter still
-  receives the unmodified `AuthorizationContext.path`.
+  receives the unmodified `AuthorizationContext.path`. Adapter failures do not
+  attach exception metadata, which could contain the raw authorization header.
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
 

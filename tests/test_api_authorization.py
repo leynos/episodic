@@ -3,6 +3,7 @@
 import time
 import typing as typ
 import unicodedata
+from unittest import mock
 
 import pytest
 from falcon import testing
@@ -88,6 +89,15 @@ class RaisingAuthorization:
         del context
         msg = "authorization backend unavailable"
         raise self._error_type(msg)
+
+
+class _AuthorizationHeaderFailure:
+    """Authorization adapter that includes the request header in its error."""
+
+    async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
+        """Raise with the raw header to test the middleware logging boundary."""
+        header = context.authorization_header
+        raise RuntimeError(header if header is not None else "missing header")
 
 
 class _AuthorizationLogCase(typ.NamedTuple):
@@ -243,6 +253,32 @@ def test_authorization_adapter_failure_types_return_service_unavailable(
         "message": "Authorization service is unavailable.",
         "details": {},
     }, payload
+
+
+def test_authorization_adapter_failure_does_not_log_exception_metadata(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failing adapter cannot leak its exception or the raw bearer header."""
+    logger = mock.Mock()
+    monkeypatch.setattr(authorization_module, "logger", logger)
+    authorization_header = "Bearer sensitive-token"
+    client = _build_client(session_factory, _AuthorizationHeaderFailure())
+
+    response = client.simulate_get(
+        "/v1/series-profiles",
+        headers={"Authorization": authorization_header},
+    )
+
+    assert response.status_code == 503, response.status_code
+    logger.warning.assert_called_once_with(
+        "Authorization adapter failed for GET /v1/series-profiles.",
+        exc_info=None,
+        stack_info=False,
+    )
+    assert authorization_header not in repr(logger.warning.call_args), (
+        "authorization header must not reach the warning logger"
+    )
 
 
 @pytest.mark.parametrize(
