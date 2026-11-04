@@ -566,6 +566,13 @@ logger = get_logger(__name__)
 log_info(logger, "Started workflow %s", "workflow-42")
 ```
 
+`episodic.logging.log_debug(logger, template, *args, exc_info=None)` formats a
+message with percent-style arguments and emits it at `DEBUG`. It calls
+`logger.debug` when available and falls back to the logger's generic `log`
+method when `debug` is absent or its inspectable signature rejects the helper's
+keyword arguments. The optional `exc_info` value is forwarded to the logger. A
+`TypeError` not identified as a signature mismatch propagates without a retry.
+
 ### Worker runtime
 
 The background-worker scaffold now exists for operators who need to stand up
