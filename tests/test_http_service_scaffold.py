@@ -107,7 +107,10 @@ def test_api_dependencies_validate_readiness_probe_entries() -> None:
             readiness_probes=(typ.cast("ReadinessProbeType", nameless_probe),),
         )
 
-    with pytest.raises(TypeError, match="must be callable"):
+    with pytest.raises(
+        TypeError,
+        match=r"readiness_probes entries check must be callable",
+    ):
         ApiDependencies(
             uow_factory=scaffold_support.unexpected_uow_factory,
             readiness_probes=(typ.cast("ReadinessProbeType", checkless_probe),),
