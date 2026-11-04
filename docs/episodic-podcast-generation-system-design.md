@@ -2140,13 +2140,13 @@ Shared Falcon envelope construction and serialization live in
 `episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
 exceptions onto that contract.
 
-The API error mappers remain pure. For an unmapped domain exception they attach
-safe diagnostic data to the generic HTTP 500 error without logging. The central
-Falcon error serializer emits that data through the optional
-`ApiDependencies.unmapped_error_emitter`; `create_app` binds the production
-`episodic.logging.log_error` callback when none is injected. Query handlers and
-REST resource methods do not emit per-handler logs, so each serialized unmapped
-response produces one `ERROR` record at the HTTP boundary.
+For an unmapped domain exception, each API error mapper emits one safe
+diagnostic through its injected logging port before returning the generic HTTP
+500 error. `create_app` passes the optional
+`ApiDependencies.unmapped_error_emitter` through every mapper path and binds
+the production `episodic.logging.log_error` callback when none is injected.
+Query handlers and REST resource methods do not emit logs themselves; the
+mapper owns the diagnostic at the error-mapping boundary.
 
 The diagnostic contains detached `exc_info` with a synthetic redacted exception
 and no live traceback. Sanitized source-frame metadata records the filename,
@@ -2157,8 +2157,7 @@ includes its context and exception type; the source-intake mapper includes only
 the exception type. These diagnostics omit the original exception message and
 chained causes because they may contain credentials. The serializer returns a
 generic client message for unmapped HTTP 500 errors. Mapped 400, 404, and 409
-outcomes carry no diagnostic data and produce no error log. REST resource
-modules add no per-handler logs.
+outcomes produce no error log. REST resource modules add no per-handler logs.
 
 Request-level logging and correlation are a separate boundary. Roadmap item
 4.1.3 plans to add request correlation across HTTP, tasks, and outbound

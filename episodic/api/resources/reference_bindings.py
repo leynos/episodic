@@ -24,14 +24,20 @@ from episodic.canonical.reference_documents import (
 )
 
 if typ.TYPE_CHECKING:
+    from episodic.api.dependencies import UnmappedErrorEmitter
     from episodic.api.types import UowFactory
 
 
 class ReferenceBindingsResource:
     """Handle create/list endpoints for reusable reference bindings."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        emit_error: UnmappedErrorEmitter,
+    ) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Create one reusable reference binding."""
@@ -67,6 +73,7 @@ class ReferenceBindingsResource:
             raise map_reference_error(
                 exc,
                 context="reference-binding",
+                emit_error=self._emit_error,
             ) from exc
 
         resp.media = serialize_reference_binding(binding)
@@ -96,6 +103,7 @@ class ReferenceBindingsResource:
             raise map_reference_error(
                 exc,
                 context="reference-binding",
+                emit_error=self._emit_error,
             ) from exc
 
         resp.media = {
@@ -110,8 +118,13 @@ class ReferenceBindingsResource:
 class ReferenceBindingResource:
     """Handle get endpoint for one reusable reference binding."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        emit_error: UnmappedErrorEmitter,
+    ) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_get(
         self,
@@ -132,6 +145,7 @@ class ReferenceBindingResource:
             raise map_reference_error(
                 exc,
                 context="reference-binding",
+                emit_error=self._emit_error,
             ) from exc
 
         resp.media = serialize_reference_binding(binding)

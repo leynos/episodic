@@ -29,8 +29,8 @@ Utilities provided
 Examples
 --------
 >>> from episodic.api.resources import SeriesProfilesResource, EpisodeTemplatesResource
->>> api.add_route("/profiles", SeriesProfilesResource(uow_factory))
->>> api.add_route("/templates", EpisodeTemplatesResource(uow_factory))
+>>> api.add_route("/profiles", SeriesProfilesResource(uow_factory, emit_error))
+>>> api.add_route("/templates", EpisodeTemplatesResource(uow_factory, emit_error))
 """
 
 from .base import _GetHistoryResourceBase, _GetResourceBase

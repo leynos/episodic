@@ -1,7 +1,7 @@
 """Build and emit credential-safe diagnostics for unmapped HTTP errors.
 
-Mappers create immutable diagnostic metadata without logging. The central
-Falcon error serializer emits that metadata through its injected logging port.
+Mappers create immutable diagnostic metadata and emit it through their injected
+logging port before returning the generic HTTP 500.
 The detached exception information contains neither the original exception
 nor its traceback frames, locals, source lines, or source message. Source
 locations are limited to 20 frame labels. Profile metadata permits only known
@@ -25,7 +25,7 @@ if typ.TYPE_CHECKING:
 
 @dc.dataclass(frozen=True, slots=True)
 class _UnmappedErrorDiagnostic:
-    """Carry safe message fields and detached exception info to serialization."""
+    """Carry safe message fields and detached exception info for mapper emission."""
 
     template: str
     args: tuple[object, ...]
@@ -144,7 +144,7 @@ def _emit_unmapped_error_diagnostic(
     emit_error: UnmappedErrorEmitter,
     diagnostic: _UnmappedErrorDiagnostic,
 ) -> None:
-    """Emit a sanitized diagnostic at the central API error boundary."""
+    """Emit a sanitized diagnostic through the mapper's logging port."""
     emit_error(
         diagnostic.template,
         *diagnostic.args,

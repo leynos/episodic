@@ -735,7 +735,11 @@ REST error contract:
   use `conflict`.
 - `ApiDependencies.unmapped_error_emitter` optionally supplies the logging port
   for unmapped API failures. When omitted, `create_app` binds the production
-  logger at the central Falcon error serializer.
+  logger and injects it into the mappers.
+- Shared GET and history resource bases build typed handler requests and use a
+  private response helper to apply each handler's `(media, status)` result.
+  Keep that helper local to `resources/base.py`; concrete resources retain
+  endpoint-specific response assembly.
 
 REST pagination and filter contract:
 
@@ -1461,13 +1465,12 @@ Shared Falcon envelope construction and serialization live in
 `episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
 exceptions onto that contract.
 
-The API error mappers remain pure: for an unmapped domain exception they attach
-safe diagnostic data to the generic HTTP 500 error, without logging. The
-central Falcon error serializer emits that data through
-`ApiDependencies.unmapped_error_emitter`; `create_app` binds it to the
-`episodic.logging` port when no callback is injected. Query handlers and REST
-resource methods do not emit per-handler logs, so each serialized unmapped
-response produces one `ERROR` record at the HTTP boundary.
+For an unmapped domain exception, each API error mapper emits one safe
+diagnostic through its injected logging port before returning the generic HTTP
+500 error. `create_app` passes `ApiDependencies.unmapped_error_emitter` to the
+mapper call paths and binds the production `episodic.logging` port when no
+callback is injected. Query handlers and REST resource methods do not emit logs
+themselves; the mapper owns the diagnostic at the error-mapping boundary.
 
 The diagnostic contains detached `exc_info` with a synthetic redacted exception
 and no live traceback. Sanitized source-frame metadata records the filename,
@@ -1478,15 +1481,14 @@ records its context and exception type; the source-intake mapper records only
 the exception type. Original exception messages and chained causes are omitted
 because they may contain credentials. The serializer returns a generic client
 message for unmapped HTTP 500 errors. Expected mapped 400, 404, and 409
-outcomes carry no diagnostic data and produce no error log. Request-level
-logging and correlation remain planned in roadmap item 4.1.3 and are not yet
-guaranteed. See the
+outcomes produce no error log. Request-level logging and correlation remain
+planned in roadmap item 4.1.3 and are not yet guaranteed. See the
 [API logging](episodic-podcast-generation-system-design.md#api-logging) section
 of the system design for the request-correlation boundary.
 
 The reference-document resource module keeps its fixed diagnostic context in a
-private mapper helper shared by its routes; only the central serializer owns
-log emission.
+private mapper helper shared by its routes. The application composition root
+injects the same logging port into each mapper path.
 
 ### Internal service-module decomposition
 
@@ -2946,10 +2948,12 @@ they do not pass a backend adapter directly.
 ## Asyncio task utilities
 
 `episodic.asyncio_tasks` provides `create_task` and `create_task_in_group` as
-thin wrappers around `asyncio.TaskGroup.create_task`. Both helpers accept an
-optional set of extra keyword arguments that are validated by the internal
-`_validate_task_create_kwargs` helper before being forwarded to the underlying
-task-creation call.
+thin wrappers around `loop.create_task` and `TaskGroup.create_task`. Both
+helpers accept an optional set of extra keyword arguments that are validated by
+the internal `_validate_task_create_kwargs` helper before being forwarded to
+the underlying task-creation call. The helper validates accepted keys and
+nested metadata so the public wrappers share one validation path while binding
+their own task creator.
 
 `_validate_task_create_kwargs` accepts a `cabc.Mapping[str, object]` rather
 than a concrete `dict[str, object]`, so read-only mappings such as

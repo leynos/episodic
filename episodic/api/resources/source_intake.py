@@ -4,6 +4,7 @@ import typing as typ
 
 import falcon
 
+from episodic.api.dependencies import UnmappedErrorEmitter
 from episodic.api.errors import http_error, map_source_intake_error
 from episodic.api.helpers import (
     parse_enum_param,
@@ -56,6 +57,8 @@ from episodic.canonical.source_intake_service import (
 if typ.TYPE_CHECKING:
     from episodic.api.types import UowFactory
 
+type _ErrorEmitter = UnmappedErrorEmitter
+
 _UPLOAD_OPERATION = "upload.create"
 _INGESTION_JOB_OPERATION = "ingestion_job.create"
 _INGESTION_SOURCE_OPERATION = "ingestion_job.source.attach"
@@ -67,10 +70,12 @@ class UploadsResource:
     def __init__(
         self,
         uow_factory: UowFactory,
+        emit_error: _ErrorEmitter,
         *,
         config: UploadResourceConfig,
     ) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
         self._config = config
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
@@ -122,6 +127,7 @@ class UploadsResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
+                    emit_error=self._emit_error,
                 ) from exc
             return IdempotentResponse(falcon.HTTP_201, serialize_upload(upload))
 
@@ -140,8 +146,9 @@ class UploadsResource:
 class UploadResource:
     """Handle one source upload metadata endpoint."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(self, uow_factory: UowFactory, emit_error: _ErrorEmitter) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_get(
         self,
@@ -158,6 +165,7 @@ class UploadResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
+                    emit_error=self._emit_error,
                 ) from exc
         resp.media = serialize_upload(upload)
         resp.status = falcon.HTTP_200
@@ -166,8 +174,9 @@ class UploadResource:
 class IngestionJobsResource:
     """Handle ingestion-job collection endpoints."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(self, uow_factory: UowFactory, emit_error: _ErrorEmitter) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Create one intake-stage ingestion job."""
@@ -201,6 +210,7 @@ class IngestionJobsResource:
                 except SourceIntakeError as exc:
                     raise map_source_intake_error(
                         exc,
+                        emit_error=self._emit_error,
                     ) from exc
             return IdempotentResponse(falcon.HTTP_201, serialize_ingestion_job(job))
 
@@ -243,8 +253,9 @@ class IngestionJobsResource:
 class IngestionJobResource:
     """Handle one ingestion-job status endpoint."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(self, uow_factory: UowFactory, emit_error: _ErrorEmitter) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_get(
         self,
@@ -261,6 +272,7 @@ class IngestionJobResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
+                    emit_error=self._emit_error,
                 ) from exc
         next_poll = None
         if job.intake_state is IntakeState.AWAITING_SOURCES:
@@ -275,8 +287,9 @@ class IngestionJobResource:
 class IngestionJobSourcesResource:
     """Handle source attachments for an ingestion job."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(self, uow_factory: UowFactory, emit_error: _ErrorEmitter) -> None:
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_post(
         self,
@@ -299,6 +312,7 @@ class IngestionJobSourcesResource:
                 except SourceIntakeError as exc:
                     raise map_source_intake_error(
                         exc,
+                        emit_error=self._emit_error,
                     ) from exc
             return IdempotentResponse(
                 falcon.HTTP_201,
@@ -337,6 +351,7 @@ class IngestionJobSourcesResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
+                    emit_error=self._emit_error,
                 ) from exc
         resp.media = {
             "items": [serialize_ingestion_job_source(source) for source in page.items],
