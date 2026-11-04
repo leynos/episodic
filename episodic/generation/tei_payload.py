@@ -189,7 +189,12 @@ def body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
     """
     text_payload = require_payload_object(document_payload.get("text"), "text")
     body_payload = require_payload_object(text_payload.get("body"), "text.body")
-    return require_payload_list(body_payload.get("blocks"), "text.body.blocks")
+    return require_sequence(
+        body_payload.get("blocks"),
+        "text.body.blocks",
+        error_cls=ValueError,
+        prefix="TEI payload field",
+    )
 
 
 def is_div_payload(value: object, div_type: str) -> bool:

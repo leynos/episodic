@@ -10,6 +10,7 @@ import pytest
 from episodic.api import create_app
 from episodic.api.resources.generation_runs import (
     GenerationRunsResource,
+    GenerationRunsResourceConfig,
     _CreateGenerationRun,
 )
 from tests.fixtures.api import build_api_dependencies
@@ -22,6 +23,16 @@ from tests.fixtures.generation_run_api import (
 if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+def _discard_error_log(
+    _template: str,
+    /,
+    *_args: object,
+    exc_info: object | None = None,
+) -> None:
+    """Ignore diagnostics in a test that exercises only ID and clock seams."""
+    del _args, exc_info
 
 
 @pytest.mark.asyncio
@@ -49,9 +60,12 @@ async def test_generation_run_resource_uses_injected_factories(
     now = dt.datetime(2026, 7, 22, tzinfo=dt.UTC)
     resource = GenerationRunsResource(
         dependencies.uow_factory,
-        launcher=RecordingLauncher(),
-        clock=lambda: now,
-        uuid_factory=iter(ids).__next__,
+        GenerationRunsResourceConfig(
+            emit_error=_discard_error_log,
+            launcher=RecordingLauncher(),
+            clock=lambda: now,
+            uuid_factory=iter(ids).__next__,
+        ),
     )
     run = await resource._create_run(
         ingestion_job_id,

@@ -4,12 +4,17 @@ import asyncio
 import logging
 import typing as typ
 import uuid
+from functools import partial
 
 import falcon
 import pytest
 
 from episodic.api.handlers import (
+    CreateEntityRequest,
+    GetEntityRequest,
+    HandlerContext,
     HistoryRequest,
+    UpdateEntityRequest,
     handle_create_entity,
     handle_get_entity,
     handle_get_history,
@@ -18,8 +23,10 @@ from episodic.api.handlers import (
 from episodic.api.helpers import build_profile_update_request
 from episodic.canonical.pagination import Pagination
 from episodic.canonical.profile_templates.types import ProfileTemplateError
+from episodic.logging import log_error
 
 if typ.TYPE_CHECKING:
+    from episodic.api.dependencies import UnmappedErrorEmitter
     from tests.fixtures.api_errors import EmptyUnitOfWorkFactory, SpyLogger
 
 _ENTITY_ID = uuid.UUID("00000000-0000-0000-0000-000000000007")
@@ -56,6 +63,7 @@ def _serialize_history_entry(_entry: object) -> dict[str, object]:
 async def _run_handler(
     case: _HandlerCase,
     empty_uow_factory: EmptyUnitOfWorkFactory,
+    emit_error: UnmappedErrorEmitter,
 ) -> None:
     """Invoke one shared handler with a service that raises ``exc``."""
     exc = case.source_exception
@@ -63,57 +71,57 @@ async def _run_handler(
     async def fail_service(
         _uow: object,
         **_kwargs: object,
-    ) -> tuple[object, int]:
+    ) -> typ.NoReturn:
         await asyncio.sleep(0)
         raise exc
 
-    async def fail_history_service(
-        _uow: object,
-        **_kwargs: object,
-    ) -> tuple[list[object], int]:
-        del _kwargs
-        await asyncio.sleep(0)
-        raise exc
+    context = HandlerContext(empty_uow_factory, emit_error)
 
     match case.name:
         case "get-entity":
             await handle_get_entity(
-                empty_uow_factory,
-                str(_ENTITY_ID),
-                "profile_id",
-                fail_service,
-                _serialize_entity,
+                GetEntityRequest(
+                    context,
+                    str(_ENTITY_ID),
+                    "profile_id",
+                    fail_service,
+                    _serialize_entity,
+                )
             )
         case "get-history":
             await handle_get_history(
-                empty_uow_factory,
                 HistoryRequest(
-                    entity_id=str(_ENTITY_ID),
-                    id_field_name="profile_id",
-                    service_fn=fail_history_service,
-                    serializer_fn=_serialize_history_entry,
-                    page=Pagination(limit=1, offset=0),
-                ),
+                    context,
+                    str(_ENTITY_ID),
+                    "profile_id",
+                    fail_service,
+                    _serialize_history_entry,
+                    Pagination(limit=1, offset=0),
+                )
             )
         case "update-entity":
             await handle_update_entity(
-                empty_uow_factory,
-                str(_ENTITY_ID),
-                "profile_id",
-                {"expected_revision": 1, "title": "Profile", "configuration": {}},
-                ("expected_revision", "title", "configuration"),
-                build_profile_update_request,
-                fail_service,
-                _serialize_entity,
+                UpdateEntityRequest(
+                    context,
+                    str(_ENTITY_ID),
+                    "profile_id",
+                    {"expected_revision": 1, "title": "Profile", "configuration": {}},
+                    ("expected_revision", "title", "configuration"),
+                    build_profile_update_request,
+                    fail_service,
+                    _serialize_entity,
+                )
             )
         case "create-entity":
             await handle_create_entity(
-                empty_uow_factory,
-                {},
-                required_fields=(),
-                kwargs_builder=lambda _payload: {},
-                service_fn=fail_service,
-                serializer_fn=_serialize_entity,
+                CreateEntityRequest(
+                    context,
+                    {},
+                    (),
+                    lambda _payload: {},
+                    fail_service,
+                    _serialize_entity,
+                )
             )
         case _:
             pytest.fail(f"Unexpected handler name: {case.name}")
@@ -123,13 +131,13 @@ async def _run_handler(
     "handler_name",
     ["get-entity", "get-history", "update-entity", "create-entity"],
 )
-def test_shared_handlers_defer_unmapped_profile_logs_to_serializer(
+def test_shared_handlers_emit_unmapped_errors_through_injected_port(
     handler_name: str,
     spy_logger: SpyLogger,
     empty_uow_factory: EmptyUnitOfWorkFactory,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Shared profile handlers attach errors without emitting logs."""
+    """Shared handlers pass the logging port to profile-error mappers."""
     source_exception = _UnexpectedProfileTemplateError(
         "Service failure.",
         entity_id=str(_ENTITY_ID),
@@ -140,7 +148,9 @@ def test_shared_handlers_defer_unmapped_profile_logs_to_serializer(
     ):
         asyncio.run(
             _run_handler(
-                _HandlerCase(handler_name, source_exception), empty_uow_factory
+                _HandlerCase(handler_name, source_exception),
+                empty_uow_factory,
+                partial(log_error, spy_logger),
             )
         )
 
@@ -151,8 +161,6 @@ def test_shared_handlers_defer_unmapped_profile_logs_to_serializer(
     assert envelope.envelope_details == {}, (
         "unmapped profile errors must not expose exception-derived details"
     )
-    assert getattr(raised_error.value, "unmapped_error_diagnostic", None) is not None, (
-        "unmapped failures must carry safe metadata to the central serializer"
-    )
-    assert spy_logger.calls == [], "query handlers must not emit logs"
-    assert not caplog.records, "query handlers must not emit log records"
+    assert len(spy_logger.calls) == 1, "unmapped mapper paths must log exactly once"
+    assert spy_logger.calls[0][0] == "ERROR", "unmapped paths must log at ERROR"
+    assert len(caplog.records) == 1, "the injected logging port must emit one record"

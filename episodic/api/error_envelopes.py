@@ -11,13 +11,7 @@ import typing as typ
 
 import falcon
 
-from ._error_logging import (
-    _emit_unmapped_error_diagnostic,
-    _UnmappedErrorDiagnostic,
-)
-
 if typ.TYPE_CHECKING:
-    from .dependencies import UnmappedErrorEmitter
     from .types import JsonPayload
 
 
@@ -50,7 +44,6 @@ def http_error(
     *,
     code: str,
     details: dict[str, object] | None = None,
-    unmapped_error_diagnostic: _UnmappedErrorDiagnostic | None = None,
 ) -> falcon.HTTPError:
     """Attach API error-envelope metadata to a Falcon error.
 
@@ -62,9 +55,6 @@ def http_error(
         Machine-readable error code returned in the envelope.
     details : dict[str, object] | None
         Optional field-level or domain-specific envelope details.
-    unmapped_error_diagnostic : _UnmappedErrorDiagnostic | None
-        Safe internal log metadata emitted by the central serializer. It is not
-        included in the client response.
 
     Returns
     -------
@@ -83,8 +73,6 @@ def http_error(
     error_with_metadata = typ.cast("typ.Any", error)
     error_with_metadata.envelope_code = code
     error_with_metadata.envelope_details = {} if details is None else details
-    if unmapped_error_diagnostic is not None:
-        error_with_metadata.unmapped_error_diagnostic = unmapped_error_diagnostic
     return error
 
 
@@ -134,17 +122,16 @@ def serialize_http_error(
     _req: falcon.Request,
     resp: falcon.Response,
     exc: falcon.HTTPError,
-    *,
-    emit_error: UnmappedErrorEmitter,
 ) -> None:
     """Serialize Falcon HTTP errors as the documented response envelope.
 
     Wired through :meth:`falcon.asgi.App.set_error_serializer`. Falcon's
     default error handler sets ``resp.status`` from ``exc.status`` before
     invoking the serializer, so this function only needs to populate
-    ``resp.media`` with the ``{code, message, details}`` envelope. Falcon
-    accepts both sync and async serializers; a sync function keeps the body
-    free of unnecessary coroutine machinery.
+    ``resp.media`` with the ``{code, message, details}`` envelope. Unmapped
+    domain errors are logged by their mappers before the HTTP error reaches
+    serialization. Falcon accepts both sync and async serializers; a sync
+    function keeps the body free of unnecessary coroutine machinery.
 
     Parameters
     ----------
@@ -155,12 +142,7 @@ def serialize_http_error(
         Response populated with the error envelope.
     exc : falcon.HTTPError
         Falcon error raised by a resource, hook, or middleware component.
-    emit_error : UnmappedErrorEmitter
-        Narrow logging callback injected by the application composition root.
     """
-    diagnostic = getattr(exc, "unmapped_error_diagnostic", None)
-    if isinstance(diagnostic, _UnmappedErrorDiagnostic):
-        _emit_unmapped_error_diagnostic(emit_error, diagnostic)
     resp.media = ErrorEnvelope(
         _error_code(exc),
         _error_message(exc),

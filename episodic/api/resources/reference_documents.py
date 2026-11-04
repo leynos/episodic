@@ -34,16 +34,19 @@ from episodic.canonical.reference_documents import (
 )
 
 if typ.TYPE_CHECKING:
+    from episodic.api.dependencies import UnmappedErrorEmitter
     from episodic.api.types import JsonPayload, UowFactory
 
 
 def _map_reference_document_error(
     exc: ReferenceDocumentError,
+    emit_error: UnmappedErrorEmitter,
 ) -> falcon.HTTPError:
     """Map resource errors with this module's fixed context."""
     return map_reference_error(
         exc,
         context="reference-document",
+        emit_error=emit_error,
     )
 
 
@@ -82,9 +85,14 @@ def _parse_expected_lock_version(payload: JsonPayload) -> int:
 class ReferenceDocumentsResource:
     """Handle collection endpoints for reusable reference documents."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        emit_error: UnmappedErrorEmitter,
+    ) -> None:
         """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_post(
@@ -108,7 +116,7 @@ class ReferenceDocumentsResource:
             async with self._uow_factory() as uow:
                 document = await create_reference_document(uow, data=data)
         except ReferenceDocumentError as exc:
-            raise _map_reference_document_error(exc) from exc
+            raise _map_reference_document_error(exc, self._emit_error) from exc
 
         resp.media = serialize_reference_document(document)
         resp.status = falcon.HTTP_201
@@ -138,7 +146,7 @@ class ReferenceDocumentsResource:
                     ),
                 )
         except ReferenceDocumentError as exc:
-            raise _map_reference_document_error(exc) from exc
+            raise _map_reference_document_error(exc, self._emit_error) from exc
 
         resp.media = {
             "items": [serialize_reference_document(item) for item in documents],
@@ -152,9 +160,14 @@ class ReferenceDocumentsResource:
 class ReferenceDocumentResource:
     """Handle read/update endpoints for one reusable reference document."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        emit_error: UnmappedErrorEmitter,
+    ) -> None:
         """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_get(
@@ -174,7 +187,7 @@ class ReferenceDocumentResource:
                     owner_series_profile_id=str(parse_uuid(profile_id, "profile_id")),
                 )
         except ReferenceDocumentError as exc:
-            raise _map_reference_document_error(exc) from exc
+            raise _map_reference_document_error(exc, self._emit_error) from exc
 
         resp.media = serialize_reference_document(document)
         resp.status = falcon.HTTP_200
@@ -206,7 +219,7 @@ class ReferenceDocumentResource:
                     request=request,
                 )
         except ReferenceDocumentError as exc:
-            raise _map_reference_document_error(exc) from exc
+            raise _map_reference_document_error(exc, self._emit_error) from exc
 
         resp.media = serialize_reference_document(updated)
         resp.status = falcon.HTTP_200
@@ -215,9 +228,14 @@ class ReferenceDocumentResource:
 class ReferenceDocumentRevisionsResource:
     """Handle create/list endpoints for one document's immutable revisions."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        emit_error: UnmappedErrorEmitter,
+    ) -> None:
         """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_post(
@@ -247,7 +265,7 @@ class ReferenceDocumentRevisionsResource:
                     data=data,
                 )
         except ReferenceDocumentError as exc:
-            raise _map_reference_document_error(exc) from exc
+            raise _map_reference_document_error(exc, self._emit_error) from exc
 
         resp.media = serialize_reference_document_revision(revision)
         resp.status = falcon.HTTP_201
@@ -277,7 +295,7 @@ class ReferenceDocumentRevisionsResource:
                     ),
                 )
         except ReferenceDocumentError as exc:
-            raise _map_reference_document_error(exc) from exc
+            raise _map_reference_document_error(exc, self._emit_error) from exc
 
         resp.media = {
             "items": [
@@ -293,9 +311,14 @@ class ReferenceDocumentRevisionsResource:
 class ReferenceDocumentRevisionResource:
     """Handle get endpoint for one immutable reference-document revision."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+        emit_error: UnmappedErrorEmitter,
+    ) -> None:
         """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
+        self._emit_error = emit_error
 
     async def on_get(
         self,
@@ -321,7 +344,7 @@ class ReferenceDocumentRevisionResource:
                     ),
                 )
         except ReferenceDocumentError as exc:
-            raise _map_reference_document_error(exc) from exc
+            raise _map_reference_document_error(exc, self._emit_error) from exc
 
         resp.media = serialize_reference_document_revision(revision)
         resp.status = falcon.HTTP_200
