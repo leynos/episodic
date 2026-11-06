@@ -100,9 +100,11 @@ class OperationObservation:
         traceback: object,
     ) -> bool:
         """Emit the latency observation and complete the span."""
-        if exc_type is not None and self.outcome == UNKNOWN_OUTCOME:
-            # An exception that no branch classified would otherwise read as a
-            # successful outcome, so make the unclassified case visible.
+        if exc_type is not None and self.failure_category is None:
+            # An exception that no branch classified would otherwise keep a
+            # success outcome recorded before it escaped -- and an exception
+            # before any outcome would read as successful -- so make both
+            # cases visible. A recorded failure category is never overwritten.
             self.failed(UNEXPECTED_FAILURE)
         self._observe_latency()
         if self._span is None:
