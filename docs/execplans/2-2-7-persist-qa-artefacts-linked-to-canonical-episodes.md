@@ -1654,7 +1654,37 @@ Stop and escalate when any of these is reached.
   itself, then this lint repair. Only the static gates completed before the
   change are usable as evidence (`check-fmt`, `typecheck`, `markdownlint`,
   `nixie`, `check-migrations` on `8784ad78`); `lint` and `test` need a clean
-  run on the final head.
+  run on the final head. A full sequential pass on `a48ce937` afterwards
+  completed all seven gates (2105 passed, 1 skipped) and is the last complete
+  evidence before the pre-merge repairs below.
+- Pre-merge-check disposition (2026-11-06): the walkthrough refreshed against
+  `a48ce937` named one error and two warnings, all valid against the current
+  tree. Each is repaired rather than argued away:
+  - **Unit Architecture (error).** `read_owned_episode` resolved the episode
+    and its launcher run with two ordinary queries, so a caller holding staged
+    work had it flushed in the middle of an ownership check. The reviewer's
+    first remedy is implemented: `CanonicalUnitOfWork` now exposes
+    `no_autoflush()`, backed by `AsyncSession.no_autoflush`, and the helper
+    holds one boundary across both reads. The new
+    `tests/test_episode_access.py` stages an evaluation row whose episode does
+    not exist, so an autoflush raises instead of merely costing a write;
+    removing the boundary reproduces
+    `IntegrityError: (raised as a result of Query-invoked autoflush; consider
+    using a session.no_autoflush block if this flush is occurring
+    prematurely)`.
+  - **Testing (Property / Proof) (warning).** `_normalize_rubric_score` now has
+    two Hypothesis properties: one over the whole accepted rounding window
+    asserting the interval, four-place quantization, half-quantum tolerance,
+    unsigned zero, and reconstruction stability, and one over the two nearest
+    rejected regions asserting rejection.
+  - **Domain Architecture (warning).** The persistence leak was real; the
+    proposed remedy was not. Moving quantization into the adapter would leave
+    the frozen value object holding a score no read could return, because the
+    adapter cannot rewrite it — the round-trip invariant the normalizer exists
+    to protect. The domain keeps the normalization and now states its own
+    four-decimal precision, with no `PostgreSQL` or `NUMERIC` reference left in
+    `episodic/canonical/qa_artefact_validation.py` or `QaEvaluationSummary`.
+    ADR 026 records why storage follows the domain here.
 
 ## Surprises & discoveries
 
@@ -1957,6 +1987,26 @@ Stop and escalate when any of these is reached.
   and assert both branches. Lesson: a rule recorded as "arrives in milestone X"
   needs a gate-visible test in X, because a plan sentence is not evidence that
   it shipped.
+- Observation (execution, 2026-11-06): the Unit Architecture finding was not
+  theoretical. Restoring the unwrapped ownership reads and re-running the new
+  regression test produced
+  `IntegrityError: (raised as a result of
+  Query-invoked autoflush; consider using a session.no_autoflush block if this
+  flush is occurring prematurely)`
+  from the second read, so SQLAlchemy names the same remedy the review did.
+  Lesson: an autoflush boundary belongs on every shared read path, not only the
+  store that happened to be reviewed first, because the defect appears the
+  moment a caller stages work before calling the helper.
+- Observation (execution, 2026-11-06): a review's diagnosis and its remedy can
+  differ in validity. The Domain Architecture row correctly identified
+  persistence knowledge in a domain module, but its proposed fix — quantize in
+  the adapter — would break the invariant the normalizer protects, because the
+  value object is frozen and the adapter cannot rewrite it. Evidence:
+  `QaEvaluationSummary.__post_init__` calls `object.__setattr__` once, and the
+  store writes `summary.rubric_score` unchanged. Impact: the domain keeps the
+  four-decimal normalization and states it as its own contract, and ADR 026
+  records the division of responsibility. Lesson: dispose of a finding against
+  the invariant it would change, not only against the symptom it names.
 
 ## Decision log
 
@@ -4822,3 +4872,14 @@ ADR's cross-reference — was renumbered in the same pass. Older progress entrie
 keep the numbers they were written with. The QA artefact migration keeps
 `20261031_000016` chained off `20261020_000015`, because `main`'s new commits
 added no Alembic revision.
+
+Revision 11, 2026-11-06. No design change, one recorded decision. The pre-merge
+checks refreshed against `a48ce937` filed an error and two warnings. All three
+were repaired: `CanonicalUnitOfWork` gained `no_autoflush()` so the shared
+episode-ownership lookup cannot flush a caller's staged work, two Hypothesis
+properties now cover `_normalize_rubric_score` across the rounding window and
+its rejected neighbours, and the domain QA modules no longer describe
+themselves in terms of a column type. The one decision is that the four-decimal
+rubric precision stays in the domain: moving it to the adapter would leave a
+frozen value object holding a score no read could return. ADR 026 records the
+reasoning under *Rubric precision is a domain contract*.
