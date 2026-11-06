@@ -38,13 +38,21 @@ async def read_owned_episode(
     CanonicalEpisode | None
         The episode when it exists, records a launcher run, and that run's
         actor equals ``actor``; otherwise ``None``.
+
+    Notes
+    -----
+    Both reads run inside :meth:`CanonicalUnitOfWork.no_autoflush`. An
+    ownership check is a query path, so it must not flush work the caller has
+    staged: doing so would turn a read into a write and report a constraint
+    failure against a request that never wrote it.
     """
     if actor is None:
         return None
-    episode = await uow.episodes.get(episode_id)
-    if episode is None or episode.last_generation_run_id is None:
-        return None
-    run = await uow.generation_runs.get_run(episode.last_generation_run_id)
+    with uow.no_autoflush():
+        episode = await uow.episodes.get(episode_id)
+        if episode is None or episode.last_generation_run_id is None:
+            return None
+        run = await uow.generation_runs.get_run(episode.last_generation_run_id)
     if run is None or run.actor != actor:
         return None
     return episode

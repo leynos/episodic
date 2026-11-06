@@ -3,6 +3,7 @@
 import typing as typ
 
 if typ.TYPE_CHECKING:
+    from contextlib import AbstractContextManager
     from types import TracebackType
 
     from episodic.cost.ports import CostLedgerPort
@@ -76,6 +77,10 @@ class CanonicalUnitOfWork(typ.Protocol):
 
     async def flush(self) -> None:
         """Flush pending changes without committing."""
+        raise NotImplementedError
+
+    def no_autoflush(self) -> AbstractContextManager[None]:
+        """Suspend autoflush so a read cannot flush the caller's staged work."""
         raise NotImplementedError
 
     async def rollback(self) -> None:
