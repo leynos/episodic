@@ -1092,7 +1092,6 @@ prefixes = [
     "episodic.observability",
     "episodic.operation_observation",
     "episodic.orchestration._types",
-    "episodic.qa.chrono",
     "episodic.qa.pedante.types",
     "episodic.worker.workloads",
 ]
@@ -1158,6 +1157,7 @@ prefixes = [
     "episodic.canonical.reference_documents",
     "episodic.cost.recorder",
     "episodic.generation",
+    "episodic.qa.chrono",
     "episodic.qa.chrono_langgraph",
     "episodic.qa.langgraph",
 ]
@@ -1218,7 +1218,7 @@ allowed = [
 [[tool.hecate.groups]]
 name = "cli"
 prefixes = ["episodic.cli"]
-allowed = ["cli", "domain_ports"]
+allowed = ["cli", "domain_ports", "external_libraries"]
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]

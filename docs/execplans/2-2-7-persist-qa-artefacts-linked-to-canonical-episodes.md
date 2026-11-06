@@ -1630,6 +1630,31 @@ Stop and escalate when any of these is reached.
   `git diff --check` reports only the trailing spaces syrupy writes into the
   blank lines of `tests/__snapshots__/test_qa_cli.ambr`; there are no conflict
   markers and no target file is deleted.
+- Hosted lint failure on the rebased head (2026-11-06): `make lint` in CI failed
+  at `check-architecture` with five `ARCH001` violations. The cause is `main`'s
+  logging-port commit, which set `include_external_packages = true` and added
+  the `external_libraries` group; until then third-party import edges were not
+  checked at all, so the pre-rebase head passed with the same source. Two
+  groupings were wrong under the new rule:
+  - `episodic.cli` imported `httpx` but the `cli` group allowed only `cli` and
+    `domain_ports`. The CLI's transport is exactly what the boundary permits it
+    to own — the prohibition that matters is the one on application services
+    and `episodic.api` — so the group now also allows `external_libraries`,
+    matching `inbound_adapter` and `outbound_adapter`.
+  - `episodic.qa.chrono` imported `tei_rapporteur` while grouped as
+    `domain_ports`, and that group is deliberately forbidden the broad external
+    group. Chrono is an evaluator runtime rather than a port: it moved to
+    `application`, beside `episodic.qa.chrono_langgraph` and
+    `episodic.qa.langgraph`, which already sit there.
+  ADR 027's enforced-boundary section and the developers' guide's group and CLI
+  rules state the new allowed set. `hecate check` passes and
+  `tests/test_architecture_enforcement.py` is green (26 passed).
+- Gate-ownership slip (2026-11-06): two scrutineer passes were invalidated
+  because tracked files changed while the suite was running — first the rebase
+  itself, then this lint repair. Only the static gates completed before the
+  change are usable as evidence (`check-fmt`, `typecheck`, `markdownlint`,
+  `nixie`, `check-migrations` on `8784ad78`); `lint` and `test` need a clean
+  run on the final head.
 
 ## Surprises & discoveries
 

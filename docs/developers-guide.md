@@ -1297,7 +1297,9 @@ The enforced groups are:
 - `domain_ports`: canonical domain types, canonical ports, ingestion ports,
   canonical constraint names, and LLM ports.
 - `application`: canonical services, profile/template workflows,
-  reference-document workflows, and generation services.
+  reference-document workflows, generation services, and the QA evaluator
+  runtimes (`episodic.qa.chrono` with its LangGraph adapters), which adapt
+  third-party parsers and therefore may depend on `external_libraries`.
 - `inbound_adapter`: Falcon API modules (`episodic.api`) and the worker
   topology seam (`episodic.worker.topology`).
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
@@ -1895,9 +1897,10 @@ database client. See
 
 ### CLI maintainer rules
 
-- The CLI may import its own modules and `domain_ports` only. The Hecate group
-  `cli` enforces this, so an import of `episodic.api` or a canonical service
-  fails `make check-architecture`.
+- The CLI may import its own modules, `domain_ports`, and the
+  `external_libraries` group that holds its `httpx` transport and `cyclopts`
+  parser. The Hecate group `cli` enforces this, so an import of `episodic.api`
+  or a canonical service fails `make check-architecture`.
 - Keep renderers pure functions from a parsed payload to a string. They must
   not print, exit, or read the environment; that is what makes them
   snapshottable.

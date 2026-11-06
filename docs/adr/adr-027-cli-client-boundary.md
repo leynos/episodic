@@ -79,10 +79,18 @@ snapshots pin them without a process boundary.
 ### Enforced boundary
 
 `[tool.hecate]` gives `episodic.cli` its own group with
-`allowed = ["cli", "domain_ports"]`. The CLI may import its own modules and the
-canonical domain types that describe the wire payload, and nothing else. An
-accidental import of `episodic.api` or a canonical service fails
+`allowed = ["cli", "domain_ports", "external_libraries"]`. The CLI may import
+its own modules, the canonical domain types that describe the wire payload, and
+the third-party libraries it is built from — `httpx` for transport and
+`cyclopts` for parsing. It may not import `episodic.api`, a canonical service,
+or a storage adapter, so an accidental convenience import fails
 `make check-architecture`.
+
+`external_libraries` is allowed because the CLI's whole job is to speak HTTP;
+the boundary that matters is the one that stops it reaching into the
+application, and that is unaffected. Hecate's `include_external_packages`
+setting treats a third-party library as an import edge like any other, so
+without this entry the transport itself would be a violation.
 
 ### Authentication and endpoint configuration
 
