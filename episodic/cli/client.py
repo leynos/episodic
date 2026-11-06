@@ -33,6 +33,7 @@ from episodic.observability import (
 from episodic.operation_observation import OperationObservation
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from episodic.canonical.qa_artefacts import QaComplianceStatus, QaEvaluator
@@ -211,6 +212,63 @@ def _enum_value[EnumT: enum.Enum](value: EnumT | None) -> str | None:
     return None if value is None else str(value.value)
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _FailureRule:
+    """How one class of API-call failure is reported and translated.
+
+    Attributes
+    ----------
+    error_type : type[Exception]
+        Exception type this rule matches.
+    category : str
+        Bounded failure category recorded on the span and the latency labels.
+    translate : collections.abc.Callable
+        Takes the failure and the resolved options; returns the exception to
+        raise instead, or ``None`` to re-raise the original unchanged.
+    """
+
+    error_type: type[Exception]
+    category: str
+    translate: cabc.Callable[[Exception, ClientOptions], BaseException | None]
+
+
+def _invalid_url(error: Exception, options: ClientOptions) -> BaseException:
+    """Translate a URL httpx rejects into a configuration error."""
+    return InvalidConfigError(f"Invalid Episodic API URL {options.base_url}: {error}")
+
+
+def _unreachable(error: Exception, options: ClientOptions) -> BaseException:
+    """Translate a transport failure, masking any token the text may quote."""
+    # A protocol error can quote the header it rejected, so mask the configured
+    # token before the text reaches standard error.
+    detail = _redact(str(error), options.token)
+    return ApiUnavailableError(
+        f"Cannot reach the Episodic API at {options.base_url}: {detail}"
+    )
+
+
+def _no_translation(_error: Exception, _options: ClientOptions) -> None:
+    """Re-raise a failure the CLI already reports under its own exit code."""
+
+
+# Ordered: ``httpx.InvalidURL`` is matched before the ``httpx.HTTPError`` base
+# it may share, and the two CLI errors are siblings so their order is free.
+# Every type here has a rule; ``tests/test_qa_cli_observability.py`` pins each
+# category against its trigger.
+_FAILURE_RULES: tuple[_FailureRule, ...] = (
+    _FailureRule(httpx.InvalidURL, "invalid_url", _invalid_url),
+    _FailureRule(httpx.HTTPError, "transport_failure", _unreachable),
+    _FailureRule(RateLimitedError, "rate_limited", _no_translation),
+    _FailureRule(ApiError, "api_error", _no_translation),
+)
+_API_FAILURES = (httpx.InvalidURL, httpx.HTTPError, RateLimitedError, ApiError)
+
+
+def _classify_failure(error: Exception) -> _FailureRule:
+    """Return the rule for ``error``, which the caller has already caught."""
+    return next(rule for rule in _FAILURE_RULES if isinstance(error, rule.error_type))
+
+
 class QaApiClient:
     """Retrieve QA artefacts from the Episodic REST API.
 
@@ -250,8 +308,7 @@ class QaApiClient:
             If the API could not be reached before the timeout elapsed.
         RateLimitedError
             If the API throttled the request.
-        """
-        options = self._runtime.options
+        """  # ruff: ignore[docstring-extraneous-exception]  # Documents the exceptions the fetch helper raises.
         observation = OperationObservation(
             tracer=self._runtime.tracer,
             metrics=self._runtime.metrics,
@@ -259,29 +316,25 @@ class QaApiClient:
             span_name="cli.qa_evaluations.list",
         )
         with observation:
-            try:
-                page = self._fetch(query)
-            except httpx.InvalidURL as error:
-                observation.failed("invalid_url")
-                invalid = f"Invalid Episodic API URL {options.base_url}: {error}"
-                raise InvalidConfigError(invalid) from error
-            except httpx.HTTPError as error:
-                observation.failed("transport_failure")
-                # A protocol error can quote the header it rejected, so mask
-                # the configured token before the text reaches standard error.
-                detail = _redact(str(error), options.token)
-                unreachable = (
-                    f"Cannot reach the Episodic API at {options.base_url}: {detail}"
-                )
-                raise ApiUnavailableError(unreachable) from error
-            except RateLimitedError:
-                observation.failed("rate_limited")
-                raise
-            except ApiError:
-                observation.failed("api_error")
-                raise
+            page = self._fetch_page(query, observation)
             observation.succeeded("success")
-            return page
+        return page
+
+    def _fetch_page(
+        self,
+        query: QaEvaluationQuery,
+        observation: OperationObservation,
+    ) -> dict[str, object]:
+        """Fetch the page, recording a bounded outcome when the call fails."""
+        try:
+            return self._fetch(query)
+        except _API_FAILURES as error:
+            rule = _classify_failure(error)
+            observation.failed(rule.category)
+            translated = rule.translate(error, self._runtime.options)
+            if translated is None:
+                raise
+            raise translated from error
 
     def _fetch(self, query: QaEvaluationQuery) -> dict[str, object]:
         """Send the request and decode the page; failures propagate untranslated."""
