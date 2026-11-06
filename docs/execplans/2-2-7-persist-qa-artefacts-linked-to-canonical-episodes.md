@@ -1612,6 +1612,24 @@ Stop and escalate when any of these is reached.
       handed its constructor list to three cohesive `_open_*_stores` helpers;
       and the CLI observability test now builds one expected observation value
       instead of repeating the same assertion block in every case.
+- Rebase onto the current target (2026-11-06): the branch was replayed from
+  `d7d8fde0` onto `origin/main` at `a2126362` — 82 commits, no merges, run with
+  the ambient Weave driver bypassed (`core.attributesFile=/dev/null`) and
+  `merge.conflictStyle=zdiff3`. `main` had landed ADR 025 (central logging
+  port) at `a2126362` and the `TY_VERSION` Makefile refactor, so both conflicts
+  were ADR indexes: this branch's ADRs occupied the number `main` had taken.
+  The QA artefact contract moved 025 → **026** and the CLI client boundary 026
+  → **027**, renaming the files, their headings, and every reference in
+  `docs/contents.md`, the design document, the developers' guide, and the CLI
+  ADR's own cross-reference. The migration needed no change: the branch already
+  carries `20261031_000016` chained off `20261020_000015`, and no two revisions
+  share an identifier. `git range-diff d7d8fde0..6b453f8e a2126362..HEAD` shows
+  seven commits whose patch differs — `683fc0a2` (the renumbering itself) and
+  six later commits whose hunks only carry the new ADR path and `main`'s
+  Makefile context — with every other commit replaying identically.
+  `git diff --check` reports only the trailing spaces syrupy writes into the
+  blank lines of `tests/__snapshots__/test_qa_cli.ambr`; there are no conflict
+  markers and no target file is deleted.
 
 ## Surprises & discoveries
 
@@ -1763,6 +1781,15 @@ Stop and escalate when any of these is reached.
   `20261020_000015`. Every reference in this plan was renumbered in the same
   pass; no design decision changed. Progress entries written before the rebase
   describe the pre-rebase numbering, and their evidence is unchanged.
+- Observation (execution, 2026-11-06): the branch was rebased again, onto
+  `origin/main` at `a2126362`, which had landed ADR 025 (central logging port).
+  Impact: the two ADRs this plan creates moved from 025/026 to **026**
+  (`adr-026-qa-artefact-persistence-contract.md`) and **027**
+  (`adr-027-cli-client-boundary.md`). Every reference in the tracked
+  documentation was renumbered in the same pass; no design decision changed.
+  The migration kept `20261031_000016`, because `main`'s new commits added no
+  Alembic revision. Progress entries written before this rebase describe the
+  pre-rebase numbering, and their evidence is unchanged.
 - Observation (execution, 2026-10-29): the barrel slimming is sufficient on its
   own. `episodic/qa/pedante/__init__.py` imports `.evaluator`, which imports
   `episodic.llm`, but `episodic/llm/__init__.py` re-exports only
@@ -4759,3 +4786,14 @@ and had not been aligned with the new policy, so the two rule sets contradicted
 each other. `AGENTS.md` now sends authored-ahead symbols to *Retaining deferred
 implementation*, which keeps its own bar — delivered behaviour, a direct test,
 a named still-open consumer, and a deletion condition. Nothing else changed.
+
+Revision 10, 2026-11-06. No design change. Rebased onto `main` at `a2126362`,
+which landed ADR 025 (central logging port) and took the number this plan's QA
+artefact ADR had used. The two ADRs this plan creates are now **026**
+(`adr-026-qa-artefact-persistence-contract.md`) and **027**
+(`adr-027-cli-client-boundary.md`), and every live reference — the ADR headings,
+`docs/contents.md`, the design document, the developers' guide, and the CLI
+ADR's cross-reference — was renumbered in the same pass. Older progress entries
+keep the numbers they were written with. The QA artefact migration keeps
+`20261031_000016` chained off `20261020_000015`, because `main`'s new commits
+added no Alembic revision.
