@@ -1903,8 +1903,8 @@ database client. See
   snapshottable.
 - Declare a command as a typed function and register it on the application.
   `cyclopts` resolves annotations at registration time, so a type used only in
-  an annotation still needs a runtime import; `episodic/cli/qa.py` carries a
-  reasoned lint ignore for `uuid` for exactly this reason.
+  an annotation still needs a runtime import; `episodic/cli/qa.py` imports
+  `uuid` at runtime for exactly this reason.
 - Pass explicit `choices=` for enum-valued options, built from the wire values,
   so help output shows `non_compliant` rather than the kebab-cased member name.
 - Translate every failure into a `CliError` subclass with the documented exit
@@ -1937,10 +1937,12 @@ database client. See
 
 - `tests/test_qa_cli.py` covers rendering and request shaping;
   `tests/test_qa_cli_errors.py` covers exit codes and base-URL validation;
+  `tests/test_qa_cli_credentials.py` covers token redaction;
   `tests/test_qa_cli_observability.py` covers the client span and its bounded
   outcomes.
-- `tests/qa_cli_fixtures.py` holds the canned payloads, the stubbed transport,
-  and the autouse environment-isolation fixture both test modules import.
+- `tests/qa_cli_fixtures.py` holds the canned payloads and the stubbed
+  transport. The `clean_environment` fixture lives in `tests/conftest.py`, and
+  the CLI test modules apply it with `pytest.mark.usefixtures`.
 - `tests/features/qa_cli_retrieval.feature`, `tests/steps/test_qa_cli_steps.py`,
   and `tests/steps/qa_cli_support.py` drive the genuine command against the
   genuine Falcon application. The harness bridges `httpx.MockTransport` to the

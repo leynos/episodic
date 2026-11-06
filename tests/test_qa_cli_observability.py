@@ -23,7 +23,7 @@ from tests.qa_cli_fixtures import PAGE, canned, list_arguments
 pytestmark = pytest.mark.usefixtures("clean_environment")
 
 _SPAN = "cli.qa_evaluations.list"
-_Latency = tuple[str, float, dict[str, str]]
+type _Latency = tuple[str, float, dict[str, str]]
 
 
 @dc.dataclass(frozen=True, slots=True)
