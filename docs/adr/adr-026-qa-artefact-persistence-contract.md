@@ -146,6 +146,18 @@ normalized usage and priced entries per provider call. The correlation is
 together reconstruct the ledger's idempotency key
 `run:{run_id}:node:{node}:call:{provider_response_id}:attempt:{n}`.
 
+### Rubric precision is a domain contract
+
+The rubric score is held at four decimal places, rounded half-to-even, by the
+value object itself rather than by the storage adapter. The precision is a
+domain decision: a score is part of the immutable artefact, and an in-memory
+summary must equal the summary the same artefact reconstructs after a round
+trip. Quantizing in the adapter instead would leave the constructed object
+holding a value no read could return, because the object is frozen and the
+adapter cannot rewrite it. Storage therefore follows the domain: the column is
+sized to hold exactly four decimal places, and the domain modules state their
+own precision without naming a column type or a database product.
+
 ### Retention posture
 
 Evaluations and findings are retained for the life of the canonical episode.

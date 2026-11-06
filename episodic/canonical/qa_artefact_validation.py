@@ -14,8 +14,8 @@ import typing as typ
 if typ.TYPE_CHECKING:
     import enum
 
-# Rubric scores are stored as NUMERIC(5, 4), so the unit interval is enforced
-# on the rounded value that would actually be persisted.
+# The domain holds rubric scores at four decimal places, so the unit interval
+# is enforced on the rounded value rather than on the raw input.
 _RUBRIC_QUANTUM = decimal.Decimal("0.0001")
 # Scores just outside the unit interval still round into it, so this window is
 # the accepted domain the CrossHair contract below quantifies over.
@@ -24,7 +24,7 @@ _RUBRIC_LOW = -_RUBRIC_TOLERANCE
 _RUBRIC_HIGH = decimal.Decimal(1) + _RUBRIC_TOLERANCE
 # Quantize under a fixed context. The caller's context may carry a narrow
 # precision or an enabled Inexact trap, either of which would reject a score
-# the column can hold.
+# the domain accepts.
 _QUANTIZE_CONTEXT = decimal.Context(prec=28)
 
 
@@ -88,8 +88,9 @@ def _require_decimal_score(score: object) -> None:
         msg = "rubric_score must be a decimal.Decimal."
         raise TypeError(msg)
     if not score.is_finite():
-        # PostgreSQL stores NaN in a NUMERIC column verbatim, so it would slip
-        # past the interval check below and later fail an ordering comparison.
+        # A non-finite score has no ordering against the unit-interval bounds:
+        # comparing NaN signals InvalidOperation rather than answering the
+        # question, so reject it here with a message that names the cause.
         msg = "rubric_score must be a finite decimal."
         raise ValueError(msg)
     if not _RUBRIC_LOW <= score <= _RUBRIC_HIGH:
@@ -100,7 +101,7 @@ def _require_decimal_score(score: object) -> None:
 
 
 def _rounded_unit_score(score: decimal.Decimal) -> decimal.Decimal:
-    """Round *score* half-to-even at the stored four-decimal precision."""
+    """Round *score* half-to-even at the domain's four-decimal precision."""
     try:
         with decimal.localcontext(_QUANTIZE_CONTEXT):
             return score.quantize(
@@ -113,7 +114,7 @@ def _rounded_unit_score(score: decimal.Decimal) -> decimal.Decimal:
 
 
 def _require_unit_interval(rounded: decimal.Decimal) -> None:
-    """Require *rounded* to lie within the stored unit interval."""
+    """Require *rounded* to lie within the unit interval."""
     if rounded < 0 or rounded > 1:
         msg = (
             "rubric_score must lie within [0, 1] after rounding to four decimal places."

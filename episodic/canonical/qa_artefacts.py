@@ -226,9 +226,9 @@ class QaEvaluationSummary:
         Optional human-readable verdict, bounded by
         :data:`MAX_SUMMARY_CHARS`.
     rubric_score : decimal.Decimal | None
-        Optional score in ``[0, 1]``, rounded half-to-even to four decimal
-        places on construction to match the ``NUMERIC(5, 4)`` column, so the
-        value read back equals the value stored.
+        Optional score in ``[0, 1]``, rounded half-to-even to the domain's
+        four decimal places on construction, so the value a stored artefact
+        reconstructs equals the value this object holds.
     runtime_estimate_seconds : int | None
         Optional non-negative runtime estimate reported by the evaluator.
     evaluator_metadata : JsonMapping
