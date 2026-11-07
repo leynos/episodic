@@ -1780,6 +1780,25 @@ Stop and escalate when any of these is reached.
     passed all seven gates (`/tmp/<gate>-episodic-2-2-7-commit8.out`): 2118
     passed, 1 skipped, Pylint and both df12 passes at 10.00/10, Skylos clean,
     and the duplication gate at 30 reasoned exceptions with none stale.
+  - Round four closed the two rows the review still marked partly addressed.
+    - `1e712f8f` **Use production projections in the Chrono retry test.** The
+      supersession test built both artefacts with the generic builder, so it
+      proved the storage rule but not that a recorded failure and the estimate
+      that retries it derive the same key. It now builds the `ERRORED` row with
+      `evaluation_from_failure` and the retry with `evaluation_from_chrono`
+      from one `QaEvaluationTarget`, asserts the two keys match before
+      recording either, and asserts the retry's
+      `evaluator_metadata["estimator_version"]`.
+    - `6774825e` **Drive the installed console script in the delivery test.**
+      The delivery test no longer runs `sys.executable -c` from the repository
+      root; it executes the installed `episodic` script from a temporary
+      directory outside the source tree, so the packaging path an operator uses
+      is what the assertions describe. This supersedes the description of that
+      test in the `82f9193e` entry above.
+    - Gate evidence: all seven gates passed on the candidate carrying both
+      edits (`/tmp/<gate>-episodic-2-2-7-commit9.out`): 2118 passed, 1 skipped,
+      Pylint and both df12 passes at 10.00/10, Skylos clean, and the
+      duplication gate at 30 reasoned exceptions with none stale.
 
 ## Surprises & discoveries
 
