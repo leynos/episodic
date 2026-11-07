@@ -15,6 +15,8 @@ from episodic.cli import main
 from episodic.cli.client import CliSinks
 from episodic.cli.entrypoint import _production_sinks
 from episodic.observability import (
+    NoopMetrics,
+    NoopTracer,
     PerfCounterClock,
     RecordedSpan,
     RecordingTracer,
@@ -73,8 +75,12 @@ def _expected(
     )
 
 
-def test_production_sinks_are_the_structured_log_adapters() -> None:
-    """The installed command reports through the structured-log adapters."""
+def test_production_sinks_are_the_structured_log_adapters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An INFO level asks the installed command for structured-log adapters."""
+    monkeypatch.setenv("EPISODIC_LOG_LEVEL", "INFO")
+
     sinks = _production_sinks()
 
     assert isinstance(sinks.tracer, StructuredLogTracer), (
@@ -85,6 +91,22 @@ def test_production_sinks_are_the_structured_log_adapters() -> None:
     )
     assert isinstance(sinks.clock, PerfCounterClock), (
         "a production CLI invocation should time calls with the monotonic clock"
+    )
+
+
+def test_production_sinks_are_no_ops_at_the_default_level(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no level configured, the command reports nothing."""
+    monkeypatch.delenv("EPISODIC_LOG_LEVEL", raising=False)
+
+    sinks = _production_sinks()
+
+    assert isinstance(sinks.tracer, NoopTracer), (
+        "the default level should leave tracing off"
+    )
+    assert isinstance(sinks.metrics, NoopMetrics), (
+        "the default level should leave metrics off"
     )
 
 

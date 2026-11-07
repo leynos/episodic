@@ -3015,6 +3015,18 @@ Keep `configure_logging(...)` as the local configuration seam. `log_exception`
 records exception information by default; the other wrappers accept optional
 `exc_info` explicitly when a caller needs it.
 
+Selecting a structured-log sink is not enough on its own. femtologging's logger
+registry starts empty, so a sink writing through `get_logger` delivers nothing
+until the process calls `configure_logging`. `episodic.cli.entrypoint`
+therefore configures logging as part of choosing its production sinks, and
+`tests/test_qa_cli_telemetry_delivery.py` runs the entry point in a fresh
+interpreter to prove the records arrive before the process exits. The same
+backend does not filter records by the configured level, so a command that must
+stay quiet above `INFO` declines the sinks itself instead of relying on the
+level. Keep that pair together: a new adapter that logs through femtologging
+needs a configuration seam and an end-to-end delivery test, not only a unit
+test of the adapter.
+
 Use `log_event(...)` for structured event fields on the port's configured
 logger. When an event must use a caller's `LoggerHandle`, use
 `format_log_event(event, **fields)` to build the stable JSON message, then emit

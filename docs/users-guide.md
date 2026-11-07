@@ -597,6 +597,31 @@ logger = get_logger(__name__)
 log_info(logger, "Started workflow %s", "workflow-42")
 ```
 
+#### Command-line telemetry
+
+The `episodic` command reports one structured span and one latency observation
+per API call. Those records go to standard error, so standard output stays a
+single JSON or table document.
+
+Telemetry is off by default: with nothing configured, a successful run writes
+nothing to standard error. Set `EPISODIC_LOG_LEVEL` to `INFO`, `DEBUG`, or
+`TRACE` to enable it:
+
+```sh
+EPISODIC_LOG_LEVEL=INFO episodic qa evaluations list <episode-id>
+```
+
+Each record is one JSON object on its own line, for example:
+
+```json
+{"event": "trace_span_completed", "operation": "cli.qa_evaluations.list", "outcome": "success", "span_name": "cli.qa_evaluations.list"}
+```
+
+Only the bounded `operation`, `outcome`, `failure_category`, `representation`,
+and `pagination` attributes are logged. Credentials and response payloads are
+never included. `WARNING`, `ERROR`, and `CRITICAL` leave telemetry off while
+still surfacing the command's own warnings and errors.
+
 ### Worker runtime
 
 The background-worker scaffold now exists for operators who need to stand up

@@ -141,7 +141,11 @@ def runtime_environ() -> dict[str, str]:
     }
 
 
-_QA_CLI_ENVIRONMENT_VARIABLES = ("EPISODIC_API_URL", "EPISODIC_API_TOKEN")
+_QA_CLI_ENVIRONMENT_VARIABLES = (
+    "EPISODIC_API_URL",
+    "EPISODIC_API_TOKEN",
+    "EPISODIC_LOG_LEVEL",
+)
 
 
 @pytest.fixture

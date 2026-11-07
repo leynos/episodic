@@ -6,6 +6,7 @@ source of process exit codes. Every other CLI module returns values and raises
 reviewable place.
 """
 
+import os
 import sys
 import typing as typ
 
@@ -18,6 +19,8 @@ from episodic.observability import (
     PerfCounterClock,
     StructuredLogMetrics,
     StructuredLogTracer,
+    admits_telemetry,
+    configure_structured_logging,
 )
 
 if typ.TYPE_CHECKING:
@@ -26,6 +29,11 @@ if typ.TYPE_CHECKING:
     import httpx
 
 USAGE_EXIT_CODE = 2
+LOG_LEVEL_ENV = "EPISODIC_LOG_LEVEL"
+# Warnings and errors still reach an operator who configured nothing, while a
+# successful command keeps standard error silent. Telemetry is opt-in because
+# the command's contract is JSON on standard output.
+DEFAULT_LOG_LEVEL = "WARNING"
 
 
 def _production_sinks() -> CliSinks:
@@ -35,12 +43,29 @@ def _production_sinks() -> CliSinks:
     test stays silent; the command line is where structured log observations
     are actually wanted.
 
+    Selecting these sinks also configures the process logger. A structured-log
+    sink only delivers once the logging backend has a handler, and
+    femtologging's logger registry starts empty, so without this call every
+    span and latency record would be dropped. The level comes from
+    ``EPISODIC_LOG_LEVEL`` and defaults to ``WARNING``; setting it to ``INFO``
+    or lower enables the span and latency events.
+
+    The pinned femtologging backend does not filter records by the configured
+    level, so the command has to decline the sinks itself rather than rely on
+    the backend: above ``INFO`` it keeps the no-op defaults and a successful
+    run's standard error stays silent.
+
     Returns
     -------
     CliSinks
         Structured-log tracer and metrics sink with a performance-counter
-        clock.
+        clock, or the no-op sinks when the level excludes ``INFO``.
     """
+    level = configure_structured_logging(
+        os.environ.get(LOG_LEVEL_ENV, DEFAULT_LOG_LEVEL)
+    )
+    if not admits_telemetry(level):
+        return CliSinks()
     return CliSinks(
         tracer=StructuredLogTracer(),
         metrics=StructuredLogMetrics(),
@@ -65,8 +90,9 @@ def main(
         transport; production leaves it unset so httpx uses the network.
     sinks : CliSinks | None
         Observability sinks for API calls. ``None`` selects the structured-log
-        tracer and metrics sink a production invocation reports through; tests
-        inject recording doubles.
+        tracer and metrics sink a production invocation reports through, and
+        configures process logging so they deliver; tests inject recording
+        doubles and leave the process logger alone.
 
     Returns
     -------
