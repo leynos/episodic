@@ -239,11 +239,8 @@ class SqlAlchemyQaArtefactStore:
                 .select_from(QaEvaluationRecord)
                 .where(*filters)
             )
-            # A query must not autoflush the caller's staged objects: that
-            # would turn a read into a write and attribute a pending constraint
-            # failure to a statement that never wrote it. Hold one boundary
-            # across both statements so the page and the total see the same
-            # snapshot.
+            # A query must not autoflush the caller's staged objects, and both
+            # statements share one boundary so the page and total match.
             try:
                 with self._session.no_autoflush:
                     result = await self._session.execute(page_statement)
@@ -264,22 +261,25 @@ class SqlAlchemyQaArtefactStore:
     async def _select_with_findings(
         self,
         statement: sa.Select[tuple[QaEvaluationRecord]],
+        *,
+        refresh: bool = False,
     ) -> QaEvaluationRecord | None:
         """Execute a statement selecting one evaluation, findings included."""
-        # As in ``list_evaluations``: a read never flushes the caller's work.
-        # Callers that need the write visible flush it explicitly first.
+        # A read never flushes the caller's work. Only the write paths refresh,
+        # because ``populate_existing`` discards unflushed attribute changes on
+        # a record this session already loaded.
+        eager = statement.options(orm.selectinload(QaEvaluationRecord.findings))
+        if refresh:
+            eager = eager.execution_options(populate_existing=True)
         with self._session.no_autoflush:
-            result = await self._session.execute(
-                statement.options(
-                    orm.selectinload(QaEvaluationRecord.findings)
-                ).execution_options(populate_existing=True)
-            )
+            result = await self._session.execute(eager)
         return result.scalar_one_or_none()
 
     async def _require_stored(self, evaluation_id: uuid.UUID) -> QaEvaluation:
         """Return a just-written evaluation or fail loudly."""
         record = await self._select_with_findings(
-            sa.select(QaEvaluationRecord).where(QaEvaluationRecord.id == evaluation_id)
+            sa.select(QaEvaluationRecord).where(QaEvaluationRecord.id == evaluation_id),
+            refresh=True,
         )
         if record is None:  # pragma: no cover - the row was written above.
             msg = f"QA evaluation {evaluation_id} is missing after a successful write."
@@ -309,14 +309,13 @@ class SqlAlchemyQaArtefactStore:
                 QaEvaluationRecord.episode_id == summary.episode_id,
                 QaEvaluationRecord.idempotency_key == summary.idempotency_key,
             )
-            .with_for_update()
+            .with_for_update(),
+            refresh=True,
         )
         if record is None:
-            # The identifier collision named a row outside this episode and
-            # key, so this is not a replay and the caller must see it. The
-            # category stays distinct from ``integrity_violation`` so a
-            # constraint that should have been rejected before the lookup is
-            # still visible in the metrics.
+            # The collision named a row outside this episode and key, so this is
+            # not a replay. Keeping the category distinct from
+            # ``integrity_violation`` keeps such a constraint visible in metrics.
             emit_failed(self._runtime.metrics, summary, "conflict_without_row")
             operation.failed("conflict_without_row")
             raise err

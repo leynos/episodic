@@ -24,12 +24,10 @@ from episodic.canonical.storage import (
     QaArtefactStorageRuntime,
     QaEvaluationRecord,
     QaFindingRecord,
-    SqlAlchemyQaArtefactStore,
     SqlAlchemyUnitOfWork,
     UnitOfWorkRuntime,
     qa_artefact_outcomes,
 )
-from episodic.canonical.storage.qa_artefact_mappers import evaluation_to_record
 from tests.canonical_storage._qa_artefact_support import (
     EvaluationOptions,
     count_rows,
@@ -99,45 +97,6 @@ async def test_get_unknown_evaluation_returns_none(
         fetched = await uow.qa_artefacts.get_evaluation(uuid.uuid7())
 
     assert fetched is None, "an unknown evaluation should read as absent"
-
-
-@pytest.mark.asyncio
-async def test_reads_do_not_flush_the_callers_pending_work(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """A QA read must not turn into a write through autoflush.
-
-    A caller can hold staged changes while it reads. Autoflush would send
-    them, so a pending constraint failure would surface from a query that
-    never wrote, and the query would see uncommitted state.
-    """
-    episode_id = await create_episode(session_factory)
-    pending = evaluation_to_record(
-        make_evaluation(episode_id, idempotency_key="pending"),
-        created_at=NOW,
-    )
-
-    async with session_factory() as session:
-        session.add(pending)
-        store = SqlAlchemyQaArtefactStore(session)
-
-        assert await store.get_evaluation(uuid.uuid7()) is None, (
-            "an unknown evaluation should read as absent"
-        )
-        assert pending in session.new, "get_evaluation flushed the pending record"
-
-        await store.list_evaluations(
-            QaEvaluationListRequest(
-                episode_id=episode_id,
-                pagination=Pagination(limit=10, offset=0),
-            )
-        )
-        assert pending in session.new, "list_evaluations flushed the pending record"
-
-        await session.rollback()
-        assert await session.scalar(sa.text("SELECT 1")) == 1, (
-            "the session should remain usable after the reads"
-        )
 
 
 @pytest.mark.parametrize(

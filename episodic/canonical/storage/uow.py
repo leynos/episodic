@@ -27,8 +27,6 @@ from episodic.logging import get_logger
 from episodic.logging import log_event as _log_event
 
 if typ.TYPE_CHECKING:
-    from contextlib import AbstractContextManager
-
     from episodic.observability import (
         MetricsPort,
         MonotonicClockPort,
@@ -342,26 +340,6 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
     async def flush(self) -> None:
         """Flush pending unit-of-work changes."""
         await self._require_session().flush()
-
-    def no_autoflush(self) -> AbstractContextManager[None]:
-        """Suspend autoflush for the duration of the returned context.
-
-        A query would otherwise flush whatever the caller has staged, turning
-        a read into a write and attributing a pending constraint failure to a
-        statement that never wrote it. Wrap read-only paths that may run while
-        other work is staged.
-
-        Returns
-        -------
-        contextlib.AbstractContextManager[None]
-            Context manager that disables autoflush until it exits.
-
-        Raises
-        ------
-        RuntimeError
-            If no unit-of-work session is active.
-        """  # ruff: ignore[docstring-extraneous-exception]  # Documents an exception propagated by the helper.
-        return self._require_session().no_autoflush
 
     async def rollback(self) -> None:
         """Roll back the current unit-of-work session."""

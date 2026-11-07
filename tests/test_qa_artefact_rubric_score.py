@@ -115,6 +115,13 @@ def test_rubric_score_rejects_values_the_column_cannot_hold(
         summary(rubric_score=rubric_score)
 
 
+def _next_outside(value: decimal.Decimal, *, above: bool) -> decimal.Decimal:
+    """Return the nearest decimal just outside *value* at a fixed precision."""
+    with decimal.localcontext() as ctx:
+        ctx.prec = 28
+        return value.next_plus() if above else value.next_minus()
+
+
 # Scores in this window round into the unit interval even when they sit
 # slightly outside it, so the normalization property quantifies over the whole
 # window rather than the few dozen values a table can enumerate.
@@ -126,6 +133,8 @@ _ACCEPTED_SCORES = st.decimals(
 )
 # The nearest four-decimal values that cannot round into the interval, so the
 # rejection property exercises the boundary rather than far-away magnitudes.
+# The two ``next_*`` values are the closest decimals to the window that still
+# round outside it, which is where an off-by-one-quantum window would show.
 _REJECTED_SCORES = st.one_of(
     st.decimals(
         min_value=decimal.Decimal("1.00006"),
@@ -139,6 +148,8 @@ _REJECTED_SCORES = st.one_of(
         allow_nan=False,
         allow_infinity=False,
     ),
+    st.just(_next_outside(_RUBRIC_HIGH, above=True)),
+    st.just(_next_outside(_RUBRIC_LOW, above=False)),
 )
 
 
@@ -172,3 +183,51 @@ def test_rubric_score_normalization_rejects_scores_outside_the_window(
     """A finite score that cannot round into the interval is rejected."""
     with pytest.raises(ValueError, match="rubric_score"):
         _normalize_rubric_score(rubric_score)
+
+
+@given(st.integers(min_value=0, max_value=9999))
+def test_rubric_score_rounds_every_tie_to_even(units: int) -> None:
+    """A score half a quantum above a grid point rounds to the even neighbour.
+
+    Ties are enumerated rather than sampled: every one of them decides whether a
+    store that rounds differently would disagree with the domain.
+    """
+    tie = decimal.Decimal(units).scaleb(-4) + decimal.Decimal("0.00005")
+    expected = decimal.Decimal(units + units % 2).scaleb(-4)
+
+    assert _normalize_rubric_score(tie) == expected, (
+        f"{tie} did not round half-to-even to {expected}"
+    )
+
+
+_CONTEXT_TRAPS = st.sampled_from([
+    (),
+    (decimal.Inexact,),
+    (decimal.Rounded,),
+    (decimal.Inexact, decimal.Rounded),
+])
+
+
+@given(
+    _ACCEPTED_SCORES,
+    st.integers(min_value=1, max_value=28),
+    _CONTEXT_TRAPS,
+)
+def test_rubric_score_normalization_ignores_the_callers_context(
+    rubric_score: decimal.Decimal,
+    precision: int,
+    traps: tuple[type[decimal.DecimalException], ...],
+) -> None:
+    """A narrow, trap-enabled caller context cannot change the stored value."""
+    expected = _normalize_rubric_score(rubric_score)
+    with decimal.localcontext() as ctx:
+        ctx.prec = precision
+        for trap in traps:
+            ctx.traps[trap] = True
+
+        actual = _normalize_rubric_score(rubric_score)
+
+    assert actual == expected, (
+        f"{rubric_score} normalized to {actual} under precision {precision} "
+        f"with traps {traps or 'off'}, not {expected}"
+    )

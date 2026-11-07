@@ -41,18 +41,17 @@ async def read_owned_episode(
 
     Notes
     -----
-    Both reads run inside :meth:`CanonicalUnitOfWork.no_autoflush`. An
-    ownership check is a query path, so it must not flush work the caller has
-    staged: doing so would turn a read into a write and report a constraint
-    failure against a request that never wrote it.
+    An ownership check is a query path, so it must not flush work the caller
+    has staged: doing so would turn a read into a write and report a constraint
+    failure against a request that never wrote it. The repositories keep that
+    boundary themselves, so this function reads without managing autoflush.
     """
     if actor is None:
         return None
-    with uow.no_autoflush():
-        episode = await uow.episodes.get(episode_id)
-        if episode is None or episode.last_generation_run_id is None:
-            return None
-        run = await uow.generation_runs.get_run(episode.last_generation_run_id)
+    episode = await uow.episodes.get(episode_id)
+    if episode is None or episode.last_generation_run_id is None:
+        return None
+    run = await uow.generation_runs.get_run(episode.last_generation_run_id)
     if run is None or run.actor != actor:
         return None
     return episode

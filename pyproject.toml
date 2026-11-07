@@ -901,10 +901,6 @@ members = ["episodic/canonical/storage/entity_mappers.py", "episodic/canonical/s
 reason = "Record import block shared by the mapper module and the aggregating models module."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/storage/repositories.py", "episodic/canonical/storage/repository_base.py"]
-reason = "Paged-query tail (offset, optional limit, execute, map rows) whose only variation is the per-entity row mapper; the surrounding query construction differs per repository."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/canonical/ports.py", "episodic/canonical/__init__.py"]
 reason = "Port re-export blocks; the package surface and the ports facade deliberately list the same protocol names."
 

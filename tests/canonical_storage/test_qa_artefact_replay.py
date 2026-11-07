@@ -1,14 +1,11 @@
-"""QA artefact replay and supersession contract tests.
+"""QA artefact replay contract tests.
 
-Covers ``INV-REPLAY-IDEMPOTENT`` and ``INV-ERRORED-SUPERSEDED``: replaying a
-key returns the artefact the first recording created, an errored artefact is
-superseded in place, and only the episode/idempotency-key and primary-key
+Covers ``INV-REPLAY-IDEMPOTENT``: replaying a key returns the artefact the
+first recording created, and only the episode/idempotency-key and primary-key
 constraints count as replay candidates.
 """
 
 import dataclasses as dc
-import datetime as dt
-import typing as typ
 import uuid
 
 import hypothesis.strategies as st
@@ -30,7 +27,9 @@ from episodic.canonical.storage import (
 )
 from episodic.canonical.storage.integrity_helpers import constraint_name
 from tests.canonical_storage._qa_artefact_support import (
+    REPLAYED_AT,
     EvaluationOptions,
+    SessionFactory,
     count_artefacts_for,
     count_rows,
     create_episode,
@@ -38,14 +37,6 @@ from tests.canonical_storage._qa_artefact_support import (
 )
 from tests.canonical_storage._workflow_checkpoint_support import RecordingMetrics
 
-if typ.TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-    type SessionFactory = async_sessionmaker[AsyncSession]
-else:
-    type SessionFactory = object
-
-REPLAYED_AT = dt.datetime(2026, 10, 31, 10, 0, tzinfo=dt.UTC)
 _KEYS = ("key-a", "key-b", "key-c")
 _STATUSES = (
     QaComplianceStatus.COMPLIANT,
@@ -187,82 +178,6 @@ async def test_identifier_collision_with_another_key_is_not_a_replay(
             {"evaluator": "pedante", "error_category": "conflict_without_row"},
         )
     ], "an identifier collision outside the episode and key is not a replay"
-
-
-@pytest.mark.parametrize(
-    ("stored_status", "incoming_status", "is_superseded"),
-    [
-        (QaComplianceStatus.COMPLIANT, QaComplianceStatus.COMPLIANT, False),
-        (QaComplianceStatus.COMPLIANT, QaComplianceStatus.ERRORED, False),
-        (QaComplianceStatus.NON_COMPLIANT, QaComplianceStatus.COMPLIANT, False),
-        (QaComplianceStatus.NON_COMPLIANT, QaComplianceStatus.ERRORED, False),
-        (QaComplianceStatus.NOT_APPLICABLE, QaComplianceStatus.COMPLIANT, False),
-        (QaComplianceStatus.NOT_APPLICABLE, QaComplianceStatus.ERRORED, False),
-        (QaComplianceStatus.ERRORED, QaComplianceStatus.COMPLIANT, True),
-        (QaComplianceStatus.ERRORED, QaComplianceStatus.NON_COMPLIANT, True),
-        (QaComplianceStatus.ERRORED, QaComplianceStatus.ERRORED, False),
-    ],
-)
-@pytest.mark.asyncio
-async def test_errored_artefact_is_superseded_in_place(
-    session_factory: SessionFactory,
-    stored_status: QaComplianceStatus,
-    incoming_status: QaComplianceStatus,
-    *,
-    is_superseded: bool,
-) -> None:
-    """Only an errored artefact is replaced, and it keeps its identifier."""
-    episode_id = await create_episode(session_factory)
-    first = make_evaluation(
-        episode_id,
-        idempotency_key="supersede",
-        options=EvaluationOptions(
-            compliance_status=stored_status,
-            severities=(QaFindingSeverity.LOW,),
-        ),
-    )
-    incoming = make_evaluation(
-        episode_id,
-        idempotency_key="supersede",
-        options=EvaluationOptions(
-            compliance_status=incoming_status,
-            severities=(QaFindingSeverity.HIGH, QaFindingSeverity.HIGH),
-            evaluated_at=REPLAYED_AT,
-        ),
-    )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        stored_first = await uow.qa_artefacts.record_evaluation(first)
-        stored_repeat = await uow.qa_artefacts.record_evaluation(incoming)
-        await uow.commit()
-
-    assert stored_repeat.summary_record.id == first.summary_record.id, (
-        "supersession should keep the stored identifier"
-    )
-    async with session_factory() as session:
-        assert await count_rows(session, QaEvaluationRecord) == 1, (
-            "supersession should not create a second evaluation row"
-        )
-        assert await count_rows(session, QaFindingRecord) == (
-            2 if is_superseded else 1
-        ), "only a superseding recording should replace the findings"
-
-    if not is_superseded:
-        assert stored_repeat == stored_first, (
-            "a non-superseding replay should return the stored artefact unchanged"
-        )
-        return
-
-    assert stored_repeat.summary_record.compliance_status is incoming_status, (
-        "the superseded artefact should carry the incoming verdict"
-    )
-    assert stored_repeat.summary_record.evaluated_at == REPLAYED_AT, (
-        "the superseded artefact should carry the incoming evaluation time"
-    )
-    assert [item.severity for item in stored_repeat.findings] == [
-        QaFindingSeverity.HIGH,
-        QaFindingSeverity.HIGH,
-    ], "the superseded artefact should carry the incoming findings"
 
 
 @pytest.mark.asyncio

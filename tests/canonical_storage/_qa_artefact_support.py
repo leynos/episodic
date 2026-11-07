@@ -44,6 +44,14 @@ from tests.fixtures.qa_artefact_builders import EVALUATED_AT, finding
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    type SessionFactory = async_sessionmaker[AsyncSession]
+else:
+    type SessionFactory = object
+
+# Later than ``EVALUATED_AT``, so a superseding recording is distinguishable
+# from the artefact it replaced.
+REPLAYED_AT = dt.datetime(2026, 10, 31, 10, 0, tzinfo=dt.UTC)
+
 
 async def count_rows(session: AsyncSession, model: type[Base]) -> int:
     """Return the number of rows in ``model``'s table."""
