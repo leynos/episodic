@@ -26,6 +26,7 @@ from episodic.canonical.storage import (
     SqlAlchemyUnitOfWork,
     qa_artefacts,
 )
+from episodic.observability import RecordingTracer
 from tests.canonical_storage._qa_artefact_support import (
     EvaluationOptions,
     create_episode,
@@ -99,10 +100,12 @@ async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
         await uow.commit()
 
     metrics = RecordingMetrics()
+    tracer = RecordingTracer()
     runtime = QaArtefactStorageRuntime(
         clock=lambda: REPLAYED_AT,
         uuid_factory=uuid.uuid7,
         metrics=metrics,
+        tracer=tracer,
     )
     async with session_factory() as session:
         _reject_replacement_ordinals(monkeypatch)
@@ -132,6 +135,11 @@ async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
             {"evaluator": "pedante", "error_category": "supersede_failed"},
         )
     ], "a supersession failure should count one bounded failure"
+    outer_spans = [span for span in tracer.spans if span.name == "qa_artefact.record"]
+    assert len(outer_spans) == 1, "the recording should open exactly one outer span"
+    assert outer_spans[0].attributes["failure_category"] == "supersede_failed", (
+        "the outer record span must name the supersession failure, not unexpected_error"
+    )
 
 
 @pytest.mark.asyncio

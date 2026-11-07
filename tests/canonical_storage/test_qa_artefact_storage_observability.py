@@ -1,12 +1,12 @@
-"""Operation-observation coverage for the QA artefact storage adapter.
+"""Operation-observation coverage for QA artefact recording and retrieval.
 
 Each test pins the span a store method opens, the bounded outcome it records,
 and the latency observation it emits. Only an evaluator, an outcome, and a
 stable failure category may reach a span or a metric, so no finding text or
-identifier is captured.
+identifier is captured. Listing is covered separately in
+``test_qa_artefact_list_observability``.
 """
 
-import datetime as dt
 import typing as typ
 import uuid
 
@@ -14,68 +14,32 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from episodic.canonical.pagination import Pagination
 from episodic.canonical.qa_artefact_errors import UnsupportedQaArtefactSchemaError
-from episodic.canonical.qa_artefact_ports import QaEvaluationListRequest
 from episodic.canonical.qa_artefacts import QaComplianceStatus, QaFindingSeverity
 from episodic.canonical.storage import (
-    QaArtefactStorageRuntime,
     QaEvaluationRecord,
     SqlAlchemyQaArtefactStore,
     qa_artefacts,
 )
 from episodic.canonical.storage.qa_artefact_mappers import evaluation_to_record
-from episodic.observability import RecordedSpan, RecordingTracer
+from episodic.observability import RecordingTracer
+from tests.canonical_storage._qa_artefact_observability_support import (
+    NOW,
+    expected_latency,
+    expected_span,
+    instrumented_runtime,
+)
 from tests.canonical_storage._qa_artefact_support import (
     EvaluationOptions,
     create_episode,
     make_evaluation,
 )
-from tests.canonical_storage._workflow_checkpoint_support import (
-    RecordingMetrics,
-    StepClock,
-)
+from tests.canonical_storage._workflow_checkpoint_support import RecordingMetrics
 
 if typ.TYPE_CHECKING:
+    import datetime as dt
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-NOW = dt.datetime(2026, 10, 31, 9, 0, tzinfo=dt.UTC)
-
-
-def _instrumented_runtime(
-    tracer: RecordingTracer,
-    metrics: RecordingMetrics,
-) -> QaArtefactStorageRuntime:
-    """Return a storage runtime whose operations report to the test sinks."""
-    return QaArtefactStorageRuntime(
-        clock=lambda: NOW,
-        uuid_factory=uuid.uuid7,
-        metrics=metrics,
-        tracer=tracer,
-        monotonic_clock=StepClock(),
-    )
-
-
-def _span(
-    name: str,
-    outcome: str,
-    *,
-    failure_category: str | None = None,
-) -> RecordedSpan:
-    """Return the completed span an operation with ``outcome`` records."""
-    attributes = {"operation": name, "outcome": outcome}
-    if failure_category is not None:
-        attributes["failure_category"] = failure_category
-    return RecordedSpan(name=name, attributes=attributes, is_completed=True)
-
-
-def _latency(
-    name: str,
-    labels: dict[str, str],
-    value: float = 1.0,
-) -> tuple[str, float, dict[str, str]]:
-    """Return a latency observation with the millisecond count ``StepClock`` made."""
-    return (f"{name}.latency_ms", value, labels)
 
 
 @pytest.mark.asyncio
@@ -91,14 +55,16 @@ async def test_recording_opens_one_span_and_observes_latency(
     async with session_factory() as session:
         store = SqlAlchemyQaArtefactStore(
             session,
-            runtime=_instrumented_runtime(tracer, metrics),
+            runtime=instrumented_runtime(tracer, metrics),
         )
         await store.record_evaluation(evaluation)
         await session.commit()
 
-    assert tracer.spans == [_span("qa_artefact.record", "recorded")], tracer.spans
+    assert tracer.spans == [expected_span("qa_artefact.record", "recorded")], (
+        tracer.spans
+    )
     assert metrics.latencies == [
-        _latency(
+        expected_latency(
             "qa_artefact.record",
             {"evaluator": "pedante", "outcome": "recorded"},
         )
@@ -119,15 +85,15 @@ async def test_replay_marks_the_record_span_replayed(
     async with session_factory() as session:
         store = SqlAlchemyQaArtefactStore(
             session,
-            runtime=_instrumented_runtime(tracer, metrics),
+            runtime=instrumented_runtime(tracer, metrics),
         )
         await store.record_evaluation(first)
         await store.record_evaluation(replay)
         await session.commit()
 
     assert tracer.spans == [
-        _span("qa_artefact.record", "recorded"),
-        _span("qa_artefact.record", "replayed"),
+        expected_span("qa_artefact.record", "recorded"),
+        expected_span("qa_artefact.record", "replayed"),
     ], tracer.spans
     assert [entry[2]["outcome"] for entry in metrics.latencies] == [
         "recorded",
@@ -163,7 +129,7 @@ async def test_supersession_opens_a_nested_span(
     async with session_factory() as session:
         store = SqlAlchemyQaArtefactStore(
             session,
-            runtime=_instrumented_runtime(tracer, metrics),
+            runtime=instrumented_runtime(tracer, metrics),
         )
         await store.record_evaluation(errored)
         await store.record_evaluation(compliant)
@@ -174,13 +140,13 @@ async def test_supersession_opens_a_nested_span(
         ("qa_artefact.record", "superseded"),
         ("qa_artefact.supersede", "superseded"),
     ], tracer.spans
-    assert metrics.latencies[1] == _latency(
+    assert metrics.latencies[1] == expected_latency(
         "qa_artefact.supersede",
         {"evaluator": "pedante", "outcome": "superseded"},
     ), metrics.latencies
     # The outer record span covers the nested supersession, so its elapsed
     # time is the sum of the inner operation's three clock steps.
-    assert metrics.latencies[2] == _latency(
+    assert metrics.latencies[2] == expected_latency(
         "qa_artefact.record",
         {"evaluator": "pedante", "outcome": "superseded"},
         value=3.0,
@@ -199,14 +165,14 @@ async def test_rejected_recording_marks_the_span_failed(
     async with session_factory() as session:
         store = SqlAlchemyQaArtefactStore(
             session,
-            runtime=_instrumented_runtime(tracer, metrics),
+            runtime=instrumented_runtime(tracer, metrics),
         )
         with pytest.raises(IntegrityError):
             await store.record_evaluation(orphan)
         await session.rollback()
 
     assert tracer.spans == [
-        _span(
+        expected_span(
             "qa_artefact.record",
             "failed",
             failure_category="integrity_violation",
@@ -240,14 +206,14 @@ async def test_storage_error_marks_the_record_span_failed(
     async with session_factory() as session:
         store = SqlAlchemyQaArtefactStore(
             session,
-            runtime=_instrumented_runtime(tracer, metrics),
+            runtime=instrumented_runtime(tracer, metrics),
         )
         with pytest.raises(SQLAlchemyError):
             await store.record_evaluation(evaluation)
         await session.rollback()
 
     assert tracer.spans == [
-        _span("qa_artefact.record", "failed", failure_category="database_error")
+        expected_span("qa_artefact.record", "failed", failure_category="database_error")
     ], tracer.spans
 
 
@@ -267,7 +233,7 @@ async def test_get_distinguishes_found_and_missing_outcomes(
     async with session_factory() as session:
         store = SqlAlchemyQaArtefactStore(
             session,
-            runtime=_instrumented_runtime(tracer, metrics),
+            runtime=instrumented_runtime(tracer, metrics),
         )
         missing = await store.get_evaluation(uuid.uuid7())
         assert missing is None, "an unknown identifier should read as not found"
@@ -275,8 +241,8 @@ async def test_get_distinguishes_found_and_missing_outcomes(
         assert stored is not None, "a stored identifier should read back"
 
     assert tracer.spans == [
-        _span("qa_artefact.get", "not_found"),
-        _span("qa_artefact.get", "success"),
+        expected_span("qa_artefact.get", "not_found"),
+        expected_span("qa_artefact.get", "success"),
     ], tracer.spans
 
 
@@ -302,89 +268,13 @@ async def test_get_marks_an_unreadable_schema_failed(
     async with session_factory() as session:
         store = SqlAlchemyQaArtefactStore(
             session,
-            runtime=_instrumented_runtime(tracer, metrics),
+            runtime=instrumented_runtime(tracer, metrics),
         )
         with pytest.raises(UnsupportedQaArtefactSchemaError):
             await store.get_evaluation(evaluation.summary_record.id)
 
     assert tracer.spans == [
-        _span("qa_artefact.get", "failed", failure_category="unsupported_schema")
-    ], tracer.spans
-
-
-@pytest.mark.asyncio
-async def test_list_records_success_and_latency(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """A served page is one successful listing span with no extra labels."""
-    episode_id = await create_episode(session_factory)
-    tracer = RecordingTracer()
-    metrics = RecordingMetrics()
-    async with session_factory() as session:
-        session.add(
-            evaluation_to_record(
-                make_evaluation(episode_id, idempotency_key="list"),
-                created_at=NOW,
-            )
+        expected_span(
+            "qa_artefact.get", "failed", failure_category="unsupported_schema"
         )
-        await session.commit()
-
-    async with session_factory() as session:
-        store = SqlAlchemyQaArtefactStore(
-            session,
-            runtime=_instrumented_runtime(tracer, metrics),
-        )
-        await store.list_evaluations(
-            QaEvaluationListRequest(
-                episode_id=episode_id,
-                pagination=Pagination(limit=10, offset=0),
-            )
-        )
-
-    assert tracer.spans == [_span("qa_artefact.list", "success")], tracer.spans
-    assert metrics.latencies == [
-        _latency("qa_artefact.list", {"outcome": "success"})
-    ], metrics.latencies
-
-
-@pytest.mark.asyncio
-async def test_list_marks_a_database_failure(
-    session_factory: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A query failure is reported as ``database_error`` and re-raised."""
-    episode_id = await create_episode(session_factory)
-    tracer = RecordingTracer()
-    metrics = RecordingMetrics()
-    async with session_factory() as session:
-        session.add(
-            evaluation_to_record(
-                make_evaluation(episode_id, idempotency_key="list-failure"),
-                created_at=NOW,
-            )
-        )
-        await session.commit()
-
-    def reject(_record: object) -> object:
-        """Fail while reading a row back from the database."""
-        raise SQLAlchemyError
-
-    monkeypatch.setattr(qa_artefacts, "summary_from_record", reject)
-
-    async with session_factory() as session:
-        store = SqlAlchemyQaArtefactStore(
-            session,
-            runtime=_instrumented_runtime(tracer, metrics),
-        )
-        with pytest.raises(SQLAlchemyError):
-            await store.list_evaluations(
-                QaEvaluationListRequest(
-                    episode_id=episode_id,
-                    pagination=Pagination(limit=10, offset=0),
-                )
-            )
-        await session.rollback()
-
-    assert tracer.spans == [
-        _span("qa_artefact.list", "failed", failure_category="database_error")
     ], tracer.spans

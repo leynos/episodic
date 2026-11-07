@@ -210,6 +210,9 @@ class SqlAlchemyQaArtefactStore:
 
         Raises
         ------
+        UnsupportedQaArtefactSchemaError
+            A stored artefact carries a schema version this release cannot
+            read.
         sqlalchemy.exc.SQLAlchemyError
             The database rejected either statement.
         """
@@ -248,6 +251,10 @@ class SqlAlchemyQaArtefactStore:
                         summary_from_record(record) for record in result.scalars()
                     ]
                     total = await self._session.scalar(total_statement)
+            except UnsupportedQaArtefactSchemaError:
+                # A newer row is a schema failure, as ``get_evaluation`` reports.
+                operation.failed("unsupported_schema")
+                raise
             except SQLAlchemyError:
                 operation.failed("database_error")
                 raise
@@ -317,7 +324,13 @@ class SqlAlchemyQaArtefactStore:
             # Read the stored status before superseding it, so the metric names
             # the verdict that was replayed rather than the one just written.
             stored_status = record.compliance_status
-            stored = await self._supersede(record, evaluation)
+            try:
+                stored = await self._supersede(record, evaluation)
+            except SQLAlchemyError:
+                # A handler's exceptions are not caught by its sibling handlers,
+                # so the outer span must name the failure the nested span did.
+                operation.failed("supersede_failed")
+                raise
             emit_replayed(self._runtime.metrics, summary, stored_status)
             log_outcome(summary, replayed=True, superseded=True)
             operation.succeeded("superseded")
