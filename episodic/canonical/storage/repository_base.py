@@ -18,6 +18,23 @@ class _RepositoryBase:
 
     _session: AsyncSession
 
+    async def _read[RecordT](
+        self,
+        statement: sa.Select[tuple[RecordT]],
+    ) -> sa.Result[tuple[RecordT]]:
+        """Execute a read without flushing the caller's staged work.
+
+        Autoflush would turn this read into a write and attribute a caller's
+        pending constraint failure to a statement that never wrote it.
+
+        Returns
+        -------
+        sa.Result[tuple[RecordT]]
+            The result of executing *statement*.
+        """
+        with self._session.no_autoflush:
+            return await self._session.execute(statement)
+
     async def _get_one_or_none[RecordT, DomainT](
         self,
         record_type: type[RecordT],
@@ -25,7 +42,7 @@ class _RepositoryBase:
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> DomainT | None:
         """Return a mapped record for the query or None."""
-        result = await self._session.execute(sa.select(record_type).where(where_clause))
+        result = await self._read(sa.select(record_type).where(where_clause))
         record = result.scalar_one_or_none()
         if record is None:
             return None
@@ -38,7 +55,7 @@ class _RepositoryBase:
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> list[DomainT]:
         """Return mapped records matching the query."""
-        result = await self._session.execute(sa.select(record_type).where(where_clause))
+        result = await self._read(sa.select(record_type).where(where_clause))
         return [mapper(row) for row in result.scalars()]
 
     async def _list_where[RecordT, DomainT](
@@ -49,7 +66,7 @@ class _RepositoryBase:
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> list[DomainT]:
         """List mapped records matching a filter and ordering."""
-        result = await self._session.execute(
+        result = await self._read(
             sa.select(record_type).where(where_clause).order_by(order_by_clause)
         )
         return [mapper(row) for row in result.scalars()]
@@ -93,7 +110,7 @@ class _RepositoryBase:
         )
         if limit is not None:
             statement = statement.limit(limit)
-        result = await self._session.execute(statement)
+        result = await self._read(statement)
         return [mapper(row) for row in result.scalars()]
 
     async def _get_latest_where[RecordT, DomainT](
@@ -104,7 +121,7 @@ class _RepositoryBase:
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> DomainT | None:
         """Return the latest mapped record matching a filter."""
-        result = await self._session.execute(
+        result = await self._read(
             sa
             .select(record_type)
             .where(where_clause)

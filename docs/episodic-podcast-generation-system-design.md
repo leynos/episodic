@@ -25,6 +25,8 @@ Accepted decision records:
 - [ADR 018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md)
 - [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
 - [ADR 025: Central logging port](adr/adr-025-central-logging-port.md)
+- [ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md)
+- [ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md)
 
 ## Overview
 
@@ -399,9 +401,55 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   policies (all must pass, weighted scoring, or majority rules) before routing
   decisions.
 - QA results persist alongside generation runs, providing audit trails of
-  iteration history and improvement trajectories.
+  iteration history and improvement trajectories. Durable artefacts live in
+  `qa_evaluations` and its `qa_findings` children, each row carrying both the
+  payload-shape version and the compliance-policy version that produced it.
+  Artefacts are immutable once recorded, apart from one errored-supersession
+  exception that lets a failed evaluation be retried. Retrieval is filtered by
+  evaluator and compliance status through the REST API and the first-party CLI.
+  The contract, its alternatives, and its retention posture are recorded in
+  [ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md).
 - Automatic gating and review task escalation remain available for workflows
   that require human intervention after repeated failures.
+
+The diagram below summarizes the durable QA artefact records and how they
+attach to a canonical episode and its generation run.
+
+For screen readers: the following entity-relationship diagram shows QA
+evaluations belonging to a canonical episode, optionally correlating with a
+generation run, and containing ordered QA findings.
+
+```mermaid
+erDiagram
+    CANONICAL_EPISODE ||--o{ QA_EVALUATION : has
+    GENERATION_RUN o|--o{ QA_EVALUATION : correlates
+    QA_EVALUATION ||--o{ QA_FINDING : contains
+
+    CANONICAL_EPISODE {
+        uuid id PK
+    }
+    GENERATION_RUN {
+        uuid id PK
+    }
+    QA_EVALUATION {
+        uuid id PK
+        uuid episode_id FK
+        uuid generation_run_id FK
+        enum evaluator
+        enum compliance_status
+        int finding_count
+        int compliance_policy_version
+    }
+    QA_FINDING {
+        uuid id PK
+        uuid evaluation_id FK
+        int ordinal
+        boolean is_blocking
+    }
+```
+
+_Figure 6: Durable QA artefact records and their relationship to canonical
+episodes and generation runs._
 
 ### Editorial Approval Service
 
@@ -1656,9 +1704,16 @@ Agentic workflow behaviour is configurable per series profile:
   factors, and original files in object storage.
 - `episodes` holds canonical TEI, generation status, QA verdicts, and approval
   pointers.
-- `qa_findings` and `brand_compliance_results` record evaluator scores,
-  pronunciation gaps, rule breaches, runtime estimates, and remediation
-  guidance.
+- `qa_evaluations` records one evaluator invocation linked to a canonical
+  episode and, optionally, to the generation run whose output it assessed. It
+  holds the evaluator and its version, the artefact schema version and
+  compliance policy version that produced the artefact, the compliance verdict,
+  a summary, an optional rubric score, an optional runtime estimate, a finding
+  count, evaluator metadata, and an idempotency key.
+- `qa_findings` records the ordered findings belonging to one QA evaluation,
+  including severity, a stable evaluator-specific code, a summary, remediation
+  guidance, subject identifiers and text, a blocking flag, citations, and
+  evaluator details.
 - `approval_events` maintains the approval state machine history with actor and
   timestamp.
 - `generation_runs` records script generation status, quality mode, skip-QA

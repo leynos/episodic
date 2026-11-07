@@ -90,7 +90,12 @@ class TestChronoContracts:
 
     @pytest.mark.crosshair
     def test_chrono_crosshair_contracts_pass(self) -> None:
-        """CrossHair should verify Chrono's PEP 316 contracts automatically."""
+        """CrossHair should verify the PEP 316 contracts `make crosshair` checks.
+
+        CI runs pytest without the Makefile target, so this subprocess is the
+        only place the contracts are checked there; it must therefore name both
+        modules the target names.
+        """
         completed = subprocess.run(
             [
                 sys.executable,
@@ -99,12 +104,15 @@ class TestChronoContracts:
                 "check",
                 "--analysis_kind=PEP316",
                 "episodic/qa/chrono.py",
+                "episodic/canonical/qa_artefact_validation.py",
             ],
             cwd=_REPOSITORY_ROOT,
             check=False,
             capture_output=True,
             text=True,
-            timeout=30,
+            # Both modules take about 18 s warm; the allowance covers a cold
+            # import of crosshair and z3 on a slower CI runner.
+            timeout=120,
         )
 
         assert completed.returncode == 0, (

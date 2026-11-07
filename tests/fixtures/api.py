@@ -1,5 +1,6 @@
 """Falcon HTTP/ASGI test-client fixtures."""
 
+import contextlib
 import dataclasses as dc
 import typing as typ
 
@@ -76,20 +77,38 @@ def build_api_dependencies(
     )
 
 
+@contextlib.asynccontextmanager
+async def api_async_client(
+    dependencies: ApiDependencies,
+) -> cabc.AsyncIterator[httpx.AsyncClient]:
+    """Yield an async HTTP client bound to the Falcon ASGI application.
+
+    Parameters
+    ----------
+    dependencies : ApiDependencies
+        Dependencies used to build the application under test.
+
+    Yields
+    ------
+    httpx.AsyncClient
+        Client whose requests are dispatched in-process through ASGI.
+    """
+    from episodic.api import create_app
+
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        yield client
+
+
 @pytest_asyncio.fixture
 async def canonical_api_async_client(
     canonical_api_dependencies: ApiDependencies,
 ) -> cabc.AsyncIterator[httpx.AsyncClient]:
     """Yield an async HTTP client bound to the Falcon ASGI app."""
-    from episodic.api import create_app
-
-    transport = httpx.ASGITransport(
-        app=typ.cast("_ASGIApp", create_app(canonical_api_dependencies))
-    )
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
+    async with api_async_client(canonical_api_dependencies) as client:
         yield client
 
 

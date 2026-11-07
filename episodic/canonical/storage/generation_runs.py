@@ -62,8 +62,9 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         self._runtime = generation_run_storage_runtime(runtime)
 
     async def _get_record(self, run_id: uuid.UUID) -> GenerationRunRecord | None:
-        """Return the storage record for a run id."""
-        return await self._session.get(GenerationRunRecord, run_id)
+        """Return the storage record for a run id, without flushing staged work."""
+        with self._session.no_autoflush:
+            return await self._session.get(GenerationRunRecord, run_id)
 
     async def _require_mutable_run(
         self,
@@ -179,7 +180,8 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         )
         if status is not None:
             statement = statement.where(GenerationRunRecord.status == status)
-        result = await self._session.execute(statement)
+        with self._session.no_autoflush:
+            result = await self._session.execute(statement)
         return tuple(run_from_record(record) for record in result.scalars())
 
     async def update_run_status(
@@ -331,17 +333,18 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         )
         if await self._get_record(run_id) is None:
             raise RunNotFound(run_id)
-        result = await self._session.execute(
-            sa
-            .select(GenerationEventRecord)
-            .where(
-                GenerationEventRecord.generation_run_id == run_id,
-                GenerationEventRecord.seq > minimum_seq,
+        with self._session.no_autoflush:
+            result = await self._session.execute(
+                sa
+                .select(GenerationEventRecord)
+                .where(
+                    GenerationEventRecord.generation_run_id == run_id,
+                    GenerationEventRecord.seq > minimum_seq,
+                )
+                .order_by(GenerationEventRecord.seq)
+                .limit(limit)
+                .offset(offset)
             )
-            .order_by(GenerationEventRecord.seq)
-            .limit(limit)
-            .offset(offset)
-        )
         return tuple(event_from_record(record) for record in result.scalars())
 
     async def count_events(
@@ -354,13 +357,14 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         if await self._get_record(run_id) is None:
             raise RunNotFound(run_id)
         minimum_seq = int(after_seq) if after_seq is not None else 0
-        count = await self._session.scalar(
-            sa
-            .select(sa.func.count())
-            .select_from(GenerationEventRecord)
-            .where(
-                GenerationEventRecord.generation_run_id == run_id,
-                GenerationEventRecord.seq > minimum_seq,
+        with self._session.no_autoflush:
+            count = await self._session.scalar(
+                sa
+                .select(sa.func.count())
+                .select_from(GenerationEventRecord)
+                .where(
+                    GenerationEventRecord.generation_run_id == run_id,
+                    GenerationEventRecord.seq > minimum_seq,
+                )
             )
-        )
         return typ.cast("int", count)

@@ -10,6 +10,7 @@ dependencies = [
     "alembic>=1.19.2,<2.0",
     "asyncpg>=0.20.0,<1.0",
     "celery>=5.5,<6.0",
+    "cyclopts>=4.25.2,<5",
     "falcon>=4.3.1,<5.0",
     "femtologging @ git+https://github.com/leynos/femtologging@691a73962df8f99308a82348d99c4f707c245e63",
     "granian>=2.7.9,<3.0",
@@ -29,12 +30,11 @@ Homepage = "https://df12.studio/docs.html"
 Repository = "https://github.com/leynos/episodic"
 
 [project.scripts]
-stilyagi = "stilyagi.stilyagi:main"
+episodic = "episodic.cli:main"
 
 [dependency-groups]
 dev = [
     "crosshair-tool>=0.0.110,<0.1",
-    "cyclopts>=4.25.2,<5",
     "df12-python-lints @ git+https://github.com/leynos/df12-python-lints.git@v0.2.0",
     "hecate @ git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12",
     "hypothesis[asyncio]>=6.168.1,<7",
@@ -555,6 +555,9 @@ full_name = [
     "alembic.versions.20260624_000010_add_generation_run_tables._drop_generation_events_table",
     "alembic.versions.20261020_000014_add_review_checkpoints._drop_enums",
     "alembic.versions.20261020_000014_add_review_checkpoints._drop_review_checkpoints_table",
+    "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_enums",
+    "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_qa_evaluations_table",
+    "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_qa_findings_table",
 ]
 reason = "Alembic invokes these downgrade helpers when an operator rolls migration revisions back."
 
@@ -572,6 +575,20 @@ full_name = [
     "episodic.canonical.adapters.generation_run_lease_reclamation.InMemoryGenerationRunLeaseReclamationMixin.fail_expired_leases.limit",
 ]
 reason = "The mixin's no-op must match GenerationRunLeaseReclamationPort.fail_expired_leases, which GenerationRunPort composes; InMemoryGenerationRunStore mixes it in and the port contract tests call it through the protocol."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.cli.entrypoint.main",
+    "episodic.cli.app.build_app.launcher",
+    "episodic.cli.qa.register.list_evaluations",
+]
+reason = "The generated `episodic` console script calls `main`, and cyclopts invokes the meta launcher and the decorator-registered command."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = ["episodic.cli.app.CliApplication.run"]
+reason = "episodic.cli.entrypoint.main calls CliApplication.run to dispatch the parsed command."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -605,6 +622,7 @@ reason = "Falcon supplies these required middleware callback parameters although
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
+    "episodic.api.app._generation_run_operation",
     "episodic.api.app._generation_route_operation",
     "episodic.api.app._response_outcome",
     "episodic.canonical.adapters.generation_runs._event_page_minimum_seq",
@@ -625,6 +643,19 @@ full_name = [
     "episodic.canonical.domain_validation._require_positive_integer",
     "episodic.canonical.domain_validation._require_value",
     "episodic.canonical.domain_validation._validate_draft_without_qa_metadata",
+    "episodic.canonical.qa_artefacts._validate_citation",
+    "episodic.canonical.qa_artefacts._validate_citation_sequence",
+    "episodic.canonical.qa_artefacts._validate_citations",
+    "episodic.canonical.qa_artefacts._validate_finding_count",
+    "episodic.canonical.qa_artefacts._validate_finding_distinctness",
+    "episodic.canonical.qa_artefacts._validate_finding_ordinal",
+    "episodic.canonical.qa_artefacts._validate_finding_ownership",
+    "episodic.canonical.qa_artefacts._validate_findings_shape",
+    "episodic.canonical.qa_artefacts._validate_findings_against_summary",
+    "episodic.canonical.qa_artefact_validation._validate_non_negative_integer",
+    "episodic.canonical.qa_artefact_validation._validate_optional_non_negative_integer",
+    "episodic.canonical.qa_artefact_validation._validate_positive_integer",
+    "episodic.canonical.qa_artefact_validation._normalize_rubric_score",
 ]
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
 
@@ -791,6 +822,17 @@ reason = "Process launchers and structured exception consumers read these docume
 names = []
 
 [tool.skylos.whitelist.documented]
+"record" = "The QaEvaluationRecorder.record method delivered by EP-M3 of roadmap item 2.2.7 and retained under the developers' guide policy 'Retaining deferred implementation': tests/test_qa_artefact_service.py exercises it directly, its still-open consumer is the QA-gated run path of roadmap item 4.4.1, and this entry is deleted in the commit that lands item 4.4.1. Skylos matches methods by bare name, and this is the only production symbol so named."
+"QaEvaluationRecorder" = "Application service delivered by EP-M3 of roadmap item 2.2.7 and retained under the developers' guide policy 'Retaining deferred implementation': tests/test_qa_artefact_service.py exercises it directly, its still-open consumer is the QA-gated run path of roadmap item 4.4.1, and this entry is deleted in the commit that lands item 4.4.1."
+"QaEvaluationRecordingRequest" = "Command DTO delivered by EP-M3 of roadmap item 2.2.7 and retained under the developers' guide policy 'Retaining deferred implementation': tests/test_qa_artefact_service.py builds it directly, QaEvaluationRecorder.record constructs it, and that service awaits the still-open QA-gated run path of roadmap item 4.4.1; delete this entry in the commit that lands item 4.4.1."
+"record_qa_evaluation" = "Delivered by EP-M3 of roadmap item 2.2.7 and retained under the developers' guide policy 'Retaining deferred implementation': tests/test_qa_artefact_service.py exercises it directly, its still-open consumer is the QA-gated run path of roadmap item 4.4.1, and this entry is deleted in the commit that lands item 4.4.1."
+"_evaluation_for" = "Private dispatch helper delivered by EP-M3 of roadmap item 2.2.7 and retained under the developers' guide policy 'Retaining deferred implementation': it is exercised through tests/test_qa_artefact_service.py, its still-open consumer is the QA-gated run path of roadmap item 4.4.1, and this entry is deleted in the commit that lands item 4.4.1."
+"build_chrono_graph" = "Delivered by completed roadmap items 2.2.1 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."
+"build_pedante_graph" = "Delivered by completed roadmap items 2.2.1 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."
+"route_after_pedante" = "Delivered by completed roadmap items 2.2.1 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."
+"_pedante_node" = "Delivered by completed roadmap items 2.2.1 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."
+"chrono_node" = "Delivered by completed roadmap items 2.2.1 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."
+"_run_pedante_node" = "Delivered by completed roadmap items 2.2.1 and 2.2.6 and retained under the developers' guide policy for deferred implementation until roadmap item 4.4.1 supplies the qa_gated run-path caller; no production caller exists today, so delete this entry in the commit that lands item 4.4.1."
 "enum" = "Used by PEP 695 generic bounds; Ruff still rejects genuinely unused imports."
 "_VersionedEntity" = "Used as the PEP 695 bound for versioned profile and template helpers."
 "create_reference_binding" = "Public compatibility re-export listed in the reference-document facade __all__."
@@ -859,10 +901,6 @@ members = ["episodic/canonical/storage/entity_mappers.py", "episodic/canonical/s
 reason = "Record import block shared by the mapper module and the aggregating models module."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/storage/repositories.py", "episodic/canonical/storage/repository_base.py"]
-reason = "Paged-query tail (offset, optional limit, execute, map rows) whose only variation is the per-entity row mapper; the surrounding query construction differs per repository."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/canonical/ports.py", "episodic/canonical/__init__.py"]
 reason = "Port re-export blocks; the package surface and the ports facade deliberately list the same protocol names."
 
@@ -929,6 +967,11 @@ reason = "Per-tool TEI enrichment modules: an identical import surface over the 
 [[tool.duplication_gate.allow]]
 members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/storage/review_checkpoints.py"]
 reason = "Parallel implementations of one port: the in-memory checkpoint mixin and the SQLAlchemy checkpoint store bind the same domain exception set and the same log-event helper. An import list cannot be factored into shared code without changing which names each module binds."
+
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/qa_artefact_storage_runtime.py", "episodic/cli/client.py", "episodic/llm/openai_api/adapter.py"]
+reason = "The observability port and default-adapter import block is a port surface, not logic: the QA storage runtime, the CLI client, and the OpenAI adapter each bind the no-op and production adapters their own runtime composes. Re-exporting the same names through an indirection module would add a hop every reader must follow without removing behaviour."
+
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"
@@ -1031,6 +1074,9 @@ prefixes = [
     "episodic.canonical.object_store",
     "episodic.canonical.pagination",
     "episodic.canonical.ports",
+    "episodic.canonical.qa_artefact_ports",
+    "episodic.canonical.qa_artefact_validation",
+    "episodic.canonical.qa_artefacts",
     "episodic.canonical.reference_protocols",
     "episodic.canonical.unit_of_work_protocols",
     "episodic.canonical.upload_protocols",
@@ -1039,7 +1085,10 @@ prefixes = [
     "episodic.cost.engine",
     "episodic.llm.ports",
     "episodic.metrics_ports",
+    "episodic.observability",
+    "episodic.operation_observation",
     "episodic.orchestration._types",
+    "episodic.qa.pedante.types",
     "episodic.worker.workloads",
 ]
 allowed = ["domain_ports", "logging_port"]
@@ -1098,9 +1147,16 @@ prefixes = [
     "episodic.canonical.generation_persistence",
     "episodic.canonical.source_intake_service",
     "episodic.canonical.profile_templates",
+    "episodic.canonical.qa_artefact_compliance",
+    "episodic.canonical.qa_artefact_pedante",
+    "episodic.canonical.qa_artefact_recording",
+    "episodic.canonical.qa_artefact_service",
     "episodic.canonical.reference_documents",
     "episodic.cost.recorder",
     "episodic.generation",
+    "episodic.qa.chrono",
+    "episodic.qa.chrono_langgraph",
+    "episodic.qa.langgraph",
 ]
 allowed = ["application", "domain_ports", "external_libraries", "logging_port"]
 
@@ -1121,6 +1177,7 @@ allowed = [
 name = "inbound_adapter"
 prefixes = [
     "episodic.api",
+    "episodic.api.resources.qa_artefacts",
     "episodic.worker.topology",
 ]
 allowed = [
@@ -1137,6 +1194,9 @@ name = "outbound_adapter"
 prefixes = [
     "episodic.canonical.adapters",
     "episodic.canonical.storage",
+    "episodic.canonical.storage.qa_artefact_mappers",
+    "episodic.canonical.storage.qa_artefact_models",
+    "episodic.canonical.storage.qa_artefacts",
     "episodic.cost.storage",
     "episodic.cost.pricing_catalogue",
     "episodic.llm.openai_api",
@@ -1151,6 +1211,11 @@ allowed = [
     "external_libraries",
     "logging_port",
 ]
+
+[[tool.hecate.groups]]
+name = "cli"
+prefixes = ["episodic.cli"]
+allowed = ["cli", "domain_ports", "external_libraries"]
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]

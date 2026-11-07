@@ -21,6 +21,7 @@ if typ.TYPE_CHECKING:
         EpisodeTemplateHistoryRepository,
         SeriesProfileHistoryRepository,
     )
+    from .qa_artefact_ports import QaArtefactRepository
     from .reference_protocols import (
         ReferenceBindingRepository,
         ReferenceDocumentRepository,
@@ -53,6 +54,7 @@ class CanonicalUnitOfWork(typ.Protocol):
     ingestion_job_sources: IngestionJobSourceRepository
     idempotency: IdempotencyStore
     generation_runs: GenerationRunPort
+    qa_artefacts: QaArtefactRepository
     cost_ledger: CostLedgerPort
 
     async def __aenter__(self) -> CanonicalUnitOfWork:

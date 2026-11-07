@@ -1,0 +1,86 @@
+# serializer version: 1
+# name: test_filters_and_pagination_reach_the_api
+  dict({
+    'compliance_status': 'non_compliant',
+    'evaluator': 'pedante',
+    'limit': '5',
+    'offset': '10',
+  })
+# ---
+# name: test_json_prints_the_envelope
+  '''
+  {
+    "items": [
+      {
+        "id": "<uuid>",
+        "episode_id": "<uuid>",
+        "generation_run_id": "<uuid>",
+        "evaluator": "anthem",
+        "evaluator_version": "anthem-1.0",
+        "artefact_schema_version": 1,
+        "compliance_policy_version": 1,
+        "compliance_status": "errored",
+        "summary": "Anthem did not respond before the deadline.",
+        "rubric_score": null,
+        "runtime_estimate_seconds": null,
+        "finding_count": 0,
+        "evaluator_metadata": {},
+        "evaluated_at": "2026-10-31T10:10:00+00:00"
+      },
+      {
+        "id": "<uuid>",
+        "episode_id": "<uuid>",
+        "generation_run_id": "<uuid>",
+        "evaluator": "chrono",
+        "evaluator_version": "chrono-1.0",
+        "artefact_schema_version": 1,
+        "compliance_policy_version": 1,
+        "compliance_status": "not_applicable",
+        "summary": "Estimated 412 seconds of speech.",
+        "rubric_score": null,
+        "runtime_estimate_seconds": 412,
+        "finding_count": 0,
+        "evaluator_metadata": {},
+        "evaluated_at": "2026-10-31T10:05:00+00:00"
+      },
+      {
+        "id": "<uuid>",
+        "episode_id": "<uuid>",
+        "generation_run_id": "<uuid>",
+        "evaluator": "pedante",
+        "evaluator_version": "pedante-1.0",
+        "artefact_schema_version": 1,
+        "compliance_policy_version": 1,
+        "compliance_status": "non_compliant",
+        "summary": "Three claims were checked.",
+        "rubric_score": null,
+        "runtime_estimate_seconds": null,
+        "finding_count": 3,
+        "evaluator_metadata": {},
+        "evaluated_at": "2026-10-31T10:00:00+00:00"
+      }
+    ],
+    "limit": 20,
+    "offset": 0,
+    "total": 3
+  }
+  
+  '''
+# ---
+# name: test_table_renders_a_page
+  '''
+  EVALUATOR  STATUS          FINDINGS  EVALUATED AT               ID
+  anthem     errored         0         2026-10-31T10:10:00+00:00  <uuid>
+  chrono     not_applicable  0         2026-10-31T10:05:00+00:00  <uuid>
+  pedante    non_compliant   3         2026-10-31T10:00:00+00:00  <uuid>
+  3 of 3 evaluations
+  
+  '''
+# ---
+# name: test_table_renders_an_empty_page
+  '''
+  EVALUATOR  STATUS  FINDINGS  EVALUATED AT  ID
+  0 of 0 evaluations
+  
+  '''
+# ---

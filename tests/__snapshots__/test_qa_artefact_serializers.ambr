@@ -1,0 +1,211 @@
+# serializer version: 1
+# name: test_detail_with_findings_matches_snapshot
+  dict({
+    'artefact_schema_version': 1,
+    'compliance_policy_version': 1,
+    'compliance_status': 'non_compliant',
+    'episode_id': '<uuid>',
+    'evaluated_at': '2026-10-29T12:00:00+00:00',
+    'evaluator': 'pedante',
+    'evaluator_metadata': dict({
+      'model': 'pedante-test-model',
+    }),
+    'evaluator_version': 'pedante-1.0.0',
+    'finding_count': 3,
+    'findings': list([
+      dict({
+        'citations': list([
+        ]),
+        'code': 'citation_absent',
+        'details': dict({
+          'claim_kind': 'direct_quote',
+        }),
+        'id': '<uuid>',
+        'is_blocking': True,
+        'ordinal': 0,
+        'remediation': 'Cite the archive catalogue.',
+        'severity': 'high',
+        'subject_id': 'claim-1',
+        'subject_text': 'The archive holds three reels.',
+        'summary': 'The claim has no citation.',
+      }),
+      dict({
+        'citations': list([
+          'src-1',
+          'src-2',
+        ]),
+        'code': 'accurate_quotation',
+        'details': dict({
+          'claim_kind': 'direct_quote',
+        }),
+        'id': '<uuid>',
+        'is_blocking': False,
+        'ordinal': 1,
+        'remediation': 'No change required.',
+        'severity': 'low',
+        'subject_id': 'claim-2',
+        'subject_text': 'The reels date from 1954.',
+        'summary': 'The quotation matches.',
+      }),
+      dict({
+        'citations': list([
+          'src-3',
+        ]),
+        'code': 'accurate_restatement',
+        'details': dict({
+          'claim_kind': 'transplanted_claim',
+        }),
+        'id': '<uuid>',
+        'is_blocking': False,
+        'ordinal': 2,
+        'remediation': 'No change required.',
+        'severity': 'medium',
+        'subject_id': 'claim-3',
+        'subject_text': 'The session was recorded in winter.',
+        'summary': 'The restatement is faithful.',
+      }),
+    ]),
+    'generation_run_id': '<uuid>',
+    'id': '<uuid>',
+    'rubric_score': None,
+    'runtime_estimate_seconds': None,
+    'summary': 'One claim lacks source support.',
+  })
+# ---
+# name: test_finding_serializer_carries_every_field
+  '''
+  {
+    "citations": [
+      "src-1",
+      "src-2"
+    ],
+    "code": "accurate_quotation",
+    "details": {
+      "claim_kind": "direct_quote"
+    },
+    "id": "<uuid>",
+    "is_blocking": false,
+    "ordinal": 1,
+    "remediation": "No change required.",
+    "severity": "low",
+    "subject_id": "claim-2",
+    "subject_text": "The reels date from 1954.",
+    "summary": "The quotation matches."
+  }
+  '''
+# ---
+# name: test_fully_populated_summary_matches_snapshot
+  dict({
+    'artefact_schema_version': 1,
+    'compliance_policy_version': 1,
+    'compliance_status': 'not_applicable',
+    'episode_id': '<uuid>',
+    'evaluated_at': '2026-10-29T12:00:00+00:00',
+    'evaluator': 'chrono',
+    'evaluator_metadata': dict({
+      'estimator_name': 'chrono-naive-word-count',
+      'estimator_version': '1',
+      'words_per_minute': 150,
+    }),
+    'evaluator_version': '1',
+    'finding_count': 0,
+    'generation_run_id': '<uuid>',
+    'id': '<uuid>',
+    'rubric_score': 0.875,
+    'runtime_estimate_seconds': 600,
+    'summary': 'Estimated runtime.',
+  })
+# ---
+# name: test_minimal_summary_matches_snapshot
+  dict({
+    'artefact_schema_version': 1,
+    'compliance_policy_version': 1,
+    'compliance_status': 'compliant',
+    'episode_id': '<uuid>',
+    'evaluated_at': '2026-10-29T12:00:00+00:00',
+    'evaluator': 'pedante',
+    'evaluator_metadata': dict({
+    }),
+    'evaluator_version': 'pedante-1.0.0',
+    'finding_count': 0,
+    'generation_run_id': None,
+    'id': '<uuid>',
+    'rubric_score': None,
+    'runtime_estimate_seconds': None,
+    'summary': '',
+  })
+# ---
+# name: test_rubric_score_encodes_as_a_json_number
+  '''
+  {
+    "artefact_schema_version": 1,
+    "compliance_policy_version": 1,
+    "compliance_status": "non_compliant",
+    "episode_id": "<uuid>",
+    "evaluated_at": "2026-10-29T12:00:00+00:00",
+    "evaluator": "pedante",
+    "evaluator_metadata": {
+      "model": "pedante-test-model"
+    },
+    "evaluator_version": "pedante-1.0.0",
+    "finding_count": 3,
+    "findings": [
+      {
+        "citations": [],
+        "code": "citation_absent",
+        "details": {
+          "claim_kind": "direct_quote"
+        },
+        "id": "<uuid>",
+        "is_blocking": true,
+        "ordinal": 0,
+        "remediation": "Cite the archive catalogue.",
+        "severity": "high",
+        "subject_id": "claim-1",
+        "subject_text": "The archive holds three reels.",
+        "summary": "The claim has no citation."
+      },
+      {
+        "citations": [
+          "src-1",
+          "src-2"
+        ],
+        "code": "accurate_quotation",
+        "details": {
+          "claim_kind": "direct_quote"
+        },
+        "id": "<uuid>",
+        "is_blocking": false,
+        "ordinal": 1,
+        "remediation": "No change required.",
+        "severity": "low",
+        "subject_id": "claim-2",
+        "subject_text": "The reels date from 1954.",
+        "summary": "The quotation matches."
+      },
+      {
+        "citations": [
+          "src-3"
+        ],
+        "code": "accurate_restatement",
+        "details": {
+          "claim_kind": "transplanted_claim"
+        },
+        "id": "<uuid>",
+        "is_blocking": false,
+        "ordinal": 2,
+        "remediation": "No change required.",
+        "severity": "medium",
+        "subject_id": "claim-3",
+        "subject_text": "The session was recorded in winter.",
+        "summary": "The restatement is faithful."
+      }
+    ],
+    "generation_run_id": "<uuid>",
+    "id": "<uuid>",
+    "rubric_score": 0.1234,
+    "runtime_estimate_seconds": null,
+    "summary": "One claim lacks source support."
+  }
+  '''
+# ---
