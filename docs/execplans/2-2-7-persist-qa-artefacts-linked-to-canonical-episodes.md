@@ -1745,6 +1745,41 @@ Stop and escalate when any of these is reached.
     none stale); `typecheck`; `test` (2114 passed, 1 skipped, 0 failed);
     `markdownlint`; `nixie`; and `check-migrations` with no drift. Logs are
     `/tmp/<gate>-episodic-2-2-7-commit4b.out`.
+  - `23cc343c` **Correct the ExecPlan's conformance references.** ADR 001's
+    open item is discharged by ADR 026, not ADR 025, and the conformance trace
+    table named a test the branch does not carry:
+    `test_documented_blocking_set_matches_the_production_set` is the one that
+    exists. The rubric tie test's docstring now says Hypothesis samples the
+    generated ties instead of claiming it enumerates them.
+  - `024e2eac` **Split the observability ports into a package.**
+    `episodic/observability.py` sat exactly on the 400-line Pylint ceiling, so
+    the seam below would have pushed it past it. The ports and their inert
+    defaults, the structured-log adapters, and the recording doubles now live
+    in `_ports`, `_structured`, and `_recording`, and the package barrel
+    re-exports every name, so no caller changed. Hecate needed no policy edit:
+    `episodic.observability` is still the group prefix and the barrel's
+    re-exports resolve to those submodules. The Skylos dead-code allow-list
+    and the guide's two file references moved with the code.
+  - `82f9193e` **Configure CLI logging so telemetry is delivered.** Selecting
+    `StructuredLogTracer` and `StructuredLogMetrics` was not enough: the
+    pinned femtologging registry starts with no handlers and drops every
+    record, which a direct probe established before the fix.
+    `configure_structured_logging` now configures the backend and the command
+    reads `EPISODIC_LOG_LEVEL`. The same backend ignores the configured level,
+    so `admits_telemetry` lets the command decline the structured sinks above
+    `INFO`; the default is `WARNING`, which keeps a successful command's
+    standard error silent while failures still reach an operator.
+    `tests/test_qa_cli_telemetry_delivery.py` runs the installed entry point in
+    a fresh interpreter against a stub API and asserts the completed span, the
+    latency observation, the bounded failure category, and that the credential
+    reaches neither stream.
+  - Gate evidence: `024e2eac` passed all seven gates
+    (`/tmp/<gate>-episodic-2-2-7-commit8b.out`); `markdownlint` was re-run
+    against the committed move at `commit8b-2`, because an unstaged deletion
+    leaves `typos-config-builder` unable to scan the old path. `82f9193e`
+    passed all seven gates (`/tmp/<gate>-episodic-2-2-7-commit8.out`): 2118
+    passed, 1 skipped, Pylint and both df12 passes at 10.00/10, Skylos clean,
+    and the duplication gate at 30 reasoned exceptions with none stale.
 
 ## Surprises & discoveries
 
@@ -2676,6 +2711,19 @@ Stop and escalate when any of these is reached.
   status: reported** — the plan's Module budget suggested splitting reads out of
   `qa_artefacts.py`; the actual growth was in instrumentation and outcome
   reporting, so the split follows the observed concern instead.
+
+- Decision: split `episodic/observability.py` into the `episodic/observability/`
+  package rather than raise the 400-line ceiling or thin the module out.
+  Rationale: the module already sat exactly on the ceiling, and the CLI logging
+  seam needs about fifty more lines, so the choice was between a structural
+  split and deleting documentation to fit. The ports with their inert defaults,
+  the structured-log adapters, and the recording doubles are three separate
+  concerns, and the package barrel keeps `episodic.observability` as the single
+  import surface, so no caller, Hecate group, or test import changed. The
+  Skylos dead-code allow-list entries are repointed by symbol to the submodule
+  that now holds each one; the strict gate confirms they still resolve.
+  Date/Author: 2026-11-07, implementation agent. **Deviation status: none** — a
+  move, with no behaviour, message, or public name changed.
 
 ## Outcomes & retrospective
 
