@@ -57,8 +57,7 @@ def qa_artefact_storage_runtime(
     ----------
     runtime : QaArtefactStorageRuntime | None
         Optional injected providers. When supplied they win outright, so a
-        caller that needs a fixed clock or identifier sequence also controls
-        the observation sinks.
+        caller that needs a fixed clock also controls the observation sinks.
     metrics : MetricsPort | None
         Metrics sink used when no runtime is injected; ``None`` selects the
         no-op sink.

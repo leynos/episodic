@@ -114,7 +114,7 @@ Stop and escalate when any of these is reached.
   (`docs/episodic-podcast-generation-system-design.md`, Data Model and Storage
   section), whereas this plan proposes `qa_evaluations` + `qa_findings` with
   compliance as a column. Severity: medium. Likelihood: high (it is a
-  deliberate deviation). Mitigation: record the deviation in ADR 025, update
+  deliberate deviation). Mitigation: record the deviation in ADR 026, update
   the design document's Data Model bullet in the same change, and trace it in
   `Conformance basis`.
 - Risk: `episodic/qa/__init__.py` unconditionally imports the LangGraph
@@ -127,7 +127,7 @@ Stop and escalate when any of these is reached.
 - Risk: `ERRORED` has **no production producer** in this slice, because
   evaluators are not wired into the run path. It is exercised only by the
   recording service's failure entry point and by tests. Severity: low.
-  Likelihood: certain. Mitigation: state this plainly in ADR 025 and in the
+  Likelihood: certain. Mitigation: state this plainly in ADR 026 and in the
   developers' guide rather than implying an end-to-end producer exists. The
   status is still worth modelling now because adding a PostgreSQL enum value
   later is a two-deploy operation (`ALTER TYPE ... ADD VALUE` cannot use the
@@ -136,7 +136,7 @@ Stop and escalate when any of these is reached.
   today. Severity: low. Likelihood: high. Mitigation: the column is nullable,
   is exercised directly by repository round-trip and property tests (where the
   repository, not an evaluator, is the unit under test), and the absence of a
-  producer is stated explicitly in the developers' guide and ADR 025.
+  producer is stated explicitly in the developers' guide and ADR 026.
 - Risk: `make check-migrations` cannot verify what this schema most depends on.
   `episodic/canonical/storage/migration_check.py` uses Alembic
   `compare_metadata`, which does **not** compare `CHECK` constraints or foreign
@@ -1685,6 +1685,66 @@ Stop and escalate when any of these is reached.
     four-decimal precision, with no `PostgreSQL` or `NUMERIC` reference left in
     `episodic/canonical/qa_artefact_validation.py` or `QaEvaluationSummary`.
     ADR 026 records why storage follows the domain here.
+- Full-review response (2026-11-07): the review at `5f0c4ad5` (submission
+  `5810518073`) filed six inline comments and eight failed pre-merge rows —
+  three errors (Testing (Overall), Module-Level Documentation, and Unit
+  Architecture) and five warnings. Each was checked against the reviewed tree
+  and all were valid there; none is argued away. The repairs span four commits,
+  and two of them supersede the *implementation* of an earlier disposition
+  while keeping its test.
+  - `318b328b` **Classify QA artefact failure categories.** `list_evaluations`
+    let `UnsupportedQaArtefactSchemaError` fall through to `database_error`, so
+    a row written by a newer release was reported to operators as a database
+    fault. It now names `unsupported_schema`, matching `get_evaluation`. In
+    `_replay_after_conflict`, a `SQLAlchemyError` from `_supersede` escaped the
+    outer operation unclassified — a handler's exceptions are not caught by its
+    sibling handlers — so the outer span now marks `supersede_failed` and
+    re-raises.
+  - `0b8a309b` **Tidy the QA artefact adapter contracts.** The annotation-only
+    `uuid` import in `qa_artefact_errors.py` moved behind `TYPE_CHECKING`,
+    which removed an inline Ruff suppression. `QaSummaryDraft` gained the
+    Attributes section its public docstring owed, including the
+    `evaluator_metadata=None` rule. `QaArtefactStorageRuntime` dropped a
+    `uuid_factory` field with no consumer; the identifier stays domain-supplied.
+  - `c9cbc5df` **Keep canonical reads free of autoflush effects.** The Unit
+    Architecture and Domain Architecture rows were one defect with two
+    remedies, and the earlier `CanonicalUnitOfWork.no_autoflush()` answered the
+    first only. That put the ORM mechanism in the domain protocol, and it still
+    left `get_evaluation` refreshing (`populate_existing`) on a query path,
+    which discards a caller's staged edits to a loaded record. The boundary now
+    lives in the adapters, where the SQLAlchemy dependency already is:
+    `_RepositoryBase._read` wraps every generic read, and
+    `SqlAlchemyGenerationRunStore` wraps its list, count, and get reads. The
+    protocol method and its implementation are deleted, and
+    `read_owned_episode` reads without managing flush, so a caller cannot get
+    the boundary wrong. Write-path reads keep autoflush because their flush
+    failure belongs to the write. `_select_with_findings` refreshes only when a
+    write path asks it to, and
+    `test_get_evaluation_keeps_staged_edits_to_a_loaded_record` fails if that
+    separation regresses. The same commit adds the Chrono failure-then-success
+    supersession test, the rubric tie-to-even and caller-context properties,
+    the two nearest-rejected-region probes, and splits the QA storage tests so
+    no module exceeds the 400-line Pylint limit.
+  - This commit **Emit CLI telemetry and document the 0.2.0 surface.** The
+    installed command now reports through `_production_sinks()`, so a
+    production invocation emits structured span and latency events while
+    `CliSinks` still defaults to no-ops for embedding callers and tests. The
+    migration guide gains the replacement imports and the ADR 026/027 links;
+    the users' guide states the real supersession rule (a retry that fails
+    again leaves the stored row alone); the developers' guide gains *Read
+    purity and explicit flushing*; and the live ExecPlan references that the
+    renumbering pass missed — the trace link, Risks, the `INV-ENUM-TAXONOMY`
+    row, the EP-M6 file list, and the versioning heading — now name ADR 026 or
+    027 as appropriate. `qa_artefact_service`'s module docstring names the
+    recording entry points as available services and separates the future
+    run-path consumer from today's retrieval-only CLI and REST surfaces.
+    Older progress entries keep the ADR numbers they were written with.
+  - Gate evidence: all seven commit gates passed on this candidate.
+    `check-fmt`; `lint` (Hecate, Ruff, Pylint 10.00/10, df12-pylint,
+    ambrleaks, Skylos, and the duplication gate at 30 reasoned exceptions with
+    none stale); `typecheck`; `test` (2114 passed, 1 skipped, 0 failed);
+    `markdownlint`; `nixie`; and `check-migrations` with no drift. Logs are
+    `/tmp/<gate>-episodic-2-2-7-commit4b.out`.
 
 ## Surprises & discoveries
 
@@ -2955,7 +3015,7 @@ RM-2.2.7-a  -> TDD-DATA -> EP-M2 -> tests/canonical_storage/test_qa_artefacts.py
 RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_records_pedante_result
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)
 RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_cli_retrieval.feature (CLI scenarios)
-ADR-001(open item) -> EP-M6 -> docs/adr/adr-025-qa-artefact-persistence-contract.md
+ADR-001(open item) -> EP-M6 -> docs/adr/adr-026-qa-artefact-persistence-contract.md
 TDD-DATA(deviation, accepted 2026-08-23) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
 ```
 
@@ -3250,7 +3310,7 @@ list endpoint equals `len(findings)` returned by the detail endpoint.
 
 **INV-ENUM-TAXONOMY.** The value sets of `QaEvaluator`, `QaComplianceStatus`,
 and `QaFindingSeverity` are exactly those documented in the system design
-document and ADR 025.
+document and ADR 026.
 
 - Method: parameterized test against literal expected sets.
 - Rationale: the enums are persisted as PostgreSQL types; drift between code
@@ -3522,7 +3582,7 @@ fenced blocks.
      - `inbound_adapter`: `episodic.api.resources.qa_artefacts`.
      - New group `cli`, declared last: `prefixes = ["episodic.cli"]`,
        `allowed = ["cli", "domain_ports"]`. This is what actually enforces
-       ADR 026 — without it, `inbound_adapter` would let the CLI import the
+       ADR 027 — without it, `inbound_adapter` would let the CLI import the
        application services and the API package.
      Do **not** add `episodic.llm`; use `episodic.llm.ports`, which is already
      grouped. Hecate's re-export index resolves
@@ -3769,7 +3829,7 @@ fenced blocks.
   describe the new behaviour, and the roadmap entry is marked done.
 - Requirements and gaps: `ADR-001` open item; `TDD-DATA` deviation.
 - Files added or changed:
-  - `docs/adr/adr-025-qa-artefact-persistence-contract.md` — new, following the
+  - `docs/adr/adr-026-qa-artefact-persistence-contract.md` — new, following the
     ADR template in `docs/documentation-style-guide.md`. Must cover: the
     unified `qa_evaluations` + `qa_findings` model; the compliance-status
     taxonomy and the exact meaning of `not_applicable`;
@@ -3782,7 +3842,7 @@ fenced blocks.
     `RunAlreadyTerminal` evidence), a JSONB findings array, a
     `lifecycle_status` plus `verdict` split, and derive-at-read compliance.
     Note that extending `qa_evaluator` later is a two-deploy operation.
-  - `docs/adr/adr-026-cli-client-boundary.md` — new. Covers the CLI as a REST
+  - `docs/adr/adr-027-cli-client-boundary.md` — new. Covers the CLI as a REST
     client, the `cyclopts` choice, the dedicated Hecate group that enforces the
     boundary, authentication via `--token`/environment, output-format policy,
     and an explicit statement that the top-level command noun structure is
@@ -3790,7 +3850,7 @@ fenced blocks.
   - `docs/episodic-podcast-generation-system-design.md` — replace the
     `qa_findings` and `brand_compliance_results` bullet in *Data Model and
     Storage* with the tables actually created; add a QA-artefact paragraph to
-    *Quality Assurance Stack* referencing ADR 025.
+    *Quality Assurance Stack* referencing ADR 026.
   - `docs/developers-guide.md` — extend *Quality-assurance evaluators* with a
     QA-artefact persistence subsection (module layout, maintainer rules, the
     versioning obligations, the fact that no evaluator populates `rubric_score`
@@ -3982,7 +4042,7 @@ class QaArtefactRepository(typ.Protocol):
 Return `tuple[list[...], int]` to match the repository's existing paged-listing
 convention (see `episodic/canonical/reference_documents/documents.py`).
 
-### Versioning semantics (EP-M1, formalized in ADR 025)
+### Versioning semantics (EP-M1, formalized in ADR 026)
 
 `artefact_schema_version` versions the **shape of the payload fields** —
 `evaluator_metadata`, `QaFinding.details`, and the interpretation of

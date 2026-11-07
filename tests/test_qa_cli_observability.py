@@ -13,7 +13,14 @@ import pytest
 
 from episodic.cli import main
 from episodic.cli.client import CliSinks
-from episodic.observability import RecordedSpan, RecordingTracer
+from episodic.cli.entrypoint import _production_sinks
+from episodic.observability import (
+    PerfCounterClock,
+    RecordedSpan,
+    RecordingTracer,
+    StructuredLogMetrics,
+    StructuredLogTracer,
+)
 from tests.canonical_storage._workflow_checkpoint_support import (
     RecordingMetrics,
     StepClock,
@@ -63,6 +70,21 @@ def _expected(
         exit_code=exit_code,
         spans=[RecordedSpan(name=_SPAN, attributes=attributes, is_completed=True)],
         latencies=[(f"{_SPAN}.latency_ms", 1.0, labels)],
+    )
+
+
+def test_production_sinks_are_the_structured_log_adapters() -> None:
+    """The installed command reports through the structured-log adapters."""
+    sinks = _production_sinks()
+
+    assert isinstance(sinks.tracer, StructuredLogTracer), (
+        "a production CLI invocation should trace through structured logs"
+    )
+    assert isinstance(sinks.metrics, StructuredLogMetrics), (
+        "a production CLI invocation should report metrics through structured logs"
+    )
+    assert isinstance(sinks.clock, PerfCounterClock), (
+        "a production CLI invocation should time calls with the monotonic clock"
     )
 
 

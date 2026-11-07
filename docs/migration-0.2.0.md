@@ -70,6 +70,21 @@ refused over plain HTTP unless the host is loopback, so a remote endpoint needs
 `0` for success, `1` for an API error envelope, `2` for a usage error, `3` when
 the API is unreachable or times out, and `4` for `429 Too Many Requests`.
 
+## Evaluator graph builders moved out of the package barrel
+
+`episodic.qa` no longer re-exports the LangGraph adapters. Import each symbol
+from the module that defines it:
+
+- `build_chrono_graph` is in `episodic.qa.chrono_langgraph`.
+- `build_pedante_graph` and `route_after_pedante` are in
+  `episodic.qa.langgraph`.
+
+A re-export would make every import of the evaluator contracts load the
+orchestration stack, so a deployment that needs only the Pedante or Chrono
+contracts no longer pulls in `langgraph`. Code that imported these three names
+from `episodic.qa` must change its import statement; the symbols themselves are
+unchanged.
+
 ## Configuration summary
 
 | Setting              | Purpose                  | Default                 |
@@ -85,5 +100,5 @@ configuration. This release adds no new required server setting.
 ## References
 
 - [Users' guide](users-guide.md)
-- [ADR 025: QA artefact persistence contract](adr/adr-025-qa-artefact-persistence-contract.md)
-- [ADR 026: CLI client boundary](adr/adr-026-cli-client-boundary.md)
+- [ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md)
+- [ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md)

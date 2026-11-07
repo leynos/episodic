@@ -711,7 +711,10 @@ require a live RabbitMQ broker.
   its version, an artefact schema version, a compliance policy version, the
   verdict, a summary, and any rubric score or runtime estimate. A row recorded
   as `errored` is the one exception: a later recording under the same
-  idempotency key supersedes it.
+  idempotency key replaces it in place, keeping the identifier the failure
+  created, but only when the incoming evaluation is not itself `errored`. A
+  retry that fails again leaves the stored row untouched rather than replacing
+  one failure with another.
 - Using the editorial approval workflow
 - Reviewing approval states and audit history for canonical episodes
 - Reviewing and approving generated content

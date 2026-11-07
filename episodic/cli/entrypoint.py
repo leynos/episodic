@@ -12,16 +12,40 @@ import typing as typ
 import cyclopts
 
 from episodic.cli.app import build_app
+from episodic.cli.client import CliSinks
 from episodic.cli.errors import CliError
+from episodic.observability import (
+    PerfCounterClock,
+    StructuredLogMetrics,
+    StructuredLogTracer,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     import httpx
 
-    from episodic.cli.client import CliSinks
-
 USAGE_EXIT_CODE = 2
+
+
+def _production_sinks() -> CliSinks:
+    """Return the sinks a production invocation reports to.
+
+    ``CliSinks`` itself defaults to no-op sinks so an embedding caller or a
+    test stays silent; the command line is where structured log observations
+    are actually wanted.
+
+    Returns
+    -------
+    CliSinks
+        Structured-log tracer and metrics sink with a performance-counter
+        clock.
+    """
+    return CliSinks(
+        tracer=StructuredLogTracer(),
+        metrics=StructuredLogMetrics(),
+        clock=PerfCounterClock(),
+    )
 
 
 def main(
@@ -40,8 +64,9 @@ def main(
         Transport the HTTP client uses. Tests inject a mock or bridging
         transport; production leaves it unset so httpx uses the network.
     sinks : CliSinks | None
-        Observability sinks for API calls. ``None`` selects the no-op tracer,
-        no-op metrics sink, and performance-counter clock.
+        Observability sinks for API calls. ``None`` selects the structured-log
+        tracer and metrics sink a production invocation reports through; tests
+        inject recording doubles.
 
     Returns
     -------
@@ -56,7 +81,10 @@ def main(
     2
     """
     tokens = list(sys.argv[1:] if argv is None else argv)
-    application = build_app(transport, sinks=sinks)
+    application = build_app(
+        transport,
+        sinks=_production_sinks() if sinks is None else sinks,
+    )
     try:
         rendered = application.run(tokens)
     except CliError as error:

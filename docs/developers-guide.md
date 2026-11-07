@@ -2315,7 +2315,9 @@ The port surface is intentionally split:
   run's checkpoints in `(created_at, id)` order, oldest first. The listing
   takes an optional `status` filter plus `limit`/`offset` paging, and rejects a
   negative bound with `ValueError`. Both reads run inside the adapter's
-  `no_autoflush` boundary, so a caller may read while holding unflushed work.
+  `no_autoflush` boundary described under
+  [Read purity and explicit flushing](#read-purity-and-explicit-flushing), so a
+  caller may read while holding unflushed work.
 - `GenerationRunLeaseReclamationPort` declares `fail_expired_leases`, which
   fails runs abandoned by a worker holding an expired execution lease. It is
   the only sub-port that reads two tables: a run is eligible only when no
@@ -2387,6 +2389,38 @@ current transaction rather than durable commit outcomes. The terminal-conflict
 counter is not tied to a write: it also records domain-precondition refusals,
 which happen before any write is attempted. A later rollback is not reflected
 in these counters.
+
+### Read purity and explicit flushing
+
+A read must never flush the caller's staged work. `AsyncSession.get` and
+`AsyncSession.execute` both autoflush before emitting SQL, so a query issued
+while unrelated changes are pending would turn the read into a write and could
+surface a pending constraint failure against a statement that never wrote it.
+
+The storage adapters own that boundary, and callers do not manage ORM flush
+behaviour:
+
+- `_RepositoryBase._read` wraps every generic repository read, so
+  `_get_one_or_none`, `_get_many`, `_list_where`, `_list_paginated`,
+  `_get_latest_where`, and the repositories built on them read without flushing.
+- `SqlAlchemyGenerationRunStore` wraps the reads it issues directly —
+  `_get_record`, `list_runs`, `list_events`, and `count_events` — in
+  `session.no_autoflush`. Its write-path reads, such as `append_event`'s
+  maximum-sequence query, stay outside the boundary because they run after the
+  caller's work has been flushed deliberately.
+- `CanonicalUnitOfWork` therefore exposes no `no_autoflush()` helper.
+  `episodic.api.episode_access.read_owned_episode` reads the episode and its
+  launcher run through the repositories, so the ownership check cannot flush a
+  caller's staged work even when the request holds pending changes.
+- `SqlAlchemyQaArtefactStore` behaves the same way for `get_evaluation` and
+  `list_evaluations`. Only the recording paths refresh a loaded record
+  (`populate_existing=True`), because `_require_stored` and
+  `_replay_after_conflict` have just flushed the rows they read back; an
+  ordinary read must leave the caller's unflushed edits in place.
+
+A caller that wants its own staged write visible to a subsequent read must
+flush it explicitly first with `await uow.flush()` rather than relying on the
+read's autoflush.
 
 ### No-QA launcher and TEI retrieval
 

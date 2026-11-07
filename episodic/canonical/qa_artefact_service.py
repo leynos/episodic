@@ -1,13 +1,16 @@
 """Application services for recording and querying QA artefacts.
 
-Two write entry points cover the same recording, because callers own different
-transaction boundaries. The QA-gated run path already holds a unit of work, so
-:func:`record_qa_evaluation` composes into that transaction and leaves the
-commit to its caller. A caller that owns no transaction uses
+Both write entry points are available services now, because callers own
+different transaction boundaries. A caller that already holds a unit of work
+uses :func:`record_qa_evaluation`, which composes into that transaction and
+leaves the commit to its owner. A caller that owns no transaction uses
 :class:`QaEvaluationRecorder`, which opens the unit of work, stamps the
-evaluation time from its injected clock, and commits exactly once. That
-consumer arrives with the QA-gated run path of roadmap item 4.4.1; the CLI and
-REST surfaces are retrieval-only today.
+evaluation time from its injected clock, and commits exactly once.
+
+Nothing outside this module calls either entry point yet: the QA-gated run path
+that will is roadmap item 4.4.1, and the CLI and REST surfaces are
+retrieval-only today. Naming that split keeps the recording services from
+reading as an already-wired pipeline.
 
 Both routes share :mod:`episodic.canonical.qa_artefact_recording` for the
 mapping, so the idempotency key and the compliance verdict cannot differ
