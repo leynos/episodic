@@ -28,6 +28,8 @@ from .models import (
     IdempotencyRecordModel,
     IngestionJobRecord,
     IngestionJobSourceRecord,
+    QaEvaluationRecord,
+    QaFindingRecord,
     ReferenceBindingRecord,
     ReferenceDocumentRecord,
     ReferenceDocumentRevisionRecord,
@@ -39,6 +41,8 @@ from .models import (
     UploadRecord,
     WorkflowCheckpointRecord,
 )
+from .qa_artefact_storage_runtime import QaArtefactStorageRuntime
+from .qa_artefacts import SqlAlchemyQaArtefactStore
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
@@ -72,6 +76,9 @@ __all__ = (
     "IdempotencyRecordModel",
     "IngestionJobRecord",
     "IngestionJobSourceRecord",
+    "QaArtefactStorageRuntime",
+    "QaEvaluationRecord",
+    "QaFindingRecord",
     "ReferenceBindingRecord",
     "ReferenceDocumentRecord",
     "ReferenceDocumentRevisionRecord",
@@ -87,6 +94,7 @@ __all__ = (
     "SqlAlchemyIdempotencyStore",
     "SqlAlchemyIngestionJobRepository",
     "SqlAlchemyIngestionJobSourceRepository",
+    "SqlAlchemyQaArtefactStore",
     "SqlAlchemyReferenceBindingRepository",
     "SqlAlchemyReferenceDocumentRepository",
     "SqlAlchemyReferenceDocumentRevisionRepository",

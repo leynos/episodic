@@ -212,7 +212,9 @@ typecheck-path: ## Typecheck one path using the pinned typechecker
 	$(UV_ENV) $(UV) tool run ty==$(TY_VERSION) check "$(TY_CHECK_PATH)"
 
 crosshair: build ## Verify CrossHair PEP 316 contracts
-	$(UV_ENV) $(UV) run crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py
+	$(UV_ENV) $(UV) run crosshair check --analysis_kind=PEP316 \
+		episodic/qa/chrono.py \
+		episodic/canonical/qa_artefact_validation.py
 
 markdownlint: spelling ## Lint Markdown files and enforce repository spelling
 	env -u NO_COLOR $(MDLINT) '**/*.md'

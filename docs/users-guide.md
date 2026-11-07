@@ -24,6 +24,44 @@ This guide will cover:
 - Creating series profiles and episode templates
 - Understanding the workflow from source documents to finished audio
 
+#### Retrieve QA evaluations from the CLI
+
+The `episodic` command is a REST client. Start the API, then list the QA
+evaluations recorded for an episode:
+
+```console
+uv run episodic qa evaluations list \
+    0199a0c1-0000-7000-8000-000000000001
+```
+
+The default endpoint is `http://127.0.0.1:8000`. Set `EPISODIC_API_URL` or pass
+`--base-url` to reach another deployment, and set `EPISODIC_API_TOKEN` or pass
+`--token` to authenticate. A bearer token is refused over plain HTTP unless the
+host is loopback, so a remote endpoint needs `https://`. A base URL must not
+carry embedded credentials or a query string. A token must be printable ASCII;
+anything else is refused as a usage error before a request is sent. `--timeout`
+must be a positive, finite number of seconds; zero would disable the timeout,
+so it is refused along with negative and non-finite values.
+
+Filter the results and choose machine-readable output:
+
+```console
+uv run episodic qa evaluations list \
+    0199a0c1-0000-7000-8000-000000000001 \
+    --evaluator pedante --compliance-status non_compliant \
+    --limit 20 --offset 0 --format json
+```
+
+The table names each evaluation's evaluator, compliance status, finding count,
+evaluation time, and identifier, followed by a summary such as
+`3 of 3 evaluations`. `--format json` prints the API envelope unchanged, so the
+output pipes into `jq`.
+
+Exit codes are `0` for success, `1` for an API error envelope (including a 2xx
+response that is not a page), `2` for a usage error, `3` when the API is
+unreachable or times out, and `4` when the API answers `429 Too Many Requests`.
+The last message repeats the server's `Retry-After` value when it sends one.
+
 ### Content Creation
 
 - Uploading and ingesting source documents
@@ -559,6 +597,31 @@ logger = get_logger(__name__)
 log_info(logger, "Started workflow %s", "workflow-42")
 ```
 
+#### Command-line telemetry
+
+The `episodic` command reports one structured span and one latency observation
+per API call. Those records go to standard error, so standard output stays a
+single JSON or table document.
+
+Telemetry is off by default: with nothing configured, a successful run writes
+nothing to standard error. Set `EPISODIC_LOG_LEVEL` to `INFO`, `DEBUG`, or
+`TRACE` to enable it:
+
+```sh
+EPISODIC_LOG_LEVEL=INFO episodic qa evaluations list <episode-id>
+```
+
+Each record is one JSON object on its own line, for example:
+
+```json
+{"event": "trace_span_completed", "operation": "cli.qa_evaluations.list", "outcome": "success", "span_name": "cli.qa_evaluations.list"}
+```
+
+Only the bounded `operation`, `outcome`, `failure_category`, `representation`,
+and `pagination` attributes are logged. Credentials and response payloads are
+never included. `WARNING`, `ERROR`, and `CRITICAL` leave telemetry off while
+still surfacing the command's own warnings and errors.
+
 ### Worker runtime
 
 The background-worker scaffold now exists for operators who need to stand up
@@ -638,8 +701,8 @@ require a live RabbitMQ broker.
   normalized usage metrics for cost accounting.
 - Pedante currently operates as an internal authoring-loop check rather than a
   public API feature. Its outputs are therefore visible in internal workflows
-  first, with broader generation-run and QA artefact APIs planned in later
-  roadmap items.
+  first; the retrieval endpoints described below serve recorded artefacts once
+  a generation run writes them.
 - Generated scripts can now receive an internal Chrono spoken-runtime estimate
   during QA. Chrono uses the canonical TEI script through `tei-rapporteur`,
   counts spoken words with a deterministic local heuristic, and records
@@ -648,6 +711,35 @@ require a live RabbitMQ broker.
   estimates round up to the next whole second using integer arithmetic, so any
   non-empty spoken script receives at least a one-second estimate even when a
   custom words-per-minute setting is extremely high.
+- Retrieving recorded QA results over REST.
+  `GET /v1/episodes/{episode_id}/qa-evaluations` lists one episode's
+  evaluations, filtered by `evaluator` and `compliance_status` and paginated
+  with `limit` and `offset`; each item is a summary.
+  `GET /v1/qa-evaluations/{evaluation_id}` returns one evaluation in full, with
+  its findings in the order the evaluator recorded them. An unknown `evaluator`
+  or `compliance_status` value is a `400` validation error naming the
+  parameter. Generation runs do not record evaluator results yet, so a listing
+  stays empty for an episode produced by a run today; that recording path
+  arrives with a later roadmap item.
+- Both reads are authorized through the episode. A request without credentials
+  receives `401 unauthorized`. An authenticated caller whose principal does not
+  own the episode receives `404 qa_evaluation_not_found`, whether the episode,
+  the evaluation, or the launcher run is missing or belongs to someone else;
+  the API does not return `403` here, so a response cannot confirm that another
+  principal's artefact exists.
+- A row written by a newer release is a `422` error with code
+  `qa_artefact_schema_unsupported`, naming the stored and supported schema
+  versions, rather than being misread. The detail route still applies its
+  ownership check first, so a caller who does not own the episode sees the
+  ordinary `404`.
+- Evaluation rows are immutable once recorded. Each records the evaluator and
+  its version, an artefact schema version, a compliance policy version, the
+  verdict, a summary, and any rubric score or runtime estimate. A row recorded
+  as `errored` is the one exception: a later recording under the same
+  idempotency key replaces it in place, keeping the identifier the failure
+  created, but only when the incoming evaluation is not itself `errored`. A
+  retry that fails again leaves the stored row untouched rather than replacing
+  one failure with another.
 - Using the editorial approval workflow
 - Reviewing approval states and audit history for canonical episodes
 - Reviewing and approving generated content

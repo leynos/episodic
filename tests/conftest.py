@@ -141,6 +141,20 @@ def runtime_environ() -> dict[str, str]:
     }
 
 
+_QA_CLI_ENVIRONMENT_VARIABLES = (
+    "EPISODIC_API_URL",
+    "EPISODIC_API_TOKEN",
+    "EPISODIC_LOG_LEVEL",
+)
+
+
+@pytest.fixture
+def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate the QA CLI tests from the operator's own API settings."""
+    for name in _QA_CLI_ENVIRONMENT_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def captured_interpreter_pool_workers(
     monkeypatch: pytest.MonkeyPatch,

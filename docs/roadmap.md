@@ -217,7 +217,7 @@ without changing the orchestration contract.
   - Estimate anticipated runtime for written dialogue using an initial naive
     local heuristic.
   - Record estimator metadata so later implementations remain comparable.
-- [ ] 2.2.7. Persist QA artefacts linked to canonical episodes.
+- [x] 2.2.7. Persist QA artefacts linked to canonical episodes.
   - Store evaluator findings, runtime estimates, rubric scores, and compliance
     results.
   - Enable retrieval via API and CLI filtered by evaluator and compliance

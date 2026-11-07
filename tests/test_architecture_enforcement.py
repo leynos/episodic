@@ -9,6 +9,7 @@ coverage lives in `tests/test_architecture_hecate_config.py`.
 """
 
 import json
+import tomllib
 import typing as typ
 from pathlib import Path
 
@@ -328,6 +329,55 @@ def test_production_checker_accepts_scoped_packages() -> None:
 
     rendered = f"{completed_process.stdout}\n{completed_process.stderr}"
     assert completed_process.returncode == 0, rendered
+
+
+def _hecate_group_prefixes() -> list[tuple[str, str]]:
+    """Return `(group, prefix)` pairs in declaration order from pyproject.toml."""
+    pyproject = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    return [
+        (group["name"], prefix)
+        for group in pyproject["tool"]["hecate"]["groups"]
+        for prefix in group["prefixes"]
+    ]
+
+
+def _prefixes_overlap(ancestor: str, descendant: str) -> bool:
+    """Return whether *ancestor* and *descendant* name overlapping prefixes."""
+    return descendant == ancestor or descendant.startswith(f"{ancestor}.")
+
+
+def test_no_prefix_shadows_a_later_group() -> None:
+    """An earlier Hecate group must not silently claim a later group's module.
+
+    Hecate classifies a module by the first group whose prefix contains it, so
+    an ancestor prefix declared earlier — for example `episodic.llm` in
+    `domain_ports` — reclassifies every module of a later group while the gate
+    still exits 0. An identical prefix repeated in two groups loses the later
+    boundary the same way. This guard makes both silent losses a test failure
+    instead.
+    """
+    pairs = _hecate_group_prefixes()
+
+    shadowing = [
+        (earlier_group, earlier_prefix, later_group, later_prefix)
+        for earlier_index, (earlier_group, earlier_prefix) in enumerate(pairs)
+        for later_group, later_prefix in pairs[earlier_index + 1 :]
+        if earlier_group != later_group
+        and _prefixes_overlap(earlier_prefix, later_prefix)
+    ]
+
+    assert not shadowing, (
+        "an earlier Hecate group prefix overlaps a later group's prefix, so "
+        "Hecate will classify those modules into the earlier group:\n"
+        + "\n".join(
+            f"  {earlier_group}:{earlier_prefix} shadows {later_group}:{later_prefix}"
+            for earlier_group, earlier_prefix, later_group, later_prefix in shadowing
+        )
+    )
 
 
 def _render_process(completed_process: subprocess.CompletedProcess[str]) -> str:

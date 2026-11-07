@@ -381,7 +381,9 @@ reason = "Falcon invokes this middleware lifecycle callback through its ASGI pro
 
 Use `make skylos-allow` only for a narrow named exception when an entry-point
 rule cannot describe the boundary. Its reason must include who or what calls
-the symbol and how that was verified. Add one with:
+the symbol and how that was verified, or — for a deferred implementation — the
+three items listed under _Retaining deferred implementation_ below. Add one
+with:
 
 ```shell
 make skylos-allow SYMBOL=registered_handler \
@@ -396,6 +398,28 @@ when neither an entry-point rule nor a named exception can describe the
 boundary, and keep its reason beside the suppression. Temporary exceptions must
 name an owner, tracking reference, and expiry condition. Remove exception
 entries when the dynamic boundary disappears.
+
+### Retaining deferred implementation
+
+A completed roadmap item sometimes delivers a symbol whose only consumer is a
+named, still-open roadmap item. The LangGraph QA graph builders and their node
+callbacks, delivered by roadmap items `2.2.1` and `2.2.6` and awaiting the
+run-path wiring of item `4.4.1`, are the current example. Such a symbol has no
+caller at all, so an entry-point rule would assert a boundary that does not
+exist, and deleting it would discard accepted prior work. Keep it, and exempt
+it with a named exception, only when every condition below holds:
+
+- a completed, checked-in roadmap item or an accepted Architecture Decision
+  Record (ADR) delivered working behaviour, not a reserved signature;
+- at least one test exercises the symbol directly;
+- the reason names the completed item that delivered it, the still-open roadmap
+  item that will call it, and the condition that deletes the entry.
+
+Record the exception in the same commit as the code it covers, so no commit
+leaves the gate broken. Delete the entry in the commit that lands the consumer:
+an exception that outlives its consumer is dead-code suppression. Do not use
+this route to park speculative interfaces, and do not use it where a framework,
+protocol, or launcher boundary really exists — those take an entry-point rule.
 
 ## Module size and façade modules
 
@@ -983,8 +1007,12 @@ When adding new worker tasks:
 
 ## Observability port abstractions
 
-Three canonical observability ports live in `episodic/observability.py` and
-must be the default when adding new operational instrumentation:
+Three canonical observability ports live in the `episodic/observability/`
+package and must be the default when adding new operational instrumentation.
+The package splits the port protocols (`_ports`), the structured-log adapters
+(`_structured`), and the recording test doubles (`_recording`) into cohesive
+modules; `episodic/observability/__init__.py` re-exports them so callers keep
+importing from `episodic.observability`:
 
 - `MetricsPort` is the canonical bounded-cardinality metrics interface. Its
   `labels` parameters are typed as `collections.abc.Mapping[str, str]` so
@@ -1006,6 +1034,19 @@ whose name is in a fixed allow-list (`operation`, `outcome`, `failure_category`,
 spans cannot leak request payloads, identifiers, or other sensitive operation
 metadata into logs. `NoopTracer` is the default no-op adapter used when no
 tracing backend is wired.
+
+`episodic/operation_observation.py` supplies `OperationObservation`, the shared
+helper for operation-level instrumentation: one span named from a fixed
+vocabulary and one latency observation named `<span>.latency_ms`. The caller
+supplies a bounded outcome through `succeeded(outcome)` or a stable failure
+category through `failed(category)`; an exception no branch classified is
+recorded as `unexpected_error` rather than read as a success. Use it at an
+adapter boundary that has no richer instrumentation of its own. The QA artefact
+store opens `qa_artefact.record`, `qa_artefact.get`, `qa_artefact.list`, and
+`qa_artefact.supersede`, and the CLI opens `cli.qa_evaluations.list`. Both read
+their tracer, metrics sink, and monotonic clock from an injected runtime and
+default to the no-op adapters, so instrumentation changes no user-visible
+output.
 
 `episodic/metrics_ports.py` retains the narrower `BoundedMetricsPort` and
 `BoundedValueMetricsPort` protocols, whose `labels` parameters are typed as
@@ -1260,7 +1301,9 @@ The enforced groups are:
 - `domain_ports`: canonical domain types, canonical ports, ingestion ports,
   canonical constraint names, and LLM ports.
 - `application`: canonical services, profile/template workflows,
-  reference-document workflows, and generation services.
+  reference-document workflows, generation services, and the QA evaluator
+  runtimes (`episodic.qa.chrono` with its LangGraph adapters), which adapt
+  third-party parsers and therefore may depend on `external_libraries`.
 - `inbound_adapter`: Falcon API modules (`episodic.api`) and the worker
   topology seam (`episodic.worker.topology`).
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
@@ -1648,7 +1691,7 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 
 ### Pedante package structure
 
-- `episodic/qa/pedante.py` contains `PedanteEvaluator`, typed request/result
+- `episodic/qa/pedante/` contains `PedanteEvaluator`, typed request/result
   objects, and strict response parsing for evaluator output.
 - `episodic/qa/langgraph.py` contains the in-process LangGraph path for the
   Pedante evaluate-and-route flow.
@@ -1659,7 +1702,7 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   request/result objects, estimator metadata, the deterministic local
   spoken-runtime heuristic, and `ChronoMetricsPort`. `ChronoMetricsPort`
   extends the shared `BoundedMetricsPort` in `episodic/metrics_ports.py`. The
-  clock boundary reuses `MonotonicClockPort` from `episodic/observability.py`
+  clock boundary reuses `MonotonicClockPort` from `episodic/observability/`
   rather than declaring a parallel hierarchy. The module delegates TEI P5
   parsing and spoken-text extraction to `tei-rapporteur`; it must not add a
   separate XML parser or local TEI traversal path.
@@ -1702,6 +1745,85 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   and Verus are Rust verification tools and are not applicable to this Python
   module.
 
+### QA artefact persistence
+
+Durable QA records live in the canonical package, not in `episodic/qa/`,
+because the recording module knows both the evaluator result and the canonical
+episode. See
+[ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md).
+
+- `episodic/canonical/qa_artefacts.py` defines `QaEvaluationSummary`,
+  `QaEvaluation`, `QaFinding`, the `QaEvaluator`, `QaComplianceStatus`, and
+  `QaFindingSeverity` enums, the payload size bounds, and the construction-time
+  validation.
+- `episodic/canonical/qa_artefact_ports.py` defines `QaEvaluationListRequest`
+  and the `QaArtefactRepository` protocol.
+- `episodic/canonical/qa_artefact_validation.py` holds the construction-time
+  invariant checks.
+- `episodic/canonical/qa_artefact_errors.py` defines the errors a reader raises
+  when a stored row cannot be interpreted.
+- `episodic/canonical/qa_artefact_recording.py` projects Chrono results and
+  evaluator failures onto artefacts, and holds the shared target, summary
+  draft, and idempotency-key types. It raises `ValueError` when a result
+  exceeds a stored bound; it never truncates.
+- `episodic/canonical/qa_artefact_pedante.py` projects Pedante results onto
+  artefacts. It is the only projection that contributes findings, so it owns
+  the field-by-field finding mapping.
+- `episodic/canonical/qa_artefact_compliance.py` holds the compliance policy,
+  the single predicate that maps Pedante findings onto a verdict.
+- `episodic/canonical/qa_artefact_service.py` is the application service that
+  records and reads evaluations through the unit of work.
+- `episodic/canonical/storage/` holds the SQLAlchemy models, the mappers, and
+  the repository adapter.
+
+Maintainer rules:
+
+- `artefact_schema_version` versions the payload shape: `evaluator_metadata`,
+  `QaFinding.details`, and the vocabulary of `QaFinding.code`. Adding an
+  optional key does not bump it; changing a key's meaning, removing a key, or
+  changing the code vocabulary does. A mapper carries the stored value through
+  and never substitutes the module default. `summary_from_record` raises
+  `UnsupportedQaArtefactSchemaError` when the stored version is newer than
+  `QA_ARTEFACT_SCHEMA_VERSION`, and both API resources turn that into a `422`
+  envelope with code `qa_artefact_schema_unsupported`; the detail resource
+  applies the episode ownership check first, so an unreadable row owned
+  elsewhere is still a `404`. `evaluation_from_record` resolves the summary
+  before it maps any finding, because the version check must decide the outcome
+  first: a finding that a newer release widened past this release's bounds
+  would otherwise raise `ValueError` and surface as a `500`.
+- `compliance_policy_version` versions the decision rule that produced
+  `compliance_status` and `QaFinding.is_blocking`. Changing the blocking
+  support-level set, or any evaluator's outcome-to-status mapping, obliges a
+  bump and leaves historical rows as statements about the older policy.
+- Stored rows are never rewritten by a version bump. The single exception is an
+  `errored` artefact, which a later successful recording under the same
+  idempotency key supersedes in place, keeping its identifier.
+- Do not store `LLMUsage` on an artefact. Correlate to the cost ledger through
+  `generation_run_id` plus `evaluator_metadata["provider_response_id"]`.
+- Quantize `rubric_score` to four decimal places with `ROUND_HALF_EVEN` on
+  construction, and serialize it as a JSON number; the API cannot serialize a
+  `decimal.Decimal`.
+- No evaluator populates `rubric_score` yet, and `errored` has no production
+  producer in this slice. Both are reachable through the recording functions
+  and are covered by tests that construct them directly.
+- Pass the target to a projection as one `QaEvaluationTarget`, never as its
+  component fields. Every projection needs the same episode, content hash,
+  instant, optional run id, and UUID factory, so the bundle keeps a new target
+  field a one-place change. `qa_idempotency_key` likewise takes
+  `QaIdempotencyKeyInputs`: exactly the five fields that compose the key.
+- Extending the `qa_evaluator` enum is a two-deploy operation, because
+  PostgreSQL cannot add an enum value and use it in the same transaction. Add
+  the value in a migration, then use it in a later release.
+- The storage adapter opens one `qa_artefact.<operation>` span and emits one
+  `<operation>.latency_ms` observation per call through `OperationObservation`.
+  Outcomes are bounded (`recorded`, `replayed`, `superseded`, `success`,
+  `not_found`) and failures carry a stable category (`integrity_violation`,
+  `conflict_without_row`, `database_error`, `unsupported_schema`,
+  `supersede_failed`); no identifier, summary, or finding text reaches a span
+  or a metric. `QaArtefactStorageRuntime` carries the tracer and monotonic
+  clock, and the unit of work forwards both from `UnitOfWorkRuntime`. Tests
+  drive the adapter with `RecordingTracer`, `RecordingMetrics`, and `StepClock`.
+
 ### Testing the evaluator
 
 - Unit tests live in `tests/test_pedante.py`.
@@ -1721,9 +1843,124 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   public estimator behaviour backed by `_compute_estimated_seconds(...)` so the
   CrossHair gate has property-test coverage beside symbolic verification. The
   same module includes the `pytest.mark.crosshair` subprocess gate for
-  `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py`.
+  `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py
+  episodic/canonical/qa_artefact_validation.py`,
+  which is the only place CI checks those contracts because CI runs pytest
+  without `make crosshair`.
 - Chrono behavioural tests do not launch Vidai Mock because Chrono has no
   inference-service boundary in roadmap item `2.2.6`.
+- QA artefact tests are split by concern: `tests/test_qa_artefact_domain.py`
+  for construction and bounds, `tests/test_qa_artefact_recording.py` and
+  `tests/test_qa_artefact_recording_non_pedante.py` for the projections,
+  `tests/test_qa_artefact_recording_properties.py` for the generative
+  statements, `tests/test_qa_artefact_rubric_score.py` for the four-decimal
+  contract, `tests/test_qa_artefact_idempotency_key.py` for the key,
+  `tests/test_qa_artefact_service.py` for the recording and query services,
+  `tests/test_qa_artefact_ports.py` for the persistence request value,
+  `tests/test_qa_artefact_serializers.py` and `tests/test_qa_artefact_api.py`
+  for the HTTP representation, `tests/test_qa_artefact_api_schema_version.py`
+  for the unsupported-version response, and
+  `tests/test_qa_artefact_observability.py` for the route spans and metrics.
+  The PGlite-backed adapter suites live in `tests/canonical_storage/`:
+  `test_qa_artefacts.py` for the store's own contracts,
+  `test_qa_artefact_constraints.py` for the database constraints,
+  `test_qa_artefact_ordering.py` and `test_qa_artefact_properties.py` for the
+  ordering and count invariants, `test_qa_artefact_replay.py` for replay and
+  supersession, `test_qa_artefact_failure_handling.py` for failed recordings,
+  `test_qa_artefact_storage_observability.py` for the store's spans, outcomes,
+  and latency observations, and `test_qa_artefact_migration.py` for the
+  migration round trip. The behavioural scenario lives in
+  `tests/features/qa_artefact_retrieval.feature` with steps in
+  `tests/steps/test_qa_artefact_retrieval_steps.py`.
+- Snapshot output that carries incidental identifiers passes through
+  `tests.snapshot_redaction.redact_snapshot_uuids` so the `ambrleaks` gate does
+  not treat a fixture UUID as a leak. The QA artefact serializers and the CLI
+  renderers both use it; the structural contract is still pinned by row order,
+  status, counts, and timestamps.
+
+## Command-line interface
+
+The `episodic` console script is a REST client of the HTTP API, not a second
+database client. See
+[ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md).
+
+### Package layout
+
+- `episodic/cli/entrypoint.py` defines `main`; it is the only module that
+  writes to standard output or chooses an exit status.
+- `episodic/cli/app.py` builds the `cyclopts.App`, declares the global options,
+  and owns the `CliApplication` launcher.
+- `episodic/cli/qa.py` declares the `qa evaluations list` command.
+- `episodic/cli/client.py` holds the `httpx` client and the resolved
+  `ClientOptions`.
+- `episodic/cli/base_url.py` validates the resolved API base URL while the
+  global options resolve, so a malformed URL is a usage error rather than a
+  traceback from the transport.
+- `episodic/cli/responses.py` translates a completed response into a page
+  payload or the matching `CliError`.
+- `episodic/cli/errors.py` holds `CliError` and its exit-coded subclasses, so
+  the decoder and the command modules name them without importing the client.
+- `episodic/cli/rendering.py` holds the pure table and JSON renderers.
+- `episodic/cli/__init__.py` re-exports `main` and nothing else.
+
+### CLI maintainer rules
+
+- The CLI may import its own modules, `domain_ports`, and the
+  `external_libraries` group that holds its `httpx` transport and `cyclopts`
+  parser. The Hecate group `cli` enforces this, so an import of `episodic.api`
+  or a canonical service fails `make check-architecture`.
+- Keep renderers pure functions from a parsed payload to a string. They must
+  not print, exit, or read the environment; that is what makes them
+  snapshottable.
+- Declare a command as a typed function and register it on the application.
+  `cyclopts` resolves annotations at registration time, so a type used only in
+  an annotation still needs a runtime import; `episodic/cli/qa.py` imports
+  `uuid` at runtime for exactly this reason.
+- Pass explicit `choices=` for enum-valued options, built from the wire values,
+  so help output shows `non_compliant` rather than the kebab-cased member name.
+- Translate every failure into a `CliError` subclass with the documented exit
+  code; nothing may escape `main` as a traceback. Validate configuration while
+  the global options resolve, because `httpx` raises `InvalidURL` outside the
+  `HTTPError` hierarchy and a schemeless URL raises plain `ValueError`.
+- The top-level noun structure is provisional until roadmap item `4.6.1` adds
+  a second command group.
+- `main` accepts a `CliSinks` keyword and forwards it through `build_app` into
+  `CliRuntime`. `CliSinks` groups the tracer, metrics sink, and monotonic clock
+  so the entry point's parameter list stays bounded as sinks are added;
+  production leaves it unset, so the no-op adapters apply and instrumentation
+  changes no output or exit code. `QaApiClient.list_evaluations` opens one
+  `cli.qa_evaluations.list` span with a bounded outcome (`success`, `api_error`,
+  `rate_limited`, `transport_failure`, `invalid_url`) and emits its latency;
+  tests inject `CliSinks` built from `RecordingTracer`, `RecordingMetrics`, and
+  `StepClock` through `main`.
+
+### Adding a command
+
+1. Declare a typed function whose parameters are the command's options, with
+   NumPy-style docstrings.
+2. Register it on the `qa` sub-application in `episodic/cli/qa.py`.
+3. Return a rendered string from a pure renderer, or a structured value the
+   entry point can render.
+4. Cover it with a unit test that stubs `httpx` with `httpx.MockTransport`, and
+   a behavioural scenario that runs the real Falcon application in process.
+
+### Testing the CLI
+
+- `tests/test_qa_cli.py` covers rendering and request shaping;
+  `tests/test_qa_cli_errors.py` covers exit codes and base-URL validation;
+  `tests/test_qa_cli_credentials.py` covers token redaction;
+  `tests/test_qa_cli_observability.py` covers the client span and its bounded
+  outcomes.
+- `tests/qa_cli_fixtures.py` holds the canned payloads and the stubbed
+  transport. The `clean_environment` fixture lives in `tests/conftest.py`, and
+  the CLI test modules apply it with `pytest.mark.usefixtures`.
+- `tests/features/qa_cli_retrieval.feature`, `tests/steps/test_qa_cli_steps.py`,
+  and `tests/steps/qa_cli_support.py` drive the genuine command against the
+  genuine Falcon application. The harness bridges `httpx.MockTransport` to the
+  ASGI app and runs the synchronous command in a worker thread on the
+  scenario's event loop.
+- `tests/__snapshots__/test_qa_cli.ambr` pins the table, JSON envelope, empty
+  page, and query-parameter contract.
 
 ## Content generation services
 
@@ -2082,7 +2319,9 @@ The port surface is intentionally split:
   run's checkpoints in `(created_at, id)` order, oldest first. The listing
   takes an optional `status` filter plus `limit`/`offset` paging, and rejects a
   negative bound with `ValueError`. Both reads run inside the adapter's
-  `no_autoflush` boundary, so a caller may read while holding unflushed work.
+  `no_autoflush` boundary described under
+  [Read purity and explicit flushing](#read-purity-and-explicit-flushing), so a
+  caller may read while holding unflushed work.
 - `GenerationRunLeaseReclamationPort` declares `fail_expired_leases`, which
   fails runs abandoned by a worker holding an expired execution lease. It is
   the only sub-port that reads two tables: a run is eligible only when no
@@ -2154,6 +2393,38 @@ current transaction rather than durable commit outcomes. The terminal-conflict
 counter is not tied to a write: it also records domain-precondition refusals,
 which happen before any write is attempted. A later rollback is not reflected
 in these counters.
+
+### Read purity and explicit flushing
+
+A read must never flush the caller's staged work. `AsyncSession.get` and
+`AsyncSession.execute` both autoflush before emitting SQL, so a query issued
+while unrelated changes are pending would turn the read into a write and could
+surface a pending constraint failure against a statement that never wrote it.
+
+The storage adapters own that boundary, and callers do not manage ORM flush
+behaviour:
+
+- `_RepositoryBase._read` wraps every generic repository read, so
+  `_get_one_or_none`, `_get_many`, `_list_where`, `_list_paginated`,
+  `_get_latest_where`, and the repositories built on them read without flushing.
+- `SqlAlchemyGenerationRunStore` wraps the reads it issues directly —
+  `_get_record`, `list_runs`, `list_events`, and `count_events` — in
+  `session.no_autoflush`. Its write-path reads, such as `append_event`'s
+  maximum-sequence query, stay outside the boundary because they run after the
+  caller's work has been flushed deliberately.
+- `CanonicalUnitOfWork` therefore exposes no `no_autoflush()` helper.
+  `episodic.api.episode_access.read_owned_episode` reads the episode and its
+  launcher run through the repositories, so the ownership check cannot flush a
+  caller's staged work even when the request holds pending changes.
+- `SqlAlchemyQaArtefactStore` behaves the same way for `get_evaluation` and
+  `list_evaluations`. Only the recording paths refresh a loaded record
+  (`populate_existing=True`), because `_require_stored` and
+  `_replay_after_conflict` have just flushed the rows they read back; an
+  ordinary read must leave the caller's unflushed edits in place.
+
+A caller that wants its own staged write visible to a subsequent read must
+flush it explicitly first with `await uow.flush()` rather than relying on the
+read's autoflush.
 
 ### No-QA launcher and TEI retrieval
 
@@ -2248,17 +2519,19 @@ normalization therefore happen after the metadata read unit of work has closed,
 so external reads do not retain a generation-run row lock or database
 connection.
 
-Generation-run polling, event listing, and TEI retrieval emit the bounded
-`generation_run.read`, `generation_run.events.list`, and `episode_tei.read`
-spans. Their only route attributes are operation, outcome, representation,
-pagination mode, and stable failure category; they never include content,
-principal identifiers, idempotency keys, or run identifiers.
+Generation-run polling, event listing, TEI retrieval, and QA-artefact retrieval
+emit the bounded `generation_run.read`, `generation_run.events.list`,
+`episode_tei.read`, `qa_evaluations.list`, and `qa_evaluation.read` spans.
+Their only route attributes are operation, outcome, representation, pagination
+mode, and stable failure category; they never include content, principal
+identifiers, idempotency keys, evaluation identifiers, or run identifiers.
 
 The API composition root emits `generation_api_request_total` and
 `generation_api_request_latency_ms` for generation creation, polling, event
-listing, and TEI retrieval. Their only labels are `operation` and the bounded
-`outcome` (`success`, `rejected`, `failed`, or `not_modified` for TEI cache
-responses); they contain no request data or principal identity.
+listing, TEI retrieval, QA-evaluation listing, and QA-evaluation detail
+requests. Their only labels are `operation` and the bounded `outcome`
+(`success`, `rejected`, `failed`, or `not_modified` for TEI cache responses);
+they contain no request data or principal identity.
 
 `GET /v1/generation-runs/{run_id}/events` returns append-only events after an
 optional `after_seq` cursor, with `items`, `after_seq`, `limit`, `offset`, and
@@ -2741,6 +3014,18 @@ correlation identifier and future common fields consistently.
 Keep `configure_logging(...)` as the local configuration seam. `log_exception`
 records exception information by default; the other wrappers accept optional
 `exc_info` explicitly when a caller needs it.
+
+Selecting a structured-log sink is not enough on its own. femtologging's logger
+registry starts empty, so a sink writing through `get_logger` delivers nothing
+until the process calls `configure_logging`. `episodic.cli.entrypoint`
+therefore configures logging as part of choosing its production sinks, and
+`tests/test_qa_cli_telemetry_delivery.py` runs the entry point in a fresh
+interpreter to prove the records arrive before the process exits. The same
+backend does not filter records by the configured level, so a command that must
+stay quiet above `INFO` declines the sinks itself instead of relying on the
+level. Keep that pair together: a new adapter that logs through femtologging
+needs a configuration seam and an end-to-end delivery test, not only a unit
+test of the adapter.
 
 Use `log_event(...)` for structured event fields on the port's configured
 logger. When an event must use a caller's `LoggerHandle`, use

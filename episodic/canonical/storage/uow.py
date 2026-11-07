@@ -42,6 +42,11 @@ from .generation_run_storage_runtime import (  # ruff: ignore[typing-only-first-
 )
 from .generation_runs import SqlAlchemyGenerationRunStore
 from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
+from .qa_artefact_storage_runtime import (
+    QaArtefactStorageRuntime,
+    qa_artefact_storage_runtime,
+)
+from .qa_artefacts import SqlAlchemyQaArtefactStore
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
@@ -81,6 +86,9 @@ class UnitOfWorkRuntime:
         Optional tracing sink forwarded to cost storage.
     generation_run_runtime : GenerationRunStorageRuntime | None
         Optional generation-run storage providers.
+    qa_artefact_runtime : QaArtefactStorageRuntime | None
+        Optional QA artefact storage providers. When omitted, the adapter
+        derives a bundle from ``metrics``, ``tracer``, and ``monotonic_clock``.
     value_metrics : ValueMetricsPort | None
         Optional scalar-metrics sink, used by adapters that report gauges.
         `metrics` alone is insufficient: `MetricsPort` has no `observe_value`.
@@ -90,6 +98,7 @@ class UnitOfWorkRuntime:
     monotonic_clock: MonotonicClockPort | None = None
     tracer: TracerPort | None = None
     generation_run_runtime: GenerationRunStorageRuntime | None = None
+    qa_artefact_runtime: QaArtefactStorageRuntime | None = None
     value_metrics: ValueMetricsPort | None = None
 
 
@@ -135,6 +144,8 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Composite port for durable generation runs: the run repository, the
         append-only event log, and the review-checkpoint store, bound to the
         same session.
+    qa_artefacts : SqlAlchemyQaArtefactStore
+        Repository for durable QA artefacts linked to canonical episodes.
     cost_ledger : SqlAlchemyCostLedgerStore
         Cost ledger adapter bound to the same session.
     """
@@ -158,32 +169,39 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         SqlAlchemyUnitOfWork
             The active unit-of-work instance.
         """
-        self._session = self._session_factory()
-        self._writes = SessionWriteTracker(self._session.sync_session)
-        self.series_profiles = SqlAlchemySeriesProfileRepository(self._session)
-        self.tei_headers = SqlAlchemyTeiHeaderRepository(self._session)
-        self.episodes = SqlAlchemyEpisodeRepository(self._session)
-        self.ingestion_jobs = SqlAlchemyIngestionJobRepository(self._session)
-        self.source_documents = SqlAlchemySourceDocumentRepository(self._session)
-        self.approval_events = SqlAlchemyApprovalEventRepository(self._session)
-        self.episode_templates = SqlAlchemyEpisodeTemplateRepository(self._session)
-        self.series_profile_history = SqlAlchemySeriesProfileHistoryRepository(
-            self._session
-        )
+        session = self._session_factory()
+        self._session = session
+        self._writes = SessionWriteTracker(session.sync_session)
+        self._open_catalogue_stores(session)
+        self._open_intake_stores(session)
+        self._open_instrumented_stores(session)
+        return self
+
+    def _open_catalogue_stores(self, session: AsyncSession) -> None:
+        """Attach the canonical catalogue repositories to the open session."""
+        self.series_profiles = SqlAlchemySeriesProfileRepository(session)
+        self.tei_headers = SqlAlchemyTeiHeaderRepository(session)
+        self.episodes = SqlAlchemyEpisodeRepository(session)
+        self.ingestion_jobs = SqlAlchemyIngestionJobRepository(session)
+        self.source_documents = SqlAlchemySourceDocumentRepository(session)
+        self.approval_events = SqlAlchemyApprovalEventRepository(session)
+        self.episode_templates = SqlAlchemyEpisodeTemplateRepository(session)
+        self.series_profile_history = SqlAlchemySeriesProfileHistoryRepository(session)
         self.episode_template_history = SqlAlchemyEpisodeTemplateHistoryRepository(
-            self._session
+            session
         )
-        self.reference_documents = SqlAlchemyReferenceDocumentRepository(self._session)
+
+    def _open_intake_stores(self, session: AsyncSession) -> None:
+        """Attach the reference, upload, intake, and generation-run stores."""
+        self.reference_documents = SqlAlchemyReferenceDocumentRepository(session)
         self.reference_document_revisions = (
-            SqlAlchemyReferenceDocumentRevisionRepository(self._session)
+            SqlAlchemyReferenceDocumentRevisionRepository(session)
         )
-        self.reference_bindings = SqlAlchemyReferenceBindingRepository(self._session)
-        self.uploads = SqlAlchemyUploadRepository(self._session)
-        self.ingestion_job_sources = SqlAlchemyIngestionJobSourceRepository(
-            self._session
-        )
+        self.reference_bindings = SqlAlchemyReferenceBindingRepository(session)
+        self.uploads = SqlAlchemyUploadRepository(session)
+        self.ingestion_job_sources = SqlAlchemyIngestionJobSourceRepository(session)
         self.idempotency = SqlAlchemyIdempotencyStore(
-            self._session,
+            session,
             runtime=source_intake_storage_runtime(
                 None,
                 metrics=self._runtime.metrics,
@@ -192,27 +210,38 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         )
         self.generation_runs = SqlAlchemyGenerationRunPortAdapter(
             SqlAlchemyGenerationRunStore(
-                self._session,
+                session,
                 runtime=self._runtime.generation_run_runtime,
             ),
             SqlAlchemyReviewCheckpointStore(
-                self._session,
+                session,
                 runtime=self._runtime.generation_run_runtime,
                 metrics=self._runtime.value_metrics,
             ),
         )
+
+    def _open_instrumented_stores(self, session: AsyncSession) -> None:
+        """Attach the stores that report spans and latency to the runtime sinks."""
+        self.qa_artefacts = SqlAlchemyQaArtefactStore(
+            session,
+            runtime=qa_artefact_storage_runtime(
+                self._runtime.qa_artefact_runtime,
+                metrics=self._runtime.metrics,
+                tracer=self._runtime.tracer,
+                monotonic_clock=self._runtime.monotonic_clock,
+            ),
+        )
         self.cost_ledger = SqlAlchemyCostLedgerStore(
-            self._session,
+            session,
             metrics=self._runtime.metrics,
             tracer=self._runtime.tracer,
             clock=self._runtime.monotonic_clock,
         )
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
-            self._session,
+            session,
             metrics=self._runtime.metrics,
             clock=self._runtime.monotonic_clock,
         )
-        return self
 
     async def __aexit__(
         self,

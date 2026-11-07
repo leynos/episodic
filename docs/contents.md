@@ -18,6 +18,12 @@ or delivery planning.
 - [Roadmap](roadmap.md) - tracks phased delivery work, dependencies, and
   acceptance criteria.
 
+## Migration guides
+
+- [Migrating to Episodic 0.2.0](migration-0.2.0.md) - upgrade steps for the
+  renamed `episodic` command, the QA database migration, and the new QA
+  retrieval interfaces.
+
 ## Product and system design
 
 - [Episodic podcast generation system design](episodic-podcast-generation-system-design.md)
@@ -129,6 +135,13 @@ or delivery planning.
     stores compose rather than inherit.
 - [ADR 025: Central logging port](adr/adr-025-central-logging-port.md)
   - logging ownership, backend boundary, and direct-call enforcement.
+- [ADR 026: QA artefact persistence
+  contract](adr/adr-026-qa-artefact-persistence-contract.md)
+  - durable evaluation and finding records, versioning, immutability, and
+    retention.
+- [ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md)
+  - the CLI as a REST client, its enforced import boundary, and its output and
+    exit-code policy.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 
@@ -167,6 +180,8 @@ or delivery planning.
   - reference repository documentation plan.
 - [Series profile and episode template models](execplans/2-2-6-series-profile-and-episode-template-models.md)
   - profile and template model plan.
+- [Persist QA artefacts linked to canonical episodes](execplans/2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md)
+  - QA artefact persistence and retrieval plan.
 - [REST endpoints for reference documents](execplans/2-2-7-rest-endpoints-for-reference-documents.md)
   - reference document API plan.
 - [Generate show notes from template expansions](execplans/2-3-1-generate-show-notes-from-template-expansions.md)
