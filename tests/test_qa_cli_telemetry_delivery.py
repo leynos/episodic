@@ -1,10 +1,11 @@
 """Delivery tests for the installed command's structured-log telemetry.
 
-Every case runs the real entry point in a fresh interpreter against a stub
-HTTP server, so the assertions describe what an operator receives rather than
-what an injected sink records. The command has to configure its own logging:
-femtologging starts with no handlers, and a sink that writes to a handlerless
-logger delivers nothing.
+Every case runs the installed ``episodic`` console script from a working
+directory outside the source tree, against a stub HTTP server, so the
+assertions describe what an operator receives rather than what an injected sink
+records or what a source checkout happens to import. The command has to
+configure its own logging: femtologging starts with no handlers, and a sink
+that writes to a handlerless logger delivers nothing.
 """
 
 import contextlib
@@ -13,7 +14,7 @@ import http.server
 import json
 import os
 import pathlib
-import subprocess  # ruff: ignore[suspicious-subprocess-import]  # The test starts the repository's own entry point.
+import subprocess  # ruff: ignore[suspicious-subprocess-import]  # The test starts the installed console script.
 import sys
 import threading
 import typing as typ
@@ -23,8 +24,11 @@ from tests.qa_cli_fixtures import PAGE, list_arguments
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-ENTRY_POINT = "import sys; from episodic.cli import main; raise SystemExit(main())"
+# Sits next to the interpreter running the tests, which is the environment the
+# project's console script is installed into. The path is deliberately not
+# resolved: the virtual environment's interpreter is a symlink, and the console
+# script is installed beside that link rather than beside its target.
+CONSOLE_SCRIPT = pathlib.Path(sys.executable).parent / "episodic"
 TOKEN = "telemetry-secret-token"  # ruff: ignore[hardcoded-password-string]  # A value a log must not leak.
 SPAN = "cli.qa_evaluations.list"
 LATENCY = f"{SPAN}.latency_ms"
@@ -88,9 +92,11 @@ def _stub_api(
 def _run_cli(
     base_url: str,
     *arguments: str,
+    cwd: pathlib.Path,
     log_level: str | None = "INFO",
 ) -> subprocess.CompletedProcess[str]:
-    """Run the installed entry point in a fresh interpreter."""
+    """Run the installed console script outside the source tree."""
+    assert CONSOLE_SCRIPT.exists(), f"expected an installed {CONSOLE_SCRIPT}"
     environment = {
         name: value
         for name, value in os.environ.items()
@@ -98,11 +104,11 @@ def _run_cli(
     }
     if log_level is not None:
         environment["EPISODIC_LOG_LEVEL"] = log_level
-    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The argv is the test's own entry point.
-        [sys.executable, "-c", ENTRY_POINT, "--base-url", base_url, *arguments],
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # The argv is the installed entry point.
+        [str(CONSOLE_SCRIPT), "--base-url", base_url, *arguments],
         capture_output=True,
         check=False,
-        cwd=REPO_ROOT,
+        cwd=cwd,
         env=environment,
         text=True,
         timeout=60,
@@ -132,14 +138,17 @@ def _only(events: list[dict[str, object]], name: str) -> dict[str, object]:
     return matching[0]
 
 
-def test_installed_command_delivers_a_completed_span_and_latency() -> None:
-    """A fresh process reports one completed span and one latency observation."""
+def test_installed_command_delivers_a_completed_span_and_latency(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The installed command reports one completed span and one latency."""
     with _stub_api() as api:
         result = _run_cli(
             api.base_url,
             "--token",
             TOKEN,
             *list_arguments("--format", "json"),
+            cwd=tmp_path,
         )
 
     assert result.returncode == 0, result.stderr
@@ -162,10 +171,12 @@ def test_installed_command_delivers_a_completed_span_and_latency() -> None:
     assert TOKEN not in result.stdout, "the credential must not reach the output"
 
 
-def test_installed_command_delivers_a_bounded_failure_observation() -> None:
+def test_installed_command_delivers_a_bounded_failure_observation(
+    tmp_path: pathlib.Path,
+) -> None:
     """A throttled call reports a failed span and its failure category."""
     with _stub_api(status=429, payload=THROTTLE) as api:
-        result = _run_cli(api.base_url, *list_arguments())
+        result = _run_cli(api.base_url, *list_arguments(), cwd=tmp_path)
 
     assert result.returncode == 4, result.stderr
     events = _telemetry(result.stderr)
@@ -181,10 +192,12 @@ def test_installed_command_delivers_a_bounded_failure_observation() -> None:
     }, latency
 
 
-def test_default_level_keeps_a_successful_command_silent() -> None:
+def test_default_level_keeps_a_successful_command_silent(
+    tmp_path: pathlib.Path,
+) -> None:
     """With no level configured, a good run writes nothing to standard error."""
     with _stub_api() as api:
-        result = _run_cli(api.base_url, *list_arguments(), log_level=None)
+        result = _run_cli(api.base_url, *list_arguments(), cwd=tmp_path, log_level=None)
 
     assert result.returncode == 0, result.stderr
     assert not _telemetry(result.stderr), result.stderr
