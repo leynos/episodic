@@ -2704,7 +2704,7 @@ REST API and a first-party CLI.
   placeholder tables the design originally carried.
 - ADR 001's open item — record the versioning and compatibility guarantees
   that apply once evaluator results are persisted or exposed — is discharged by
-  ADR 025, which names the two version columns, the reader-side schema check,
+  ADR 026, which names the two version columns, the reader-side schema check,
   and the single errored-supersession exception as those guarantees and links
   back to ADR 001.
 - `docs/roadmap.md` item `2.2.7` is `[x]`.
@@ -3010,7 +3010,7 @@ Trace links:
 ```plaintext
 ADR-014     -> EP-M0 -> tests/test_architecture_enforcement.py::test_no_prefix_shadows_a_later_group
 ADR-014     -> EP-M0 -> tests/test_qa_import_purity.py::test_evaluator_contract_import_is_pure
-RM-2.2.7-a  -> TDD-DATA -> EP-M1 -> tests/test_qa_artefact_domain.py::test_blocking_support_levels_match_documented_set
+RM-2.2.7-a  -> TDD-DATA -> EP-M1 -> tests/test_qa_artefact_domain.py::test_documented_blocking_set_matches_the_production_set
 RM-2.2.7-a  -> TDD-DATA -> EP-M2 -> tests/canonical_storage/test_qa_artefacts.py::test_evaluation_round_trip
 RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_records_pedante_result
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)

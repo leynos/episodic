@@ -189,8 +189,9 @@ def test_rubric_score_normalization_rejects_scores_outside_the_window(
 def test_rubric_score_rounds_every_tie_to_even(units: int) -> None:
     """A score half a quantum above a grid point rounds to the even neighbour.
 
-    Ties are enumerated rather than sampled: every one of them decides whether a
-    store that rounds differently would disagree with the domain.
+    Hypothesis samples the generated ties rather than enumerating them: each
+    example decides whether a store that rounds differently would disagree with
+    the domain.
     """
     tie = decimal.Decimal(units).scaleb(-4) + decimal.Decimal("0.00005")
     expected = decimal.Decimal(units + units % 2).scaleb(-4)
