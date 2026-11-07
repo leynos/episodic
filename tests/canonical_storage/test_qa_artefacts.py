@@ -322,7 +322,6 @@ async def test_recording_emits_bounded_metrics_and_safe_log(
     runtime = UnitOfWorkRuntime(
         qa_artefact_runtime=QaArtefactStorageRuntime(
             clock=lambda: NOW,
-            uuid_factory=uuid.uuid7,
             metrics=metrics,
             monotonic_clock=StepClock(),
         )
@@ -376,7 +375,6 @@ async def test_recording_failure_emits_bounded_metric_and_reraises(
     runtime = UnitOfWorkRuntime(
         qa_artefact_runtime=QaArtefactStorageRuntime(
             clock=lambda: NOW,
-            uuid_factory=uuid.uuid7,
             metrics=metrics,
             monotonic_clock=StepClock(),
         )

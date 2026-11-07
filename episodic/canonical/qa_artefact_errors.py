@@ -1,6 +1,9 @@
 """Errors raised when stored QA artefacts cannot be interpreted."""
 
-import uuid  # ruff: ignore[typing-only-standard-library-import] - constructor signatures expose uuid.UUID.
+import typing as typ
+
+if typ.TYPE_CHECKING:
+    import uuid
 
 
 class QaArtefactError(Exception):

@@ -1758,9 +1758,13 @@ episode. See
   invariant checks.
 - `episodic/canonical/qa_artefact_errors.py` defines the errors a reader raises
   when a stored row cannot be interpreted.
-- `episodic/canonical/qa_artefact_recording.py` projects Pedante and Chrono
-  results onto artefacts. It raises `ValueError` when a result exceeds a stored
-  bound; it never truncates.
+- `episodic/canonical/qa_artefact_recording.py` projects Chrono results and
+  evaluator failures onto artefacts, and holds the shared target, summary
+  draft, and idempotency-key types. It raises `ValueError` when a result
+  exceeds a stored bound; it never truncates.
+- `episodic/canonical/qa_artefact_pedante.py` projects Pedante results onto
+  artefacts. It is the only projection that contributes findings, so it owns
+  the field-by-field finding mapping.
 - `episodic/canonical/qa_artefact_compliance.py` holds the compliance policy,
   the single predicate that maps Pedante findings onto a verdict.
 - `episodic/canonical/qa_artefact_service.py` is the application service that

@@ -103,7 +103,6 @@ async def test_supersession_failure_is_counted_and_keeps_the_transaction_usable(
     tracer = RecordingTracer()
     runtime = QaArtefactStorageRuntime(
         clock=lambda: REPLAYED_AT,
-        uuid_factory=uuid.uuid7,
         metrics=metrics,
         tracer=tracer,
     )
@@ -156,7 +155,6 @@ async def test_caller_owned_constraint_failure_is_not_counted_as_a_qa_failure(
     metrics = RecordingMetrics()
     runtime = QaArtefactStorageRuntime(
         clock=lambda: REPLAYED_AT,
-        uuid_factory=uuid.uuid7,
         metrics=metrics,
     )
     incoming = make_evaluation(episode_id, idempotency_key="caller-pending-other")

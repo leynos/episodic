@@ -6,7 +6,6 @@ contract.
 """
 
 import datetime as dt
-import uuid
 
 from episodic.canonical.storage import QaArtefactStorageRuntime
 from episodic.observability import RecordedSpan, RecordingTracer
@@ -25,7 +24,6 @@ def instrumented_runtime(
     """Return a storage runtime whose operations report to the test sinks."""
     return QaArtefactStorageRuntime(
         clock=lambda: NOW,
-        uuid_factory=uuid.uuid7,
         metrics=metrics,
         tracer=tracer,
         monotonic_clock=StepClock(),

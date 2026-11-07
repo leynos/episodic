@@ -1,14 +1,13 @@
 """Provide injectable runtime dependencies for QA artefact storage.
 
-The bundle isolates adapter-owned timestamps, identifiers, and metrics from
-SQLAlchemy persistence. Production callers use the default bundle, while tests
-may inject deterministic collaborators through the unit of work.
+The bundle isolates adapter-owned timestamps and metrics from SQLAlchemy
+persistence. Production callers use the default bundle, while tests may inject
+deterministic collaborators through the unit of work.
 """
 
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
-import uuid
 
 from episodic.observability import (
     MetricsPort,
@@ -20,7 +19,6 @@ from episodic.observability import (
 )
 
 type Clock = cabc.Callable[[], dt.datetime]
-type UuidFactory = cabc.Callable[[], uuid.UUID]
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -31,9 +29,6 @@ class QaArtefactStorageRuntime:
     ----------
     clock : Clock
         UTC timestamp provider for adapter-assigned storage times.
-    uuid_factory : UuidFactory
-        Identifier provider shared with the recording service, so artefacts
-        and their findings are minted the same way wherever they originate.
     metrics : MetricsPort
         Bounded-cardinality metrics sink for recording outcomes and operation
         latency.
@@ -44,7 +39,6 @@ class QaArtefactStorageRuntime:
     """
 
     clock: Clock
-    uuid_factory: UuidFactory
     metrics: MetricsPort
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
@@ -84,7 +78,6 @@ def qa_artefact_storage_runtime(
         return runtime
     return QaArtefactStorageRuntime(
         clock=lambda: dt.datetime.now(dt.UTC),
-        uuid_factory=uuid.uuid7,
         metrics=NoopMetrics() if metrics is None else metrics,
         tracer=NoopTracer() if tracer is None else tracer,
         monotonic_clock=(

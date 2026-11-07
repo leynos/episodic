@@ -11,10 +11,10 @@ import typing as typ
 
 import pytest
 
+from episodic.canonical.qa_artefact_pedante import evaluation_from_pedante
 from episodic.canonical.qa_artefact_recording import (
     QaEvaluationTarget,
     QaIdempotencyKeyInputs,
-    evaluation_from_pedante,
     qa_idempotency_key,
 )
 from episodic.canonical.qa_artefacts import QaEvaluator

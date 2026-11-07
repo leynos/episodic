@@ -168,7 +168,6 @@ async def test_identifier_collision_with_another_key_is_not_a_replay(
             session,
             runtime=QaArtefactStorageRuntime(
                 clock=lambda: REPLAYED_AT,
-                uuid_factory=uuid.uuid7,
                 metrics=metrics,
             ),
         )
@@ -290,7 +289,6 @@ async def test_non_idempotency_violation_is_not_treated_as_replay(
             session,
             runtime=QaArtefactStorageRuntime(
                 clock=lambda: REPLAYED_AT,
-                uuid_factory=uuid.uuid7,
                 metrics=metrics,
             ),
         )

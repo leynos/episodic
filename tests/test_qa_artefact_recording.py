@@ -16,10 +16,8 @@ import dataclasses as dc
 import pytest
 
 from episodic.canonical.qa_artefact_compliance import compliance_status_for_pedante
-from episodic.canonical.qa_artefact_recording import (
-    QaEvaluationTarget,
-    evaluation_from_pedante,
-)
+from episodic.canonical.qa_artefact_pedante import evaluation_from_pedante
+from episodic.canonical.qa_artefact_recording import QaEvaluationTarget
 from episodic.canonical.qa_artefacts import (
     MAX_SUMMARY_CHARS,
     QA_ARTEFACT_SCHEMA_VERSION,

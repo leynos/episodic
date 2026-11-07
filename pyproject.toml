@@ -1152,6 +1152,7 @@ prefixes = [
     "episodic.canonical.source_intake_service",
     "episodic.canonical.profile_templates",
     "episodic.canonical.qa_artefact_compliance",
+    "episodic.canonical.qa_artefact_pedante",
     "episodic.canonical.qa_artefact_recording",
     "episodic.canonical.qa_artefact_service",
     "episodic.canonical.reference_documents",

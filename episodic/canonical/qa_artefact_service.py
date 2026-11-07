@@ -1,11 +1,13 @@
 """Application services for recording and querying QA artefacts.
 
-Two entry points cover the same write, because the two callers own different
-transaction boundaries. A launcher run is already inside a unit of work, so
+Two write entry points cover the same recording, because callers own different
+transaction boundaries. The QA-gated run path already holds a unit of work, so
 :func:`record_qa_evaluation` composes into that transaction and leaves the
-commit to its caller. A CLI invocation or REST request owns nothing, so
-:class:`QaEvaluationRecorder` opens the unit of work, stamps the evaluation
-time from its injected clock, and commits exactly once.
+commit to its caller. A caller that owns no transaction uses
+:class:`QaEvaluationRecorder`, which opens the unit of work, stamps the
+evaluation time from its injected clock, and commits exactly once. That
+consumer arrives with the QA-gated run path of roadmap item 4.4.1; the CLI and
+REST surfaces are retrieval-only today.
 
 Both routes share :mod:`episodic.canonical.qa_artefact_recording` for the
 mapping, so the idempotency key and the compliance verdict cannot differ
@@ -21,13 +23,13 @@ import uuid
 from episodic.qa.chrono import ChronoRuntimeEstimate
 from episodic.qa.pedante.types import PedanteEvaluationResult
 
+from .qa_artefact_pedante import evaluation_from_pedante
 from .qa_artefact_recording import (
     QaEvaluationTarget,
     QaEvaluatorFailure,
     UuidFactory,
     evaluation_from_chrono,
     evaluation_from_failure,
-    evaluation_from_pedante,
 )
 
 if typ.TYPE_CHECKING:

@@ -5,6 +5,9 @@ every evaluator. Each function is pure: it reads no clock or identifier
 generator other than the caller's, and raises ``ValueError`` rather than
 truncating when projected data exceeds a bound. Composing the projections with
 a unit of work is :mod:`episodic.canonical.qa_artefact_service`'s job.
+
+The Pedante projection, which is the only one that contributes findings, lives
+in :mod:`episodic.canonical.qa_artefact_pedante`.
 """
 
 import collections.abc as cabc
@@ -12,13 +15,6 @@ import dataclasses as dc
 import typing as typ
 import uuid
 
-from episodic.qa.pedante.types import (
-    PEDANTE_CONTRACT_VERSION,
-    PedanteEvaluationResult,
-    PedanteFinding,
-)
-
-from .qa_artefact_compliance import compliance_status_for_pedante
 from .qa_artefacts import (
     QA_ARTEFACT_SCHEMA_VERSION,
     QA_COMPLIANCE_POLICY_VERSION,
@@ -26,8 +22,6 @@ from .qa_artefacts import (
     QaEvaluation,
     QaEvaluationSummary,
     QaEvaluator,
-    QaFinding,
-    QaFindingSeverity,
 )
 
 if typ.TYPE_CHECKING:
@@ -135,7 +129,23 @@ def qa_idempotency_key(inputs: QaIdempotencyKeyInputs) -> str:
 class QaSummaryDraft:
     """Evaluator-contributed summary fields awaiting invocation stamping.
 
-    Carries the evaluator, version, verdict, count, and optional payload fields.
+    Attributes
+    ----------
+    evaluator : QaEvaluator
+        Evaluator that produced the verdict.
+    evaluator_version : str
+        Version of the evaluator's rules, recorded with the artefact.
+    compliance_status : QaComplianceStatus
+        Verdict the evaluator reached.
+    finding_count : int
+        Number of findings the evaluator reported.
+    summary : str
+        Human-readable summary; empty when the evaluator supplies none.
+    runtime_estimate_seconds : int | None
+        Evaluator's estimate of the run time, when it reports one.
+    evaluator_metadata : JsonMapping | None
+        Evaluator-specific payload; ``None`` selects an empty mapping when the
+        summary is stamped.
     """
 
     evaluator: QaEvaluator
@@ -211,106 +221,6 @@ class QaEvaluatorFailure:
     evaluator_version: str
     error_category: str
     summary: str
-
-
-def _finding_from_pedante(
-    finding: PedanteFinding,
-    *,
-    evaluation_id: uuid.UUID,
-    ordinal: int,
-    uuid_factory: UuidFactory,
-) -> QaFinding:
-    """Project one Pedante finding onto its QA finding."""
-    return QaFinding(
-        # Application-side UUIDv7, like every other primary key in this store.
-        id=uuid_factory(),
-        evaluation_id=evaluation_id,
-        ordinal=ordinal,
-        severity=QaFindingSeverity(finding.severity.value),
-        code=finding.support_level.value,
-        summary=finding.summary,
-        remediation=finding.remediation,
-        subject_id=finding.claim_id,
-        subject_text=finding.claim_text,
-        is_blocking=finding.is_blocking,
-        citations=finding.cited_source_ids,
-        details={"claim_kind": finding.claim_kind.value},
-    )
-
-
-def _pedante_draft(result: PedanteEvaluationResult) -> QaSummaryDraft:
-    """Return the evaluator-contributed fields for a Pedante result."""
-    return QaSummaryDraft(
-        evaluator=QaEvaluator.PEDANTE,
-        evaluator_version=PEDANTE_CONTRACT_VERSION,
-        compliance_status=compliance_status_for_pedante(result),
-        finding_count=len(result.findings),
-        summary=result.summary,
-        evaluator_metadata={
-            "model": result.model,
-            "provider_response_id": result.provider_response_id,
-            "finish_reason": result.finish_reason,
-        },
-    )
-
-
-def evaluation_from_pedante(
-    result: PedanteEvaluationResult,
-    *,
-    target: QaEvaluationTarget,
-) -> QaEvaluation:
-    """Map a Pedante result onto a persistable evaluation.
-
-    Findings keep Pedante's emission order, so ordinals are stable on replay.
-
-    Parameters
-    ----------
-    result : PedanteEvaluationResult
-        Typed Pedante findings plus its provider metadata.
-    target : QaEvaluationTarget
-        Episode, script hash, timestamp, launcher run, and identifier factory.
-
-    Returns
-    -------
-    QaEvaluation
-        The mapped evaluation with ``finding_count`` equal to its findings.
-
-    Raises
-    ------
-    ValueError
-        If the result exceeds a bound declared in
-        :mod:`episodic.canonical.qa_artefacts`. The projection never truncates,
-        so a caller that meets this failure records it with
-        :func:`evaluation_from_failure` instead.
-
-    Examples
-    --------
-    >>> import datetime as dt, uuid
-    >>> from episodic.llm import LLMUsage
-    >>> result = PedanteEvaluationResult("Done.", (), LLMUsage(1, 1, 2))
-    >>> target = QaEvaluationTarget(
-    ...     uuid.uuid7(), "sha256:0", dt.datetime.now(dt.UTC)
-    ... )
-    >>> evaluation = evaluation_from_pedante(result, target=target)
-    >>> evaluation.summary_record.compliance_status.value
-    'compliant'
-    """  # ruff: ignore[docstring-extraneous-exception]  # QaEvaluation validates the mapped fields here.
-    evaluation_id = target.uuid_factory()
-    return QaEvaluation(
-        summary_record=_pedante_draft(result).stamp(
-            evaluation_id=evaluation_id,
-            target=target,
-        ),
-        findings=tuple(
-            _finding_from_pedante(
-                finding,
-                evaluation_id=evaluation_id,
-                ordinal=ordinal,
-                uuid_factory=target.uuid_factory,
-            )
-            for ordinal, finding in enumerate(result.findings)
-        ),
-    )
 
 
 def evaluation_from_chrono(
