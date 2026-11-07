@@ -195,6 +195,8 @@ class EvaluationOptions:
         One finding per entry, in emission order.
     generation_run_id : uuid.UUID | None
         Optional launcher run that triggered the evaluation.
+    runtime_estimate_seconds : int | None
+        Optional runtime estimate, as a Chrono artefact carries.
     created_at : dt.datetime | None
         Optional storage time, so a round trip can compare whole artefacts.
     """
@@ -204,6 +206,7 @@ class EvaluationOptions:
     evaluated_at: dt.datetime = EVALUATED_AT
     severities: tuple[QaFindingSeverity, ...] = ()
     generation_run_id: uuid.UUID | None = None
+    runtime_estimate_seconds: int | None = None
     created_at: dt.datetime | None = None
 
 
@@ -260,6 +263,7 @@ def make_evaluation(
             idempotency_key=idempotency_key,
             finding_count=len(findings),
             generation_run_id=options.generation_run_id,
+            runtime_estimate_seconds=options.runtime_estimate_seconds,
             created_at=options.created_at,
         ),
         findings=findings,

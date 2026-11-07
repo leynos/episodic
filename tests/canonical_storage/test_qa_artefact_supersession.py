@@ -26,6 +26,10 @@ from tests.canonical_storage._qa_artefact_support import (
     make_evaluation,
 )
 
+# Distinct from every other recorded field, so an assertion on it cannot pass
+# because some other column happened to carry the same value.
+RETRY_RUNTIME_ESTIMATE_SECONDS = 412
+
 
 @pytest.mark.parametrize(
     ("stored_status", "incoming_status", "is_superseded"),
@@ -111,7 +115,10 @@ async def test_errored_chrono_recording_is_superseded_by_its_retry(
 
     A failed Chrono run is recorded as an ``ERRORED`` artefact under the same
     idempotency key the successful retry will derive, so the retry must persist
-    its verdict rather than replay the failure.
+    its own payload rather than replay the failure. Chrono measures duration,
+    so the retry is ``NOT_APPLICABLE`` and carries a runtime estimate: the
+    supersession rule may not be narrowed to verdict-bearing evaluators without
+    failing here.
     """
     episode_id = await create_episode(session_factory)
     failed = make_evaluation(
@@ -127,27 +134,35 @@ async def test_errored_chrono_recording_is_superseded_by_its_retry(
         idempotency_key="chrono-retry",
         options=EvaluationOptions(
             evaluator=QaEvaluator.CHRONO,
-            compliance_status=QaComplianceStatus.COMPLIANT,
+            compliance_status=QaComplianceStatus.NOT_APPLICABLE,
             evaluated_at=REPLAYED_AT,
-            severities=(QaFindingSeverity.LOW,),
+            runtime_estimate_seconds=RETRY_RUNTIME_ESTIMATE_SECONDS,
         ),
     )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         stored_failed = await uow.qa_artefacts.record_evaluation(failed)
-        stored_retried = await uow.qa_artefacts.record_evaluation(retried)
-        reread = await uow.qa_artefacts.get_evaluation(failed.summary_record.id)
+        await uow.qa_artefacts.record_evaluation(retried)
         await uow.commit()
 
     assert (
         stored_failed.summary_record.compliance_status is QaComplianceStatus.ERRORED
     ), "the failed run should be recorded as an errored artefact"
-    assert stored_retried.summary_record.id == failed.summary_record.id, (
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        reread = await uow.qa_artefacts.get_evaluation(failed.summary_record.id)
+
+    assert reread is not None, "the superseded artefact should still exist"
+    assert reread.summary_record.id == failed.summary_record.id, (
         "the retry should keep the identifier the failure created"
     )
     assert (
-        stored_retried.summary_record.compliance_status is QaComplianceStatus.COMPLIANT
+        reread.summary_record.compliance_status is QaComplianceStatus.NOT_APPLICABLE
     ), "the retry should store its own verdict rather than replay the failure"
-    assert reread == stored_retried, (
-        "a later read should return the superseded artefact"
-    )
+    assert reread.summary_record.runtime_estimate_seconds == (
+        RETRY_RUNTIME_ESTIMATE_SECONDS
+    ), "the superseded artefact should carry the retry's runtime estimate"
+    async with session_factory() as session:
+        assert await count_rows(session, QaEvaluationRecord) == 1, (
+            "the retry should replace the failed artefact, not add a second row"
+        )
