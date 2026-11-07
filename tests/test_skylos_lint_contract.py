@@ -87,7 +87,7 @@ def test_skylos_entrypoint_rules_distinguish_methods_from_functions() -> None:
         == "method"
     ), "Expected the checkpoint validator to be classified as a method."
     assert (
-        entrypoint_types["episodic.observability.NoopMetrics.increment_counter"]
+        entrypoint_types["episodic.observability._ports.NoopMetrics.increment_counter"]
         == "method"
     ), "Expected the metrics protocol implementation to be classified as a method."
 

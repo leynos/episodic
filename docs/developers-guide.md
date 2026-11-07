@@ -1007,8 +1007,12 @@ When adding new worker tasks:
 
 ## Observability port abstractions
 
-Three canonical observability ports live in `episodic/observability.py` and
-must be the default when adding new operational instrumentation:
+Three canonical observability ports live in the `episodic/observability/`
+package and must be the default when adding new operational instrumentation.
+The package splits the port protocols (`_ports`), the structured-log adapters
+(`_structured`), and the recording test doubles (`_recording`) into cohesive
+modules; `episodic/observability/__init__.py` re-exports them so callers keep
+importing from `episodic.observability`:
 
 - `MetricsPort` is the canonical bounded-cardinality metrics interface. Its
   `labels` parameters are typed as `collections.abc.Mapping[str, str]` so
@@ -1698,7 +1702,7 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   request/result objects, estimator metadata, the deterministic local
   spoken-runtime heuristic, and `ChronoMetricsPort`. `ChronoMetricsPort`
   extends the shared `BoundedMetricsPort` in `episodic/metrics_ports.py`. The
-  clock boundary reuses `MonotonicClockPort` from `episodic/observability.py`
+  clock boundary reuses `MonotonicClockPort` from `episodic/observability/`
   rather than declaring a parallel hierarchy. The module delegates TEI P5
   parsing and spoken-text extraction to `tei-rapporteur`; it must not add a
   separate XML parser or local TEI traversal path.
