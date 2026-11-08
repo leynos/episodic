@@ -17,6 +17,7 @@ class IdempotencyState(enum.StrEnum):
 
 
 def _require_non_empty(value: str, field: str) -> None:
+    """Raise ``ValueError`` when ``value`` is blank."""
     if not value.strip():
         msg = f"{field} must be a non-empty string."
         raise ValueError(msg)
@@ -25,6 +26,7 @@ def _require_non_empty(value: str, field: str) -> None:
 def _validate_completed_state(
     state: IdempotencyState, serialised_outcome: bytes | None
 ) -> None:
+    """Raise ``ValueError`` for a completed record without a serialised outcome."""
     if state is IdempotencyState.COMPLETED and serialised_outcome is None:
         msg = "completed idempotency records require serialised_outcome."
         raise ValueError(msg)

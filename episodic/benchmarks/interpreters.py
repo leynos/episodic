@@ -77,6 +77,7 @@ async def _run_benchmark(
     tasks: tuple[PrimeTask, ...],
     repeats: int,
 ) -> tuple[BenchmarkResult, tuple[int, ...]]:
+    """Time ``repeats`` runs of one executor and return the first run's outputs."""
     durations: list[float] = []
     reference_outputs: tuple[int, ...] | None = None
 
@@ -102,10 +103,12 @@ async def _run_benchmark(
 
 
 def _build_tasks(task_count: int, upper_bound: int) -> tuple[PrimeTask, ...]:
+    """Build ``task_count`` identical prime-count tasks."""
     return tuple(PrimeTask(upper_bound=upper_bound) for _ in range(task_count))
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser for the benchmark options."""
     parser = argparse.ArgumentParser(
         description=(
             "Benchmark CPU-heavy prime counting with inline execution and "
@@ -140,6 +143,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _print_result(result: BenchmarkResult) -> None:
+    """Print one benchmark result as a summary line."""
     print(
         f"{result.label}: mean={result.mean_seconds:.4f}s "
         f"throughput={result.throughput_tasks_per_second:.2f} tasks/s "
@@ -148,6 +152,7 @@ def _print_result(result: BenchmarkResult) -> None:
 
 
 async def _main_async() -> int:
+    """Run the inline and interpreter-pool benchmarks and report the comparison."""
     parser = _build_parser()
     args = parser.parse_args()
 

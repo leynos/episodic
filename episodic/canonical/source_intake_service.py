@@ -129,18 +129,24 @@ async def _commit_pending_upload(
 
 @dc.dataclass(frozen=True, slots=True)
 class _UploadRef:
+    """Identify one upload row and its object-store key."""
+
     id: uuid.UUID
     storage_key: str
 
 
 @dc.dataclass(frozen=True, slots=True)
 class _StoredUpload:
+    """Pair an upload reference with the object-store result."""
+
     ref: _UploadRef
     stored: StoredObject
 
 
 @dc.dataclass(frozen=True, slots=True)
 class _UploadStorageInput:
+    """Bundle the inputs needed to store one upload's bytes."""
+
     ref: _UploadRef
     request: UploadBytesRequest
     precomputed_sha256: str

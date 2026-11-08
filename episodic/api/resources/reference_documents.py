@@ -73,6 +73,7 @@ class ReferenceDocumentsResource:
     """Handle collection endpoints for reusable reference documents."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
@@ -142,6 +143,7 @@ class ReferenceDocumentResource:
     """Handle read/update endpoints for one reusable reference document."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
@@ -204,6 +206,7 @@ class ReferenceDocumentRevisionsResource:
     """Handle create/list endpoints for one document's immutable revisions."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
@@ -281,6 +284,7 @@ class ReferenceDocumentRevisionResource:
     """Handle get endpoint for one immutable reference-document revision."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_get(

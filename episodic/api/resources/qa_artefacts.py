@@ -240,6 +240,7 @@ class EpisodeQaEvaluationsResource:
         *,
         tracer: TracerPort | None = None,
     ) -> None:
+        """Store the unit-of-work factory and the span tracer, or a no-op tracer."""
         self._uow_factory = uow_factory
         self._tracer = NoopTracer() if tracer is None else tracer
 
@@ -314,6 +315,7 @@ class QaEvaluationResource:
         *,
         tracer: TracerPort | None = None,
     ) -> None:
+        """Store the unit-of-work factory and the span tracer, or a no-op tracer."""
         self._uow_factory = uow_factory
         self._tracer = NoopTracer() if tracer is None else tracer
 

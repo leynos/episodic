@@ -21,30 +21,35 @@ class AttachmentKind(enum.StrEnum):
 def _validate_exclusive_attachment(
     upload_id: uuid.UUID | None, source_uri: str | None
 ) -> None:
+    """Raise ``ValueError`` unless exactly one attachment target is set."""
     if (upload_id is not None) == (source_uri is not None):
         msg = "Exactly one of upload_id or source_uri must be populated."
         raise ValueError(msg)
 
 
 def _validate_upload_kind(kind: AttachmentKind, upload_id: uuid.UUID | None) -> None:
+    """Raise ``ValueError`` when an upload attachment lacks ``upload_id``."""
     if kind is AttachmentKind.UPLOAD and upload_id is None:
         msg = "upload attachments must populate upload_id."
         raise ValueError(msg)
 
 
 def _validate_source_uri_kind(kind: AttachmentKind, source_uri: str | None) -> None:
+    """Raise ``ValueError`` when a source-URI attachment lacks ``source_uri``."""
     if kind is AttachmentKind.SOURCE_URI and source_uri is None:
         msg = "source_uri attachments must populate source_uri."
         raise ValueError(msg)
 
 
 def _validate_source_type(source_type: str) -> None:
+    """Raise ``ValueError`` when ``source_type`` is blank."""
     if not source_type.strip():
         msg = "source_type must be a non-empty string."
         raise ValueError(msg)
 
 
 def _validate_weight(weight: float) -> None:
+    """Raise ``ValueError`` when ``weight`` is outside the range 0 to 1."""
     if not 0 <= weight <= 1:
         msg = "weight must be between 0 and 1."
         raise ValueError(msg)

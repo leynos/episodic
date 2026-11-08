@@ -31,6 +31,7 @@ class ReferenceBindingsResource:
     """Handle create/list endpoints for reusable reference bindings."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
@@ -105,6 +106,7 @@ class ReferenceBindingResource:
     """Handle get endpoint for one reusable reference binding."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_get(

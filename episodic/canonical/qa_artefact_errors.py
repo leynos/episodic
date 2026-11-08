@@ -28,6 +28,7 @@ class UnsupportedQaArtefactSchemaError(QaArtefactError):
         stored_version: int,
         supported_version: int,
     ) -> None:
+        """Initialize an error for an artefact written with an unsupported schema."""
         msg = (
             f"QA evaluation {evaluation_id} records artefact schema version "
             f"{stored_version}, but this release reads version "

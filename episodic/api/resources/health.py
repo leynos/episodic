@@ -22,6 +22,7 @@ class HealthLiveResource:
     """Serve a process liveness response once the app has booted."""
 
     def __init__(self) -> None:
+        """Initialize the name reported for the application check."""
         self._application_check_name = "application"
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
@@ -38,6 +39,7 @@ class HealthReadyResource:
     """Serve a readiness response based on a domain health observer."""
 
     def __init__(self, health_observer: HealthObserver) -> None:
+        """Initialize the resource with the observer that builds readiness reports."""
         self._health_observer = health_observer
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:

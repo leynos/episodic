@@ -17,6 +17,7 @@ class ResolvedBindingsResource:
     """Return resolved reference bindings for a series profile context."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_get(  # ruff: ignore[too-many-locals]  # Falcon adapter validates and coordinates several route/query inputs.

@@ -21,18 +21,21 @@ class UploadState(enum.StrEnum):
 
 
 def _require_non_negative(value: int, field: str) -> None:
+    """Raise ``ValueError`` when ``value`` is negative."""
     if value < 0:
         msg = f"{field} must be non-negative."
         raise ValueError(msg)
 
 
 def _require_non_negative_if_present(value: int | None, field: str) -> None:
+    """Raise ``ValueError`` when a provided ``value`` is negative."""
     if value is not None and value < 0:
         msg = f"{field} must be non-negative when provided."
         raise ValueError(msg)
 
 
 def _require_non_empty(value: str, field: str) -> None:
+    """Raise ``ValueError`` when ``value`` is blank."""
     if not value.strip():
         msg = f"{field} must be a non-empty string."
         raise ValueError(msg)
