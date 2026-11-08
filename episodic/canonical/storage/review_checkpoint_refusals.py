@@ -4,7 +4,8 @@ Two paths can discover an already-terminal checkpoint: the domain transition
 rejects it up front, or the compare-and-set update matches no row because a
 concurrent writer got there first. Both must emit the same event, so the
 emission lives here instead of being written out twice; the exception it raises
-is the same one either route ends in.
+is the same one either route ends in. :func:`refuse_missing` does the same for
+a checkpoint that no stored row holds.
 """
 
 import typing as typ
