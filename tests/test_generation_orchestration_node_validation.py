@@ -19,12 +19,12 @@ from episodic.orchestration.langgraph import (
     _plan_node,
     build_generation_orchestration_graph,
 )
-from tests.test_generation_orchestration_langgraph import (
-    _action_result,
-    _FakePlanner,
-    _FakeToolExecutor,
-    _planner_result,
-    _request,
+from tests.fixtures.langgraph_orchestration_support import (
+    FakePlanner,
+    FakeToolExecutor,
+    build_action_result,
+    build_planner_result,
+    build_request,
 )
 
 if typ.TYPE_CHECKING:
@@ -40,7 +40,7 @@ class TestLangGraphNodeValidation:
         with pytest.raises(ValueError, match="missing required state value: request"):
             await _plan_node(
                 GenerationGraphState(),
-                planner=_FakePlanner(_planner_result()),
+                planner=FakePlanner(build_planner_result()),
             )
 
     @pytest.mark.asyncio
@@ -48,12 +48,12 @@ class TestLangGraphNodeValidation:
         ("state_factory", "missing_field"),
         [
             pytest.param(
-                lambda: GenerationGraphState(planner_result=_planner_result()),
+                lambda: GenerationGraphState(planner_result=build_planner_result()),
                 "request",
                 id="missing-request",
             ),
             pytest.param(
-                lambda: GenerationGraphState(request=_request()),
+                lambda: GenerationGraphState(request=build_request()),
                 "planner_result",
                 id="missing-planner-result",
             ),
@@ -71,7 +71,7 @@ class TestLangGraphNodeValidation:
         ) as exc_info:
             await _execute_node(
                 state,
-                tool_executor=_FakeToolExecutor(_action_result()),
+                tool_executor=FakeToolExecutor(build_action_result()),
                 monotonic_clock=lambda: 0.0,
             )
 
@@ -93,8 +93,10 @@ class TestLangGraphNodeValidation:
 
         monkeypatch.setattr(_graph_nodes, "_log_event", record_log_event)
         await _execute_node(
-            GenerationGraphState(request=_request(), planner_result=_planner_result()),
-            tool_executor=_FakeToolExecutor(_action_result()),
+            GenerationGraphState(
+                request=build_request(), planner_result=build_planner_result()
+            ),
+            tool_executor=FakeToolExecutor(build_action_result()),
             monotonic_clock=lambda: next(timestamps),
         )
 
@@ -135,8 +137,8 @@ class TestLangGraphNodeValidation:
             _checkpoint_resume, "_build_checkpoint_payload", invalid_payload
         )
         graph = build_generation_orchestration_graph(
-            planner=_FakePlanner(_planner_result()),
-            tool_executor=_FakeToolExecutor(_action_result()),
+            planner=FakePlanner(build_planner_result()),
+            tool_executor=FakeToolExecutor(build_action_result()),
             extensions=GenerationGraphExtensions(
                 checkpoint_port=InMemoryCheckpointStore(),
                 metrics=typ.cast("BoundedMetricsPort", metrics),
@@ -144,7 +146,7 @@ class TestLangGraphNodeValidation:
         )
 
         with pytest.raises(TypeError, match="payload must be JSON-serializable"):
-            await graph.ainvoke(GenerationGraphState(request=_request()))
+            await graph.ainvoke(GenerationGraphState(request=build_request()))
 
         error_events = [event for event in events if event[0] == "error"]
         assert len(error_events) == 1, (
@@ -176,8 +178,8 @@ class TestLangGraphNodeValidation:
         with pytest.raises(ValueError, match="missing required state value: request"):
             _finish_node(
                 GenerationGraphState(
-                    planner_result=_planner_result(),
-                    action_results=(_action_result(),),
+                    planner_result=build_planner_result(),
+                    action_results=(build_action_result(),),
                 ),
             )
 
@@ -186,4 +188,4 @@ class TestLangGraphNodeValidation:
         with pytest.raises(
             ValueError, match="missing required state value: planner_result"
         ):
-            _finish_node(GenerationGraphState(request=_request()))
+            _finish_node(GenerationGraphState(request=build_request()))
