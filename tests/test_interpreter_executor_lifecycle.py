@@ -167,7 +167,7 @@ def test_interpreter_executor_concurrent_maps_then_shutdown_are_terminal(
     """Generated multi-map interleavings serialise before terminal shutdown."""
 
     async def exercise_interleaving() -> None:
-        """Run two overlapping maps, then check that shutdown is terminal."""
+        """Run two scheduled map calls, then check that shutdown is terminal."""
         create_executor = mock.patch.object(
             ci,
             "_create_interpreter_pool_executor",
