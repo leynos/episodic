@@ -115,7 +115,7 @@ async def test_generate_rejects_non_retryable_http_status(
         Returns
         -------
         httpx.Response
-            JSON error body with status_code and a "bad request" message.
+            JSON error body with the HTTP status and a "bad request" message.
         """
         del request
         return openai_json_response(
@@ -173,7 +173,7 @@ async def test_generate_retries_retryable_http_5xx_then_fails(
         Returns
         -------
         httpx.Response
-            JSON error body with status_code and a "server error" message.
+            JSON error body with the HTTP status and a "server error" message.
         """
         nonlocal attempts
         del request
