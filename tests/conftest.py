@@ -164,7 +164,18 @@ def captured_interpreter_pool_workers(
     captured_max_workers: list[int | None] = []
 
     def fake_create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
-        """Record *max_workers* and return a thread pool of that size."""
+        """Record *max_workers* and return a thread pool using it.
+
+        Parameters
+        ----------
+        max_workers : int | None
+            The pool's maximum; ``None`` leaves the pool to choose a default.
+
+        Returns
+        -------
+        cf.Executor
+            A thread pool executor created with *max_workers*.
+        """
         captured_max_workers.append(max_workers)
         return cf.ThreadPoolExecutor(max_workers=max_workers)
 

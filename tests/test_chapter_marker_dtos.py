@@ -44,7 +44,7 @@ def _result(*chapters: ChapterMarker) -> ChapterMarkersResult:
 
 
 def _iso_duration(seconds: int) -> str:
-    """Format integer seconds as a supported PT duration."""
+    """Format non-negative integer seconds as a supported PT duration."""
     hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
     parts = ["PT"]
