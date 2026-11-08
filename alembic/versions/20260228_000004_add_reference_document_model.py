@@ -29,6 +29,7 @@ depends_on = None
 
 
 def _reference_document_kind_enum() -> postgresql.ENUM:
+    """Return the reference_document_kind enum type."""
     return postgresql.ENUM(
         *REFERENCE_DOCUMENT_KIND_VALUES,
         name="reference_document_kind",
@@ -37,6 +38,7 @@ def _reference_document_kind_enum() -> postgresql.ENUM:
 
 
 def _reference_document_lifecycle_state_enum() -> postgresql.ENUM:
+    """Return the reference_document_lifecycle_state enum type."""
     return postgresql.ENUM(
         *REFERENCE_DOCUMENT_LIFECYCLE_STATE_VALUES,
         name="reference_document_lifecycle_state",
@@ -45,6 +47,7 @@ def _reference_document_lifecycle_state_enum() -> postgresql.ENUM:
 
 
 def _reference_binding_target_kind_enum() -> postgresql.ENUM:
+    """Return the reference_binding_target_kind enum type."""
     return postgresql.ENUM(
         *REFERENCE_BINDING_TARGET_KIND_VALUES.values(),
         name="reference_binding_target_kind",

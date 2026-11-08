@@ -211,6 +211,7 @@ def _make_log_wrapper(
         *args: object,
         exc_info: object | None = config.default_exc_info,
     ) -> None:
+        """Emit one message at the bound level through the logging port."""
         _emit(
             logger,
             _LogCall(

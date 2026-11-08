@@ -30,6 +30,7 @@ class GenerationRunResource:
     def __init__(
         self, uow_factory: UowFactory, *, tracer: TracerPort | None = None
     ) -> None:
+        """Store the unit-of-work factory and tracer, defaulting to no-op."""
         self._uow_factory = uow_factory
         self._tracer = NoopTracer() if tracer is None else tracer
 
@@ -78,6 +79,7 @@ class GenerationRunEventsResource:
     def __init__(
         self, uow_factory: UowFactory, *, tracer: TracerPort | None = None
     ) -> None:
+        """Store the unit-of-work factory and tracer, defaulting to no-op."""
         self._uow_factory = uow_factory
         self._tracer = NoopTracer() if tracer is None else tracer
 
@@ -149,6 +151,7 @@ class GenerationRunEventsResource:
 
 
 def _parse_optional_positive_int(req: falcon.Request, name: str) -> int | None:
+    """Parse an optional query parameter that must be a positive integer."""
     raw = req.get_param(name)
     if raw is None:
         return None
@@ -164,6 +167,7 @@ def _parse_optional_positive_int(req: falcon.Request, name: str) -> int | None:
 
 
 def _parse_limit(req: falcon.Request) -> int:
+    """Parse the ``limit`` query parameter, defaulting to 20 and capped at 100."""
     raw = req.get_param("limit")
     value = _DEFAULT_EVENT_LIMIT if raw is None else _parse_int(raw, "limit")
     if value < 1 or value > _MAX_EVENT_LIMIT:
@@ -191,6 +195,7 @@ def _parse_offset(req: falcon.Request) -> int:
 
 
 def _parse_int(raw: str, name: str) -> int:
+    """Parse an integer query value, raising a validation error if invalid."""
     try:
         return int(raw)
     except ValueError as exc:

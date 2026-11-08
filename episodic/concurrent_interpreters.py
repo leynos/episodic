@@ -180,6 +180,7 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         metrics: CpuTaskExecutorMetricsPort | None = None,
         clock: _CpuTaskExecutorClockPort | None = None,
     ) -> None:
+        """Create an executor that builds its interpreter pool on first use."""
         self._max_workers = max_workers
         self._executor: cf.Executor | None = None
         self._executor_lock = threading.RLock()
@@ -265,6 +266,7 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                 return []
 
         def map_ordered_sync() -> list[_OutputT]:
+            """Map ``task`` over ``items`` on the pool and record metrics."""
             with self._executor_lock:
                 executor = self._get_executor()
                 try:

@@ -28,6 +28,7 @@ def _generation_overloaded() -> falcon.HTTPServiceUnavailable:
 
 
 def _run_not_found(run_id: uuid.UUID) -> falcon.HTTPNotFound:
+    """Build the 404 error for a missing or inaccessible generation run."""
     return typ.cast(
         "falcon.HTTPNotFound",
         http_error(
@@ -58,6 +59,7 @@ def _owns_ingestion_job(job: IngestionJob, principal: str | None) -> bool:
 
 
 def _generation_input_error(message: str) -> falcon.HTTPUnprocessableEntity:
+    """Build the 422 error for invalid generation input."""
     return typ.cast(
         "falcon.HTTPUnprocessableEntity",
         http_error(

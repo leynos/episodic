@@ -99,6 +99,7 @@ class _GenerationRouteMetricsMiddleware:
         metrics: MetricsPort,
         monotonic_clock: MonotonicClockPort,
     ) -> None:
+        """Store the metrics sink and monotonic clock for route timing."""
         self._metrics = metrics
         self._monotonic_clock = monotonic_clock
 
@@ -160,6 +161,7 @@ class _ShutdownHooksMiddleware:
     """Run injected async cleanup hooks during the ASGI shutdown phase."""
 
     def __init__(self, shutdown_hooks: tuple[ShutdownHook, ...]) -> None:
+        """Store the shutdown hooks to run in order."""
         self._shutdown_hooks = shutdown_hooks
 
     async def process_shutdown(
@@ -182,6 +184,7 @@ class _ShutdownHooksMiddleware:
 
 
 def _register_health_routes(app: asgi.App, dependencies: ApiDependencies) -> None:
+    """Register the liveness and readiness routes on *app*."""
     app.add_route("/health/live", HealthLiveResource())
     app.add_route(
         "/health/ready",
@@ -190,6 +193,7 @@ def _register_health_routes(app: asgi.App, dependencies: ApiDependencies) -> Non
 
 
 def _register_series_profile_routes(app: asgi.App, uow_factory: UowFactory) -> None:
+    """Register the series-profile routes on *app*."""
     app.add_route("/v1/series-profiles", SeriesProfilesResource(uow_factory))
     app.add_route(
         "/v1/series-profiles/{profile_id}", SeriesProfileResource(uow_factory)
@@ -209,6 +213,7 @@ def _register_series_profile_routes(app: asgi.App, uow_factory: UowFactory) -> N
 
 
 def _register_episode_template_routes(app: asgi.App, uow_factory: UowFactory) -> None:
+    """Register the episode-template routes on *app*."""
     app.add_route("/v1/episode-templates", EpisodeTemplatesResource(uow_factory))
     app.add_route(
         "/v1/episode-templates/{template_id}",
@@ -221,6 +226,7 @@ def _register_episode_template_routes(app: asgi.App, uow_factory: UowFactory) ->
 
 
 def _register_reference_document_routes(app: asgi.App, uow_factory: UowFactory) -> None:
+    """Register the reference-document and revision routes on *app*."""
     app.add_route(
         "/v1/series-profiles/{profile_id}/reference-documents",
         ReferenceDocumentsResource(uow_factory),
@@ -240,6 +246,7 @@ def _register_reference_document_routes(app: asgi.App, uow_factory: UowFactory) 
 
 
 def _register_reference_binding_routes(app: asgi.App, uow_factory: UowFactory) -> None:
+    """Register the reference-binding routes on *app*."""
     app.add_route("/v1/reference-bindings", ReferenceBindingsResource(uow_factory))
     app.add_route(
         "/v1/reference-bindings/{binding_id}",
@@ -252,6 +259,7 @@ def _register_intake_routes(
     uow_factory: UowFactory,
     dependencies: ApiDependencies,
 ) -> None:
+    """Register the upload and ingestion-job routes on *app*."""
     app.add_route(
         "/v1/uploads",
         UploadsResource(
@@ -280,6 +288,7 @@ def _register_generation_run_routes(
     uow_factory: UowFactory,
     dependencies: ApiDependencies,
 ) -> None:
+    """Register the generation-run creation and polling routes on *app*."""
     app.add_route(
         "/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
         GenerationRunsResource(
@@ -308,6 +317,7 @@ def _register_episode_tei_routes(
     uow_factory: UowFactory,
     dependencies: ApiDependencies,
 ) -> None:
+    """Register the episode TEI route on *app*."""
     app.add_route(
         "/v1/episodes/{episode_id}/tei",
         EpisodeTeiResource(uow_factory, tracer=dependencies.tracer),
@@ -319,6 +329,7 @@ def _register_qa_artefact_routes(
     uow_factory: UowFactory,
     dependencies: ApiDependencies,
 ) -> None:
+    """Register the QA evaluation routes on *app*."""
     app.add_route(
         "/v1/episodes/{episode_id}/qa-evaluations",
         EpisodeQaEvaluationsResource(uow_factory, tracer=dependencies.tracer),

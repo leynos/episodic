@@ -100,6 +100,7 @@ class GenerationRunsResource:
         max_source_count: int | None = None,
         tracer: TracerPort | None = None,
     ) -> None:
+        """Store the unit-of-work factory, launcher, injected seams and tracer."""
         self._uow_factory = uow_factory
         self._launcher = launcher
         self._clock = clock
@@ -146,6 +147,7 @@ class GenerationRunsResource:
             raise _ingestion_job_not_found(source_bundle_id)
 
         async def work() -> IdempotentResponse:
+            """Create and schedule the run, then build its 202 response."""
             run = await self._create_and_schedule_run(
                 self._create_run(
                     source_bundle_id,
@@ -226,6 +228,7 @@ class GenerationRunsResource:
         return run
 
     def _require_launcher(self) -> GenerationRunLauncher:
+        """Return the configured launcher or raise a 503 error if absent."""
         if self._launcher is None:
             raise http_error(
                 falcon.HTTPServiceUnavailable(
@@ -243,6 +246,7 @@ class GenerationRunsResource:
         actor: str,
         idempotency_key: str | None,
     ) -> GenerationRun:
+        """Materialise an episode and persist a pending run for an owned job."""
         async with self._uow_factory() as uow:
             job = await uow.ingestion_jobs.get(source_bundle_id)
             if job is None or not _owns_ingestion_job(job, actor):
@@ -300,6 +304,7 @@ class GenerationRunsResource:
         error_message: str,
         error_category: str,
     ) -> None:
+        """Mark a run failed, ignoring runs that are terminal or missing."""
         now = self._clock()
         async with self._uow_factory() as uow:
             try:
