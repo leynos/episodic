@@ -15,7 +15,7 @@ from tests.test_helm_chart_contract import (
 if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
 
-    from tests.test_helm_chart_contract import _Deployment
+    from tests.helm_chart_types import Deployment
 
 
 @pytest.fixture(scope="module")
@@ -87,7 +87,7 @@ def test_helm_external_secret_wires_database_url(
     """Wire DATABASE_URL to the ExternalSecret target secret."""
     deployment = _rendered_resources(external_secret_manifest).get("Deployment")
     assert deployment is not None, "Helm rendering must contain a Deployment"
-    container = _container(typ.cast("_Deployment", deployment))
+    container = _container(typ.cast("Deployment", deployment))
     database_url_entries = [
         entry for entry in container["env"] if entry["name"] == "DATABASE_URL"
     ]
@@ -124,7 +124,7 @@ def test_helm_explicit_required_secret_overrides_missing_secret_fallback() -> No
     ]
     assert len(deployments) == 1, "Helm rendering must contain exactly one Deployment"
 
-    container = _container(typ.cast("_Deployment", deployments[0]))
+    container = _container(typ.cast("Deployment", deployments[0]))
     database_url_entries = [
         entry for entry in container["env"] if entry["name"] == "DATABASE_URL"
     ]
