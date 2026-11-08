@@ -67,6 +67,7 @@ class StructuredPlanningOrchestrator:
         """Execute one planned action with the standard action log envelope."""
 
         async def execute() -> ActionExecutionResult:
+            """Execute the action, logging its start, completion, and known failures."""
             _log_event(
                 "debug",
                 "structured_planning_orchestrator.execute_plan.action.start",
@@ -214,6 +215,7 @@ class StructuredPlanningOrchestrator:
         """Run the planner with the orchestration-level error log envelope."""
 
         async def run() -> PlannerResult:
+            """Run the planner, logging planning errors before re-raising them."""
             try:
                 return await self.planner.plan(request)
             except (LLMError, PlanningResponseFormatError) as exc:
@@ -234,6 +236,7 @@ class StructuredPlanningOrchestrator:
         """Run tool execution with the orchestration-level error log envelope."""
 
         async def run() -> tuple[ActionExecutionResult, ...]:
+            """Run tool execution, logging orchestration errors before re-raising."""
             try:
                 return await self.execute_plan(
                     request=request,

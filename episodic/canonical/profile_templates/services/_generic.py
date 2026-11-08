@@ -89,12 +89,14 @@ def _get_repos_for_kind(  # ruff: ignore[complex-structure]  # Inlining mandated
                 limit: int | None,
                 offset: int,
             ) -> cabc.Sequence[object]:
+                """List series profiles, ignoring the parent identifier."""
                 return typ.cast(
                     "cabc.Sequence[object]",
                     await profile_repo.list(limit=limit, offset=offset),
                 )
 
             async def _count_entities(_: uuid.UUID | None) -> int:
+                """Count all series profiles, ignoring the parent identifier."""
                 return await profile_repo.count()
 
             async def _list_history_paged(
@@ -102,6 +104,7 @@ def _get_repos_for_kind(  # ruff: ignore[complex-structure]  # Inlining mandated
                 limit: int,
                 offset: int,
             ) -> list[object]:
+                """List one page of history entries for a series profile."""
                 return typ.cast(
                     "list[object]",
                     await profile_history_repo.list_for_profile_paged(
@@ -146,6 +149,7 @@ def _get_repos_for_kind(  # ruff: ignore[complex-structure]  # Inlining mandated
                 limit: int | None,
                 offset: int,
             ) -> cabc.Sequence[object]:
+                """List episode templates, optionally filtered by series profile."""
                 return typ.cast(
                     "cabc.Sequence[object]",
                     await template_repo.list(
@@ -156,6 +160,7 @@ def _get_repos_for_kind(  # ruff: ignore[complex-structure]  # Inlining mandated
                 )
 
             async def _count_entities(series_profile_id: uuid.UUID | None) -> int:
+                """Count episode templates for an optional series profile."""
                 return await template_repo.count(series_profile_id)
 
             async def _list_history_paged(
@@ -163,6 +168,7 @@ def _get_repos_for_kind(  # ruff: ignore[complex-structure]  # Inlining mandated
                 limit: int,
                 offset: int,
             ) -> list[object]:
+                """List one page of history entries for an episode template."""
                 return typ.cast(
                     "list[object]",
                     await template_history_repo.list_for_template_paged(

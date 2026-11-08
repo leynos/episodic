@@ -91,6 +91,7 @@ class SequentialDraftIds:
     """Deterministic per-run TEI id factory."""
 
     def __init__(self) -> None:
+        """Start every prefix counter at zero."""
         self._counts: dict[str, int] = {}
 
     def __call__(self, prefix: str) -> str:

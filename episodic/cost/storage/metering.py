@@ -29,6 +29,7 @@ class SqlAlchemyMeteringCounterStore:
     """SQLAlchemy implementation of `MeteringPort`."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind the counter store to a database session."""
         self._session = session
 
     # Atomic consumption needs the counter, period, delta, and idempotency

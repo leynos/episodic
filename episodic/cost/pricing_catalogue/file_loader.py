@@ -151,6 +151,7 @@ class FilePricingCatalogue:
         *,
         now: cabc.Callable[[], str] = _default_now,
     ) -> None:
+        """Store the pricing directory and the callable that supplies timestamps."""
         self._directory = pathlib.Path(directory)
         self._now = now
         self._cache: list[_LoadedSnapshot] | None = None

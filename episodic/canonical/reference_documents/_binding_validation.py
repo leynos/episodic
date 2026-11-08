@@ -37,11 +37,15 @@ if typ.TYPE_CHECKING:
 
 
 class _SeriesOwnedEntity(typ.Protocol):
+    """Structural type for entities that carry a series profile identifier."""
+
     series_profile_id: uuid.UUID
 
 
 @dc.dataclass(frozen=True, slots=True)
 class _EntityAlignmentCheck:
+    """Error messages used when validating one binding target entity."""
+
     required_msg: str
     not_found_msg: str
     mismatch_msg: str
@@ -155,6 +159,7 @@ def _assert_effective_from_series_profile_only(
     target_kind: ReferenceBindingTargetKind,
     effective_from_episode_id: uuid.UUID | None,
 ) -> None:
+    """Reject effective-from episodes on non-series-profile binding targets."""
     if (
         effective_from_episode_id is not None
         and target_kind is not ReferenceBindingTargetKind.SERIES_PROFILE
@@ -172,6 +177,7 @@ async def _validate_effective_from_episode(
     effective_from_episode_id: uuid.UUID | None,
     document_owner_series_id: uuid.UUID,
 ) -> uuid.UUID | None:
+    """Validate the effective-from episode and return its identifier, if any."""
     if effective_from_episode_id is None:
         return None
     episode = await _require_episode_exists(

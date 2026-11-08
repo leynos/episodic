@@ -50,6 +50,7 @@ def test_check_provider_round_trip_accepts_fixture_completion(
     calls: list[tuple[str, str]] = []
 
     def post_completion(base_url: str, *, model: str) -> dict[str, object]:
+        """Record the requested base URL and model, then return a valid completion."""
         calls.append((base_url, model))
         return _completion_payload()
 
@@ -107,6 +108,7 @@ def test_check_provider_round_trip_rejects_incomplete_fixture_completion(
     """Each part of the fixture completion oracle has a failing regression."""
 
     def post_completion(base_url: str, *, model: str) -> dict[str, object]:
+        """Return the prepared payload whatever the request."""
         del base_url, model
         return payload
 
@@ -133,10 +135,12 @@ def test_main_cleans_up_server_after_successful_smoke_checks(
     events: list[str] = []
 
     def find_executable(name: str) -> str:
+        """Resolve any executable name to the fixture binary path."""
         del name
         return "/opt/vidaimock"
 
     def configured_provider_names(config_dir: Path) -> list[str]:
+        """Report only the smoke test's provider as configured."""
         del config_dir
         return [smoke.PROVIDER_NAME]
 
@@ -145,6 +149,7 @@ def test_main_cleans_up_server_after_successful_smoke_checks(
     monkeypatch.setattr(smoke, "_configured_provider_names", configured_provider_names)
 
     def start_server(launch: smoke.VidaiMockLaunch) -> smoke.VidaiMockServer:
+        """Check the launch uses the resolved executable, then return the server."""
         assert launch.executable == "/opt/vidaimock", (
             "the launcher must receive the executable resolved by the smoke test."
         )
@@ -152,6 +157,7 @@ def test_main_cleans_up_server_after_successful_smoke_checks(
         return server
 
     def check_isolation(base_url: str, configured: list[str]) -> None:
+        """Check isolation targets the server, then record the step."""
         assert base_url == server.base_url, (
             "isolation must target the started server's base URL."
         )
@@ -161,6 +167,7 @@ def test_main_cleans_up_server_after_successful_smoke_checks(
         events.append("isolation")
 
     def check_completion(base_url: str) -> None:
+        """Check completion targets the server, then record the step."""
         assert base_url == server.base_url, (
             "completion must target the started server's base URL."
         )
@@ -170,6 +177,7 @@ def test_main_cleans_up_server_after_successful_smoke_checks(
         cleanup_process: subprocess.Popen[str],
         cleanup_stderr: io.StringIO | None,
     ) -> None:
+        """Check cleanup receives the launched process and capture, then record it."""
         assert cleanup_process is process, "cleanup must receive the launched process."
         assert cleanup_stderr is stderr_file, (
             "cleanup must receive the launched server's stderr capture."

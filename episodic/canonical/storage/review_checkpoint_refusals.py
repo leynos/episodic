@@ -4,16 +4,52 @@ Two paths can discover an already-terminal checkpoint: the domain transition
 rejects it up front, or the compare-and-set update matches no row because a
 concurrent writer got there first. Both must emit the same event, so the
 emission lives here instead of being written out twice; the exception it raises
-is the same one either route ends in.
+is the same one either route ends in. :func:`refuse_missing` does the same for
+a checkpoint that no stored row holds.
 """
 
 import typing as typ
 
-from episodic.canonical.generation_run_errors import CheckpointAlreadyTerminal
+from episodic.canonical.generation_run_errors import (
+    CheckpointAlreadyTerminal,
+    CheckpointNotFound,
+)
 from episodic.logging import log_event as _log_event
 
 if typ.TYPE_CHECKING:
+    import uuid
+
     from .review_checkpoint_models import ReviewCheckpointRecord
+
+
+def refuse_missing(
+    event: str,
+    checkpoint_id: uuid.UUID,
+    fields: dict[str, str],
+) -> typ.NoReturn:
+    """Report the missing checkpoint, then raise :class:`CheckpointNotFound`.
+
+    Parameters
+    ----------
+    event : str
+        Operation that found no row, such as ``respond_checkpoint``.
+    checkpoint_id : uuid.UUID
+        Identifier that no stored row holds.
+    fields : dict of str to str
+        Further context describing the request.
+
+    Raises
+    ------
+    CheckpointNotFound
+        Always: no stored row holds the identifier.
+    """
+    _log_event(
+        "warning",
+        f"sql_review_checkpoint_store.{event}_missing",
+        checkpoint_id=str(checkpoint_id),
+        **fields,
+    )
+    raise CheckpointNotFound(checkpoint_id)
 
 
 def refuse_already_terminal(

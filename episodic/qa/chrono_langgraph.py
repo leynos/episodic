@@ -66,6 +66,7 @@ def build_chrono_graph(
     async def chrono_node(
         state: ChronoGraphState,
     ) -> dict[str, ChronoRuntimeEstimate]:
+        """Evaluate the Chrono request in state, logging missing or failed requests."""
         if state.chrono_request is None:
             log_error(
                 _log,

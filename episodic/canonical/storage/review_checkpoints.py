@@ -18,7 +18,6 @@ from episodic.canonical.domain import Checkpoint, CheckpointStatus
 from episodic.canonical.generation_run_errors import (
     CheckpointAlreadyExists,
     CheckpointAlreadyTerminal,
-    CheckpointNotFound,
     RunNotFound,
 )
 from episodic.logging import log_event as _log_event
@@ -41,7 +40,7 @@ from .review_checkpoint_metrics import (
     record_terminal_conflict,
 )
 from .review_checkpoint_models import ReviewCheckpointRecord
-from .review_checkpoint_refusals import refuse_already_terminal
+from .review_checkpoint_refusals import refuse_already_terminal, refuse_missing
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -84,6 +83,7 @@ class SqlAlchemyReviewCheckpointStore:
         runtime: GenerationRunStorageRuntime | None = None,
         metrics: ValueMetricsPort | None = None,
     ) -> None:
+        """Bind the store to a session, with optional runtime and metrics port."""
         self._session = session
         self._runtime = generation_run_storage_runtime(runtime)
         self._metrics = metrics or NoopValueMetrics()
@@ -305,13 +305,7 @@ class SqlAlchemyReviewCheckpointStore:
         fields: dict[str, str] = {} if extra is None else extra
         record = await self._session.get(ReviewCheckpointRecord, checkpoint_id)
         if record is None:
-            _log_event(
-                "warning",
-                f"sql_review_checkpoint_store.{event}_missing",
-                checkpoint_id=str(checkpoint_id),
-                **fields,
-            )
-            raise CheckpointNotFound(checkpoint_id)
+            refuse_missing(event, checkpoint_id, fields)
 
         try:
             updated = transition(checkpoint_from_record(record))
@@ -376,12 +370,8 @@ class SqlAlchemyReviewCheckpointStore:
         ``populate_existing`` makes it a re-read rather than an identity map hit
         reporting a status the row never held. A surviving row goes through the
         shared refusal route, which reports the terminal conflict and raises
-        there.
-
-        Raises
-        ------
-        CheckpointNotFound
-            If the row is gone.
+        there. A vanished row raises :class:`CheckpointNotFound` through
+        ``refuse_missing``.
         """
         current = await self._session.get(
             ReviewCheckpointRecord,
@@ -389,12 +379,6 @@ class SqlAlchemyReviewCheckpointStore:
             populate_existing=True,
         )
         if current is None:
-            _log_event(
-                "warning",
-                f"sql_review_checkpoint_store.{event}_missing",
-                checkpoint_id=str(checkpoint_id),
-                **fields,
-            )
-            raise CheckpointNotFound(checkpoint_id)
+            refuse_missing(event, checkpoint_id, fields)
         record_terminal_conflict(self._metrics)
         refuse_already_terminal(event, current, fields)

@@ -965,10 +965,6 @@ members = ["episodic/generation/guest_bios_tei.py", "episodic/generation/show_no
 reason = "Per-tool TEI enrichment modules: an identical import surface over the shared tei_payload helpers, each binding its own domain models and div_type at the point of use; merging them would couple two independent enrichment features."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/storage/review_checkpoints.py"]
-reason = "Parallel implementations of one port: the in-memory checkpoint mixin and the SQLAlchemy checkpoint store bind the same domain exception set and the same log-event helper. An import list cannot be factored into shared code without changing which names each module binds."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/canonical/storage/qa_artefact_storage_runtime.py", "episodic/cli/client.py", "episodic/llm/openai_api/adapter.py"]
 reason = "The observability port and default-adapter import block is a port surface, not logic: the QA storage runtime, the CLI client, and the OpenAI adapter each bind the no-op and production adapters their own runtime composes. Re-exporting the same names through an indirection module would add a hop every reader must follow without removing behaviour."
 

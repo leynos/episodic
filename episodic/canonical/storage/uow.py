@@ -156,6 +156,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         *,
         runtime: UnitOfWorkRuntime | None = None,
     ) -> None:
+        """Store the session factory and runtime, defaulting the runtime if absent."""
         self._session_factory = session_factory
         self._runtime = UnitOfWorkRuntime() if runtime is None else runtime
         self._session: AsyncSession | None = None

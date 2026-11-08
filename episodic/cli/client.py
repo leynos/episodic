@@ -279,6 +279,7 @@ class QaApiClient:
     """
 
     def __init__(self, runtime: CliRuntime) -> None:
+        """Store the CLI runtime used for later requests."""
         self._runtime = runtime
 
     def list_evaluations(

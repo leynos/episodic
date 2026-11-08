@@ -211,6 +211,7 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
         """
 
         def _translate(error: IntegrityError) -> BaseException | None:
+            """Map a duplicate source-document ID conflict to a projection error."""
             if is_source_document_duplicate_integrity_error(error):
                 return _DuplicateProjectionError()
             return None

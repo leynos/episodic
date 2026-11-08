@@ -58,6 +58,7 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         *,
         runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:
+        """Bind the store to a session and an optional storage runtime."""
         self._session = session
         self._runtime = generation_run_storage_runtime(runtime)
 

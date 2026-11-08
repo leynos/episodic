@@ -144,6 +144,7 @@ def stub_runner(
     payload = STUB_REPORT if report is None else report
 
     def run(command: cabc.Sequence[str]) -> str:
+        """Return the version line for a version request, else the JSON payload."""
         if "--version" in command:
             return f"{version}\n"
         return json.dumps(payload)
