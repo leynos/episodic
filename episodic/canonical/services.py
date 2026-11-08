@@ -153,6 +153,8 @@ def _create_initial_approval_event(
 
 @dc.dataclass(frozen=True, slots=True)
 class _IngestionContext:
+    """Identifiers and timestamp shared by one ingestion's persistence steps."""
+
     job_id: uuid.UUID
     episode_id: uuid.UUID
     now: dt.datetime

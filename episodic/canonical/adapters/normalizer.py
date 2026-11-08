@@ -101,6 +101,7 @@ class InMemorySourceNormalizer:
         self,
         score_overrides: dict[str, JsonMapping] | None = None,
     ) -> None:
+        """Initialize the normalizer with optional per-source-type score overrides."""
         self._scores = dict(_DEFAULT_SCORES)
         if score_overrides:
             for source_type, overrides in score_overrides.items():

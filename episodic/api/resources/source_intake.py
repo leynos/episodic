@@ -70,6 +70,7 @@ class UploadsResource:
         *,
         config: UploadResourceConfig,
     ) -> None:
+        """Store the unit-of-work factory and the upload configuration."""
         self._uow_factory = uow_factory
         self._config = config
 
@@ -105,6 +106,7 @@ class UploadsResource:
         )
 
         async def work() -> IdempotentResponse:
+            """Register the upload and build its 201 response."""
             try:
                 upload = await register_upload(
                     self._uow_factory,
@@ -139,6 +141,7 @@ class UploadResource:
     """Handle one source upload metadata endpoint."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_get(
@@ -163,6 +166,7 @@ class IngestionJobsResource:
     """Handle ingestion-job collection endpoints."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
@@ -184,6 +188,7 @@ class IngestionJobsResource:
             )
 
         async def work() -> IdempotentResponse:
+            """Create the ingestion job and build its 201 response."""
             async with self._uow_factory() as uow:
                 try:
                     job = await create_ingestion_job(
@@ -238,6 +243,7 @@ class IngestionJobResource:
     """Handle one ingestion-job status endpoint."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_get(
@@ -268,6 +274,7 @@ class IngestionJobSourcesResource:
     """Handle source attachments for an ingestion job."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_post(
@@ -283,6 +290,7 @@ class IngestionJobSourcesResource:
         attach_request = build_attach_source_request(parsed_job_id, payload)
 
         async def work() -> IdempotentResponse:
+            """Check job ownership, attach the source, and return its response."""
             async with self._uow_factory() as uow:
                 try:
                     job = await get_ingestion_job_status(uow, parsed_job_id)

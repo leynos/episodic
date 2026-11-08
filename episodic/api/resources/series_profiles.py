@@ -247,6 +247,7 @@ class SeriesProfileBriefResource:
     """
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
     async def on_get(

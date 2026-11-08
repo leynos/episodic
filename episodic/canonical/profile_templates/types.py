@@ -211,6 +211,7 @@ class ProfileTemplateError(Exception):
         entity_id: str | None = None,
         retryable: bool | None = None,
     ) -> None:
+        """Initialize the error with a message and optional structured metadata."""
         super().__init__(message)
         self.code = code if code is not None else type(self).error_code
         self.entity_id = entity_id
@@ -254,36 +255,50 @@ class _VersionedEntity(typ.Protocol):
 class _EntityRepository[EntityT: _VersionedEntity](typ.Protocol):
     """Protocol for repositories that update versioned entities."""
 
-    async def get(self, entity_id: uuid.UUID, /) -> EntityT | None: ...
+    async def get(self, entity_id: uuid.UUID, /) -> EntityT | None:
+        """Return the entity with this identifier, or None."""
+        ...
 
-    async def update(self, entity: EntityT, /) -> None: ...
+    async def update(self, entity: EntityT, /) -> None:
+        """Persist the changes to the given entity."""
+        ...
 
 
 class _HistoryRepository[HistoryT](typ.Protocol):
     """Protocol for repositories that persist history entries."""
 
-    async def add(self, entry: HistoryT, /) -> None: ...
+    async def add(self, entry: HistoryT, /) -> None:
+        """Persist a new history entry."""
+        ...
 
 
 class _SeriesProfileRepository(typ.Protocol):
     """Protocol for series-profile repository read operations."""
 
-    async def get(self, entity_id: uuid.UUID, /) -> SeriesProfile | None: ...
+    async def get(self, entity_id: uuid.UUID, /) -> SeriesProfile | None:
+        """Return the series profile with this identifier, or None."""
+        ...
 
     async def list(
         self,
         *,
         limit: int | None = None,
         offset: int = 0,
-    ) -> cabc.Sequence[SeriesProfile]: ...
+    ) -> cabc.Sequence[SeriesProfile]:
+        """Return a page of series profiles."""
+        ...
 
-    async def count(self) -> int: ...
+    async def count(self) -> int:
+        """Return the total number of series profiles."""
+        ...
 
 
 class _EpisodeTemplateRepository(typ.Protocol):
     """Protocol for episode-template repository read operations."""
 
-    async def get(self, entity_id: uuid.UUID, /) -> EpisodeTemplate | None: ...
+    async def get(self, entity_id: uuid.UUID, /) -> EpisodeTemplate | None:
+        """Return the episode template with this identifier, or None."""
+        ...
 
     async def list(
         self,
@@ -291,9 +306,13 @@ class _EpisodeTemplateRepository(typ.Protocol):
         *,
         limit: int | None = None,
         offset: int = 0,
-    ) -> cabc.Sequence[EpisodeTemplate]: ...
+    ) -> cabc.Sequence[EpisodeTemplate]:
+        """Return a page of episode templates, optionally for one series profile."""
+        ...
 
-    async def count(self, series_profile_id: uuid.UUID | None) -> int: ...
+    async def count(self, series_profile_id: uuid.UUID | None) -> int:
+        """Count episode templates, optionally for one series profile."""
+        ...
 
 
 class _SeriesProfileHistoryRepository(typ.Protocol):
@@ -303,13 +322,17 @@ class _SeriesProfileHistoryRepository(typ.Protocol):
         self,
         profile_id: uuid.UUID,
         /,
-    ) -> SeriesProfileHistoryEntry | None: ...
+    ) -> SeriesProfileHistoryEntry | None:
+        """Return the latest history entry for a series profile, or None."""
+        ...
 
     async def list_for_profile(
         self,
         profile_id: uuid.UUID,
         /,
-    ) -> list[SeriesProfileHistoryEntry]: ...
+    ) -> list[SeriesProfileHistoryEntry]:
+        """Return all history entries for a series profile."""
+        ...
 
     async def list_for_profile_paged(
         self,
@@ -318,9 +341,13 @@ class _SeriesProfileHistoryRepository(typ.Protocol):
         *,
         limit: int,
         offset: int,
-    ) -> list[SeriesProfileHistoryEntry]: ...
+    ) -> list[SeriesProfileHistoryEntry]:
+        """Return one page of history entries for a series profile."""
+        ...
 
-    async def count_for_profile(self, profile_id: uuid.UUID, /) -> int: ...
+    async def count_for_profile(self, profile_id: uuid.UUID, /) -> int:
+        """Count history entries for a series profile."""
+        ...
 
     get_latest_revisions_for_profiles: BulkLatestRevisionsFn
 
@@ -332,13 +359,17 @@ class _EpisodeTemplateHistoryRepository(typ.Protocol):
         self,
         template_id: uuid.UUID,
         /,
-    ) -> EpisodeTemplateHistoryEntry | None: ...
+    ) -> EpisodeTemplateHistoryEntry | None:
+        """Return the latest history entry for an episode template, or None."""
+        ...
 
     async def list_for_template(
         self,
         template_id: uuid.UUID,
         /,
-    ) -> list[EpisodeTemplateHistoryEntry]: ...
+    ) -> list[EpisodeTemplateHistoryEntry]:
+        """Return all history entries for an episode template."""
+        ...
 
     async def list_for_template_paged(
         self,
@@ -347,8 +378,12 @@ class _EpisodeTemplateHistoryRepository(typ.Protocol):
         *,
         limit: int,
         offset: int,
-    ) -> list[EpisodeTemplateHistoryEntry]: ...
+    ) -> list[EpisodeTemplateHistoryEntry]:
+        """Return one page of history entries for an episode template."""
+        ...
 
-    async def count_for_template(self, template_id: uuid.UUID, /) -> int: ...
+    async def count_for_template(self, template_id: uuid.UUID, /) -> int:
+        """Count history entries for an episode template."""
+        ...
 
     get_latest_revisions_for_templates: BulkLatestRevisionsFn
