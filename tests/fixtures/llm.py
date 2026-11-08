@@ -93,6 +93,13 @@ def openai_request_builder() -> _OpenAIRequestBuilder:
         operation: str | LLMProviderOperation = "chat_completions",
         prompt: str = "Draft the episode opener.",
     ) -> LLMRequest:
+        """Build an LLM request with a fixed model and token budget.
+
+        Returns
+        -------
+        LLMRequest
+            Request for the given provider operation and prompt.
+        """
         return LLMRequest(
             model="gpt-4o-mini",
             prompt=prompt,
@@ -116,6 +123,13 @@ def openai_json_response() -> _OpenAIJsonResponseBuilder:
         payload: dict[str, object],
         status_code: int = 200,
     ) -> httpx.Response:
+        """Return an HTTPX response carrying the payload as JSON.
+
+        Returns
+        -------
+        httpx.Response
+            Response with a JSON content type and encoded payload.
+        """
         return httpx.Response(
             status_code=status_code,
             headers={"content-type": "application/json"},
@@ -132,6 +146,23 @@ def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
     def _build_invalid_config(
         config_kwargs: dict[str, object],
     ) -> OpenAICompatibleLLMConfig:
+        """Build an OpenAI config from overrides, rejecting unknown keys.
+
+        Parameters
+        ----------
+        config_kwargs : dict[str, object]
+            Overrides applied on top of the test defaults.
+
+        Returns
+        -------
+        OpenAICompatibleLLMConfig
+            Config built from the defaults and overrides.
+
+        Raises
+        ------
+        ValueError
+            If ``config_kwargs`` contains an unsupported key.
+        """
         allowed_keys = {
             "api_key",
             "base_url",
@@ -190,6 +221,13 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
         metrics: MetricsPort | None = None,
         clock: MonotonicClockPort | None = None,
     ) -> cabc.AsyncIterator[OpenAICompatibleLLMAdapter]:
+        """Yield an OpenAI adapter bound to an HTTPX client on the transport.
+
+        Yields
+        ------
+        OpenAICompatibleLLMAdapter
+            Adapter configured from the supplied options.
+        """
         async with httpx.AsyncClient(
             transport=transport,
             base_url=_OPENAI_TEST_BASE_URL,

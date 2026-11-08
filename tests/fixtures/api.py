@@ -119,6 +119,13 @@ def canonical_api_creators(
     """Bundle the canonical-API entity-creator callables for use in tests."""
 
     def _create_series_profile(slug: str) -> str:
+        """Create a series profile through the API and return its identifier.
+
+        Returns
+        -------
+        str
+            Identifier of the created series profile.
+        """
         response = canonical_api_client.simulate_post(
             "/v1/series-profiles",
             json={
@@ -141,6 +148,13 @@ def canonical_api_creators(
         return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
 
     def _create_episode_template(profile_id: str) -> str:
+        """Create an episode template through the API and return its identifier.
+
+        Returns
+        -------
+        str
+            Identifier of the created episode template.
+        """
         response = canonical_api_client.simulate_post(
             "/v1/episode-templates",
             json={

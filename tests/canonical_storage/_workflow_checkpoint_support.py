@@ -44,6 +44,7 @@ class RecordingMetrics:
     """Capture checkpoint metrics for adapter assertions."""
 
     def __init__(self) -> None:
+        """Initialize empty counter and latency buffers."""
         self.counters: list[tuple[str, dict[str, str]]] = []
         self.latencies: list[tuple[str, float, dict[str, str]]] = []
 
@@ -94,6 +95,7 @@ class StepClock:
     """Deterministic monotonic clock for metric latency assertions."""
 
     def __init__(self) -> None:
+        """Start the clock at zero seconds."""
         self._seconds = 0.0
 
     def monotonic_seconds(self) -> float:

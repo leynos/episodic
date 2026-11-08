@@ -250,6 +250,7 @@ async def _acquire_and_run_failing_work(
     assert isinstance(outcome, Acquired), "Expected value to have the required type"
 
     async def failing_work() -> IdempotentResponse:
+        """Yield to the event loop, then raise a RuntimeError."""
         await asyncio.sleep(0)
         raise RuntimeError("boom")
 

@@ -84,6 +84,7 @@ def _run_single_error_call(
         client: httpx.AsyncClient,
         scenario_context: SourceIntakeContext,
     ) -> None:
+        """Send the request and record the error response in the context."""
         response = await request_fn(client)
         record_error_response(response, scenario_context)
 
@@ -213,6 +214,13 @@ def attach_pending_upload(
     """Attach a pending upload to a known ingestion job."""
 
     async def _request(client: httpx.AsyncClient) -> httpx.Response:
+        """Create a pending upload and attach it to a new ingestion job.
+
+        Returns
+        -------
+        httpx.Response
+            Response from the attach request.
+        """
         upload_id = await create_pending_upload(session_factory)
         return await _attach_upload_to_new_job(
             client,
@@ -238,6 +246,7 @@ def list_attached_sources(
         client: httpx.AsyncClient,
         scenario_context: SourceIntakeContext,
     ) -> None:
+        """Create a job, attach an upload, and record the source listing."""
         profile_id = await create_series_profile(client)
         upload = await post_text_upload(
             client,
@@ -270,6 +279,7 @@ def _run_source_intake_call(
     """Run one BDD action against the source-intake ASGI app."""
 
     async def _run_workflow() -> None:
+        """Build the app, open a client, and run the action against it."""
         dependencies = build_api_dependencies(
             config.session_factory,
             authorization=HeaderPrincipalAuthorization(),

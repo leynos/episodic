@@ -268,6 +268,7 @@ def generation_payload(**overrides: object) -> dict[str, object]:
 
 
 def _write_provider_config(provider_dir: Path) -> None:
+    """Write the draft provider configuration into the provider directory."""
     (provider_dir / "draft.yaml").write_text(
         "\n".join((
             'name: "draft"',
@@ -282,6 +283,7 @@ def _write_provider_config(provider_dir: Path) -> None:
 
 
 def _write_response_template(template_dir: Path) -> None:
+    """Write the draft response template that serves malformed content on demand."""
     valid_content = json.dumps(_VALID_DRAFT)
     invalid_tei_draft = json.dumps({
         "title": "Invalid TEI draft",

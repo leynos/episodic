@@ -51,6 +51,7 @@ class _RecordingValueMetrics:
     """Capture counters and scalar values for store-level assertions."""
 
     def __init__(self) -> None:
+        """Initialize empty counter and value buffers."""
         self.counters: list[tuple[str, dict[str, str]]] = []
         self.values: list[tuple[str, float, dict[str, str]]] = []
 
@@ -300,6 +301,7 @@ async def test_domain_rejection_logs_the_refusal_event(
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def record_event(level: str, message: str, **fields: object) -> None:
+        """Append a captured log event to the events list."""
         events.append((level, message, fields))
 
     monkeypatch.setattr(review_checkpoint_refusals, "_log_event", record_event)

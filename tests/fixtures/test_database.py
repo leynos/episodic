@@ -72,6 +72,7 @@ class _CountingSchemaResetLock:
     """Async context manager that records reset lock usage."""
 
     def __init__(self) -> None:
+        """Create the lock and zero the usage counters."""
         self._lock = asyncio.Lock()
         self.enter_count = 0
         self.exit_count = 0
@@ -79,6 +80,13 @@ class _CountingSchemaResetLock:
         self.max_active_count = 0
 
     async def __aenter__(self) -> _CountingSchemaResetLock:
+        """Acquire the lock and record the entry.
+
+        Returns
+        -------
+        _CountingSchemaResetLock
+            This context manager.
+        """
         self.enter_count += 1
         await self._lock.acquire()
         self._active_count += 1
@@ -91,6 +99,7 @@ class _CountingSchemaResetLock:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """Record the exit and release the lock."""
         self.exit_count += 1
         self._active_count -= 1
         self._lock.release()

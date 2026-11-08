@@ -104,11 +104,20 @@ async def test_snapshot_resolved_bindings_persists_reference_source_documents(
     fx = binding_snapshot_fixtures
 
     class _FixedDateTime(dt.datetime):
+        """Stand in for datetime so that now returns the expected instant."""
+
         @classmethod
         def now(
             cls,
             tz: dt.tzinfo | None = None,
         ) -> dt.datetime:
+            """Return the expected creation instant for a UTC request.
+
+            Returns
+            -------
+            dt.datetime
+                The fixed creation instant supplied by the test.
+            """
             assert tz == dt.UTC, "datetime.now must receive dt.UTC"
             return expected_created_at
 

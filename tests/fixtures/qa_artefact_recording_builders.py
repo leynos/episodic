@@ -79,6 +79,13 @@ def identifier_sequence(
     issued = itertools.count()
 
     def next_identifier() -> uuid.UUID:
+        """Return the next identifier in the sequence.
+
+        Returns
+        -------
+        uuid.UUID
+            The first evaluation identifier, then deterministic derived ones.
+        """
         ordinal = next(issued)
         if ordinal == 0:
             return first

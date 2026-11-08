@@ -65,6 +65,13 @@ async def test_uow_rolls_back_on_exception(session_factory: object) -> None:
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
 
     async def _add_and_raise() -> None:
+        """Add the profile, then raise to force a rollback.
+
+        Raises
+        ------
+        RuntimeError
+            Always, to trigger the unit-of-work rollback.
+        """
         async with SqlAlchemyUnitOfWork(factory) as uow:
             await uow.series_profiles.add(profile)
             msg = "Simulated failure."

@@ -142,6 +142,13 @@ async def test_generation_run_store_claims_pending_run_once_concurrently(
     async def claim_from_independent_session(
         current_node: str,
     ) -> GenerationRun | None:
+        """Wait at the barrier, then claim the run from an independent session.
+
+        Returns
+        -------
+        GenerationRun | None
+            The claimed run, or None if the claim was lost.
+        """
         await claim_barrier.wait()
         return await claim_run_in_independent_uow(
             session_factory,
@@ -269,6 +276,7 @@ async def test_generation_run_store_logs_claim_outcomes(
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def capture_log_event(level: str, message: str, **fields: object) -> None:
+        """Append a captured log event to the events list."""
         events.append((level, message, fields))
 
     monkeypatch.setattr(generation_runs_module, "_log_event", capture_log_event)

@@ -232,6 +232,7 @@ async def test_uncommitted_response_does_not_persist(
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def record_event(level: str, message: str, **fields: object) -> None:
+        """Append a captured log event to the events list."""
         events.append((level, message, fields))
 
     monkeypatch.setattr(uow, "_log_event", record_event)
@@ -277,6 +278,7 @@ async def test_uncommitted_staged_add_warns_before_it_is_discarded(
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def record_event(level: str, message: str, **fields: object) -> None:
+        """Append a captured log event to the events list."""
         events.append((level, message, fields))
 
     monkeypatch.setattr(uow, "_log_event", record_event)

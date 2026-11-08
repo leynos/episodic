@@ -202,6 +202,13 @@ async def test_checkpoint_store_reuses_concurrent_idempotency_key(
     duplicate = make_checkpoint(checkpoint_id=str(uuid.uuid4()), idempotency_key=key)
 
     async def save_checkpoint(checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
+        """Save the checkpoint in its own unit of work.
+
+        Returns
+        -------
+        WorkflowCheckpoint
+            The checkpoint returned by ``save_or_reuse``.
+        """
         async with SqlAlchemyUnitOfWork(factory) as uow:
             stored = await uow.workflow_checkpoints.save_or_reuse(checkpoint)
             await uow.commit()
@@ -294,6 +301,13 @@ async def test_checkpoint_store_concurrent_idempotency_property(
         checkpoint: WorkflowCheckpoint,
         delay: float,
     ) -> WorkflowCheckpoint:
+        """Sleep for the delay, then save the checkpoint in its own unit of work.
+
+        Returns
+        -------
+        WorkflowCheckpoint
+            The checkpoint returned by ``save_or_reuse``.
+        """
         await asyncio.sleep(delay)
         async with SqlAlchemyUnitOfWork(factory) as uow:
             stored = await uow.workflow_checkpoints.save_or_reuse(checkpoint)

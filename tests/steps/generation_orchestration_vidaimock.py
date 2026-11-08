@@ -18,6 +18,13 @@ __all__ = [
 
 
 def _planner_content_literal() -> str:
+    """Return the planner plan JSON, encoded again as a JSON string.
+
+    Returns
+    -------
+    str
+        JSON string literal wrapping the planner content.
+    """
     planner_content = json.dumps({
         "plan_version": "1.0",
         "steps": [
@@ -34,6 +41,13 @@ def _planner_content_literal() -> str:
 
 
 def _show_notes_content_literal() -> str:
+    """Return the show-notes JSON, encoded again as a JSON string.
+
+    Returns
+    -------
+    str
+        JSON string literal wrapping the show-notes content.
+    """
     show_notes_content = json.dumps({
         "entries": [
             {
