@@ -49,7 +49,7 @@ class _FakeToolExecutor:
         result: ActionExecutionResult | None = None,
         error: Exception | None = None,
     ) -> None:
-        """Store the result or error to return, with no calls recorded yet."""
+        """Store the result to return or the error to raise, with no calls yet."""
         self.result = result
         self.error = error
         self.calls: list[tuple[PlannedAction, GenerationOrchestrationRequest]] = []

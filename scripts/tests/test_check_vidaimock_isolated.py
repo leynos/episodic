@@ -137,7 +137,7 @@ def urlopen_spy_fixture(
     """
 
     def install(outcome: object) -> _UrlopenSpy:
-        """Install *outcome* as the `urlopen` stand-in and return the spy."""
+        """Install a `urlopen` spy answering with *outcome* and return it."""
         spy = _UrlopenSpy(outcome)
         monkeypatch.setattr(urllib.request, "urlopen", spy)
         return spy
