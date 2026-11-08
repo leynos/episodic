@@ -23,12 +23,14 @@ async def test_create_app_runs_shutdown_hooks_during_asgi_shutdown() -> None:
     first_hook_completed = False
 
     async def first_shutdown_hook() -> None:
+        """Record the first shutdown hook and mark it as completed."""
         nonlocal first_hook_completed
         await asyncio.sleep(0)
         hook_calls.append("first")
         first_hook_completed = True
 
     async def second_shutdown_hook() -> None:
+        """Record the second shutdown hook after checking the first finished."""
         await asyncio.sleep(0)
         assert first_hook_completed, "shutdown hooks must not run concurrently"
         hook_calls.append("second")
@@ -64,12 +66,20 @@ async def test_shutdown_runs_remaining_hooks_after_failure() -> None:
     calls: list[str] = []
 
     async def failing_hook() -> None:
+        """Record the call, then raise the first hook's failure.
+
+        Raises
+        ------
+        RuntimeError
+            Always, with the message "first hook failed".
+        """
         await asyncio.sleep(0)
         calls.append("failing")
         msg = "first hook failed"
         raise RuntimeError(msg)
 
     async def later_hook() -> None:
+        """Record that the later shutdown hook ran."""
         await asyncio.sleep(0)
         calls.append("later")
 
@@ -98,22 +108,39 @@ async def test_runtime_lifespan_shuts_down_generation_before_database(
     events: list[str] = []
 
     async def shutdown_database() -> None:
+        """Record the database disposal during shutdown."""
         await asyncio.sleep(0)
         events.append("database.dispose")
 
     async def check_database() -> bool:
+        """Yield to the event loop, then report a healthy result.
+
+        Returns
+        -------
+        bool
+            Always ``True``.
+        """
         await asyncio.sleep(0)
         return True
 
     async def shutdown_launcher() -> None:
+        """Record the generation launcher shutdown."""
         await asyncio.sleep(0)
         events.append("launcher.shutdown")
 
     async def close_llm() -> None:
+        """Record the LLM port close during shutdown."""
         await asyncio.sleep(0)
         events.append("llm_port.aclose")
 
     def unit_of_work_factory() -> object:
+        """Build a placeholder unit-of-work object.
+
+        Returns
+        -------
+        object
+            A new bare ``object`` instance.
+        """
         return object()
 
     probe = runtime_module.ReadinessProbe(name="database", check=check_database)

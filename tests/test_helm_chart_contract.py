@@ -9,6 +9,15 @@ import typing as typ
 import pytest
 import yaml
 
+if typ.TYPE_CHECKING:
+    from tests.helm_chart_types import (
+        ApplicationContainer,
+        ConfigMap,
+        Deployment,
+        Ingress,
+        LocalResources,
+    )
+
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 CHART_PATH = REPOSITORY_ROOT / "charts" / "episodic"
 LOCAL_VALUES_PATH = CHART_PATH / "values.local.yaml"
@@ -25,113 +34,6 @@ _EXPECTED_LOCAL_CONFIGMAP_DATA = {
     "OPENAI_TIMEOUT_SECONDS": "600",
     "GENERATION_MAX_OUTPUT_TOKENS": "32768",
 }
-
-
-class _Metadata(typ.TypedDict):
-    name: str
-
-
-class _ConfigMap(typ.TypedDict):
-    metadata: _Metadata
-    data: dict[str, str]
-
-
-class _SecretKeyRef(typ.TypedDict):
-    name: str
-    key: str
-    optional: bool
-
-
-class _ContainerValueFrom(typ.TypedDict):
-    secretKeyRef: _SecretKeyRef
-
-
-class _ContainerEnvironment(typ.TypedDict):
-    name: str
-    valueFrom: _ContainerValueFrom
-
-
-class _ContainerEnvironmentFrom(typ.TypedDict):
-    configMapRef: _Metadata
-
-
-class _ContainerSecurityContext(typ.TypedDict):
-    readOnlyRootFilesystem: bool
-    allowPrivilegeEscalation: bool
-
-
-class _ApplicationContainer(typ.TypedDict):
-    name: str
-    image: str
-    imagePullPolicy: str
-    envFrom: list[_ContainerEnvironmentFrom]
-    env: list[_ContainerEnvironment]
-    securityContext: _ContainerSecurityContext
-
-
-class _PodSecurityContext(typ.TypedDict):
-    runAsNonRoot: bool
-
-
-class _PodSpec(typ.TypedDict):
-    containers: list[_ApplicationContainer]
-    securityContext: _PodSecurityContext
-
-
-class _PodTemplate(typ.TypedDict):
-    spec: _PodSpec
-
-
-class _DeploymentSpec(typ.TypedDict):
-    replicas: int
-    template: _PodTemplate
-
-
-class _Deployment(typ.TypedDict):
-    spec: _DeploymentSpec
-
-
-class _IngressServicePort(typ.TypedDict):
-    name: str
-
-
-class _IngressService(typ.TypedDict):
-    name: str
-    port: _IngressServicePort
-
-
-class _IngressBackend(typ.TypedDict):
-    service: _IngressService
-
-
-class _IngressPath(typ.TypedDict):
-    path: str
-    pathType: str
-    backend: _IngressBackend
-
-
-class _IngressHttp(typ.TypedDict):
-    paths: list[_IngressPath]
-
-
-class _IngressRule(typ.TypedDict):
-    host: str
-    http: _IngressHttp
-
-
-class _IngressSpec(typ.TypedDict):
-    ingressClassName: str
-    rules: list[_IngressRule]
-
-
-class _Ingress(typ.TypedDict):
-    spec: _IngressSpec
-
-
-class _LocalResources(typ.TypedDict):
-    ConfigMap: _ConfigMap
-    Deployment: _Deployment
-    Ingress: _Ingress
 
 
 def _string_key_mapping(value: object, description: str) -> dict[str, object]:
@@ -215,7 +117,7 @@ def test_helm_local_manifest_has_required_resources(
     ), "local preview manifest must contain its required resource kinds"
 
 
-def _local_resources(local_chart_manifest: str) -> _LocalResources:
+def _local_resources(local_chart_manifest: str) -> LocalResources:
     """Return the rendered local manifest indexed by resource kind."""
     documents = [
         _string_key_mapping(typ.cast("object", document), "rendered Helm document")
@@ -239,9 +141,9 @@ def _local_resources(local_chart_manifest: str) -> _LocalResources:
             "Ingress": ingress,
         }:
             return {
-                "ConfigMap": typ.cast("_ConfigMap", config_map),
-                "Deployment": typ.cast("_Deployment", deployment),
-                "Ingress": typ.cast("_Ingress", ingress),
+                "ConfigMap": typ.cast("ConfigMap", config_map),
+                "Deployment": typ.cast("Deployment", deployment),
+                "Ingress": typ.cast("Ingress", ingress),
             }
         case _:
             pytest.fail(
@@ -250,7 +152,7 @@ def _local_resources(local_chart_manifest: str) -> _LocalResources:
             )
 
 
-def _container(deployment: _Deployment) -> _ApplicationContainer:
+def _container(deployment: Deployment) -> ApplicationContainer:
     """Return the sole application container of the rendered Deployment."""
     pod_spec = _string_key_mapping(
         typ.cast("object", deployment["spec"]["template"]["spec"]),
@@ -261,7 +163,7 @@ def _container(deployment: _Deployment) -> _ApplicationContainer:
         f"the Deployment pod spec must contain a container list; got {pod_spec}"
     )
     typed_containers = [
-        typ.cast("_ApplicationContainer", _string_key_mapping(container, "container"))
+        typ.cast("ApplicationContainer", _string_key_mapping(container, "container"))
         for container in containers
     ]
 

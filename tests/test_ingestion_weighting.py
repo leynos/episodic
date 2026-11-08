@@ -21,6 +21,7 @@ class RecordingCpuTaskExecutor:
     """Test double that records how many map dispatches occurred."""
 
     def __init__(self) -> None:
+        """Start the map dispatch counter at zero."""
         self.map_calls = 0
 
     async def map_ordered(
@@ -212,6 +213,13 @@ def test_default_weighting_strategy_forwards_metrics_to_executor_builder(
         *,
         metrics: object = None,
     ) -> RecordingCpuTaskExecutor:
+        """Capture the forwarded metrics and return a recording executor.
+
+        Returns
+        -------
+        RecordingCpuTaskExecutor
+            A new recording executor.
+        """
         captured["metrics"] = metrics
         return RecordingCpuTaskExecutor()
 
