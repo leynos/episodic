@@ -28,6 +28,10 @@ Accepted decision records:
 - [ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md)
 - [ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md)
 
+Proposed decision records:
+
+- [ADR 028: Generation-run REST completion](adr/adr-028-generation-run-rest-completion.md)
+
 ## Overview
 
 The episodic podcast generation platform automates the production of scripted,
@@ -348,6 +352,10 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   (reserve → commit → release) around billable calls.
 - Exposes human-in-the-loop checkpoints where editors can intervene, approve, or
   redirect the generation graph mid-cycle.
+- Roadmap item `2.6.3` plans authenticated, paginated generation-run status and
+  event history through the REST API, with checkpoint responses recorded as
+  durable review events. The proposed route and transaction contract is in
+  [ADR 028](adr/adr-028-generation-run-rest-completion.md).
 - Provides checkpointing for resumable workflows, enabling long-running
   editorial review periods without state loss.
 - Surfaces retryable failure modes and exposes override hooks for human edits.

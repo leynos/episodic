@@ -255,14 +255,21 @@ ingestion-job source.
 
 ### Generation runs
 
-Each generation run is created from a ready ingestion job and is a first-class
-resource with an append-only event log and checkpoint support for
-human-in-the-loop intervention.
+Each generation run is a first-class resource with an append-only event log and
+checkpoint support for human-in-the-loop intervention. The initial run is
+created from a ready ingestion job. After a successful run, episode-scoped
+creation can start a regeneration using the source bundle pinned on that run.
+The proposed route and lifecycle decisions for roadmap item `2.6.3` are
+recorded in [ADR 028](adr/adr-028-generation-run-rest-completion.md).
 
 ```plaintext
 POST   /v1/ingestion-jobs/{ingestion_job_id}/generation-runs
        Body: template_id, quality_mode, prompt_overrides,
-             budget_hints, skip_qa_rationale, actor
+             budget_hints, skip_qa_rationale
+       Header: Idempotency-Key
+POST   /v1/episodes/{episode_id}/generation-runs
+       Body: template_id, quality_mode, prompt_overrides,
+             budget_hints, skip_qa_rationale
        Header: Idempotency-Key
 GET    /v1/episodes/{episode_id}/generation-runs
        Query: status, limit, offset
@@ -279,6 +286,15 @@ POST   /v1/generation-runs/{run_id}/checkpoint
        Body: checkpoint_id, action (approve | request_changes | edit),
        payload (notes, patch)
 ```
+
+The ingestion-job route materializes an initial episode. The episode route
+requires a successful prior generation, uses its pinned source bundle and
+preserves the episode identifier. Collection access is based on an actor-owned
+run, so pending and failed initial runs remain visible. Pagination filters by
+actor, episode and optional status before applying the limit and offset. The
+`total` field is observational while run state changes. See
+[ADR 028](adr/adr-028-generation-run-rest-completion.md) for idempotency,
+checkpoint submission and transaction details.
 
 `quality_mode` is required for the source-to-script vertical slice. The first
 supported value is `draft_without_qa`; runs created with this value skip QA
