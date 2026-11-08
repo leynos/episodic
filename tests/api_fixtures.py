@@ -32,6 +32,7 @@ class RevisionRequest:
 
 
 def _fail(message: str) -> typ.NoReturn:
+    """Fail the current test with *message*."""
     pytest.fail(message)
 
 
@@ -40,16 +41,19 @@ def _assert_status(
     expected_status: int,
     message: str,
 ) -> None:
+    """Fail unless *actual_status* equals *expected_status*."""
     if actual_status != expected_status:
         _fail(message)
 
 
 def _assert_equal(actual: object, expected: object, message: str) -> None:
+    """Fail unless *actual* equals *expected*."""
     if actual != expected:
         _fail(message)
 
 
 def _assert_instance(value: object, expected_type: type[object], message: str) -> None:
+    """Fail unless *value* is an instance of *expected_type*."""
     if not isinstance(value, expected_type):
         _fail(message)
 

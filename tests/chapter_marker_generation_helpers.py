@@ -14,6 +14,7 @@ class FakeLLMPort:
     """Capture chapter-marker requests and return a canned response."""
 
     def __init__(self, response: LLMResponse) -> None:
+        """Store the canned response and start an empty request log."""
         self.response = response
         self.requests: list[LLMRequest] = []
 
@@ -27,6 +28,7 @@ class BlockingLLMPort:
     """LLM fake that blocks until cancelled by the caller."""
 
     def __init__(self) -> None:
+        """Create the event that signals when generation has started."""
         self.started = asyncio.Event()
 
     async def generate(self, request: LLMRequest) -> LLMResponse:

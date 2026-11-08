@@ -19,6 +19,8 @@ pytestmark = [pytest.mark.asyncio]
 
 
 class _ScenarioParams(typ.NamedTuple):
+    """Hold the episode, revision and resolve keys and the default expectation."""
+
     episode_key: typ.Literal["episode_middle", "episode_late"]
     revision_key: typ.Literal["revision_v2", "revision_v3"]
     resolve_key: typ.Literal["episode_middle", "episode_early"]

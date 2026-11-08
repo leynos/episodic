@@ -82,6 +82,7 @@ def test_parse_tei_header_preserves_unmapped_validation_errors(
         _xml: str,
         parse_xml: tei_module.ParseXmlFn = _tei.parse_xml,
     ) -> object:
+        """Raise a ValueError carrying the parametrised message."""
         raise ValueError(message)
 
     monkeypatch.setattr(

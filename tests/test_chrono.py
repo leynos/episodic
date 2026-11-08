@@ -275,6 +275,7 @@ def test_chrono_estimator_propagates_tei_validation_errors(
         *args: object,
         **kwargs: object,
     ) -> None:
+        """Record the warning message and its arguments for assertions."""
         del logger
         warnings.append((msg, args, kwargs))
 

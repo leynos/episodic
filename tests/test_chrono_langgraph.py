@@ -50,6 +50,7 @@ class _FailingChronoEvaluator:
 
 
 def _request() -> ChronoEvaluationRequest:
+    """Return a Chrono evaluation request with one spoken line."""
     return ChronoEvaluationRequest(
         script_tei_xml=(
             "<TEI><text><body><sp><p>Hello from Chrono.</p></sp></body></text></TEI>"
@@ -66,6 +67,7 @@ def _tei_document(body: str) -> str:
 
 
 def _result() -> ChronoRuntimeEstimate:
+    """Return a canned Chrono estimate of two seconds."""
     return ChronoRuntimeEstimate(
         estimated_seconds=2,
         metadata=ChronoEstimatorMetadata(
@@ -91,6 +93,7 @@ def _capture_log_calls(
         *args: object,
         **kwargs: object,
     ) -> None:
+        """Record the message and its arguments for assertions."""
         del logger
         calls.append((msg, args, kwargs))
 

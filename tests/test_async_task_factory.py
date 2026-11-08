@@ -32,6 +32,7 @@ async def test_create_task_forwards_task_factory_kwargs() -> None:
     """`create_task` forwards stdlib and custom kwargs to task factories."""
 
     async def _job() -> str:
+        """Yield once to the event loop and return ``"done"``."""
         await asyncio.sleep(0)
         return "done"
 
@@ -73,6 +74,7 @@ async def test_create_task_in_group_forwards_task_factory_kwargs() -> None:
     """`create_task_in_group` forwards kwargs to task factories."""
 
     async def _job() -> str:
+        """Yield once to the event loop and return ``"group-done"``."""
         await asyncio.sleep(0)
         return "group-done"
 
@@ -228,6 +230,7 @@ async def test_create_task_ignores_metadata_without_custom_factory() -> None:
     try:
 
         async def _job() -> str:
+            """Yield once to the event loop and return ``"ok"``."""
             await asyncio.sleep(0)
             return "ok"
 
@@ -248,6 +251,7 @@ async def test_create_task_empty_metadata_is_not_forwarded() -> None:
     """An empty metadata dictionary is treated as absent metadata."""
 
     async def _job() -> str:
+        """Yield once to the event loop and return ``"done"``."""
         await asyncio.sleep(0)
         return "done"
 
@@ -274,6 +278,7 @@ async def test_create_task_partial_metadata_forwards_present_keys_only() -> None
     """Partial metadata is forwarded without synthesizing missing keys."""
 
     async def _job() -> str:
+        """Yield once to the event loop and return ``"done"``."""
         await asyncio.sleep(0)
         return "done"
 

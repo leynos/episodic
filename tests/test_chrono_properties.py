@@ -20,6 +20,7 @@ _SIMPLE_WORDS = st.lists(
 
 
 def _script_from_words(words: list[str]) -> str:
+    """Wrap the words in a minimal TEI document as one spoken line."""
     return (
         "<TEI><teiHeader><fileDesc><title>Chrono property</title></fileDesc>"
         f"</teiHeader><text><body><sp><p>{' '.join(words)}</p></sp></body></text></TEI>"

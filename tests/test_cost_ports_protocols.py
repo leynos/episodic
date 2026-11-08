@@ -61,6 +61,8 @@ def _make_snapshot(
 
 
 class _InMemoryCostLedger:
+    """Fake cost ledger for protocol conformance tests."""
+
     async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
         """Accept a fake snapshot persistence request."""
         _ = snapshot
@@ -97,6 +99,8 @@ class _InMemoryCostLedger:
 
 
 class _StaticPricingCatalogue:
+    """Fake pricing catalogue that returns deterministic snapshots."""
+
     async def get_snapshot(
         self,
         pricing_snapshot_id: PricingSnapshotId,
@@ -125,6 +129,8 @@ class _StaticPricingCatalogue:
 
 
 class _InMemoryMetering:
+    """Fake metering port that echoes the consumed delta."""
+
     async def consume(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         counter_key: MeteringCounterKey,
