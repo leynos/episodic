@@ -26,12 +26,13 @@ def _is_xml_compatible_text(value: str) -> bool:
     """Return True when all characters are valid XML 1.0 text characters."""
 
     def is_allowed(char: str) -> bool:
-        """Return True when one character is valid XML 1.0 text.
+        """Return True when one character is valid XML 1.0 text, minus noncharacters.
 
         Returns
         -------
         bool
-            Whether the character falls in an allowed XML 1.0 range.
+            Whether the character falls in an allowed XML 1.0 range and is not
+            a noncharacter such as U+FDD0.
         """
         codepoint = ord(char)
         is_noncharacter = 0xFDD0 <= codepoint <= 0xFDEF or codepoint & 0xFFFF in {
@@ -73,7 +74,8 @@ def _guest_entries(draw: st.DrawFn) -> tuple[GuestBioEntry, ...]:
     Returns
     -------
     tuple[GuestBioEntry, ...]
-        Entries whose reference revision IDs are indexed as ``rev-N``.
+        Once decorated, a Hypothesis strategy drawing tuples of entries whose
+        reference revision IDs are indexed as ``rev-N``.
     """
     names = draw(st.lists(_TEXT, min_size=1, max_size=4, unique=True))
     entries: list[GuestBioEntry] = []

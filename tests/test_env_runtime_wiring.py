@@ -179,7 +179,7 @@ async def test_create_app_from_env_wires_configured_llm_launcher(
         return True
 
     def unit_of_work_factory() -> object:
-        """Return a placeholder unit-of-work factory.
+        """Return a placeholder unit of work.
 
         Returns
         -------
