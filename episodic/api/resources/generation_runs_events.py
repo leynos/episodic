@@ -167,7 +167,7 @@ def _parse_optional_positive_int(req: falcon.Request, name: str) -> int | None:
 
 
 def _parse_limit(req: falcon.Request) -> int:
-    """Parse the ``limit`` query parameter, defaulting to 20 and capped at 100."""
+    """Parse the ``limit`` query parameter (default 20, must be 1 to 100)."""
     raw = req.get_param("limit")
     value = _DEFAULT_EVENT_LIMIT if raw is None else _parse_int(raw, "limit")
     if value < 1 or value > _MAX_EVENT_LIMIT:
