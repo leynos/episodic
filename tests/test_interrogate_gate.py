@@ -24,7 +24,7 @@ CLEAN_REPORT = (
     "| episodic/app.py | COVERED |\nRESULT: PASSED (minimum: 100.0%, actual: 100.0%)\n"
 )
 MISSED_REPORT = (
-    "| episodic/app.py |  MISSED |\nRESULT: PASSED (minimum: 100.0%, actual: 99.6%)\n"
+    "| episodic/app.py |  MISSED |\nRESULT: PASSED (minimum: 100.0%, actual: 100.0%)\n"
 )
 
 
@@ -88,3 +88,6 @@ def test_lint_runs_the_gate() -> None:
 
     assert result.returncode == 0, result.stderr
     assert marker in result.stdout, "lint must reach the interrogate recipe"
+    assert result.stdout.index(marker) < result.stdout.index("hecate"), (
+        "the docstring gate must run before the other lint steps"
+    )
