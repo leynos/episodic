@@ -41,6 +41,13 @@ class _FakePedanteEvaluator:
 
 
 def _request() -> PedanteEvaluationRequest:
+    """Build an evaluation request with one TEI claim and one cited source.
+
+    Returns
+    -------
+    PedanteEvaluationRequest
+        Request carrying the fixed TEI script and a single source packet.
+    """
     return PedanteEvaluationRequest(
         script_tei_xml="<TEI><text><body><p>Claim</p></body></text></TEI>",
         sources=(
@@ -56,6 +63,14 @@ def _request() -> PedanteEvaluationRequest:
 
 
 def _result(*, blocking: bool) -> PedanteEvaluationResult:
+    """Build a Pedante result with one finding, blocking or not.
+
+    Returns
+    -------
+    PedanteEvaluationResult
+        Result whose single finding is high severity when blocking, otherwise
+        low severity with an accurate restatement.
+    """
     support_level = (
         SupportLevel.CITATION_ABSENT if blocking else SupportLevel.ACCURATE_RESTATEMENT
     )

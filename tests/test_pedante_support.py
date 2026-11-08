@@ -12,6 +12,7 @@ class FakeLLMPort:
     """Capture one Pedante request and return a canned response."""
 
     def __init__(self, response: LLMResponse) -> None:
+        """Store the canned response and start an empty request list."""
         self.response = response
         self.requests: list[LLMRequest] = []
 

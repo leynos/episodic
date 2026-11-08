@@ -65,6 +65,13 @@ _DOCUMENTED_FINDING_SEVERITIES = {"low", "medium", "high", "critical"}
 
 
 def _pedante_finding(support_level: SupportLevel) -> PedanteFinding:
+    """Build a medium-severity finding for one claim at the given support level.
+
+    Returns
+    -------
+    PedanteFinding
+        Finding for a direct quote that cites source "src-1".
+    """
     return PedanteFinding(
         claim_id="claim-1",
         claim_text="The archive holds three reels.",

@@ -131,6 +131,13 @@ async def _create_host_and_guest_documents(
     session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> tuple[ReferenceDocument, ReferenceDocument]:
+    """Create the host and guest reference documents for the primary profile.
+
+    Returns
+    -------
+    tuple[ReferenceDocument, ReferenceDocument]
+        The created host document and guest document, in that order.
+    """
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         host_document = await create_reference_document(
             uow,
@@ -159,6 +166,14 @@ async def _create_revisions_for_host_and_guest(
     host_document: ReferenceDocument,
     guest_document: ReferenceDocument,
 ) -> ReferenceDocumentRevision:
+    """Create one revision for the host and one for the guest document.
+
+    Returns
+    -------
+    ReferenceDocumentRevision
+        The host document's revision; the guest revision is created but
+        not returned.
+    """
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         host_revision = await create_reference_document_revision(
             uow,
@@ -190,6 +205,13 @@ async def _list_documents_and_bind(
     service_fixture: ServiceFixture,
     host_revision: ReferenceDocumentRevision,
 ) -> tuple[list[ReferenceDocument], list[ReferenceDocument]]:
+    """List host and guest documents, then bind the host revision to a template.
+
+    Returns
+    -------
+    tuple[list[ReferenceDocument], list[ReferenceDocument]]
+        The host documents and the guest documents that were listed.
+    """
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         host_documents = await list_reference_documents(
             uow,

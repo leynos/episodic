@@ -27,6 +27,13 @@ def _static_content_handler(
     """Return a handler that always responds with the given raw JSON-typed content."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a 200 response carrying the stored raw content.
+
+        Returns
+        -------
+        httpx.Response
+            JSON-typed response with the stored content for any request.
+        """
         del request
         return httpx.Response(
             200,
@@ -45,6 +52,13 @@ def _make_fail_once_handler(
     counter: list[int] = [0]
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Route the first request to first_call and later ones to second_call.
+
+        Returns
+        -------
+        httpx.Response
+            Response produced by whichever delegate handles the request.
+        """
         counter[0] += 1
         if counter[0] == 1:
             return first_call(request)
@@ -96,6 +110,14 @@ async def test_generate_rejects_non_retryable_http_status(
     """Non-retryable provider HTTP responses surface as response errors."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return an error response with the parametrized non-retryable status.
+
+        Returns
+        -------
+        httpx.Response
+            Response carrying the HTTP status, with a JSON error body holding a
+            "bad request" message.
+        """
         del request
         return openai_json_response(
             {"error": {"message": "bad request"}},
@@ -118,6 +140,13 @@ async def test_generate_rejects_redirect_http_status(
     """Redirect provider responses surface as response errors."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a 302 redirect response with an empty JSON body.
+
+        Returns
+        -------
+        httpx.Response
+            Redirect response for any request.
+        """
         del request
         return openai_json_response({}, 302)
 
@@ -140,6 +169,14 @@ async def test_generate_retries_retryable_http_5xx_then_fails(
     attempts = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Count the attempt and return the parametrized 5xx error response.
+
+        Returns
+        -------
+        httpx.Response
+            Response carrying the HTTP status, with a JSON error body holding a
+            "server error" message.
+        """
         nonlocal attempts
         del request
         attempts += 1
@@ -168,6 +205,13 @@ async def test_generate_retries_transport_failures_then_succeeds(
     """Transport failures are retried using the same transient policy as 429s."""
 
     def _raise_connect_error(request: httpx.Request) -> httpx.Response:
+        """Raise a connect error for the given request.
+
+        Raises
+        ------
+        httpx.ConnectError
+            Always, with the "connect failed" message.
+        """
         raise httpx.ConnectError(_CONNECT_FAILED_MESSAGE, request=request)
 
     handler, counter = _make_fail_once_handler(
@@ -202,6 +246,13 @@ async def test_generate_raises_after_exhausting_transport_retries(
     attempts = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Count the attempt and raise a connect error for the request.
+
+        Raises
+        ------
+        httpx.ConnectError
+            Always, with the "still offline" message.
+        """
         nonlocal attempts
         attempts += 1
         raise httpx.ConnectError(_OFFLINE_MESSAGE, request=request)

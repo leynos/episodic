@@ -25,6 +25,13 @@ async def test_generate_chat_completion_success(
     captured_request: httpx.Request | None = None
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Capture the request and return a chat-completions payload.
+
+        Returns
+        -------
+        httpx.Response
+            JSON chat completion with text, finish reason, and usage.
+        """
         nonlocal attempts, captured_request
         attempts += 1
         captured_request = request
@@ -81,6 +88,13 @@ async def test_generate_responses_success(
     attempts = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Count the attempt and return a Responses API payload.
+
+        Returns
+        -------
+        httpx.Response
+            JSON response with one output message and usage counts.
+        """
         nonlocal attempts
         del request
         attempts += 1

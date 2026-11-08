@@ -53,6 +53,13 @@ async def test_chat_completion_provider_call_usage_includes_cached_tokens(
     """Chat-completions usage details populate canonical cost metrics."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a chat completion with cached and audio usage details.
+
+        Returns
+        -------
+        httpx.Response
+            JSON chat completion whose usage carries nested token details.
+        """
         del request
         return openai_json_response({
             "id": "chatcmpl-usage",
@@ -110,6 +117,13 @@ async def test_responses_provider_call_usage_includes_reasoning_tokens(
     """Responses usage details populate canonical cost metrics."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a Responses payload with four cached input tokens.
+
+        Returns
+        -------
+        httpx.Response
+            JSON Responses payload built by _responses_usage_payload.
+        """
         del request
         return openai_json_response(_responses_usage_payload(cached_tokens=4))
 
@@ -136,6 +150,13 @@ async def test_responses_usage_omits_zero_cached_tokens(
     """Zero cached input tokens must not become a priced Responses metric."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a Responses payload with zero cached input tokens.
+
+        Returns
+        -------
+        httpx.Response
+            JSON Responses payload built by _responses_usage_payload.
+        """
         del request
         return openai_json_response(_responses_usage_payload(cached_tokens=0))
 
@@ -161,6 +182,13 @@ async def test_responses_usage_rejects_cached_tokens_exceeding_input(
     """Oversubscribed Responses cached input fails at the adapter boundary."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a Responses payload with 16 cached input tokens.
+
+        Returns
+        -------
+        httpx.Response
+            JSON Responses payload built by _responses_usage_payload.
+        """
         del request
         return openai_json_response(_responses_usage_payload(cached_tokens=16))
 
@@ -184,6 +212,13 @@ async def test_chat_completion_usage_omits_zero_valued_optional_metrics(
     """Zero-valued optional usage details must not become priced metrics."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a chat completion whose optional usage details are all zero.
+
+        Returns
+        -------
+        httpx.Response
+            JSON chat completion with zero-valued cached and audio counts.
+        """
         del request
         return openai_json_response({
             "id": "chatcmpl-zero-usage",
@@ -243,6 +278,13 @@ async def test_chat_completion_usage_rejects_oversubscribed_details(
     """Nested counts exceeding the parent totals must fail validation."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a chat completion with the parametrized usage details.
+
+        Returns
+        -------
+        httpx.Response
+            JSON chat completion whose nested counts exceed parent totals.
+        """
         del request
         return openai_json_response({
             "id": "chatcmpl-oversubscribed",

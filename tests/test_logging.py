@@ -157,6 +157,8 @@ class _RaisingInfoLogger(_LogOnlySpyLogger):
 
 
 class _LogFallbackCase(typ.NamedTuple):
+    """Describe one log-fallback scenario and its expected outcome."""
+
     emit: cabc.Callable[..., None]
     template: str
     args: tuple[object, ...]

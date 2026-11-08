@@ -41,6 +41,13 @@ async def _create_draft_episode(
     series_profile_id: str,
     title: str,
 ) -> CanonicalEpisode:
+    """Persist a TEI header and a draft episode that uses it.
+
+    Returns
+    -------
+    CanonicalEpisode
+        The persisted draft episode, linked to the new TEI header.
+    """
     now = dt.datetime.now(dt.UTC)
     header = TeiHeader(
         id=uuid.uuid4(),

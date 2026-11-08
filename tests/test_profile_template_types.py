@@ -117,6 +117,8 @@ def test_custom_subclass_uses_class_level_defaults() -> None:
     """Custom subclasses should inherit default metadata behavior."""
 
     class CustomProfileTemplateError(ProfileTemplateError):
+        """Subclass that overrides only the class-level error metadata."""
+
         error_code: typ.ClassVar[str] = "custom_profile_template_error"
         default_retryable: typ.ClassVar[bool] = True
 

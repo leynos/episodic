@@ -23,6 +23,7 @@ class _RecordingMetrics:
     """Capture bounded route observations for assertion."""
 
     def __init__(self) -> None:
+        """Initialize empty counter and latency observation lists."""
         self.counters: list[tuple[str, dict[str, str]]] = []
         self.latencies: list[tuple[str, float, dict[str, str]]] = []
 
@@ -50,6 +51,7 @@ class _SteppingMonotonicClock:
     """Return deterministic monotonic timestamps for request timing tests."""
 
     def __init__(self, timestamps: cabc.Iterator[float]) -> None:
+        """Store the iterator of timestamps to replay."""
         self._timestamps = timestamps
 
     def monotonic_seconds(self) -> float:
@@ -83,6 +85,13 @@ def _compose_runtime_observability_dependencies(
     captured_dependencies: ApiDependencies | None = None
 
     def capture_dependencies(dependencies: ApiDependencies) -> object:
+        """Store the dependencies and return a placeholder app object.
+
+        Returns
+        -------
+        object
+            A new plain object standing in for the composed application.
+        """
         nonlocal captured_dependencies
         captured_dependencies = dependencies
         return object()

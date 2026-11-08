@@ -50,6 +50,7 @@ class _FakeQaArtefactRepository:
     """In-memory stand-in for the persistence port."""
 
     def __init__(self) -> None:
+        """Initialize empty evaluation stores and call logs."""
         self.recorded: list[QaEvaluation] = []
         self.stored: dict[uuid.UUID, QaEvaluation] = {}
         self.listed: list[QaEvaluationListRequest] = []
@@ -84,6 +85,7 @@ class _FakeUnitOfWork:
     """Unit of work that records how the service used it."""
 
     def __init__(self) -> None:
+        """Create a fake repository and zeroed transaction counters."""
         self.qa_artefacts = _FakeQaArtefactRepository()
         self.commit_count = 0
         self.enter_count = 0
