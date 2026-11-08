@@ -73,7 +73,7 @@ def _guest_entries(draw: st.DrawFn) -> tuple[GuestBioEntry, ...]:
 
     Returns
     -------
-    tuple[GuestBioEntry, ...]
+    SearchStrategy[tuple[GuestBioEntry, ...]]
         Once decorated, a Hypothesis strategy drawing tuples of entries whose
         reference revision IDs are indexed as ``rev-N``.
     """

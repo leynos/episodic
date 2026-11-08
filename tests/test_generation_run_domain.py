@@ -2,8 +2,8 @@
 
 This module covers `GenerationRun`, `GenerationEvent`, `Checkpoint`, their
 status enums, and the event-sequence value constructor. The tests verify
-creation invariants, validation errors for blank and non-mapping inputs,
-terminal-status classification, and checkpoint state transitions. Hypothesis
+creation invariants, validation errors for blank and non-mapping inputs, and
+checkpoint state transitions. Hypothesis
 properties exercise the validation rules across many generated examples, while
 the `generation_run`, `generation_event`, and `checkpoint` fixtures keep valid
 entity construction local and explicit.
