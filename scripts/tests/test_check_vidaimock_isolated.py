@@ -137,6 +137,7 @@ def urlopen_spy_fixture(
     """
 
     def install(outcome: object) -> _UrlopenSpy:
+        """Install *outcome* as the `urlopen` stand-in and return the spy."""
         spy = _UrlopenSpy(outcome)
         monkeypatch.setattr(urllib.request, "urlopen", spy)
         return spy
@@ -407,6 +408,7 @@ def test_main_reports_server_launch_os_error_as_smoke_failure(
     )
 
     def fail_to_launch(launch: smoke.VidaiMockLaunch) -> smoke.VidaiMockServer:
+        """Raise the `PermissionError` a non-executable binary produces."""
         del launch
         msg = "vidaimock is not executable"
         raise PermissionError(msg)
@@ -439,6 +441,7 @@ def test_verify_startup_reports_a_missing_executable(
     """
 
     def raise_outcome() -> str:
+        """Raise the pytest outcome that stands in for a missing binary."""
         raise outcome(_MISSING_BINARY_REASON)
 
     monkeypatch.setattr(smoke, "resolve_vidaimock_executable", raise_outcome)

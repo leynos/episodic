@@ -37,6 +37,7 @@ SCRIPT_TEI = """\
 
 
 def _reference_document(document_id: UUID) -> ReferenceDocument:
+    """Build an active guest-profile reference document with *document_id*."""
     return ReferenceDocument(
         id=document_id,
         owner_series_profile_id=uuid4(),
@@ -53,6 +54,7 @@ def _reference_revision(
     document_id: UUID,
     revision_id: UUID,
 ) -> ReferenceDocumentRevision:
+    """Build a revision of *document_id* holding a fixed guest profile."""
     return ReferenceDocumentRevision(
         id=revision_id,
         reference_document_id=document_id,
@@ -68,6 +70,7 @@ def _reference_revision(
 
 
 def _reference_binding(revision_id: UUID) -> ReferenceBinding:
+    """Build a series-profile binding to the given revision."""
     return ReferenceBinding(
         id=uuid4(),
         reference_document_revision_id=revision_id,
@@ -81,6 +84,7 @@ def _reference_binding(revision_id: UUID) -> ReferenceBinding:
 
 
 def _guest_bios_action() -> PlannedAction:
+    """Build a planned action that generates guest bios."""
     return PlannedAction(
         action_id="guest-bios-1",
         action_kind=ActionKind.GENERATE_GUEST_BIOS,
@@ -130,6 +134,7 @@ class _RaisingGuestBiosGenerator:
         *,
         expected_template_structure: dict[str, object] | None = None,
     ) -> None:
+        """Store the error to raise and the template structure to expect."""
         self._error = error
         self._expected_template_structure = expected_template_structure
 

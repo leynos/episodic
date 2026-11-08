@@ -450,6 +450,7 @@ class TestRunDetector:
         monkeypatch.setenv("NOSE_BIN", "/stub/nose")
 
         def runner(command: cabc.Sequence[str]) -> str:
+            """Answer the version probe, and answer any other call with non-JSON."""
             return "nose 0.20.0\n" if "--version" in command else "not json"
 
         with pytest.raises(detector.GateExecutionError, match="not valid JSON"):
@@ -459,6 +460,7 @@ class TestRunDetector:
         """A slow detector becomes an actionable execution error."""
 
         def timeout(*_args: object, **_kwargs: object) -> typ.NoReturn:
+            """Raise a timeout, as a detector that runs too long would."""
             raise detector.subprocess.TimeoutExpired(["nose", "query"], 120)
 
         monkeypatch.setattr(detector.subprocess, "run", timeout)
@@ -476,6 +478,7 @@ class TestRunDetector:
         def failing(
             *_args: object, **_kwargs: object
         ) -> detector.subprocess.CompletedProcess[str]:
+            """Return a failed run with status two and a diagnostic on stderr."""
             return detector.subprocess.CompletedProcess(
                 args=["nose", "query"], returncode=2, stdout="", stderr="bad query\n"
             )
@@ -494,6 +497,7 @@ class TestRunDetector:
         """An unrunnable detector points at the install remediation."""
 
         def unrunnable(*_args: object, **_kwargs: object) -> typ.NoReturn:
+            """Raise the permission error of a detector that cannot run."""
             raise OSError(13, "Permission denied")
 
         monkeypatch.setattr(detector.subprocess, "run", unrunnable)

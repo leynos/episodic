@@ -25,6 +25,7 @@ def test_discovery_failure_names_provider_directory_and_preserves_cause(
     cause = PermissionError("directory scan denied")
 
     def fail_discovery(_path: Path) -> object:
+        """Raise the scan failure in place of listing the directory."""
         raise cause
 
     monkeypatch.setattr(smoke.os, "scandir", fail_discovery)
@@ -49,22 +50,30 @@ def test_scan_iteration_failure_names_provider_directory_and_preserves_cause(
     cause = OSError("directory scan interrupted")
 
     class _ProviderEntry:
+        """A directory entry for a provider file named `openai.yaml`."""
+
         name: str = "openai.yaml"
 
     class _FailingScan:
+        """A `scandir` iterator that yields one entry and then fails."""
+
         closed = False
         yielded_entry = False
 
         def __enter__(self) -> _FailingScan:
+            """Return the scanner itself, as `scandir` does."""
             return self
 
         def __exit__(self, *_args: object) -> None:
+            """Mark the scanner closed, whatever the scan did."""
             self.closed = True
 
         def __iter__(self) -> _FailingScan:
+            """Return the scanner as its own iterator."""
             return self
 
         def __next__(self) -> _ProviderEntry:
+            """Return the one provider entry, then raise the scan failure."""
             if not self.yielded_entry:
                 self.yielded_entry = True
                 return _ProviderEntry()
@@ -73,6 +82,7 @@ def test_scan_iteration_failure_names_provider_directory_and_preserves_cause(
     scanner = _FailingScan()
 
     def fail_during_scan(_path: Path) -> _FailingScan:
+        """Return the failing scanner in place of a real `scandir` iterator."""
         return scanner
 
     monkeypatch.setattr(smoke.os, "scandir", fail_during_scan)
@@ -104,6 +114,7 @@ def test_file_read_failure_names_file_and_preserves_cause(
         encoding: str | None = None,
         errors: str | None = None,
     ) -> str:
+        """Check the read targets the provider file, then raise the read error."""
         del encoding, errors
         assert path == provider_file, "read the discovered provider YAML file"
         raise cause

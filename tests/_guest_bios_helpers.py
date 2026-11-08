@@ -49,10 +49,12 @@ SCRIPT_TEI = """\
 
 
 def _usage() -> LLMUsage:
+    """Build a token-usage record for a canned response."""
     return LLMUsage(input_tokens=10, output_tokens=20, total_tokens=30)
 
 
 def _response(payload: object) -> LLMResponse:
+    """Build a canned response whose text is the JSON-encoded payload."""
     return LLMResponse(
         text=json.dumps(payload),
         model="vidai-mock",
@@ -63,11 +65,13 @@ def _response(payload: object) -> LLMResponse:
 
 
 def _tei_payload(xml: str) -> dict[str, object]:
+    """Parse TEI XML and return it as a plain mapping."""
     document = tei.parse_xml(xml)
     return typ.cast("dict[str, object]", tei.to_dict(document))
 
 
 def _body_blocks(xml: str) -> list[object]:
+    """Return the blocks of the TEI body in *xml*."""
     payload = _tei_payload(xml)
     text = typ.cast("dict[str, object]", payload["text"])
     body = typ.cast("dict[str, object]", text["body"])
@@ -80,6 +84,7 @@ def _reference_document(
     kind: ReferenceDocumentKind,
     metadata: dict[str, object] | None = None,
 ) -> ReferenceDocument:
+    """Build an active reference document of the given kind."""
     return ReferenceDocument(
         id=document_id,
         owner_series_profile_id=uuid4(),
@@ -97,6 +102,7 @@ def _reference_revision(
     revision_id: UUID,
     content: dict[str, object],
 ) -> ReferenceDocumentRevision:
+    """Build a revision of *document_id* with the given content."""
     return ReferenceDocumentRevision(
         id=revision_id,
         reference_document_id=document_id,
@@ -109,6 +115,7 @@ def _reference_revision(
 
 
 def _reference_binding(revision_id: UUID) -> ReferenceBinding:
+    """Build a series-profile binding to the given revision."""
     return ReferenceBinding(
         id=uuid4(),
         reference_document_revision_id=revision_id,
