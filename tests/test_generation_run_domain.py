@@ -281,6 +281,18 @@ def test_checkpoint_validation_messages_snapshot(
     """Snapshot exact checkpoint validation failure messages."""
 
     def validation_message(**changes: object) -> str:
+        """Return the validation error raised by replacing checkpoint fields.
+
+        Returns
+        -------
+        str
+            Message of the ``ValueError`` raised by the replacement.
+
+        Raises
+        ------
+        AssertionError
+            If the replacement does not fail validation.
+        """
         try:
             dc.replace(checkpoint, **changes)
         except ValueError as exc:

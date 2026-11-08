@@ -88,6 +88,7 @@ class TestLangGraphNodeValidation:
         logged_events: list[tuple[str, dict[str, object]]] = []
 
         def record_log_event(_level: str, message: str, **fields: object) -> None:
+            """Append the logged message and its fields to the capture list."""
             logged_events.append((message, fields))
 
         monkeypatch.setattr(_graph_nodes, "_log_event", record_log_event)
@@ -116,9 +117,17 @@ class TestLangGraphNodeValidation:
         metrics = mock.Mock()
 
         def record_log_event(level: str, message: str, **fields: object) -> None:
+            """Append the log level, message and fields to the capture list."""
             events.append((level, message, fields))
 
         def invalid_payload(**_: object) -> dict[str, object]:
+            """Build a checkpoint payload containing a non-serializable value.
+
+            Returns
+            -------
+            dict[str, object]
+                Payload whose ``bad`` entry cannot be serialized.
+            """
             return {"bad": object()}
 
         monkeypatch.setattr(_checkpoint_resume, "_log_event", record_log_event)

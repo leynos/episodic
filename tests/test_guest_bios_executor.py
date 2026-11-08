@@ -55,6 +55,13 @@ async def test_guest_bios_tool_executor_resolves_bindings_and_returns_result(
         uow: object,
         **kwargs: object,
     ) -> list[ResolvedBinding]:
+        """Record the resolver call and return the guest-profile binding.
+
+        Returns
+        -------
+        list[ResolvedBinding]
+            The guest-profile binding and its document and revision.
+        """
         await asyncio.sleep(0)
         calls.append({"uow": uow, **kwargs})
         return [
@@ -132,6 +139,13 @@ async def test_guest_bios_tool_executor_uses_guest_bios_prompt_by_default() -> N
         uow: object,
         **kwargs: object,
     ) -> list[ResolvedBinding]:
+        """Return one resolved guest binding for the default-prompt test.
+
+        Returns
+        -------
+        list[ResolvedBinding]
+            A single guest-profile binding.
+        """
         del uow, kwargs
         await asyncio.sleep(0)
         return [
@@ -188,6 +202,13 @@ async def test_guest_bios_tool_executor_allows_no_sources_no_op() -> None:
         uow: object,
         **kwargs: object,
     ) -> list[ResolvedBinding]:
+        """Return no bindings, so the plan has no guest-profile sources.
+
+        Returns
+        -------
+        list[ResolvedBinding]
+            An empty list.
+        """
         del uow, kwargs
         await asyncio.sleep(0)
         return []

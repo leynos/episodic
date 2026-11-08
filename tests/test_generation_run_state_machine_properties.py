@@ -100,6 +100,13 @@ async def test_adapter_invariants_hold_across_generated_operation_sequences(
     counter = itertools.count()
 
     def monotonic_time_provider() -> dt.datetime:
+        """Return the base time advanced by one microsecond per call.
+
+        Returns
+        -------
+        dt.datetime
+            The next timestamp in the monotonic sequence.
+        """
         return NOW + dt.timedelta(microseconds=next(counter))
 
     store = InMemoryGenerationRunStore(time_provider=monotonic_time_provider)

@@ -26,6 +26,13 @@ def _is_xml_compatible_text(value: str) -> bool:
     """Return True when all characters are valid XML 1.0 text characters."""
 
     def is_allowed(char: str) -> bool:
+        """Return True when one character is valid XML 1.0 text.
+
+        Returns
+        -------
+        bool
+            Whether the character falls in an allowed XML 1.0 range.
+        """
         codepoint = ord(char)
         is_noncharacter = 0xFDD0 <= codepoint <= 0xFDEF or codepoint & 0xFFFF in {
             0xFFFE,
@@ -49,11 +56,25 @@ _TEXT = st.text(
 
 
 def _usage() -> LLMUsage:
+    """Build a fixed token-usage record for guest-bio results.
+
+    Returns
+    -------
+    LLMUsage
+        Usage with one input token, one output token and two in total.
+    """
     return LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2)
 
 
 @st.composite
 def _guest_entries(draw: st.DrawFn) -> tuple[GuestBioEntry, ...]:
+    """Draw between one and four guest-bio entries with unique names.
+
+    Returns
+    -------
+    tuple[GuestBioEntry, ...]
+        Entries whose reference revision IDs are indexed as ``rev-N``.
+    """
     names = draw(st.lists(_TEXT, min_size=1, max_size=4, unique=True))
     entries: list[GuestBioEntry] = []
     for index, name in enumerate(names):
@@ -68,10 +89,24 @@ def _guest_entries(draw: st.DrawFn) -> tuple[GuestBioEntry, ...]:
 
 
 def _result(entries: tuple[GuestBioEntry, ...]) -> GuestBiosResult:
+    """Wrap guest-bio entries in a result with fixed usage.
+
+    Returns
+    -------
+    GuestBiosResult
+        Result carrying ``entries`` and the fixed usage record.
+    """
     return GuestBiosResult(entries=entries, usage=_usage())
 
 
 def _guest_bio_items(xml: str) -> list[dict[str, object]]:
+    """Parse TEI XML and return the items of the first guest-bios list.
+
+    Returns
+    -------
+    list[dict[str, object]]
+        Parsed list items from the first guest-bios div.
+    """
     document_payload = typ.cast("dict[str, object]", tei.to_dict(tei.parse_xml(xml)))
     text_payload = typ.cast("dict[str, object]", document_payload["text"])
     body_payload = typ.cast("dict[str, object]", text_payload["body"])
@@ -96,6 +131,13 @@ def _guest_bio_divs(blocks: list[object]) -> list[dict[str, object]]:
 
 
 def _inline_text(value: object) -> str:
+    """Concatenate the text nodes of a parsed inline content list.
+
+    Returns
+    -------
+    str
+        The text values of ``text`` items, joined in order.
+    """
     content = typ.cast("list[object]", value)
     text_parts: list[str] = []
     for item in content:
@@ -107,6 +149,13 @@ def _inline_text(value: object) -> str:
 
 
 def _label_text(item: dict[str, object]) -> str:
+    """Return the concatenated text of a list item's label.
+
+    Returns
+    -------
+    str
+        The text of the label's inline content.
+    """
     label = typ.cast("dict[str, object]", item["label"])
     return _inline_text(label["content"])
 

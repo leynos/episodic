@@ -42,6 +42,7 @@ class FakeLLMPort:
         response: LLMResponse | None = None,
         error: Exception | None = None,
     ) -> None:
+        """Store the canned response, error and an empty request log."""
         self.response = response
         self.error = error
         self.requests: list[LLMRequest] = []
@@ -60,6 +61,7 @@ class SequentialDraftIds:
     """Deterministic TEI identifier factory for snapshots."""
 
     def __init__(self) -> None:
+        """Initialize empty per-prefix counters."""
         self.counts: dict[str, int] = {}
 
     def __call__(self, prefix: str) -> str:

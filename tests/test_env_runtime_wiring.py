@@ -164,16 +164,38 @@ async def test_create_app_from_env_wires_configured_llm_launcher(
     captured_dependencies: ApiDependencies | None = None
 
     async def shutdown_database() -> None:
+        """Yield once to the event loop to simulate database shutdown."""
         await asyncio.sleep(0)
 
     async def check_database() -> bool:
+        """Report the stubbed database as ready after one loop tick.
+
+        Returns
+        -------
+        bool
+            Always True.
+        """
         await asyncio.sleep(0)
         return True
 
     def unit_of_work_factory() -> object:
+        """Return a placeholder unit-of-work factory.
+
+        Returns
+        -------
+        object
+            A fresh placeholder object.
+        """
         return object()
 
     def capture_dependencies(dependencies: ApiDependencies) -> object:
+        """Record the composed dependencies in the enclosing scope.
+
+        Returns
+        -------
+        object
+            Placeholder returned in place of the ASGI application.
+        """
         nonlocal captured_dependencies
         captured_dependencies = dependencies
         return object()
@@ -288,11 +310,19 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
         metrics: MetricsPort | None = None,
         tracer: TracerPort | None = None,
     ) -> tuple[object, ...]:
+        """Build the database probe and wrap its shutdown hook.
+
+        Returns
+        -------
+        tuple[object, ...]
+            The probe, unit-of-work factory and wrapped shutdown hook.
+        """
         probe, uow, original_hook = original_build(
             database_url, metrics=metrics, tracer=tracer
         )
 
         async def _tracked_hook() -> None:
+            """Mark the shutdown hook as called, then run the original hook."""
             nonlocal shutdown_hook_called
             shutdown_hook_called = True
             await original_hook()

@@ -116,6 +116,13 @@ def monotonic_time_provider() -> cabc.Callable[[], dt.datetime]:
     counter = itertools.count()
 
     def provide_time() -> dt.datetime:
+        """Return the base time advanced by one microsecond per call.
+
+        Returns
+        -------
+        dt.datetime
+            The next timestamp in the monotonic sequence.
+        """
         return NOW + dt.timedelta(microseconds=next(counter))
 
     return provide_time

@@ -88,6 +88,13 @@ class _FakeResumePort:
 
 
 def _request() -> GenerationOrchestrationRequest:
+    """Build a graph request for orchestration tests.
+
+    Returns
+    -------
+    GenerationOrchestrationRequest
+        Request with a fixed correlation ID and a minimal TEI script.
+    """
     return GenerationOrchestrationRequest(
         correlation_id="corr-graph",
         script_tei_xml="<TEI><text><body><p>Graph request</p></body></text></TEI>",
@@ -95,6 +102,13 @@ def _request() -> GenerationOrchestrationRequest:
 
 
 def _planner_result() -> PlannerResult:
+    """Build a planner result with one show-notes step.
+
+    Returns
+    -------
+    PlannerResult
+        Planner output with a single planned action and token usage.
+    """
     return PlannerResult(
         plan=ExecutionPlan(
             plan_version="1.0",
@@ -143,6 +157,13 @@ def _multi_step_planner_result() -> PlannerResult:
 
 
 def _action_result() -> ActionExecutionResult:
+    """Build a show-notes action result with token usage.
+
+    Returns
+    -------
+    ActionExecutionResult
+        Successful execution result for the ``action-1`` step.
+    """
     return ActionExecutionResult(
         action_id="action-1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,

@@ -201,6 +201,7 @@ async def test_generation_graph_records_costs_before_finish_callback() -> None:
     cost_recorder = _RecordingCostRecorder(events=events)
 
     def record_finish_callback(_result: GenerationOrchestrationResult) -> None:
+        """Append the finish marker to the shared event log."""
         events.append("finish_callback")
 
     graph = build_generation_orchestration_graph(

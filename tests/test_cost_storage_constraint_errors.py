@@ -25,6 +25,7 @@ class _DriverError(Exception):
         constraint_name: str | None = None,
         diagnostic_constraint_name: str | None = None,
     ) -> None:
+        """Store the message and optional constraint metadata."""
         super().__init__(message)
         self.constraint_name = constraint_name
         self.diag = (
