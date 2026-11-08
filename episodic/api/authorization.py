@@ -93,6 +93,7 @@ class AuthorizationMiddleware:
     """Falcon middleware that short-circuits unauthorized `/v1` requests."""
 
     def __init__(self, authorization: AuthorizationPort) -> None:
+        """Store the authorization port used to decide each `/v1` request."""
         self._authorization = authorization
 
     async def process_request(

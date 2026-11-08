@@ -114,6 +114,7 @@ async def parse_upload_form(req: falcon.Request, *, max_bytes: int) -> ParsedUpl
 
 
 def _raise_payload_too_large(max_bytes: int) -> typ.NoReturn:
+    """Raise a 413 error reporting the ``max_bytes`` upload limit."""
     raise http_error(
         falcon.HTTPContentTooLarge(description=_UPLOAD_TOO_LARGE),
         code="payload_too_large",

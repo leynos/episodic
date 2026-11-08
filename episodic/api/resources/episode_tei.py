@@ -37,6 +37,7 @@ class EpisodeTeiResource:
     def __init__(
         self, uow_factory: UowFactory, *, tracer: TracerPort | None = None
     ) -> None:
+        """Store the unit-of-work factory and tracer, defaulting to no-op."""
         self._uow_factory = uow_factory
         self._tracer = NoopTracer() if tracer is None else tracer
 
@@ -145,6 +146,7 @@ def negotiate_tei_media_type(accept: str | None) -> str:
 
 
 def _has_generated_draft(episode: CanonicalEpisode) -> bool:
+    """Return whether the episode has run-linked TEI content and a QA status."""
     return (
         episode.last_generation_run_id is not None
         and episode.tei_content_hash is not None
@@ -157,6 +159,7 @@ def _apply_tei_json(
     resp: falcon.Response,
     episode: CanonicalEpisode,
 ) -> None:
+    """Set the JSON metadata representation of the episode's TEI on *resp*."""
     content = json.dumps(serialize_tei_envelope(episode), ensure_ascii=False).encode()
     _apply_representation(req, resp, content=content, media_type=_JSON_MEDIA_TYPE)
 
@@ -166,6 +169,7 @@ def _apply_tei_attachment(
     resp: falcon.Response,
     episode: CanonicalEpisode,
 ) -> None:
+    """Set the raw TEI XML attachment representation on *resp*."""
     resp.set_header(
         "Content-Disposition",
         f'attachment; filename="episode-{episode.id}.xml"',
@@ -202,6 +206,7 @@ def _representation_etag(content: bytes) -> str:
 
 
 def _tei_not_found(episode_id: uuid.UUID) -> falcon.HTTPNotFound:
+    """Build the 404 error for an episode without generated TEI."""
     return typ.cast(
         "falcon.HTTPNotFound",
         http_error(

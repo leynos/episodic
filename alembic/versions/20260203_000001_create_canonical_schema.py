@@ -24,6 +24,7 @@ depends_on = None
 
 
 def _episode_status_enum() -> postgresql.ENUM:
+    """Return the episode_status enum type."""
     return postgresql.ENUM(
         "draft",
         "in_progress",
@@ -45,6 +46,7 @@ def _episode_status_enum() -> postgresql.ENUM:
 
 
 def _approval_state_enum() -> postgresql.ENUM:
+    """Return the approval_state enum type."""
     return postgresql.ENUM(
         "draft",
         "submitted",
@@ -56,6 +58,7 @@ def _approval_state_enum() -> postgresql.ENUM:
 
 
 def _ingestion_status_enum() -> postgresql.ENUM:
+    """Return the ingestion_status enum type."""
     return postgresql.ENUM(
         "pending",
         "running",

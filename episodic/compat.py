@@ -8,6 +8,7 @@ if typ.TYPE_CHECKING:
 
 
 def _load_rust_hello() -> cabc.Callable[[], str] | None:
+    """Return the Rust ``hello`` callable, or ``None`` when unavailable."""
     try:
         module = importlib.import_module("episodic_rust")
     except ModuleNotFoundError:  # pragma: no cover - optional extension

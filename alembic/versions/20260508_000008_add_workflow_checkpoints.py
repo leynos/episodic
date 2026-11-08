@@ -12,6 +12,7 @@ depends_on = None
 
 
 def _workflow_checkpoint_status_enum() -> postgresql.ENUM:
+    """Return the workflow_checkpoint_status enum type."""
     return postgresql.ENUM(
         "suspended",
         "resumed",

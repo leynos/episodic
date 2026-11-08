@@ -126,6 +126,7 @@ def _build_database_probe(
     )
 
     async def check_database() -> bool:
+        """Return whether a ``SELECT 1`` query succeeds against the database."""
         try:
             async with (
                 await psycopg.AsyncConnection.connect(
@@ -140,6 +141,7 @@ def _build_database_probe(
         return True
 
     def uow_factory() -> CanonicalUnitOfWork:
+        """Create a unit of work bound to the shared session factory."""
         return SqlAlchemyUnitOfWork(
             session_factory,
             runtime=UnitOfWorkRuntime(metrics=metrics, tracer=tracer),
@@ -163,6 +165,7 @@ def _build_generation_launcher(
     pricing_catalogue = FilePricingCatalogue(config.pricing_snapshot_directory)
 
     def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
+        """Build a cost recorder over the unit of work's cost ledger."""
         return CostRecorder(
             ledger=uow.cost_ledger,
             pricing_catalogue=pricing_catalogue,

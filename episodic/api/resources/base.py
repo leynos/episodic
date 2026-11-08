@@ -74,6 +74,7 @@ class _ResourceBase(ABC):
     """Shared base resource that stores the unit-of-work factory."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
+        """Store the unit-of-work factory for the resource's handlers."""
         self._uow_factory = uow_factory
 
     @staticmethod

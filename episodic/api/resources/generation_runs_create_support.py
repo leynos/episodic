@@ -13,12 +13,15 @@ if typ.TYPE_CHECKING:
 
 
 class _CreateGenerationRun(typ.NamedTuple):
+    """Parsed fields of a no-QA generation-run creation request."""
+
     skip_qa_rationale: str
     configuration: JsonPayload
     budget_snapshot: JsonPayload
 
 
 def _parse_create_request(payload: JsonPayload) -> _CreateGenerationRun:
+    """Validate a no-QA create payload and return its parsed fields."""
     quality_mode = require_str(payload, "quality_mode")
     if quality_mode == "qa_gated":
         raise typ.cast(
@@ -55,6 +58,7 @@ def _parse_create_request(payload: JsonPayload) -> _CreateGenerationRun:
 
 
 def _optional_mapping(payload: JsonPayload, field_name: str) -> JsonPayload:
+    """Return the named payload field as a mapping, defaulting to empty."""
     value = payload.get(field_name, {})
     if not isinstance(value, dict):
         message = f"{field_name} must be a JSON object."
