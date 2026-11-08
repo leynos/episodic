@@ -101,6 +101,7 @@ def drift_check_runs(
     """Run the schema drift detection."""
 
     async def _check() -> None:
+        """Run schema drift detection and store the differences in context."""
         engine = drift_context["engine"]
         drift_context["diffs"] = await detect_schema_drift(engine)
 

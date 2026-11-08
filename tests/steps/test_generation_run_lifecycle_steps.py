@@ -208,6 +208,13 @@ def run_persisted_in_postgres(
     factory = session_factory
 
     async def prepare() -> GenerationRun:
+        """Persist the run prerequisites and create the run in an open unit of work.
+
+        Returns
+        -------
+        GenerationRun
+            The generation run that was created.
+        """
         run = _run()
         await persist_generation_run_prerequisites(factory, run)
         stack = contextlib.AsyncExitStack()
@@ -272,6 +279,13 @@ def _apply_terminal_transition(
     """Run a terminal-transition coroutine and store the resulting checkpoint."""
 
     async def await_transition() -> Checkpoint:
+        """Await the terminal-transition coroutine.
+
+        Returns
+        -------
+        Checkpoint
+            The checkpoint produced by the transition.
+        """
         return await coro
 
     ctx.checkpoint = ctx.runner.run(await_transition())

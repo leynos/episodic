@@ -21,6 +21,7 @@ class _FakeProcess:
     """Small process double exposing the operations used by cleanup."""
 
     def __init__(self, outcome: str) -> None:
+        """Store the scripted outcome and derive the fake exit code from it."""
         self.outcome = outcome
         self.returncode: int | None = {
             "bind": 1,
@@ -85,9 +86,23 @@ class _LifecycleDoubles:
         patch.setattr(harness, "wait_for_port", self._wait_for_port)
 
     def _next_port(self) -> int:
+        """Return a port derived from the number of processes launched so far.
+
+        Returns
+        -------
+        int
+            Port 30000 plus the count of fake processes started so far.
+        """
         return 30000 + len(self.processes)
 
     def _new_capture(self, *, mode: str, encoding: str) -> io.StringIO:
+        """Return a new in-memory capture after checking its open arguments.
+
+        Returns
+        -------
+        io.StringIO
+            The new capture, also appended to ``captures``.
+        """
         assert mode == "w+", f"expected a readable capture mode, got {mode!r}."
         assert encoding == "utf-8", (
             f"expected UTF-8 capture encoding, got {encoding!r}."
@@ -102,12 +117,31 @@ class _LifecycleDoubles:
         port: int,
         stderr_file: typ.TextIO,
     ) -> subprocess.Popen[str]:
+        """Return the next scripted fake process and record it.
+
+        Returns
+        -------
+        subprocess.Popen[str]
+            The fake process, cast to the Popen type.
+        """
         del launch, port, stderr_file
         process = _FakeProcess(self.outcomes[len(self.processes)])
         self.processes.append(process)
         return typ.cast("subprocess.Popen[str]", process)
 
     def _wait_for_port(self, server: harness.VidaiMockServer) -> None:
+        """Simulate the readiness wait for the scripted outcome.
+
+        Writes a diagnostic line to the capture, returns on success, and
+        otherwise raises for the scripted failure: ``RuntimeError`` for
+        ``unexpected`` and ``VidaiMockStartupError`` for ``bind``, ``exit``
+        or ``timeout``.
+
+        Raises
+        ------
+        AssertionError
+            If the outcome is not a supported readiness outcome.
+        """
         process = typ.cast("_FakeProcess", server.process)
         outcome = process.outcome
         capture = typ.cast("io.StringIO", server.stderr_file)

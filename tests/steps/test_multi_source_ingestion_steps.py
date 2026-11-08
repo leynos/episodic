@@ -78,6 +78,7 @@ def series_profile_exists_for_multi_source(
     """Persist a series profile for multi-source ingestion."""
 
     async def _store_profile() -> None:
+        """Save the multi-source series profile and store it in context."""
         now = dt.datetime.now(dt.UTC)
         profile = SeriesProfile(
             id=uuid.uuid4(),
@@ -155,6 +156,7 @@ def multi_source_ingestion_processes(
     """Run multi-source ingestion with the reference adapters."""
 
     async def _ingest() -> None:
+        """Ingest the raw sources and record the episode and job IDs in context."""
         profile = multi_source_context["profile"]
         raw_sources = multi_source_context["raw_sources"]
         pipeline = IngestionPipeline(
@@ -204,6 +206,7 @@ def canonical_episode_created(
     """Verify the canonical episode was persisted."""
 
     async def _verify() -> None:
+        """Check the canonical episode exists and is in draft state."""
         episode_id = multi_source_context["episode_id"]
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await uow.episodes.get(episode_id)
@@ -225,6 +228,7 @@ def source_documents_persisted_with_weights(
     """Verify source documents have non-zero computed weights."""
 
     async def _verify() -> None:
+        """Check stored source documents have weights within (0, 1]."""
         job_id = multi_source_context["ingestion_job_id"]
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             documents = await uow.source_documents.list_for_job(job_id)
@@ -248,6 +252,7 @@ def conflict_resolution_metadata_recorded(
     """Verify the approval event records source provenance."""
 
     async def _verify() -> None:
+        """Check the approval event and per-document conflict-resolution metadata."""
         episode_id = multi_source_context["episode_id"]
         job_id = multi_source_context["ingestion_job_id"]
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -301,6 +306,7 @@ def single_source_marked_as_preferred(
     """Verify a single source is persisted as the sole document."""
 
     async def _verify() -> None:
+        """Check that a single source document with non-zero weight is stored."""
         job_id = multi_source_context["ingestion_job_id"]
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             documents = await uow.source_documents.list_for_job(job_id)
@@ -322,6 +328,7 @@ def tei_header_provenance_captures_priorities(
     """Verify TEI header provenance captures source-priority ordering."""
 
     async def _verify() -> None:
+        """Check the TEI header provenance and source priority ordering."""
         episode_id = multi_source_context["episode_id"]
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:

@@ -198,6 +198,13 @@ def _create(
     payload: dict[str, object],
     key: str = "no-qa-run",
 ) -> httpx.Response:
+    """Post a generation run for the ingested job and drain the launcher.
+
+    Returns
+    -------
+    httpx.Response
+        The response to the generation-run creation request.
+    """
     job_id = require(context.ingestion_job_id, "ingestion job")
     response = context.runner.run(
         context.request(

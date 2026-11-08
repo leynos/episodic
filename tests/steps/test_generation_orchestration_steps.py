@@ -211,6 +211,7 @@ def run_orchestration(
     """Call the orchestration service with a live LLM adapter."""
 
     async def _orchestrate() -> None:
+        """Plan and execute the request, then store the result and requests."""
         request = orchestration_context.request
         if request is None:
             msg = "generation request was not prepared"
@@ -258,6 +259,7 @@ def run_suspend_resume_orchestration(
     """Call the checkpointing LangGraph flow with a live LLM adapter."""
 
     async def _orchestrate() -> None:  # ruff: ignore[too-many-locals]  # The scenario keeps distinct intermediate values for readable behavioural assertions.
+        """Suspend the LangGraph flow, resume it, and store the outcome."""
         request = orchestration_context.request
         if request is None:
             msg = "generation request was not prepared"

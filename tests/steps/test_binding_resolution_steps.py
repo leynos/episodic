@@ -95,6 +95,7 @@ def create_binding_resolution_episodes(
     """Persist early and late episodes for the scenario profile."""
 
     async def _create() -> None:
+        """Insert the early and late canonical episodes with TEI headers."""
         profile_id = uuid.UUID(context["profile_id"])
         episode_specs = [
             ("early", dt.datetime(2026, 1, 1, tzinfo=dt.UTC)),
@@ -271,6 +272,7 @@ def run_ingestion_with_reference_bindings(
     """Run multi-source ingestion so resolved bindings are snapshotted."""
 
     async def _ingest() -> None:
+        """Ingest a transcript source and record the resulting job ID in context."""
         pipeline = IngestionPipeline(
             normalizer=InMemorySourceNormalizer(),
             weighting=DefaultWeightingStrategy(),
@@ -347,6 +349,7 @@ def assert_ingestion_snapshots(
     """Verify that ingestion persists reference snapshots as source documents."""
 
     async def _assert_snapshots() -> None:
+        """Check that two reference snapshots cover the late and template revisions."""
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             documents = await uow.source_documents.list_for_job(
                 uuid.UUID(context["ingestion_job_id"])

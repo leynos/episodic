@@ -142,6 +142,7 @@ def add_series_profile(
     """Persist a series profile through the repository."""
 
     async def _store() -> None:
+        """Persist and commit a series profile, then record it in context."""
         profile = await _persist_series_profile(
             session_factory,
             {
@@ -166,6 +167,7 @@ def add_and_rollback(
     """Add a series profile and roll back without committing."""
 
     async def _store_and_rollback() -> None:
+        """Persist a series profile, roll back, and record it in context."""
         profile = await _persist_series_profile(
             session_factory,
             {"slug": "bdd-rollback", "title": "BDD Rollback", "configuration": {}},
@@ -186,6 +188,7 @@ def episode_with_dependencies(
     """Set up the entity graph required for a source document."""
 
     async def _setup() -> None:
+        """Persist a series, header, episode and ingestion job, then store IDs."""
         now = dt.datetime.now(dt.UTC)
         series_id = uuid.uuid4()
         header_id = uuid.uuid4()
@@ -263,6 +266,7 @@ def fetch_profile(
     """Fetch the series profile by its identifier."""
 
     async def _fetch() -> None:
+        """Load the series profile by ID and store the result in context."""
         profile_id = context["profile_id"]
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -282,6 +286,7 @@ def add_bad_weight_source(
     """Add a source document with an out-of-range weight."""
 
     async def _add() -> None:
+        """Attempt to add a weight-1.5 source document and expect an integrity error."""
         now = dt.datetime.now(dt.UTC)
         job_id: uuid.UUID = context["_job_id"]
         episode_id: uuid.UUID = context["_episode_id"]

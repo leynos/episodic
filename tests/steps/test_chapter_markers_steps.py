@@ -217,6 +217,7 @@ def run_chapter_marker_generation(
     """Call the chapter-marker generator with a live LLM adapter."""
 
     async def _generate_chapter_markers() -> None:
+        """Run the generator against the mock LLM and store its result."""
         async with OpenAICompatibleLLMAdapter(
             config=OpenAICompatibleLLMConfig(
                 base_url=chapter_markers_context.base_url,
