@@ -88,6 +88,8 @@ def test_lint_runs_the_gate() -> None:
 
     assert result.returncode == 0, result.stderr
     assert marker in result.stdout, "lint must reach the interrogate recipe"
-    assert result.stdout.index(marker) < result.stdout.index("hecate"), (
-        "the docstring gate must run before the other lint steps"
-    )
+    position = result.stdout.index(marker)
+    for other_prerequisite in ("hecate", "nose"):
+        assert position < result.stdout.index(other_prerequisite), (
+            f"the docstring gate must run before the {other_prerequisite} step"
+        )
