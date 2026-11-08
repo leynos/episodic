@@ -19,6 +19,8 @@ if typ.TYPE_CHECKING:
 
 
 class _ErrorCase(typ.NamedTuple):
+    """Pair a subprocess error factory with its expected match and cause type."""
+
     exception_factory: cabc.Callable[[list[str]], Exception]
     expected_match: str
     expected_cause_type: type[BaseException]
@@ -62,6 +64,7 @@ def test_fixture_check_wraps_subprocess_errors(
         command: list[str],
         **_kwargs: object,
     ) -> subprocess.CompletedProcess[str]:
+        """Raise the parametrised exception for the captured command."""
         raise error_case.exception_factory(command)
 
     monkeypatch.setattr(subprocess, "run", raising_run)
@@ -111,6 +114,7 @@ def test_production_check_wraps_subprocess_errors(
         command: list[str],
         **_kwargs: object,
     ) -> subprocess.CompletedProcess[str]:
+        """Raise the parametrised exception for the captured command."""
         raise error_case.exception_factory(command)
 
     monkeypatch.setattr(subprocess, "run", raising_run)
@@ -140,6 +144,7 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
         command: list[str],
         **kwargs: object,
     ) -> subprocess.CompletedProcess[str]:
+        """Record the command, check its keyword arguments and return success."""
         captured_command.extend(command)
         assert kwargs == {
             "check": False,
@@ -188,6 +193,7 @@ def test_production_check_uses_injected_python(
         command: list[str],
         **kwargs: object,
     ) -> subprocess.CompletedProcess[str]:
+        """Record the command, check its keyword arguments and return success."""
         captured_command.extend(command)
         assert kwargs == {
             "check": False,

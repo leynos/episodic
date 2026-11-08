@@ -42,6 +42,7 @@ class PropGraphPlanner:
         result: PlannerResult,
         event_recorder: GraphEventRecorder | None = None,
     ) -> None:
+        """Store the canned planner result and optional event recorder."""
         self._result = result
         self._event_recorder = event_recorder
 
@@ -67,6 +68,7 @@ class PropGraphToolExecutor:
         *,
         event_recorder: GraphEventRecorder | None = None,
     ) -> None:
+        """Store the canned tool result and optional event recorder."""
         self._result = result
         self._event_recorder = event_recorder
 

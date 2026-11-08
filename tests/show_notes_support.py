@@ -7,6 +7,7 @@ class FakeLLMPort:
     """Capture one show-notes request and return a canned response."""
 
     def __init__(self, response: LLMResponse) -> None:
+        """Store the canned response and start an empty request log."""
         self.response = response
         self.requests: list[LLMRequest] = []
 

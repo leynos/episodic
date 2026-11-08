@@ -195,6 +195,7 @@ class _CountingReferenceBindingRepository:
     """Count binding lookup calls made by brief reference-document loaders."""
 
     def __init__(self) -> None:
+        """Start both call counters at zero and clear the recorded target ids."""
         self.single_target_calls = 0
         self.multi_target_calls = 0
         self.last_target_ids: set[uuid.UUID] = set()

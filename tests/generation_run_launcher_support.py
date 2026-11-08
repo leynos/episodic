@@ -82,6 +82,7 @@ class BlockingDraftGenerator:
     """Draft generator fake that blocks until the task is cancelled."""
 
     def __init__(self) -> None:
+        """Create the event that signals when generation has started."""
         self.started = asyncio.Event()
 
     async def generate(self, request: DraftScriptRequest) -> DraftScriptResult:
@@ -96,6 +97,7 @@ class ReleasableDraftGenerator:
     """Draft generator fake that completes when the test releases it."""
 
     def __init__(self, result: DraftScriptResult) -> None:
+        """Store the draft result and create the start and release events."""
         self.result = result
         self.started = asyncio.Event()
         self.release = asyncio.Event()

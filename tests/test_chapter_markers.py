@@ -62,6 +62,7 @@ def chapter_markers_result() -> cabc.Callable[..., ChapterMarkersResult]:
     """Return a factory for chapter-marker results."""
 
     def build_result(*chapters: ChapterMarker) -> ChapterMarkersResult:
+        """Build a chapter-markers result from *chapters* with fixed usage."""
         return ChapterMarkersResult(
             chapters=chapters,
             usage=LLMUsage(input_tokens=10, output_tokens=5, total_tokens=15),

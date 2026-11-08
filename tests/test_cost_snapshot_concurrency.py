@@ -83,6 +83,7 @@ async def test_concurrent_ensure_persists_exactly_one_snapshot(
     start = asyncio.Event()
 
     async def ensure_once() -> None:
+        """Ensure the snapshot and commit once the start event is set."""
         async with session_factory() as session:
             await start.wait()
             await SqlAlchemyCostLedgerStore(session).ensure_snapshot(snapshot)
@@ -120,6 +121,7 @@ async def test_concurrent_ensure_and_pin_persist_one_snapshot_and_pin(
     start = asyncio.Event()
 
     async def ensure_and_pin() -> None:
+        """Ensure the snapshot, pin the run and commit once started."""
         async with session_factory() as session:
             await start.wait()
             store = SqlAlchemyCostLedgerStore(session)
@@ -172,6 +174,7 @@ async def test_cancelled_transaction_leaves_no_partial_snapshot(
     release = asyncio.Event()
 
     async def ensure_then_stall() -> None:
+        """Ensure the snapshot and pin the run, then hold the transaction open."""
         async with session_factory() as session:
             store = SqlAlchemyCostLedgerStore(session)
             await store.ensure_snapshot(snapshot)

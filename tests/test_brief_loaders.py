@@ -239,6 +239,7 @@ class _ReferenceLoaderUnitOfWork:
         revisions: list[ReferenceDocumentRevision],
         documents: list[ReferenceDocument],
     ) -> None:
+        """Wrap the revisions and documents in in-memory repository stubs."""
         self.reference_document_revisions = _RevisionRepositoryStub(revisions)
         self.reference_documents = _DocumentRepositoryStub(documents)
 
@@ -247,6 +248,7 @@ class _RevisionRepositoryStub:
     """Return matching revisions from an in-memory collection."""
 
     def __init__(self, revisions: list[ReferenceDocumentRevision]) -> None:
+        """Store the revisions to search."""
         self._revisions = revisions
 
     async def list_by_ids(
@@ -261,6 +263,7 @@ class _DocumentRepositoryStub:
     """Return matching documents from an in-memory collection."""
 
     def __init__(self, documents: list[ReferenceDocument]) -> None:
+        """Store the documents to search."""
         self._documents = documents
 
     async def list_by_ids(

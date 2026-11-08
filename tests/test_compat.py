@@ -11,7 +11,10 @@ if typ.TYPE_CHECKING:
 
 
 def _dummy_hello(name: str) -> cabc.Callable[[], str]:
+    """Return a zero-argument callable that returns *name*."""
+
     def impl() -> str:
+        """Return the name this dummy implementation was built with."""
         return name
 
     return impl

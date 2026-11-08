@@ -36,6 +36,7 @@ from episodic.llm import LLMUsage
 
 
 def _result(*chapters: ChapterMarker) -> ChapterMarkersResult:
+    """Build a chapter-markers result from *chapters* with fixed usage."""
     return ChapterMarkersResult(
         chapters=chapters,
         usage=LLMUsage(input_tokens=10, output_tokens=5, total_tokens=15),
@@ -43,6 +44,7 @@ def _result(*chapters: ChapterMarker) -> ChapterMarkersResult:
 
 
 def _iso_duration(seconds: int) -> str:
+    """Format integer seconds as a supported PT duration."""
     hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
     parts = ["PT"]

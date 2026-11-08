@@ -85,6 +85,7 @@ def canned(
     recorded = RecordedRequests()
 
     def handle(request: httpx.Request) -> httpx.Response:
+        """Record the request and return the canned JSON response."""
         recorded.seen.append(request)
         return httpx.Response(status, json=payload, headers=headers)
 

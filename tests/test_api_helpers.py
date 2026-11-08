@@ -58,6 +58,7 @@ class TestTypedUpdateRequest:
         entity_id = uuid.UUID("018fdcf0-0000-7000-8000-000000000001")
 
         def sentinel_data_builder(payload: dict[str, object]) -> str:
+            """Return the title field of *payload*."""
             return typ.cast("str", payload["title"])
 
         def fake_build_update_kwargs(
@@ -65,6 +66,7 @@ class TestTypedUpdateRequest:
             *,
             data_builder: cabc.Callable[[dict[str, object]], str],
         ) -> helpers._ParsedUpdatePayload[str]:
+            """Record the payload and data builder, then return a parsed payload."""
             captured["payload"] = payload
             captured["data_builder"] = data_builder
             return helpers._ParsedUpdatePayload(

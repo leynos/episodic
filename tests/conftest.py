@@ -90,6 +90,7 @@ class BlockingMapExecutor(cf.Executor):
     """Executor test double that exposes map/shutdown ordering."""
 
     def __init__(self) -> None:
+        """Create unset events for map start, map release and shutdown."""
         self.map_started = threading.Event()
         self.release_map = threading.Event()
         self.shutdown_called = threading.Event()
@@ -163,6 +164,7 @@ def captured_interpreter_pool_workers(
     captured_max_workers: list[int | None] = []
 
     def fake_create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
+        """Record *max_workers* and return a thread pool of that size."""
         captured_max_workers.append(max_workers)
         return cf.ThreadPoolExecutor(max_workers=max_workers)
 
