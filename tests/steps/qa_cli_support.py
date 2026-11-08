@@ -90,6 +90,13 @@ def bridge_transport(
     """Return a transport that serves requests through the ASGI application."""
 
     async def send(request: httpx.Request) -> httpx.Response:
+        """Serve the request through the ASGI application.
+
+        Returns
+        -------
+        httpx.Response
+            Response with its body read eagerly.
+        """
         async with api_async_client(dependencies) as client:
             response = await client.request(
                 request.method,
@@ -107,6 +114,13 @@ def bridge_transport(
             )
 
     def handle(request: httpx.Request) -> httpx.Response:
+        """Run the async ``send`` on the scenario loop and wait for its response.
+
+        Returns
+        -------
+        httpx.Response
+            Response produced by ``send``.
+        """
         future = asyncio.run_coroutine_threadsafe(send(request), loop)
         return future.result(timeout=30)
 
@@ -170,6 +184,13 @@ def list_evaluations(context: QaCliContext, options: ListOptions) -> None:
         argv.extend(["--format", options.output_format])
 
     async def drive() -> tuple[int, str, str]:
+        """Run the CLI in a worker thread and collect its output.
+
+        Returns
+        -------
+        tuple[int, str, str]
+            Exit code, captured standard output, and captured standard error.
+        """
         loop = asyncio.get_running_loop()
         return await asyncio.to_thread(
             _invoke,

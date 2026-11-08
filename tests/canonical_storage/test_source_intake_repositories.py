@@ -297,6 +297,13 @@ async def test_sqlalchemy_idempotency_store_concurrent_acquire_is_first_writer_w
     )
 
     async def acquire() -> Acquired | Replay | Conflict | InFlight:
+        """Acquire the idempotency key in its own unit of work.
+
+        Returns
+        -------
+        Acquired | Replay | Conflict | InFlight
+            The outcome reported by ``idempotency.acquire``.
+        """
         async with SqlAlchemyUnitOfWork(factory) as uow:
             outcome = await uow.idempotency.acquire(request=request)
             await uow.commit()

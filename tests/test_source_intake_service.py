@@ -31,6 +31,7 @@ class _SecondCommitFailsUnitOfWork(SqlAlchemyUnitOfWork):
         session_factory: cabc.Callable[[], AsyncSession],
         counter: list[int],
     ) -> None:
+        """Store the shared commit counter alongside the session factory."""
         super().__init__(session_factory)
         self._counter = counter
 
@@ -55,6 +56,7 @@ async def test_register_upload_keeps_pending_row_when_ready_commit_fails(
     payload = b"recoverable upload\n"
 
     def failing_uow_factory() -> _SecondCommitFailsUnitOfWork:
+        """Build a unit of work whose second commit fails."""
         return _SecondCommitFailsUnitOfWork(session_factory, commit_counter)
 
     with pytest.raises(RuntimeError, match="simulated ready commit failure"):

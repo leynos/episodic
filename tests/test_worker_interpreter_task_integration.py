@@ -21,6 +21,23 @@ def test_eager_cpu_task_body_uses_environment_executor_pattern(
 
     @app.task(name="tests.worker.cpu_fanout_probe")
     def run_cpu_fanout_probe(payload: cabc.Mapping[str, object]) -> dict[str, object]:
+        """Map abs over the payload items in an interpreter-pool executor.
+
+        Parameters
+        ----------
+        payload : cabc.Mapping[str, object]
+            Mapping whose "items" entry is a list of integers.
+
+        Returns
+        -------
+        dict[str, object]
+            Mapping with a "results" key holding the absolute values.
+
+        Raises
+        ------
+        TypeError
+            If "items" is not a list or contains a non-integer value.
+        """
         raw_items = payload["items"]
         if not isinstance(raw_items, list):
             msg = "items must be a JSON list."

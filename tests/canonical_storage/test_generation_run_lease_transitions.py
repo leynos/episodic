@@ -84,6 +84,13 @@ async def test_reclamation_appends_the_event_before_the_terminal_update(
         payload: JsonMapping,
         occurred_at: dt.datetime | None = None,
     ) -> GenerationEvent:
+        """Record the append call, then delegate to the real store method.
+
+        Returns
+        -------
+        GenerationEvent
+            The event returned by the real ``append_event``.
+        """
         calls.append("append_event")
         return await real_append(
             self,
@@ -99,6 +106,13 @@ async def test_reclamation_appends_the_event_before_the_terminal_update(
         *,
         update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
+        """Record the status update call, then delegate to the real store method.
+
+        Returns
+        -------
+        GenerationRun
+            The run returned by the real ``update_run_status``.
+        """
         calls.append("update_run_status")
         return await real_update(self, run_id, update=update)
 

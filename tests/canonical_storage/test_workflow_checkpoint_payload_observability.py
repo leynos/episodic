@@ -72,6 +72,7 @@ async def test_checkpoint_store_observes_rejected_persisted_payload(
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def record_log_event(level: str, message: str, **fields: object) -> None:
+        """Append a captured log event to the events list."""
         events.append((level, message, fields))
 
     monkeypatch.setattr(workflow_checkpoints, "_log_event", record_log_event)

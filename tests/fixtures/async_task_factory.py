@@ -58,6 +58,13 @@ def recording_task_factory() -> cabc.Iterator[list[dict[str, object]]]:
         coro: cabc.Coroutine[object, object, object],
         **task_kwargs: object,
     ) -> asyncio.Task[object]:
+        """Record the task kwargs and build the task on the running loop.
+
+        Returns
+        -------
+        asyncio.Task[object]
+            Task wrapping the supplied coroutine.
+        """
         task_kwargs_dict = dict(task_kwargs)
         captured.append(task_kwargs_dict)
         return asyncio.Task(
@@ -200,6 +207,13 @@ def make_fake_ingest_sources(
         series_profile: SeriesProfile,
         request: IngestionRequest,
     ) -> CanonicalEpisode:
+        """Record the request sources and return a fake canonical episode.
+
+        Returns
+        -------
+        CanonicalEpisode
+            Episode built for the profile identifier.
+        """
         await asyncio.sleep(0)
         _ = (uow, series_profile)
         captured_sources.extend(request.sources)

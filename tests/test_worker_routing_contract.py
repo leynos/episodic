@@ -19,10 +19,12 @@ class _FakeWorkerLogger:
     exceptions: list[str]
 
     def info(self, message: str, **kwargs: object) -> None:
+        """Record an info message."""
         del kwargs
         self.infos += [message]
 
     def exception(self, message: str, **kwargs: object) -> None:
+        """Record an exception message."""
         del kwargs
         self.exceptions += [message]
 
@@ -44,6 +46,13 @@ class _FakeWorkerLogger:
 
 
 def _runtime_environ() -> dict[str, str]:
+    """Return runtime environment variables for an eager Celery worker.
+
+    Returns
+    -------
+    dict[str, str]
+        Broker URL and always-eager settings.
+    """
     return {
         "EPISODIC_CELERY_BROKER_URL": "amqp://guest:guest@localhost:5672//",
         "EPISODIC_CELERY_ALWAYS_EAGER": "true",

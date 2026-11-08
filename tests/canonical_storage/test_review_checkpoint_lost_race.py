@@ -45,6 +45,7 @@ def _capture_log_events(
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def record_event(level: str, message: str, **fields: object) -> None:
+        """Append a captured log event to the events list."""
         events.append((level, message, fields))
 
     # Both refusal routes report through the shared helper, so the refusal

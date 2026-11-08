@@ -174,6 +174,13 @@ def establish_generated_episode(context: QaRetrievalContext) -> None:
         context.dependencies = build_qa_dependencies(context.session_factory)
 
     async def _create() -> QaEpisodeFixture:
+        """Create the generated episode and return its fixture.
+
+        Returns
+        -------
+        QaEpisodeFixture
+            Fixture describing the generated episode and its TEI draft.
+        """
         dependencies = require(context.dependencies, "QA retrieval dependencies")
         return await create_generated_episode(dependencies)
 
@@ -186,6 +193,13 @@ def record_pedante_for_context(context: QaRetrievalContext) -> None:
     episode = require(context.episode, "canonical episode")
 
     async def _record_pedante() -> uuid.UUID:
+        """Record the Pedante evaluation and return its identifier.
+
+        Returns
+        -------
+        uuid.UUID
+            Identifier of the recorded Pedante evaluation.
+        """
         return await record_pedante_evaluation(dependencies, episode)
 
     context.pedante_evaluation_id = context.runner.run(_record_pedante())
