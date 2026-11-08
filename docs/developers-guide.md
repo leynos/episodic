@@ -276,14 +276,17 @@ make lint
 
 The target runs this repository-wide pipeline, in order:
 
-1. Hecate architecture import-boundary checks;
-2. Ruff formatting-independent lint checks;
-3. the focused built-in Pylint 4 rules under CPython 3.14;
-4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
+1. Interrogate docstring coverage (`make interrogate`), which fails on any
+   undocumented definition under `alembic`, `episodic`, `scripts`, and `tests`,
+   including a lone gap that a rounded percentage would hide;
+2. Hecate architecture import-boundary checks;
+3. Ruff formatting-independent lint checks;
+4. the focused built-in Pylint 4 rules under CPython 3.14;
+5. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
    separate future-annotations pass;
-5. `ambrleaks` over Syrupy snapshots under `tests`;
-6. a blocking Skylos dead-code scan; and
-7. a blocking nose code-duplication gate.
+6. `ambrleaks` over Syrupy snapshots under `tests`;
+7. a blocking Skylos dead-code scan; and
+8. a blocking nose code-duplication gate.
 
 The built-in Pylint pass runs the pinned `pylint==$(PYLINT_VERSION)` through
 `uv tool run --managed-python --python 3.14`, isolated from the project

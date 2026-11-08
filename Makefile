@@ -72,7 +72,19 @@ NOSE_BIN ?= $(NOSE_TOOLS_DIR)/nose
 CARGO_BINSTALL ?= cargo-binstall
 DUPLICATION_GATE = $(UV_ENV) NOSE_BIN=$(NOSE_BIN) $(UV) run scripts/duplication_gate.py
 
-.PHONY: help all clean build build-release lint fmt check-fmt \
+# Interrogate scans each target recursively, subject to its default exclusions
+# (check a new file against the verbose report). Add a new Python directory to
+# the targets. Python 3.14 is required: interrogate parses the source with the
+# interpreter that runs it, and this code uses template strings.
+INTERROGATE_VERSION ?= 1.7.0
+INTERROGATE_TARGETS ?= alembic episodic openai_test_types.py scripts tests
+# Level 2 prints a MISSED row per undocumented definition, which the
+# `interrogate` target fails on: the rounded percentage alone passes a lone gap.
+INTERROGATE_FLAGS ?= -vv --no-color --ext pyi --fail-under 100
+INTERROGATE ?= $(UV_ENV) $(UV) tool run --python 3.14 \
+	--from 'interrogate==$(INTERROGATE_VERSION)' interrogate
+
+.PHONY: help all clean build build-release lint interrogate fmt check-fmt \
         markdownlint nixie spelling test typecheck typecheck-path \
         crosshair check-migrations skylos-allow validate \
         install-nose duplication duplication-test duplication-allow \
@@ -140,7 +152,19 @@ check-fmt: build ## Verify formatting
 validate: ## Validate the Makefile
 	mbake validate Makefile
 
-lint: check-architecture install-nose ## Run linters
+interrogate: ## Enforce complete Python docstring coverage
+	@report="$$($(INTERROGATE) $(INTERROGATE_FLAGS) $(INTERROGATE_TARGETS))"; \
+	  status=$$?; \
+	  printf '%s\n' "$$report"; \
+	  test "$$status" -eq 0 || exit "$$status"; \
+	  found=0; \
+	  printf '%s\n' "$$report" | grep '| *MISSED *|' >/dev/null || found=$$?; \
+	  if test "$$found" -ne 1; then \
+	    printf '%s\n' 'interrogate: undocumented definitions remain (or the MISSED check failed); see above' >&2; \
+	    exit 1; \
+	  fi
+
+lint: interrogate check-architecture install-nose ## Run linters
 	$(UV_ENV) $(UV) run ruff check
 	$(PYLINT) $(PYLINT_TARGETS)
 	$(DF12_PYLINT) $(PYLINT_TARGETS)
