@@ -21,7 +21,10 @@ def test_eager_cpu_task_body_uses_environment_executor_pattern(
 
     @app.task(name="tests.worker.cpu_fanout_probe")
     def run_cpu_fanout_probe(payload: cabc.Mapping[str, object]) -> dict[str, object]:
-        """Map abs over the payload items in an interpreter-pool executor.
+        """Map abs over the payload items with the environment-built executor.
+
+        The environment selects the interpreter-pool adapter, which the test
+        backs with a thread pool.
 
         Parameters
         ----------

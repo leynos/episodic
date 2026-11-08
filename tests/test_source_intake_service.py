@@ -56,7 +56,7 @@ async def test_register_upload_keeps_pending_row_when_ready_commit_fails(
     payload = b"recoverable upload\n"
 
     def failing_uow_factory() -> _SecondCommitFailsUnitOfWork:
-        """Build a unit of work whose second commit fails."""
+        """Build a unit of work; the shared counter fails the second commit overall."""
         return _SecondCommitFailsUnitOfWork(session_factory, commit_counter)
 
     with pytest.raises(RuntimeError, match="simulated ready commit failure"):
