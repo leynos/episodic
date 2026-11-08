@@ -89,17 +89,21 @@ class TestGateCommands:
         if str(error).startswith("unreadable"):
 
             def reader(_path: object) -> tuple[allowlist.AllowEntry, ...]:
+                """Raise the injected allowlist failure."""
                 raise error
 
             def detect() -> list[detector.Finding]:
+                """Report no duplicate findings."""
                 return []
 
         else:
 
             def reader(_path: object) -> tuple[allowlist.AllowEntry, ...]:
+                """Return an empty allowlist."""
                 return ()
 
             def detect() -> list[detector.Finding]:
+                """Raise the injected detector failure."""
                 raise error
 
         with pytest.raises(gate.GateExecutionError, match=str(error)):
@@ -110,6 +114,7 @@ class TestGateCommands:
         entry = allowlist.AllowEntry(keys=("episodic/a.py",), reason="reviewed")
 
         def reader(_path: object) -> tuple[allowlist.AllowEntry, ...]:
+            """Return the single allow entry under test."""
             return (entry,)
 
         assert gate._read_allowlist(reader) == (entry,), (
@@ -128,6 +133,7 @@ class TestGateCommands:
         )
 
         def detect() -> list[detector.Finding]:
+            """Return the single finding under test."""
             return [finding]
 
         assert gate._detect_findings(detect) == [finding], (
@@ -160,6 +166,7 @@ class TestGateCommands:
         """Unreadable configuration becomes an explicit execution error."""
 
         def reader(_path: object) -> tuple[allowlist.AllowEntry, ...]:
+            """Raise the parametrized environment failure."""
             raise error
 
         with pytest.raises(expected_type) as raised:
@@ -200,6 +207,7 @@ class TestGateCommands:
         """Execution failures and schema violations use distinct gate errors."""
 
         def detect() -> list[detector.Finding]:
+            """Raise the parametrized detector failure."""
             raise error
 
         with pytest.raises(expected_type) as raised:
@@ -213,6 +221,7 @@ class TestGateCommands:
         error = RuntimeError("detector runtime failed")
 
         def detect() -> list[detector.Finding]:
+            """Raise the runtime error under test."""
             raise error
 
         with pytest.raises(RuntimeError) as raised:
@@ -225,6 +234,7 @@ class TestGateCommands:
         error = gate.GateConfigError("duplication_gate.allow[0] requires a reason")
 
         def reader(_path: object) -> tuple[allowlist.AllowEntry, ...]:
+            """Raise the configuration error under test."""
             raise error
 
         with pytest.raises(gate.GateConfigError) as raised:
@@ -237,6 +247,7 @@ class TestGateCommands:
         error = gate.GateConfigError("nose 0.19.0 is installed but 0.20.0 is pinned")
 
         def detect() -> list[detector.Finding]:
+            """Raise the configuration error under test."""
             raise error
 
         with pytest.raises(gate.GateConfigError) as raised:
@@ -255,6 +266,7 @@ class TestGateCommands:
         monkeypatch.setattr(gate, "load_allowlist", lambda _path: ())
 
         def raise_schema_error() -> list[detector.Finding]:
+            """Raise a `TypeError` for a malformed detector report."""
             msg = "nose report families must be an array"
             raise TypeError(msg)
 
@@ -321,6 +333,7 @@ class TestGateCommands:
         write_error = OSError("read-only filesystem")
 
         def fail_write(*_args: object, **_kwargs: object) -> None:
+            """Raise the write error instead of recording the entry."""
             raise write_error
 
         monkeypatch.setattr(gate, "append_allow_entry", fail_write)

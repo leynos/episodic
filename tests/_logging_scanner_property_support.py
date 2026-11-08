@@ -26,6 +26,8 @@ class ScannerSource(typ.NamedTuple):
 
 
 class _ScannerImport(typ.NamedTuple):
+    """A generated import, the factory it exposes and whether it is absolute."""
+
     statement: str
     factory_reference: str
     is_absolute: bool

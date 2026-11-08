@@ -28,6 +28,7 @@ class _FakeLLMPort:
     """Capture requests and return canned responses in sequence."""
 
     def __init__(self, responses: list[LLMResponse]) -> None:
+        """Store the canned responses to return, in order."""
         self._responses = responses
         self.requests: list[LLMRequest] = []
 
@@ -48,6 +49,7 @@ class _FakeToolExecutor:
         result: ActionExecutionResult | None = None,
         error: Exception | None = None,
     ) -> None:
+        """Store the result to return or the error to raise, with no calls yet."""
         self.result = result
         self.error = error
         self.calls: list[tuple[PlannedAction, GenerationOrchestrationRequest]] = []
@@ -112,6 +114,7 @@ class _LLMErrorShowNotesGenerator(_BaseShowNotesGenerator):
     """Raise a configurable LLM error so provider failures surface untransformed."""
 
     def __init__(self, error: BaseException) -> None:
+        """Store the error to raise from generate."""
         self._error = error
 
     @typ.override
@@ -151,6 +154,7 @@ def _usage(
     input_tokens: int,
     output_tokens: int,
 ) -> LLMUsage:
+    """Build token usage whose total is the input plus the output tokens."""
     return LLMUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
@@ -159,6 +163,7 @@ def _usage(
 
 
 def _response(text: str, *, model: str, usage: LLMUsage) -> LLMResponse:
+    """Build a canned stop response for *model* carrying *text*."""
     return LLMResponse(
         text=text,
         model=model,
@@ -169,6 +174,7 @@ def _response(text: str, *, model: str, usage: LLMUsage) -> LLMResponse:
 
 
 def _request() -> GenerationOrchestrationRequest:
+    """Build a generation request with a fixed correlation ID and script."""
     return GenerationOrchestrationRequest(
         correlation_id="corr-123",
         script_tei_xml="<TEI><text><body><p>Episode script</p></body></text></TEI>",
@@ -177,6 +183,7 @@ def _request() -> GenerationOrchestrationRequest:
 
 
 def _config() -> GenerationOrchestrationConfig:
+    """Build a generation config using chat completions for both tiers."""
     return GenerationOrchestrationConfig(
         planning_model="gpt-4.1",
         execution_model="gpt-4o-mini",
@@ -186,6 +193,7 @@ def _config() -> GenerationOrchestrationConfig:
 
 
 def _planned_action(*, action_id: str = "action-1") -> PlannedAction:
+    """Build an execution-tier planned action that generates show notes."""
     return PlannedAction(
         action_id=action_id,
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
@@ -196,6 +204,7 @@ def _planned_action(*, action_id: str = "action-1") -> PlannedAction:
 
 
 def _plan_payload() -> str:
+    """Return a JSON plan holding one show-notes step."""
     return json.dumps({
         "plan_version": "1.0",
         "steps": [
