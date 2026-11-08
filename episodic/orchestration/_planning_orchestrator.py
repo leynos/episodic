@@ -67,7 +67,7 @@ class StructuredPlanningOrchestrator:
         """Execute one planned action with the standard action log envelope."""
 
         async def execute() -> ActionExecutionResult:
-            """Execute the action, logging its start, completion, and any failure."""
+            """Execute the action, logging its start, completion, and known failures."""
             _log_event(
                 "debug",
                 "structured_planning_orchestrator.execute_plan.action.start",
