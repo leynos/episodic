@@ -28,39 +28,55 @@ _EXPECTED_LOCAL_CONFIGMAP_DATA = {
 
 
 class _Metadata(typ.TypedDict):
+    """Name field shared by rendered metadata and object references."""
+
     name: str
 
 
 class _ConfigMap(typ.TypedDict):
+    """Rendered ConfigMap with its metadata and string data."""
+
     metadata: _Metadata
     data: dict[str, str]
 
 
 class _SecretKeyRef(typ.TypedDict):
+    """Secret key reference with its optional flag."""
+
     name: str
     key: str
     optional: bool
 
 
 class _ContainerValueFrom(typ.TypedDict):
+    """Value source that points at a secret key."""
+
     secretKeyRef: _SecretKeyRef
 
 
 class _ContainerEnvironment(typ.TypedDict):
+    """Environment variable entry sourced from a secret."""
+
     name: str
     valueFrom: _ContainerValueFrom
 
 
 class _ContainerEnvironmentFrom(typ.TypedDict):
+    """Environment source that references a ConfigMap by name."""
+
     configMapRef: _Metadata
 
 
 class _ContainerSecurityContext(typ.TypedDict):
+    """Container security context flags."""
+
     readOnlyRootFilesystem: bool
     allowPrivilegeEscalation: bool
 
 
 class _ApplicationContainer(typ.TypedDict):
+    """Application container entry in a rendered pod spec."""
+
     name: str
     image: str
     imagePullPolicy: str
@@ -70,65 +86,93 @@ class _ApplicationContainer(typ.TypedDict):
 
 
 class _PodSecurityContext(typ.TypedDict):
+    """Pod security context flags."""
+
     runAsNonRoot: bool
 
 
 class _PodSpec(typ.TypedDict):
+    """Pod spec with its containers and security context."""
+
     containers: list[_ApplicationContainer]
     securityContext: _PodSecurityContext
 
 
 class _PodTemplate(typ.TypedDict):
+    """Pod template wrapping a pod spec."""
+
     spec: _PodSpec
 
 
 class _DeploymentSpec(typ.TypedDict):
+    """Deployment spec with its replica count and pod template."""
+
     replicas: int
     template: _PodTemplate
 
 
 class _Deployment(typ.TypedDict):
+    """Rendered Deployment with its spec."""
+
     spec: _DeploymentSpec
 
 
 class _IngressServicePort(typ.TypedDict):
+    """Named service port referenced by an ingress backend."""
+
     name: str
 
 
 class _IngressService(typ.TypedDict):
+    """Service name and port referenced by an ingress backend."""
+
     name: str
     port: _IngressServicePort
 
 
 class _IngressBackend(typ.TypedDict):
+    """Ingress backend that points at a service."""
+
     service: _IngressService
 
 
 class _IngressPath(typ.TypedDict):
+    """HTTP path entry with its path type and backend."""
+
     path: str
     pathType: str
     backend: _IngressBackend
 
 
 class _IngressHttp(typ.TypedDict):
+    """HTTP block listing ingress paths."""
+
     paths: list[_IngressPath]
 
 
 class _IngressRule(typ.TypedDict):
+    """Ingress rule matching a host and its HTTP block."""
+
     host: str
     http: _IngressHttp
 
 
 class _IngressSpec(typ.TypedDict):
+    """Ingress spec with its class name and rules."""
+
     ingressClassName: str
     rules: list[_IngressRule]
 
 
 class _Ingress(typ.TypedDict):
+    """Rendered Ingress with its spec."""
+
     spec: _IngressSpec
 
 
 class _LocalResources(typ.TypedDict):
+    """Rendered local-preview resources keyed by kind."""
+
     ConfigMap: _ConfigMap
     Deployment: _Deployment
     Ingress: _Ingress

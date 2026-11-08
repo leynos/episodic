@@ -36,6 +36,13 @@ def test_readiness_probe_requires_async_check() -> None:
     from episodic.api import ReadinessProbe
 
     def check_database() -> bool:
+        """Return a healthy result from a synchronous check.
+
+        Returns
+        -------
+        bool
+            Always ``True``.
+        """
         return True
 
     with pytest.raises(TypeError, match="async callable"):
@@ -50,6 +57,13 @@ def test_api_dependencies_validate_readiness_probe_entries() -> None:
     from episodic.api import ApiDependencies
 
     async def check_database() -> bool:
+        """Yield to the event loop, then report a healthy result.
+
+        Returns
+        -------
+        bool
+            Always ``True``.
+        """
         await asyncio.sleep(0)
         return True
 

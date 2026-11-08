@@ -179,6 +179,13 @@ async def test_interpreter_executor_map_after_shutdown_raises(
     def fake_create_interpreter_pool_executor(
         max_workers: int | None,
     ) -> cf.ThreadPoolExecutor:
+        """Record and return a thread pool standing in for an interpreter pool.
+
+        Returns
+        -------
+        cf.ThreadPoolExecutor
+            The new pool, also appended to ``created_pools``.
+        """
         pool = cf.ThreadPoolExecutor(max_workers=max_workers)
         created_pools.append(pool)
         return pool
@@ -226,6 +233,13 @@ async def test_interpreter_executor_handles_empty_input(
     created_pools = {"count": 0}
 
     def fake_create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
+        """Count the pool creation and return a thread pool instead.
+
+        Returns
+        -------
+        cf.Executor
+            A new thread pool with the requested worker count.
+        """
         created_pools["count"] += 1
         return cf.ThreadPoolExecutor(max_workers=max_workers)
 
@@ -283,6 +297,13 @@ def test_builder_selects_executor_based_on_environment(
     if mock_support is not None:
 
         def capability_check() -> bool:
+            """Return the mocked interpreter-support result.
+
+            Returns
+            -------
+            bool
+                The ``mock_support`` value for this parametrized case.
+            """
             return mock_support
 
     executor = ci._build_cpu_task_executor_from_environment(
@@ -315,6 +336,13 @@ async def test_builder_parses_max_workers_from_environment(
     captured: dict[str, int | None] = {}
 
     def fake_create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
+        """Capture the requested worker count and return a thread pool.
+
+        Returns
+        -------
+        cf.Executor
+            A single-worker thread pool.
+        """
         captured["max_workers"] = max_workers
         return cf.ThreadPoolExecutor(max_workers=1)
 

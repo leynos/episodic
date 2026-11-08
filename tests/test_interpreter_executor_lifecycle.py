@@ -34,6 +34,7 @@ def test_interpreter_executor_shutdown_race_preserves_state(
     """Generated map/shutdown races leave the executor terminal after shutdown."""
 
     async def exercise_race() -> None:
+        """Run one generated map/shutdown race on a blocking executor."""
         blocking_executor = _BlockingMapExecutor()
         create_executor = mock.patch.object(
             ci,
@@ -61,6 +62,7 @@ def test_interpreter_executor_shutdown_race_preserves_state(
                 shutdown_entered = threading.Event()
 
                 def shutdown_executor() -> None:
+                    """Signal that shutdown has begun, then shut down the executor."""
                     shutdown_entered.set()
                     executor.shutdown()
 
@@ -107,6 +109,13 @@ def test_interpreter_executor_lifecycle_state_sequences(
     created_pools = 0
 
     def fake_create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
+        """Count the pool creation and return a thread pool instead.
+
+        Returns
+        -------
+        cf.Executor
+            A new thread pool with the requested worker count.
+        """
         nonlocal created_pools
         created_pools += 1
         return cf.ThreadPoolExecutor(max_workers=max_workers)
@@ -158,6 +167,7 @@ def test_interpreter_executor_concurrent_maps_then_shutdown_are_terminal(
     """Generated multi-map interleavings serialise before terminal shutdown."""
 
     async def exercise_interleaving() -> None:
+        """Run two overlapping maps, then check that shutdown is terminal."""
         create_executor = mock.patch.object(
             ci,
             "_create_interpreter_pool_executor",

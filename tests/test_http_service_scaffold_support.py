@@ -60,9 +60,17 @@ async def run_asgi_lifespan(
         )
 
     async def receive() -> cabc.MutableMapping[str, typ.Any]:
+        """Return the next queued lifespan event.
+
+        Returns
+        -------
+        cabc.MutableMapping[str, typ.Any]
+            The next event from the receive queue.
+        """
         return await receive_queue.get()
 
     async def send(message: cabc.MutableMapping[str, typ.Any]) -> None:
+        """Record the type of a sent lifespan message."""
         message_type = message["type"]
         assert isinstance(message_type, str), (
             f"ASGI message type must be a string, got {type(message_type).__name__}."

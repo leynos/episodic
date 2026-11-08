@@ -25,6 +25,7 @@ class _RecordingMetrics:
     """Capture bounded counters and latency observations."""
 
     def __init__(self) -> None:
+        """Create empty counter and latency stores."""
         self.counters: list[tuple[str, dict[str, str]]] = []
         self.latencies: list[tuple[str, float, dict[str, str]]] = []
 
@@ -52,6 +53,7 @@ class _SteppingClock:
     """Return deterministic half-second monotonic steps."""
 
     def __init__(self) -> None:
+        """Start the timestamp sequence at 1.0 seconds in half-second steps."""
         self._values = itertools.count(start=1.0, step=0.5)
 
     def monotonic_seconds(self) -> float:
@@ -82,6 +84,7 @@ async def test_interrupted_request_never_emits_success(
     attempts = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Count the attempt, then raise the configured failure on every call."""
         nonlocal attempts
         del request
         attempts += 1
@@ -193,6 +196,13 @@ async def test_successful_request_emits_span_counter_and_latency(
     metrics = _RecordingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a JSON response carrying the success payload.
+
+        Returns
+        -------
+        httpx.Response
+            The success response built by ``openai_json_response``.
+        """
         del request
         return openai_json_response(_success_payload())
 
@@ -239,6 +249,13 @@ async def test_provider_failure_emits_bounded_error_labels(
     metrics = _RecordingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a 400 response with a bad-request JSON body.
+
+        Returns
+        -------
+        httpx.Response
+            HTTP 400 response with the bad-request body.
+        """
         del request
         return httpx.Response(400, json={"error": "bad request"})
 
@@ -281,6 +298,13 @@ async def test_provider_timeout_emits_timeout_outcome(
     metrics = _RecordingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Simulate a provider read timeout for the request.
+
+        Raises
+        ------
+        httpx.ReadTimeout
+            Always, with the message "simulated provider timeout".
+        """
         del request
         msg = "simulated provider timeout"
         raise httpx.ReadTimeout(msg)
@@ -323,6 +347,13 @@ async def test_oversubscribed_usage_details_emit_fixed_category(
     metrics = _RecordingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Return a success payload whose cached token count is oversized.
+
+        Returns
+        -------
+        httpx.Response
+            JSON response with ``prompt_tokens_details.cached_tokens`` set to 99.
+        """
         del request
         payload = _success_payload()
         usage = typ.cast("dict[str, object]", payload["usage"])
