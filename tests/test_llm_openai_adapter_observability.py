@@ -1,7 +1,6 @@
 """Observability coverage for the OpenAI-compatible provider adapter."""
 
 import asyncio
-import itertools
 import typing as typ
 
 import httpx
@@ -10,55 +9,14 @@ import pytest
 from episodic.llm import LLMTransientProviderError
 from episodic.llm.ports import LLMProviderResponseError
 from episodic.observability import RecordingTracer
+from tests.llm_observability_support import RecordingMetrics, SteppingClock
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
     from openai_test_types import (
         _OpenAIAdapterFactory,
         _OpenAIJsonResponseBuilder,
         _OpenAIRequestBuilder,
     )
-
-
-class _RecordingMetrics:
-    """Capture bounded counters and latency observations."""
-
-    def __init__(self) -> None:
-        """Create empty counter and latency stores."""
-        self.counters: list[tuple[str, dict[str, str]]] = []
-        self.latencies: list[tuple[str, float, dict[str, str]]] = []
-
-    def increment_counter(
-        self,
-        name: str,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Record one counter increment."""
-        self.counters.append((name, dict(labels)))
-
-    def observe_latency_ms(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Record one latency observation."""
-        self.latencies.append((name, value, dict(labels)))
-
-
-class _SteppingClock:
-    """Return deterministic half-second monotonic steps."""
-
-    def __init__(self) -> None:
-        """Start the timestamp sequence at 1.0 seconds in half-second steps."""
-        self._values = itertools.count(start=1.0, step=0.5)
-
-    def monotonic_seconds(self) -> float:
-        """Return the next configured timestamp."""
-        return next(self._values)
 
 
 @pytest.mark.parametrize(
@@ -78,7 +36,7 @@ async def test_interrupted_request_never_emits_success(
 ) -> None:
     """Propagate the exact failure while recording a bounded failed attempt."""
     tracer = RecordingTracer()
-    metrics = _RecordingMetrics()
+    metrics = RecordingMetrics()
     failure = failure_type("sentinel provider interruption")
     outcome, category = expected_labels
     attempts = 0
@@ -94,7 +52,7 @@ async def test_interrupted_request_never_emits_success(
         transport=httpx.MockTransport(handler),
         tracer=tracer,
         metrics=metrics,
-        clock=_SteppingClock(),
+        clock=SteppingClock(),
     ) as adapter:
         with pytest.raises(
             failure_type, match="sentinel provider interruption"
@@ -154,8 +112,8 @@ async def test_explicit_runtime_collaborators_reach_adapter_unchanged() -> None:
     )
 
     tracer = RecordingTracer()
-    metrics = _RecordingMetrics()
-    clock = _SteppingClock()
+    metrics = RecordingMetrics()
+    clock = SteppingClock()
     runtime = OpenAICompatibleLLMRuntime(
         tracer=tracer,
         metrics=metrics,
@@ -193,7 +151,7 @@ async def test_successful_request_emits_span_counter_and_latency(
 ) -> None:
     """A successful provider request records one bounded success signal set."""
     tracer = RecordingTracer()
-    metrics = _RecordingMetrics()
+    metrics = RecordingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
         """Return a JSON response carrying the success payload.
@@ -210,7 +168,7 @@ async def test_successful_request_emits_span_counter_and_latency(
         transport=httpx.MockTransport(handler),
         tracer=tracer,
         metrics=metrics,
-        clock=_SteppingClock(),
+        clock=SteppingClock(),
     ) as adapter:
         await adapter.generate(openai_request_builder())
 
@@ -246,7 +204,7 @@ async def test_provider_failure_emits_bounded_error_labels(
 ) -> None:
     """A non-retryable provider failure records bounded error labels."""
     tracer = RecordingTracer()
-    metrics = _RecordingMetrics()
+    metrics = RecordingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
         """Return a 400 response with a bad-request JSON body.
@@ -263,7 +221,7 @@ async def test_provider_failure_emits_bounded_error_labels(
         transport=httpx.MockTransport(handler),
         tracer=tracer,
         metrics=metrics,
-        clock=_SteppingClock(),
+        clock=SteppingClock(),
     ) as adapter:
         with pytest.raises(LLMProviderResponseError):
             await adapter.generate(openai_request_builder())
@@ -295,7 +253,7 @@ async def test_provider_timeout_emits_timeout_outcome(
 ) -> None:
     """A timed-out provider request records the timeout outcome."""
     tracer = RecordingTracer()
-    metrics = _RecordingMetrics()
+    metrics = RecordingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
         """Simulate a provider read timeout for the request.
@@ -315,7 +273,7 @@ async def test_provider_timeout_emits_timeout_outcome(
         retry_delay_seconds=0.0,
         tracer=tracer,
         metrics=metrics,
-        clock=_SteppingClock(),
+        clock=SteppingClock(),
     ) as adapter:
         with pytest.raises(LLMTransientProviderError):
             await adapter.generate(openai_request_builder())
@@ -344,7 +302,7 @@ async def test_oversubscribed_usage_details_emit_fixed_category(
 ) -> None:
     """Oversubscribed usage details record the fixed validation category."""
     tracer = RecordingTracer()
-    metrics = _RecordingMetrics()
+    metrics = RecordingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
         """Return a success payload whose cached token count is oversized.
@@ -364,7 +322,7 @@ async def test_oversubscribed_usage_details_emit_fixed_category(
         transport=httpx.MockTransport(handler),
         tracer=tracer,
         metrics=metrics,
-        clock=_SteppingClock(),
+        clock=SteppingClock(),
     ) as adapter:
         with pytest.raises(LLMProviderResponseError):
             await adapter.generate(openai_request_builder())

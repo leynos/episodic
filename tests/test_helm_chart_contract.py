@@ -9,6 +9,15 @@ import typing as typ
 import pytest
 import yaml
 
+if typ.TYPE_CHECKING:
+    from tests.helm_chart_types import (
+        ApplicationContainer,
+        ConfigMap,
+        Deployment,
+        Ingress,
+        LocalResources,
+    )
+
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 CHART_PATH = REPOSITORY_ROOT / "charts" / "episodic"
 LOCAL_VALUES_PATH = CHART_PATH / "values.local.yaml"
@@ -25,157 +34,6 @@ _EXPECTED_LOCAL_CONFIGMAP_DATA = {
     "OPENAI_TIMEOUT_SECONDS": "600",
     "GENERATION_MAX_OUTPUT_TOKENS": "32768",
 }
-
-
-class _Metadata(typ.TypedDict):
-    """Name field shared by rendered metadata and object references."""
-
-    name: str
-
-
-class _ConfigMap(typ.TypedDict):
-    """Rendered ConfigMap with its metadata and string data."""
-
-    metadata: _Metadata
-    data: dict[str, str]
-
-
-class _SecretKeyRef(typ.TypedDict):
-    """Secret key reference with its optional flag."""
-
-    name: str
-    key: str
-    optional: bool
-
-
-class _ContainerValueFrom(typ.TypedDict):
-    """Value source that points at a secret key."""
-
-    secretKeyRef: _SecretKeyRef
-
-
-class _ContainerEnvironment(typ.TypedDict):
-    """Environment variable entry sourced from a secret."""
-
-    name: str
-    valueFrom: _ContainerValueFrom
-
-
-class _ContainerEnvironmentFrom(typ.TypedDict):
-    """Environment source that references a ConfigMap by name."""
-
-    configMapRef: _Metadata
-
-
-class _ContainerSecurityContext(typ.TypedDict):
-    """Container security context flags."""
-
-    readOnlyRootFilesystem: bool
-    allowPrivilegeEscalation: bool
-
-
-class _ApplicationContainer(typ.TypedDict):
-    """Application container entry in a rendered pod spec."""
-
-    name: str
-    image: str
-    imagePullPolicy: str
-    envFrom: list[_ContainerEnvironmentFrom]
-    env: list[_ContainerEnvironment]
-    securityContext: _ContainerSecurityContext
-
-
-class _PodSecurityContext(typ.TypedDict):
-    """Pod security context flags."""
-
-    runAsNonRoot: bool
-
-
-class _PodSpec(typ.TypedDict):
-    """Pod spec with its containers and security context."""
-
-    containers: list[_ApplicationContainer]
-    securityContext: _PodSecurityContext
-
-
-class _PodTemplate(typ.TypedDict):
-    """Pod template wrapping a pod spec."""
-
-    spec: _PodSpec
-
-
-class _DeploymentSpec(typ.TypedDict):
-    """Deployment spec with its replica count and pod template."""
-
-    replicas: int
-    template: _PodTemplate
-
-
-class _Deployment(typ.TypedDict):
-    """Rendered Deployment with its spec."""
-
-    spec: _DeploymentSpec
-
-
-class _IngressServicePort(typ.TypedDict):
-    """Named service port referenced by an ingress backend."""
-
-    name: str
-
-
-class _IngressService(typ.TypedDict):
-    """Service name and port referenced by an ingress backend."""
-
-    name: str
-    port: _IngressServicePort
-
-
-class _IngressBackend(typ.TypedDict):
-    """Ingress backend that points at a service."""
-
-    service: _IngressService
-
-
-class _IngressPath(typ.TypedDict):
-    """HTTP path entry with its path type and backend."""
-
-    path: str
-    pathType: str
-    backend: _IngressBackend
-
-
-class _IngressHttp(typ.TypedDict):
-    """HTTP block listing ingress paths."""
-
-    paths: list[_IngressPath]
-
-
-class _IngressRule(typ.TypedDict):
-    """Ingress rule matching a host and its HTTP block."""
-
-    host: str
-    http: _IngressHttp
-
-
-class _IngressSpec(typ.TypedDict):
-    """Ingress spec with its class name and rules."""
-
-    ingressClassName: str
-    rules: list[_IngressRule]
-
-
-class _Ingress(typ.TypedDict):
-    """Rendered Ingress with its spec."""
-
-    spec: _IngressSpec
-
-
-class _LocalResources(typ.TypedDict):
-    """Rendered local-preview resources keyed by kind."""
-
-    ConfigMap: _ConfigMap
-    Deployment: _Deployment
-    Ingress: _Ingress
 
 
 def _string_key_mapping(value: object, description: str) -> dict[str, object]:
@@ -259,7 +117,7 @@ def test_helm_local_manifest_has_required_resources(
     ), "local preview manifest must contain its required resource kinds"
 
 
-def _local_resources(local_chart_manifest: str) -> _LocalResources:
+def _local_resources(local_chart_manifest: str) -> LocalResources:
     """Return the rendered local manifest indexed by resource kind."""
     documents = [
         _string_key_mapping(typ.cast("object", document), "rendered Helm document")
@@ -283,9 +141,9 @@ def _local_resources(local_chart_manifest: str) -> _LocalResources:
             "Ingress": ingress,
         }:
             return {
-                "ConfigMap": typ.cast("_ConfigMap", config_map),
-                "Deployment": typ.cast("_Deployment", deployment),
-                "Ingress": typ.cast("_Ingress", ingress),
+                "ConfigMap": typ.cast("ConfigMap", config_map),
+                "Deployment": typ.cast("Deployment", deployment),
+                "Ingress": typ.cast("Ingress", ingress),
             }
         case _:
             pytest.fail(
@@ -294,7 +152,7 @@ def _local_resources(local_chart_manifest: str) -> _LocalResources:
             )
 
 
-def _container(deployment: _Deployment) -> _ApplicationContainer:
+def _container(deployment: Deployment) -> ApplicationContainer:
     """Return the sole application container of the rendered Deployment."""
     pod_spec = _string_key_mapping(
         typ.cast("object", deployment["spec"]["template"]["spec"]),
@@ -305,7 +163,7 @@ def _container(deployment: _Deployment) -> _ApplicationContainer:
         f"the Deployment pod spec must contain a container list; got {pod_spec}"
     )
     typed_containers = [
-        typ.cast("_ApplicationContainer", _string_key_mapping(container, "container"))
+        typ.cast("ApplicationContainer", _string_key_mapping(container, "container"))
         for container in containers
     ]
 
