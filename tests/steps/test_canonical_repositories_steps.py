@@ -167,7 +167,7 @@ def add_and_rollback(
     """Add a series profile and roll back without committing."""
 
     async def _store_and_rollback() -> None:
-        """Persist a series profile, roll back, and record it in context."""
+        """Add a series profile, roll back, and record it in context."""
         profile = await _persist_series_profile(
             session_factory,
             {"slug": "bdd-rollback", "title": "BDD Rollback", "configuration": {}},

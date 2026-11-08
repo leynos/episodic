@@ -139,6 +139,10 @@ class _LifecycleDoubles:
 
         Raises
         ------
+        RuntimeError
+            For the scripted ``unexpected`` outcome.
+        VidaiMockStartupError
+            For the scripted ``bind``, ``exit`` or ``timeout`` outcome.
         AssertionError
             If the outcome is not a supported readiness outcome.
         """
