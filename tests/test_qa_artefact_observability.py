@@ -35,6 +35,7 @@ class _RecordingMetrics:
     """Capture bounded route observations for assertion."""
 
     def __init__(self) -> None:
+        """Initialize empty counter and latency observation lists."""
         self.counters: list[tuple[str, dict[str, str]]] = []
         self.latencies: list[tuple[str, float, dict[str, str]]] = []
 

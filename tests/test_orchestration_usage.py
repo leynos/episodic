@@ -31,6 +31,7 @@ def test_sum_usage_logs_component_and_aggregate_total_mismatches(
     logged_events: list[tuple[str, str, dict[str, object]]] = []
 
     def capture_log_event(level: str, message: str, **fields: object) -> None:
+        """Record the level, message, and fields of a usage log event."""
         logged_events.append((level, message, dict(fields)))
 
     monkeypatch.setattr(
@@ -71,6 +72,7 @@ def test_sum_usage_skips_logging_when_provider_totals_are_consistent(
     logged_events: list[str] = []
 
     def capture_log_event(level: str, message: str, **fields: object) -> None:
+        """Record the message and any JSON-encoded fields of a usage log event."""
         logged_events.append(message)
         if fields:
             logged_events.append(json.dumps(fields, sort_keys=True))

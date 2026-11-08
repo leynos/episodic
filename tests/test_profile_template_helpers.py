@@ -47,6 +47,7 @@ class _RecordingEntityRepository:
     """Entity repository double returning a fixed entity and recording updates."""
 
     def __init__(self, entity: SeriesProfile) -> None:
+        """Store the fixed entity and start an empty update list."""
         self._entity = entity
         self.updated: list[SeriesProfile] = []
 
@@ -64,6 +65,7 @@ class _ConflictingHistoryRepository:
     """History repository double raising a translated revision conflict."""
 
     def __init__(self, entity_id: uuid.UUID) -> None:
+        """Store the entity identifier and start an empty attempt list."""
         self._entity_id = entity_id
         self.attempts: list[SeriesProfileHistoryEntry] = []
 
@@ -110,12 +112,33 @@ async def test_update_versioned_entity_rolls_back_on_translated_conflict() -> No
     history_repo = _ConflictingHistoryRepository(profile.id)
 
     async def fetch_latest(_entity_id: uuid.UUID) -> _RevisionStub:  # ruff: ignore[unused-async]  # awaited via the fetch_latest contract, so it must be a coroutine
+        """Return a latest-revision stub at revision 1.
+
+        Returns
+        -------
+        _RevisionStub
+            Stub whose revision is 1.
+        """
         return _RevisionStub(revision=1)
 
     def update_fields(entity: SeriesProfile, _now: dt.datetime) -> SeriesProfile:
+        """Return the entity unchanged.
+
+        Returns
+        -------
+        SeriesProfile
+            The same entity that was passed in.
+        """
         return entity
 
     def create_snapshot(_entity: SeriesProfile) -> dict[str, object]:
+        """Return an empty snapshot mapping.
+
+        Returns
+        -------
+        dict[str, object]
+            Always an empty dictionary.
+        """
         return {}
 
     with pytest.raises(RevisionConflictError):

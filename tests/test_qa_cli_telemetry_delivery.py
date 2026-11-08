@@ -47,7 +47,10 @@ def _make_handler(status: int, payload: object, api: _StubApi) -> type:
     """Return a request handler that answers every GET with one body."""
 
     class _Handler(http.server.BaseHTTPRequestHandler):
+        """Answer GET requests with the canned status and payload."""
+
         def do_GET(self) -> None:
+            """Record the Authorization header and send the canned JSON body."""
             api.authorizations.append(self.headers.get("Authorization"))
             body = json.dumps(payload).encode("utf8")
             self.send_response(status)

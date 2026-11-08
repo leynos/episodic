@@ -287,6 +287,13 @@ async def test_langgraph_finish_callback_errors_do_not_replace_result() -> None:
     tool_result = _tool_result()
 
     def _raise_callback(_result: GenerationOrchestrationResult) -> None:
+        """Raise a runtime error after the graph result has been computed.
+
+        Raises
+        ------
+        RuntimeError
+            Always, with the "callback failed after result computation" message.
+        """
         msg = "callback failed after result computation"
         raise RuntimeError(msg)
 

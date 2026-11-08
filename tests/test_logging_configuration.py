@@ -27,6 +27,7 @@ def test_configure_logging_normalizes_levels(
     recorded_calls: list[tuple[str, bool]] = []
 
     def _fake_basic_config(*, level: str, force: bool) -> None:
+        """Record the level and force flag passed to basicConfig."""
         recorded_calls.append((level, force))
 
     monkeypatch.setattr(episodic_logging, "basicConfig", _fake_basic_config)
@@ -59,6 +60,7 @@ def test_configure_logging_uses_false_as_default_force_value(
     recorded_calls: list[tuple[str, bool]] = []
 
     def _fake_basic_config(*, level: str, force: bool) -> None:
+        """Record the level and force flag passed to basicConfig."""
         recorded_calls.append((level, force))
 
     monkeypatch.setattr(episodic_logging, "basicConfig", _fake_basic_config)

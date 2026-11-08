@@ -50,6 +50,7 @@ class _RecordingCostRecorder:
     """Capture cost-recorder calls made by the orchestrator."""
 
     def __init__(self) -> None:
+        """Initialize empty lists for the recorded cost-ledger calls."""
         self.pinned_runs: list[tuple[str, object, object]] = []
         self.provider_calls: list[ProviderCallRecord] = []
         self.finalized_runs: list[tuple[str, str | None]] = []
@@ -85,6 +86,7 @@ class _FakePlanner:
     """Return a planner result with provider-call usage metadata."""
 
     def __init__(self, result: PlannerResult) -> None:
+        """Store the planner result to return from plan."""
         self.result = result
 
     async def plan(self, request: object) -> PlannerResult:
@@ -99,6 +101,14 @@ def _provider_call_usage(
     output_tokens: int,
     provider_response_id: str,
 ) -> ProviderCallUsage:
+    """Build complete provider-sourced usage with fixed timing for tests.
+
+    Returns
+    -------
+    ProviderCallUsage
+        Usage with the given token counts and response ID, a "stop" finish
+        reason, a fixed start timestamp, and a latency of 25 ms.
+    """
     return ProviderCallUsage(
         usage_metrics={
             "input_tokens": input_tokens,

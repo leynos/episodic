@@ -28,6 +28,7 @@ class RecordingRunner:
         self,
         results: list[subprocess.CompletedProcess[str]] | None = None,
     ) -> None:
+        """Store the queued results and initialize the recording lists."""
         self.commands: list[list[str]] = []
         self.input_texts: list[str | None] = []
         self._results = results or []

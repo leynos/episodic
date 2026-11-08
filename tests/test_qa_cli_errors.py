@@ -200,6 +200,13 @@ def test_unreachable_api_maps_to_exit_three(
     """A transport failure is reported as an unreachable API."""
 
     def handle(request: httpx.Request) -> httpx.Response:
+        """Raise a connection-refused error for the request.
+
+        Raises
+        ------
+        httpx.ConnectError
+            Always, with the connection-refused message.
+        """
         raise httpx.ConnectError(_CONNECTION_REFUSED, request=request)
 
     exit_code = main(list_arguments(), transport=httpx.MockTransport(handle))
