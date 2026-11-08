@@ -209,11 +209,13 @@ def register_scaffold_tasks(
 
     @app.task(name=IO_DIAGNOSTIC_TASK_NAME)
     def run_io_diagnostic(payload: cabc.Mapping[str, object]) -> dict[str, object]:
+        """Run the I/O diagnostic task and return its payload."""
         request = IoDiagnosticRequest.from_mapping(payload)
         return dependencies.io_diagnostic(request).as_payload()
 
     @app.task(name=CPU_DIAGNOSTIC_TASK_NAME)
     def run_cpu_diagnostic(payload: cabc.Mapping[str, object]) -> dict[str, object]:
+        """Run the CPU diagnostic task and return its payload."""
         request = CpuDiagnosticRequest.from_mapping(payload)
         return dependencies.cpu_diagnostic(request).as_payload()
 

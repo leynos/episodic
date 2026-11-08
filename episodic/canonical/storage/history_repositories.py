@@ -55,6 +55,7 @@ class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):
         session: AsyncSession,
         config: HistoryRepositoryConfig[HistoryEntryT, HistoryRecordT],
     ) -> None:
+        """Bind the repository to a session and its history table configuration."""
         super().__init__(session)
         self._record_type = config.record_type
         self._parent_id_field = config.parent_id_field
@@ -81,6 +82,7 @@ class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):
         """
 
         def _translate(exc: IntegrityError) -> RevisionConflictError | None:
+            """Map a recognised revision conflict to a domain error."""
             if not is_revision_conflict_integrity_error(exc, self._parent_id_field):
                 return None
             parent_id = getattr(entry, self._parent_id_field, None)
@@ -191,6 +193,7 @@ class SqlAlchemySeriesProfileHistoryRepository(
     )
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind the repository to a session using the profile history config."""
         super().__init__(session=session, config=self._config)
 
     async def add(self, entry: SeriesProfileHistoryEntry) -> None:
@@ -259,6 +262,7 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
     )
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind the repository to a session using the template history config."""
         super().__init__(session=session, config=self._config)
 
     async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:

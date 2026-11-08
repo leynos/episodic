@@ -42,6 +42,7 @@ class SqlAlchemyGenerationRunPortAdapter:
         runs: SqlAlchemyGenerationRunStore,
         checkpoints: SqlAlchemyReviewCheckpointStore,
     ) -> None:
+        """Keep references to the run and review-checkpoint stores."""
         self._runs = runs
         self._checkpoints = checkpoints
 

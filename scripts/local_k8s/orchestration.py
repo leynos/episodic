@@ -49,6 +49,7 @@ def _try_parse_port(item: object) -> int | None:
 
 
 def _ports_from_dict(value: dict[object, object]) -> set[int]:
+    """Collect host ports from a k3d JSON object, including nested values."""
     ports: set[int] = set()
     for key, item in value.items():
         if isinstance(key, str) and key.lower() in _HOST_PORT_KEYS:
@@ -60,6 +61,7 @@ def _ports_from_dict(value: dict[object, object]) -> set[int]:
 
 
 def _ports_from_list(value: list[object]) -> set[int]:
+    """Collect host ports from each item of a k3d JSON list."""
     ports: set[int] = set()
     for item in value:
         ports.update(_collect_host_ports(item))

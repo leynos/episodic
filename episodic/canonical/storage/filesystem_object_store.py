@@ -75,6 +75,7 @@ class FilesystemObjectStore(ObjectStorePort):
     """
 
     def __init__(self, root: pathlib.Path) -> None:
+        """Store the object root and derive its temporary upload directory."""
         self._root = root
         self._tmp_root = root / "_tmp"
 
@@ -117,6 +118,7 @@ class FilesystemObjectStore(ObjectStorePort):
         path = self._resolve_under_root(validate_object_key(key))
 
         async def _chunks() -> cabc.AsyncIterator[bytes]:
+            """Yield stored bytes in chunks, closing the file afterwards."""
             file_handle = typ.cast(
                 "typ.BinaryIO",
                 await asyncio.to_thread(path.open, "rb"),

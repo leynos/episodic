@@ -84,6 +84,7 @@ class SqlAlchemyQaArtefactStore:
         *,
         runtime: QaArtefactStorageRuntime | None = None,
     ) -> None:
+        """Bind the store to a session and an optional QA artefact runtime."""
         self._session = session
         self._runtime = qa_artefact_storage_runtime(runtime)
 

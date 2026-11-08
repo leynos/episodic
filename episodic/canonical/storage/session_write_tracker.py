@@ -43,6 +43,7 @@ class SessionWriteTracker:
     """
 
     def __init__(self, session: Session) -> None:
+        """Track writes on a session by listening to its flush and execute events."""
         self._session = session
         self._wrote = False
         event.listen(session, "before_flush", self._on_flush)

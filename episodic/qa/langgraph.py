@@ -93,6 +93,7 @@ def build_pedante_graph(
     async def _run_pedante_node(
         state: PedanteGraphState,
     ) -> dict[str, PedanteEvaluationResult]:
+        """Run the Pedante evaluation node against the graph state."""
         return await _pedante_node(state, evaluator=evaluator)
 
     graph.add_node("pedante", _run_pedante_node)

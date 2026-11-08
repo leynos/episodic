@@ -84,6 +84,7 @@ class SqlAlchemyReviewCheckpointStore:
         runtime: GenerationRunStorageRuntime | None = None,
         metrics: ValueMetricsPort | None = None,
     ) -> None:
+        """Bind the store to a session, with optional runtime and metrics port."""
         self._session = session
         self._runtime = generation_run_storage_runtime(runtime)
         self._metrics = metrics or NoopValueMetrics()

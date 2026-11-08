@@ -86,6 +86,7 @@ class SqlAlchemyWorkflowCheckpointStore:
         metrics: MetricsPort | None = None,
         clock: MonotonicClockPort | None = None,
     ) -> None:
+        """Bind the store to a session, with optional metrics and clock ports."""
         self._session = session
         self._metrics = metrics or NoopMetrics()
         self._clock = clock or PerfCounterClock()

@@ -39,6 +39,7 @@ def constraint_name(exc: BaseException) -> str | None:
     """
 
     def _from_candidate(candidate: object | None) -> str | None:
+        """Return the constraint name set on the candidate or its diag."""
         if candidate is None:
             return None
         direct = getattr(candidate, "constraint_name", None)
@@ -177,6 +178,7 @@ async def add_translating_constraint_conflicts(
     """
 
     def _translate(exc: IntegrityError) -> BaseException | None:
+        """Return the mapped domain error for a listed constraint, else None."""
         name = constraint_name(exc)
         if name is not None and name in constraints:
             return on_conflict()

@@ -47,6 +47,7 @@ def _new_binding(
     effective_from_episode_id: uuid.UUID | None,
     clock: cabc.Callable[[], dt.datetime] | None = None,
 ) -> ReferenceBinding:
+    """Build a reference binding with a new identifier and creation timestamp."""
     now = clock() if clock is not None else dt.datetime.now(dt.UTC)
     try:
         return ReferenceBinding(

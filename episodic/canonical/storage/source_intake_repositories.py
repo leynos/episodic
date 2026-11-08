@@ -171,6 +171,7 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
         *,
         runtime: SourceIntakeStorageRuntime | None = None,
     ) -> None:
+        """Bind the store to a session and an optional source-intake runtime."""
         self._session = session
         self._runtime = source_intake_storage_runtime(runtime)
 

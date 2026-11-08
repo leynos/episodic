@@ -159,6 +159,7 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         client: httpx.AsyncClient | None = None,
         runtime: OpenAICompatibleLLMRuntime | None = None,
     ) -> None:
+        """Configure the adapter from its config, runtime, and optional HTTP client."""
         effective_runtime = OpenAICompatibleLLMRuntime() if runtime is None else runtime
         self._tracer = effective_runtime.tracer
         self._metrics = effective_runtime.metrics
