@@ -152,7 +152,7 @@ def _print_result(result: BenchmarkResult) -> None:
 
 
 async def _main_async() -> int:
-    """Run the inline and interpreter-pool benchmarks and report the comparison."""
+    """Run the inline benchmark and, where supported, the pool one and comparison."""
     parser = _build_parser()
     args = parser.parse_args()
 
