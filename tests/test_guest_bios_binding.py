@@ -96,6 +96,13 @@ async def test_generate_from_reference_bindings_resolves_and_enriches_tei(
         uow: object,
         **kwargs: object,
     ) -> list[ResolvedBinding]:
+        """Record the resolver call and return the guest-profile binding.
+
+        Returns
+        -------
+        list[ResolvedBinding]
+            The guest-profile binding and its document and revision.
+        """
         await asyncio.sleep(0)
         calls.append({"uow": uow, **kwargs})
         return [
@@ -180,6 +187,13 @@ async def test_generate_from_reference_bindings_skips_llm_without_guest_profiles
         uow: object,
         **kwargs: object,
     ) -> list[ResolvedBinding]:
+        """Return no bindings, so no guest profiles resolve.
+
+        Returns
+        -------
+        list[ResolvedBinding]
+            An empty list.
+        """
         await asyncio.sleep(0)
         return []
 

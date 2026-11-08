@@ -63,6 +63,13 @@ async def test_filesystem_object_store_uses_precomputed_sha256(
     supplied_digest = "f" * 64
 
     def fail_hashing() -> typ.NoReturn:
+        """Fail the test if the store attempts to compute a digest.
+
+        Raises
+        ------
+        AssertionError
+            Always, because hashing must not run for a precomputed digest.
+        """
         raise AssertionError
 
     monkeypatch.setattr(hashlib, "sha256", fail_hashing)

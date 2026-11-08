@@ -125,6 +125,7 @@ async def test_guest_bios_executor_propagates_llm_provider_errors(
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def capture_log_event(level: str, message: str, **fields: object) -> None:
+        """Append the log level, message and fields to the capture list."""
         events.append((level, message, fields))
 
     monkeypatch.setattr(
@@ -188,6 +189,7 @@ async def test_guest_bios_executor_logs_unknown_llm_subclass(
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def capture_log_event(level: str, message: str, **fields: object) -> None:
+        """Append the log level, message and fields to the capture list."""
         events.append((level, message, fields))
 
     executor = GuestBiosToolExecutor(

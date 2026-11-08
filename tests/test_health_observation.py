@@ -12,16 +12,37 @@ type HealthProbe = cabc.Callable[[], cabc.Awaitable[bool]]
 
 
 async def _probe_returns_true() -> bool:
+    """Yield once, then report a successful probe.
+
+    Returns
+    -------
+    bool
+        Always True.
+    """
     await asyncio.sleep(0)
     return True
 
 
 async def _probe_returns_false() -> bool:
+    """Yield once, then report a failed probe.
+
+    Returns
+    -------
+    bool
+        Always False.
+    """
     await asyncio.sleep(0)
     return False
 
 
 async def _probe_raises() -> bool:
+    """Yield once, then fail the probe with a RuntimeError.
+
+    Raises
+    ------
+    RuntimeError
+        Always, to simulate an unavailable database.
+    """
     await asyncio.sleep(0)
     msg = "database unavailable"
     raise RuntimeError(msg)
@@ -66,6 +87,13 @@ def test_probe_health_observer_rejects_invalid_check_names() -> None:
     from episodic.canonical.health import ProbeHealthObserver
 
     async def database_ready() -> bool:
+        """Yield once, then report the database as ready.
+
+        Returns
+        -------
+        bool
+            Always True.
+        """
         await asyncio.sleep(0)
         return True
 
@@ -78,6 +106,13 @@ def test_probe_health_observer_rejects_non_async_checks() -> None:
     from episodic.canonical.health import ProbeHealthObserver
 
     def database_ready() -> bool:
+        """Report the database as ready using a synchronous callable.
+
+        Returns
+        -------
+        bool
+            Always True.
+        """
         return True
 
     invalid_checks = typ.cast("dict[str, typ.Any]", {"database": database_ready})
@@ -97,10 +132,24 @@ async def test_probe_health_observer_aggregates_mixed_check_results() -> None:
     )
 
     async def database_ready() -> bool:
+        """Yield once, then report the database as ready.
+
+        Returns
+        -------
+        bool
+            Always True.
+        """
         await asyncio.sleep(0)
         return True
 
     async def queue_ready() -> bool:
+        """Yield once, then report the queue as not ready.
+
+        Returns
+        -------
+        bool
+            Always False.
+        """
         await asyncio.sleep(0)
         return False
 

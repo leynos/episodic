@@ -42,15 +42,30 @@ def _compose_runtime_dependencies(
     captured: dict[str, ApiDependencies] = {}
 
     async def check_database() -> bool:
+        """Report the stubbed database as ready after one loop tick.
+
+        Returns
+        -------
+        bool
+            Always True.
+        """
         await asyncio.sleep(0)
         return True
 
     async def shutdown_database() -> None:
+        """Yield once to the event loop to simulate database shutdown."""
         await asyncio.sleep(0)
 
     probe = runtime_module.ReadinessProbe(name="database", check=check_database)
 
     def capture_dependencies(dependencies: ApiDependencies) -> object:
+        """Record the composed dependencies in the enclosing mapping.
+
+        Returns
+        -------
+        object
+            Placeholder returned in place of the ASGI application.
+        """
         captured["dependencies"] = dependencies
         return object()
 
@@ -152,6 +167,13 @@ async def test_runtime_composed_adapter_sends_configured_provider_request(
     captured_requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        """Capture the outgoing request and return a canned completion.
+
+        Returns
+        -------
+        httpx.Response
+            A 200 response carrying a chat completion payload.
+        """
         captured_requests.append(request)
         return httpx.Response(
             200,

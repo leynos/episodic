@@ -32,6 +32,7 @@ class _RecordingMetrics:
     """Capture bounded counters and latency observations."""
 
     def __init__(self) -> None:
+        """Initialize empty counter and latency records."""
         self.counters: list[tuple[str, dict[str, str]]] = []
         self.latencies: list[tuple[str, float, dict[str, str]]] = []
 
@@ -59,6 +60,7 @@ class _SteppingClock:
     """Return deterministic half-second monotonic steps."""
 
     def __init__(self) -> None:
+        """Initialize the half-second step sequence."""
         self._values = itertools.count(start=1.0, step=0.5)
 
     def monotonic_seconds(self) -> float:

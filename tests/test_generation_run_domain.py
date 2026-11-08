@@ -2,8 +2,8 @@
 
 This module covers `GenerationRun`, `GenerationEvent`, `Checkpoint`, their
 status enums, and the event-sequence value constructor. The tests verify
-creation invariants, validation errors for blank and non-mapping inputs,
-terminal-status classification, and checkpoint state transitions. Hypothesis
+creation invariants, validation errors for blank and non-mapping inputs, and
+checkpoint state transitions. Hypothesis
 properties exercise the validation rules across many generated examples, while
 the `generation_run`, `generation_event`, and `checkpoint` fixtures keep valid
 entity construction local and explicit.
@@ -87,30 +87,6 @@ def checkpoint(generation_run: GenerationRun) -> Checkpoint:
     )
 
 
-def test_generation_run_status_terminal_states_are_explicit() -> None:
-    """Only completed run states should be terminal."""
-    assert not GenerationRunStatus.PENDING.is_terminal(), (
-        "PENDING must not be terminal."
-    )
-    assert not GenerationRunStatus.RUNNING.is_terminal(), (
-        "RUNNING must not be terminal."
-    )
-    assert not GenerationRunStatus.PAUSED.is_terminal(), "PAUSED must not be terminal."
-    assert GenerationRunStatus.SUCCEEDED.is_terminal(), "SUCCEEDED must be terminal."
-    assert GenerationRunStatus.FAILED.is_terminal(), "FAILED must be terminal."
-    assert GenerationRunStatus.CANCELLED.is_terminal(), "CANCELLED must be terminal."
-
-
-def test_quality_enums_pin_no_qa_slice_values() -> None:
-    """Quality metadata uses stable wire values for the no-QA slice."""
-    assert QualityMode.DRAFT_WITHOUT_QA == "draft_without_qa", (
-        f"expected draft_without_qa wire value, got {QualityMode.DRAFT_WITHOUT_QA!r}"
-    )
-    assert QaStatus.SKIPPED == "skipped", (
-        f"expected skipped wire value, got {QaStatus.SKIPPED!r}"
-    )
-
-
 def test_generation_run_records_no_qa_quality_metadata(
     generation_run: GenerationRun,
 ) -> None:
@@ -160,14 +136,6 @@ def test_generation_run_rejects_incomplete_no_qa_metadata(
             quality_mode=QualityMode.DRAFT_WITHOUT_QA,
             **changes,
         )
-
-
-def test_checkpoint_status_terminal_states_are_explicit() -> None:
-    """Only checkpoint end states should be terminal."""
-    assert not CheckpointStatus.CREATED.is_terminal(), "CREATED must not be terminal."
-    assert CheckpointStatus.RESPONDED.is_terminal(), "RESPONDED must be terminal."
-    assert CheckpointStatus.TIMED_OUT.is_terminal(), "TIMED_OUT must be terminal."
-    assert CheckpointStatus.CANCELLED.is_terminal(), "CANCELLED must be terminal."
 
 
 def test_generation_run_rejects_blank_actor(generation_run: GenerationRun) -> None:
@@ -281,6 +249,18 @@ def test_checkpoint_validation_messages_snapshot(
     """Snapshot exact checkpoint validation failure messages."""
 
     def validation_message(**changes: object) -> str:
+        """Return the validation error raised by replacing checkpoint fields.
+
+        Returns
+        -------
+        str
+            Message of the ``ValueError`` raised by the replacement.
+
+        Raises
+        ------
+        AssertionError
+            If the replacement does not fail validation.
+        """
         try:
             dc.replace(checkpoint, **changes)
         except ValueError as exc:

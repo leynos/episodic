@@ -41,6 +41,7 @@ class SequentialUuids:
     """Deterministic UUID factory for persistence service tests."""
 
     def __init__(self) -> None:
+        """Initialize the fixed sequence of four UUIDs."""
         self.values = iter([
             uuid.UUID("00000000-0000-0000-0000-000000000101"),
             uuid.UUID("00000000-0000-0000-0000-000000000102"),

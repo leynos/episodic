@@ -82,6 +82,13 @@ async def test_health_ready_route_reflects_probe_result(
     from episodic.api import ApiDependencies, ReadinessProbe, create_app
 
     async def check_database() -> bool:
+        """Yield once, then report the parametrized probe result.
+
+        Returns
+        -------
+        bool
+            The ``probe_result`` value for this test case.
+        """
         await asyncio.sleep(0)
         return probe_result
 
@@ -112,6 +119,13 @@ async def test_health_ready_route_treats_probe_exceptions_as_failures() -> None:
     from episodic.api import ApiDependencies, ReadinessProbe, create_app
 
     async def check_database() -> bool:
+        """Yield once, then fail the probe with a RuntimeError.
+
+        Raises
+        ------
+        RuntimeError
+            Always, to simulate an unexpected probe failure.
+        """
         await asyncio.sleep(0)
         msg = "probe failed"
         raise RuntimeError(msg)
@@ -145,7 +159,16 @@ async def test_health_ready_route_uses_domain_health_observer(
     from episodic.canonical.health import HealthCheck, HealthReport, HealthStatus
 
     class StubHealthObserver:
+        """Observe a fixed report with database OK and queue in error."""
+
         async def observe(self) -> HealthReport:
+            """Return the fixed database-OK, queue-error health report.
+
+            Returns
+            -------
+            HealthReport
+                Report with one OK check and one error check.
+            """
             await asyncio.sleep(0)
             return HealthReport.from_checks((
                 HealthCheck("database", HealthStatus.OK),
