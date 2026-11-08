@@ -200,6 +200,7 @@ def run_show_notes_generation(
     """Call the show-notes generator with a live LLM adapter."""
 
     async def _generate_show_notes() -> None:
+        """Run the generator against the mock LLM and store its result."""
         async with OpenAICompatibleLLMAdapter(
             config=OpenAICompatibleLLMConfig(
                 base_url=show_notes_context.base_url,

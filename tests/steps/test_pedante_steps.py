@@ -192,6 +192,7 @@ def evaluate_script(
     """Run Pedante over the live Vidai Mock-backed OpenAI adapter."""
 
     async def _evaluate() -> None:
+        """Build the prompt and run the evaluator, storing both in context."""
         async with OpenAICompatibleLLMAdapter(
             config=OpenAICompatibleLLMConfig(
                 base_url=pedante_context.base_url,

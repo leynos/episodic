@@ -219,6 +219,7 @@ def run_guest_bios_generation(
     """Call the guest-bios generator with a live LLM adapter."""
 
     async def _generate_guest_bios() -> None:
+        """Run the generator against the mock LLM and store its result."""
         async with OpenAICompatibleLLMAdapter(
             config=OpenAICompatibleLLMConfig(
                 base_url=guest_bios_context.base_url,

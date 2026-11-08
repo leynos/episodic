@@ -173,6 +173,7 @@ def bind_reference_revisions(
     """Persist reusable host/guest reference documents and bindings."""
 
     async def _bind() -> None:
+        """Add host and guest documents, revisions and bindings, then commit."""
         now = dt.datetime.now(dt.UTC)
         profile_uuid = uuid.UUID(context["profile_id"])
         template_uuid = uuid.UUID(context["template_id"])

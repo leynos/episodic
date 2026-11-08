@@ -75,6 +75,7 @@ def _run_episode_assertion(
     """Execute a canonical episode assertion for a BDD step."""
 
     async def _fetch() -> None:
+        """Load the canonical episode and apply the assertion to it."""
         episode_id = context["episode_id"]
 
         episode = await _require_episode(session_factory, episode_id)
@@ -119,6 +120,7 @@ def series_profile_exists(
     """Persist a series profile for ingestion."""
 
     async def _store_profile() -> None:
+        """Save the science-hour series profile and store it in context."""
         now = dt.datetime.now(dt.UTC)
         profile = SeriesProfile(
             id=uuid.uuid4(),
@@ -156,6 +158,7 @@ def ingestion_job_records_sources(
     """Ingest source documents into a canonical episode."""
 
     async def _ingest() -> None:
+        """Ingest two source documents and record the episode and job IDs."""
         profile = context["profile"]
         tei_xml = context["tei_xml"]
         sources = [
@@ -242,6 +245,7 @@ def approval_event_persisted(
     """Verify approval events are stored for the ingestion."""
 
     async def _fetch() -> None:
+        """Check the initial draft approval event and its source payload."""
         episode_id = context["episode_id"]
         source_uris = context["source_uris"]
 
@@ -272,6 +276,7 @@ def source_documents_linked(
     """Verify source documents are linked to ingestion jobs and episodes."""
 
     async def _fetch() -> None:
+        """Check the stored source documents link to the job and episode."""
         job_id = context["ingestion_job_id"]
         episode_id = context["episode_id"]
         source_uris = context["source_uris"]
@@ -309,6 +314,7 @@ def tei_header_provenance_captured(
     """Verify TEI header provenance metadata is persisted."""
 
     async def _fetch() -> None:
+        """Check the persisted TEI header provenance for the episode."""
         episode_id = context["episode_id"]
         source_uris = context["source_uris"]
 

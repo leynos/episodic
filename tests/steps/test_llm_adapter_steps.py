@@ -108,6 +108,7 @@ class _MockLLMServer(ThreadingHTTPServer):
         state: MockServerState,
         fail_first: bool = False,
     ) -> None:
+        """Bind the mock server to an ephemeral localhost port with its state."""
         super().__init__(("127.0.0.1", 0), _MockLLMHandler)
         self.state = state
         self.fail_first = fail_first
@@ -144,6 +145,7 @@ def _run_generate(
     """Run ``adapter.generate()`` via *runner* and store the result in *context*."""
 
     async def _generate() -> None:
+        """Generate text through the adapter and store it in the context."""
         async with OpenAICompatibleLLMAdapter(
             config=OpenAICompatibleLLMConfig(
                 base_url=context.base_url,

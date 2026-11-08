@@ -6,7 +6,6 @@ import contextlib
 import dataclasses as dc
 import datetime as dt
 import typing as typ
-import uuid
 
 import pytest
 from pytest_bdd import given, parsers, scenario, then, when
@@ -15,32 +14,29 @@ from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunSto
 from episodic.canonical.domain import (
     Checkpoint,
     CheckpointAction,
-    CheckpointResponse,
     CheckpointStatus,
     GenerationRun,
-    GenerationRunStatus,
 )
-from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import CheckpointAlreadyTerminal
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from tests.canonical_storage._generation_run_support import (
     persist_generation_run_prerequisites,
 )
+from tests.steps._generation_run_lifecycle_support import (
+    NOW,
+    build_checkpoint,
+    build_response,
+    build_run,
+)
 
 if typ.TYPE_CHECKING:
     import asyncio
     import collections.abc as cabc
+    import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.canonical.generation_run_ports import GenerationRunPort
-
-NOW = dt.datetime(2026, 6, 4, 8, 0, tzinfo=dt.UTC)
-_ACTION_PAYLOADS: dict[str, dict[str, object]] = {
-    "approve": {"approved": True},
-    "request_changes": {"approved": False},
-    "edit": {"approved": False},
-}
 
 
 # The durability scenario holds one unit of work open across three steps, so the
@@ -91,55 +87,6 @@ def _require[T](value: T | None, message: str) -> T:
     return value
 
 
-def _run() -> GenerationRun:
-    """Return a sample generation run for tests."""
-    return GenerationRun(
-        id=uuid.uuid7(),
-        episode_id=uuid.uuid7(),
-        source_bundle_id=uuid.uuid7(),
-        actor="editor@example.com",
-        status=GenerationRunStatus.PENDING,
-        current_node=None,
-        budget_snapshot={},
-        configuration={},
-        created_at=NOW,
-        updated_at=NOW,
-        started_at=None,
-        ended_at=None,
-        error_message=None,
-        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
-        qa_status=QaStatus.SKIPPED,
-        skip_qa_rationale="No-QA vertical-slice draft.",
-    )
-
-
-def _checkpoint(run_id: uuid.UUID) -> Checkpoint:
-    """Return a sample checkpoint for tests."""
-    return Checkpoint(
-        id=uuid.uuid7(),
-        generation_run_id=run_id,
-        node="human_review",
-        prompt="Approve the draft?",
-        options=("approve", "request_changes", "edit"),
-        status=CheckpointStatus.CREATED,
-        created_at=NOW,
-        responded_at=None,
-        responded_by=None,
-        response_action=None,
-        response_payload={},
-    )
-
-
-def _response(action: str, *, offset_minutes: int) -> CheckpointResponse:
-    """Build a reviewer response for the named action."""
-    return CheckpointResponse(
-        action=CheckpointAction(action),
-        payload=_ACTION_PAYLOADS[action],
-        responded_at=NOW + dt.timedelta(minutes=offset_minutes),
-        responded_by="reviewer@example.com",
-    )
-
-
 @scenario(
     "../features/generation_run_lifecycle.feature", "Reviewer approves a checkpoint"
 )
@@ -178,8 +125,10 @@ def created_checkpoint(
 ) -> None:
     """Create a generation run checkpoint awaiting review."""
     ctx = generation_run_context
-    run = ctx.runner.run(ctx.store.create_run(_run()))
-    ctx.checkpoint = ctx.runner.run(ctx.store.create_checkpoint(_checkpoint(run.id)))
+    run = ctx.runner.run(ctx.store.create_run(build_run()))
+    ctx.checkpoint = ctx.runner.run(
+        ctx.store.create_checkpoint(build_checkpoint(run.id))
+    )
 
 
 @given("a checkpoint that has already been responded to")
@@ -188,12 +137,12 @@ def responded_checkpoint(
 ) -> None:
     """Create a checkpoint that already reached a terminal response state."""
     ctx = generation_run_context
-    run = ctx.runner.run(ctx.store.create_run(_run()))
-    checkpoint = ctx.runner.run(ctx.store.create_checkpoint(_checkpoint(run.id)))
+    run = ctx.runner.run(ctx.store.create_run(build_run()))
+    checkpoint = ctx.runner.run(ctx.store.create_checkpoint(build_checkpoint(run.id)))
     ctx.checkpoint = ctx.runner.run(
         ctx.store.respond_to_checkpoint(
             checkpoint.id,
-            response=_response("approve", offset_minutes=1),
+            response=build_response("approve", offset_minutes=1),
         )
     )
 
@@ -208,7 +157,14 @@ def run_persisted_in_postgres(
     factory = session_factory
 
     async def prepare() -> GenerationRun:
-        run = _run()
+        """Persist the run prerequisites and create the run in an open unit of work.
+
+        Returns
+        -------
+        GenerationRun
+            The generation run that was created.
+        """
+        run = build_run()
         await persist_generation_run_prerequisites(factory, run)
         stack = contextlib.AsyncExitStack()
         uow = await stack.enter_async_context(SqlAlchemyUnitOfWork(factory))
@@ -228,7 +184,9 @@ def checkpoint_created_against_run(
     """Create the checkpoint the durability scenario responds to."""
     ctx = generation_run_context
     run = _require(ctx.run, "Generation run was not prepared.")
-    ctx.checkpoint = ctx.runner.run(ctx.store.create_checkpoint(_checkpoint(run.id)))
+    ctx.checkpoint = ctx.runner.run(
+        ctx.store.create_checkpoint(build_checkpoint(run.id))
+    )
 
 
 @when(parsers.parse('the reviewer responds with action "{action}"'))
@@ -242,7 +200,7 @@ def reviewer_responds(
     ctx.checkpoint = ctx.runner.run(
         ctx.store.respond_to_checkpoint(
             checkpoint.id,
-            response=_response(action, offset_minutes=1),
+            response=build_response(action, offset_minutes=1),
         )
     )
 
@@ -258,7 +216,7 @@ def reviewer_attempts_second_response(
         ctx.runner.run(
             ctx.store.respond_to_checkpoint(
                 checkpoint.id,
-                response=_response("edit", offset_minutes=2),
+                response=build_response("edit", offset_minutes=2),
             )
         )
     except Exception as exc:  # ruff: ignore[blind-except] - BDD step captures the outcome.
@@ -272,6 +230,13 @@ def _apply_terminal_transition(
     """Run a terminal-transition coroutine and store the resulting checkpoint."""
 
     async def await_transition() -> Checkpoint:
+        """Await the terminal-transition coroutine.
+
+        Returns
+        -------
+        Checkpoint
+            The checkpoint produced by the transition.
+        """
         return await coro
 
     ctx.checkpoint = ctx.runner.run(await_transition())

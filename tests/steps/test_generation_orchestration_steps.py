@@ -12,7 +12,6 @@ from pathlib import (
 import pytest
 from pytest_bdd import given, scenario, then, when
 
-from episodic.cost.ports import BillingPeriodKey, CostLedgerEntryId
 from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
@@ -31,6 +30,11 @@ from episodic.orchestration import (
     build_generation_orchestration_graph,
     resume_generation_orchestration,
 )
+from tests.steps._generation_orchestration_support import (
+    BDDResumePort,
+    RecordingCostRecorder,
+    RecordingLLMPort,
+)
 from tests.steps.generation_orchestration_vidaimock import (
     write_provider_config,
     write_response_template,
@@ -44,10 +48,8 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import subprocess
 
-    from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
-    from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
+    from episodic.llm.ports import LLMRequest
     from episodic.orchestration import (
-        ActionExecutionResult,
         GenerationOrchestrationResult,
         SuspendedWorkflowResult,
     )
@@ -64,77 +66,8 @@ class OrchestrationBDDContext:
     requests: list[LLMRequest] = dc.field(default_factory=list)
     suspended_result: SuspendedWorkflowResult | None = None
     repeated_suspended_result: SuspendedWorkflowResult | None = None
-    cost_recorder: _RecordingCostRecorder | None = None
+    cost_recorder: RecordingCostRecorder | None = None
     stderr_file: typ.TextIO | None = None
-
-
-@dc.dataclass(slots=True)
-class _RecordingLLMPort:
-    """Capture the actual `LLMRequest` values before delegating."""
-
-    wrapped: LLMPort
-    requests: list[LLMRequest] = dc.field(default_factory=list)
-
-    async def generate(self, request: LLMRequest) -> LLMResponse:
-        """Record and forward the request."""
-        self.requests.append(request)
-        return await self.wrapped.generate(request)
-
-
-@dc.dataclass(slots=True)
-class _BDDResumePort:
-    """Return the action result supplied by the behavioural resume command."""
-
-    async def resume(
-        self,
-        command: ResumeWorkflowCommand,
-    ) -> ActionExecutionResult:
-        """Return the externally supplied action result."""
-        match command:
-            case ResumeWorkflowCommand(result=result):
-                return result
-            case _:
-                msg = f"unsupported resume command: {type(command).__name__}"
-                raise TypeError(msg)
-
-
-@dc.dataclass(slots=True)
-class _RecordingCostRecorder:
-    """Capture orchestration cost-recorder calls for the BDD scenario."""
-
-    pinned_providers: tuple[CostProviderOperation, ...] = ()
-    pinned_billing_period_key: BillingPeriodKey | None = None
-    provider_calls: list[ProviderCallRecord] = dc.field(default_factory=list)
-    finalized_workflow_run_id: str | None = None
-
-    async def pin_run_pricing(
-        self,
-        workflow_run_id: str,
-        providers: tuple[CostProviderOperation, ...],
-        billing_period_key: BillingPeriodKey,
-    ) -> None:
-        """Capture pricing pins selected for this workflow."""
-        _ = workflow_run_id
-        self.pinned_providers = providers
-        self.pinned_billing_period_key = billing_period_key
-
-    async def record_provider_call(
-        self,
-        record: ProviderCallRecord,
-    ) -> CostLedgerEntryId:
-        """Capture provider-call ledger input."""
-        self.provider_calls.append(record)
-        return CostLedgerEntryId(f"bdd:{record.idempotency_key}")
-
-    async def finalize_run(
-        self,
-        workflow_run_id: str,
-        workflow_node: str | None,
-    ) -> CostLedgerEntryId:
-        """Capture the final run-level roll-up request."""
-        _ = workflow_node
-        self.finalized_workflow_run_id = workflow_run_id
-        return CostLedgerEntryId(f"bdd:run:{workflow_run_id}:rollup")
 
 
 def _run_async_step(
@@ -211,6 +144,7 @@ def run_orchestration(
     """Call the orchestration service with a live LLM adapter."""
 
     async def _orchestrate() -> None:
+        """Plan and execute the request, then store the result and requests."""
         request = orchestration_context.request
         if request is None:
             msg = "generation request was not prepared"
@@ -222,12 +156,12 @@ def run_orchestration(
                 api_key="test-key",
             ),
         ) as adapter:
-            recording_port = _RecordingLLMPort(wrapped=adapter)
+            recording_port = RecordingLLMPort(wrapped=adapter)
             config = GenerationOrchestrationConfig(
                 planning_model="gpt-4.1",
                 execution_model="gpt-4o-mini",
             )
-            cost_recorder = _RecordingCostRecorder()
+            cost_recorder = RecordingCostRecorder()
             orchestrator = StructuredPlanningOrchestrator(
                 planner=StructuredGenerationPlanner(
                     llm=recording_port,
@@ -258,6 +192,7 @@ def run_suspend_resume_orchestration(
     """Call the checkpointing LangGraph flow with a live LLM adapter."""
 
     async def _orchestrate() -> None:  # ruff: ignore[too-many-locals]  # The scenario keeps distinct intermediate values for readable behavioural assertions.
+        """Suspend the LangGraph flow, resume it, and store the outcome."""
         request = orchestration_context.request
         if request is None:
             msg = "generation request was not prepared"
@@ -269,7 +204,7 @@ def run_suspend_resume_orchestration(
                 api_key="test-key",
             ),
         ) as adapter:
-            recording_port = _RecordingLLMPort(wrapped=adapter)
+            recording_port = RecordingLLMPort(wrapped=adapter)
             config = GenerationOrchestrationConfig(
                 planning_model="gpt-4.1",
                 execution_model="gpt-4o-mini",
@@ -296,7 +231,7 @@ def run_suspend_resume_orchestration(
             action_result = await tool_executor.execute(action, request)
             orchestration_context.result = await resume_generation_orchestration(
                 checkpoint_port=checkpoint_store,
-                resume_port=_BDDResumePort(),
+                resume_port=BDDResumePort(),
                 command=ResumeWorkflowCommand(
                     checkpoint_id=suspended_result.checkpoint_id,
                     result=action_result,

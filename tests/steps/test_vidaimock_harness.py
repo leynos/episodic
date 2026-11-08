@@ -308,6 +308,7 @@ def test_a_capture_is_closed_when_no_child_is_created(
         _port: int,
         stderr_file: typ.TextIO,
     ) -> subprocess.Popen[str]:
+        """Record the capture, then raise the injected start failure."""
         created.append(stderr_file)
         raise error
 
@@ -345,6 +346,7 @@ def test_an_unexpected_readiness_failure_still_reaps_the_child(
     error = RuntimeError("the readiness probe itself failed")
 
     def _fail_readiness(server: VidaiMockServer, **_kwargs: object) -> None:
+        """Record the server's process, then raise the injected readiness error."""
         started.append(server.process)
         raise error
 
