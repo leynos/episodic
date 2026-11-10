@@ -224,9 +224,12 @@ Success is observable as follows:
 - [x] (2026-11-10) EP-M1: shared leaf modules and ADR-024 draft. Gates green:
   `make check-fmt`, `make typecheck`, `make lint`, `make test` (1725 passed, 1
   skipped), `make check-migrations`, `make markdownlint`, `make nixie`.
+- [x] (2026-11-10) EP-M1 rebased onto `main` at `92663d12` after 20 upstream
+  commits; Hecate and Skylos entries survived the weave. Upstream drift
+  reconciled into this plan (see `Surprises & discoveries`).
 - [ ] EP-M2: persisted read path and `PricingSnapshotRepository`.
 - [ ] EP-M3: schema version 1 snapshots, content addressing, and migration
-  `000014`.
+  `20261110_000017`.
 - [ ] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
   correction.
 - [ ] EP-M5: documentation, roadmap, and final gates.
@@ -256,6 +259,9 @@ Success is observable as follows:
   regression test is added.
 - Observation: `episodic/cost/ports.py` and `episodic/cost/storage/adapters.py`
   are both exactly 400 lines. Impact: extraction precedes every addition.
+  Update (2026-11-10): `ports.py` is 380 lines after EP-M1 extracted
+  `episodic/cost/primitives.py`; `adapters.py` is still 400, so EP-M2's
+  extraction of the snapshot store is a precondition, not a nicety.
 - Observation: there are three ADR-015 files and the cost ADR-015 is missing
   from `docs/contents.md`; the `2.4.4` ExecPlan is also unlisted. Impact: the
   new ADR is numbered 024 and EP-M5 fixes the index entries.
@@ -263,6 +269,27 @@ Success is observable as follows:
   `tests/test_pricing_snapshot_constraint_migration.py:207`, and that file's
   offline test migrates to `head`. Impact: EP-M3 pins those tests to
   `20261010_000013` explicitly.
+- Observation (2026-11-10): upstream `main` advanced past this plan while it was
+  being written. The Alembic head is now `20261031_000016`
+  (`20261020_000014_add_review_checkpoints.py`,
+  `20261020_000015_add_expired_lease_index.py`, and
+  `20261031_000016_add_qa_artefact_tables.py` landed first), so the proposed
+  `000014` content-addressing migration collides by filename and by
+  `down_revision`. None of those migrations touches `pricing_snapshots`.
+  Impact: EP-M3 creates `20261110_000017_content_address_pricing_snapshots.py`
+  with `down_revision = "20261031_000016"`; migration tests seed legacy rows
+  after upgrading to `20261031_000016` (the immediate parent) and assert
+  rollback lands there rather than at `20261010_000013`. The `000013` pin in
+  the constraint-migration test is where the named constraint was introduced
+  and stays.
+- Observation (2026-11-10): `main` also added comprehensive docstrings across
+  `episodic/cost/*` (docstring coverage gate, #424) and split
+  `SqlAlchemyUnitOfWork` store construction into `_open_catalogue_stores`,
+  `_open_intake_stores`, and `_open_instrumented_stores`, with
+  `CanonicalUnitOfWork` now also exposing `generation_runs` and `qa_artefacts`.
+  Impact: EP-M2 attaches `pricing_snapshots` inside the instrumented-stores
+  helper, next to `cost_ledger`, and new public members need NumPy-style
+  docstrings for the coverage gate.
 - Observation: no Vidai Mock test exercises the real `CostRecorder`; the
   orchestration BDD steps use `_RecordingCostRecorder`
   (`tests/steps/test_generation_orchestration_steps.py:102`). Impact: the Vidai
@@ -689,14 +716,15 @@ non-vacuity evidence.
   a month without its own card still resolves (regression). Method:
   parameterized pytest. Artefact:
   `tests/test_cost_pricing_catalogue_file_loader.py`.
-- Obligation `INV-MIGRATION`: upgrading from `20261010_000013` converts each
-  legacy row so that the domain store reads it without an integrity error, and
-  its hash equals the hash of the corresponding rewritten shipped card; a
-  recomputed-hash collision aborts with `CommandError` naming both identifiers
-  and leaves the schema at `20261010_000013`; offline upgrade SQL contains the
-  non-empty-table guard; downgrade refuses on a non-empty table and succeeds on
-  an empty one. Method: py-pglite migration tests plus syrupy snapshots of
-  offline SQL. Artefact:
+- Obligation `INV-MIGRATION`: upgrading from `20261031_000016` (the immediate
+  parent, which carries the same `pricing_snapshots` shape as
+  `20261010_000013`) converts each legacy row so that the domain store reads it
+  without an integrity error, and its hash equals the hash of the corresponding
+  rewritten shipped card; a recomputed-hash collision aborts with
+  `CommandError` naming both identifiers and leaves the schema at
+  `20261031_000016`; offline upgrade SQL contains the non-empty-table guard;
+  downgrade refuses on a non-empty table and succeeds on an empty one. Method:
+  py-pglite migration tests plus syrupy snapshots of offline SQL. Artefact:
   `tests/test_pricing_snapshot_content_address_migration.py` and its `.ambr`.
   Non-vacuity: legacy fixtures are byte copies of the three shipped `2.4.4`
   YAML files inserted through `sa.table` at the old schema.
@@ -871,8 +899,8 @@ expected-failure markers, then the implementation.
    database `IntegrityError`s; the two must not be merged.
 7. ORM model and migration: update `PricingSnapshotRecord` to the v1 columns
    (see `Interfaces and dependencies`). Add
-   `alembic/versions/<YYYYMMDD>_000014_content_address_pricing_snapshots.py`
-   (`down_revision = "20261010_000013"`). Online upgrade: lock the table; add
+   `alembic/versions/20261110_000017_content_address_pricing_snapshots.py`
+   (`down_revision = "20261031_000016"`). Online upgrade: lock the table; add
    the new columns as nullable; read every legacy row; convert it with a frozen
    inline converter and canonicalizer (no imports from `episodic`). The
    converter's legacy defaults are `service_kind = 'llm'`,
@@ -904,8 +932,9 @@ expected-failure markers, then the implementation.
    `tests/test_cost_snapshot_persistence_properties.py`,
    `tests/test_cost_snapshot_observability.py`,
    `tests/test_cost_snapshot_concurrency.py`,
-   `tests/test_pricing_snapshot_constraint_migration.py` (pin its targets to
-   `20261010_000013` and insert legacy rows with `sa.table`),
+   `tests/test_pricing_snapshot_constraint_migration.py` (keep its
+   `20261010_000013` constraint pin; the new content-address migration test
+   seeds legacy rows after upgrading to `20261031_000016` with `sa.table`),
    `tests/test_env_runtime_wiring.py`, `tests/test_runtime_configuration.py`,
    and the new `tests/test_production_hecate_cost_config.py`.
 10. Fill the hash vectors in ADR-024 from the syrupy snapshots.
@@ -1054,7 +1083,7 @@ Local `make test` needs Vidai Mock 0.2.8 or later on `PATH`. Shared-host pytest
 timeouts above 180 seconds are usually host contention; re-run the failing
 module alone before treating them as failures.
 
-Before applying migration `000014` to any alpha database, take a backup:
+Before applying migration `000017` to any alpha database, take a backup:
 
 ```bash
 pg_dump --table=pricing_snapshots --table=run_pricing_pins --table=cost_ledger_entries \
@@ -1158,8 +1187,8 @@ At each milestone boundary, record the conformance check from
 ## Idempotence and recovery
 
 - Every code step is re-runnable; gates are read-only apart from `make fmt`.
-- Migration `000014` runs in one transaction and takes an exclusive lock on
-  `pricing_snapshots`; a failure rolls back to `20261010_000013` with the
+- Migration `000017` runs in one transaction and takes an exclusive lock on
+  `pricing_snapshots`; a failure rolls back to `20261031_000016` with the
   `CommandError` message naming the offending rows. Fix the data (or escalate)
   and re-run.
 - Downgrade is deliberately refused on a populated table. Recovery from a bad
@@ -1370,7 +1399,7 @@ class PricingSnapshotRepository(typ.Protocol):
 - Unit of work:
   `CanonicalUnitOfWork.pricing_snapshots: PricingSnapshotRepository`.
 
-Table `pricing_snapshots` after migration `000014`:
+Table `pricing_snapshots` after migration `000017`:
 
 ```plaintext
 id                          uuid primary key            (surrogate; UUIDv7 for new rows)
