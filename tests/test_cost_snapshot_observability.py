@@ -8,8 +8,12 @@ from unittest import mock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from episodic.cost import PricingSnapshotCollisionError, PricingSnapshotId
-from episodic.cost.storage import SqlAlchemyCostLedgerStore
+from episodic.cost import (
+    PricingSnapshotCollisionError,
+    PricingSnapshotId,
+    PricingSnapshotNotFoundError,
+)
+from episodic.cost.storage import SqlAlchemyPricingSnapshotStore
 from episodic.observability import RecordingTracer
 from tests.fixtures.cost import pricing_snapshot
 
@@ -93,12 +97,12 @@ async def test_invalid_snapshot_timestamp_emits_validation_telemetry() -> None:
         pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f98"),
         retrieved_at="2026-06-04T09:00:00",
     )
-    store = SqlAlchemyCostLedgerStore(
+    store = SqlAlchemyPricingSnapshotStore(
         session, metrics=metrics, tracer=tracer, clock=clock
     )
 
     with pytest.raises(ValueError, match="timestamp must include timezone information"):
-        await store.ensure_snapshot(snapshot)
+        await store.ensure(snapshot)
 
     session.execute.assert_not_called()
     clock.monotonic_seconds.assert_not_called()
@@ -126,12 +130,12 @@ async def test_ensure_snapshot_constructs_statement_before_persistence_timing(
     session_factory: SessionFactory,
 ) -> None:
     """Persistence timing excludes statement construction and stays at 500 ms."""
-    from episodic.cost.storage import adapters as adapters_module
+    from episodic.cost.storage import pricing_snapshot_store as store_module
 
     metrics = _RecordingMetrics()
     clock = mock.Mock(wraps=_SteppingClock())
     snapshot = pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f98")
-    original_builder = adapters_module._snapshot_insert_statement
+    original_builder = store_module._snapshot_insert_statement
 
     def build_before_timing(value: PricingSnapshot) -> Insert:
         """Assert the measurement boundary before constructing the insert."""
@@ -139,13 +143,13 @@ async def test_ensure_snapshot_constructs_statement_before_persistence_timing(
         return original_builder(value)
 
     async with session_factory() as session:
-        store = SqlAlchemyCostLedgerStore(session, metrics=metrics, clock=clock)
+        store = SqlAlchemyPricingSnapshotStore(session, metrics=metrics, clock=clock)
         with mock.patch.object(
-            adapters_module,
+            store_module,
             "_snapshot_insert_statement",
             side_effect=build_before_timing,
         ) as builder:
-            await store.ensure_snapshot(snapshot)
+            await store.ensure(snapshot)
 
     builder.assert_called_once_with(snapshot)
     assert clock.monotonic_seconds.call_count == 2, (
@@ -174,16 +178,16 @@ async def test_ensure_snapshot_emits_persisted_reused_and_collision(
     )
 
     async with session_factory() as session:
-        store = SqlAlchemyCostLedgerStore(
+        store = SqlAlchemyPricingSnapshotStore(
             session,
             metrics=metrics,
             tracer=tracer,
             clock=_SteppingClock(),
         )
-        await store.ensure_snapshot(snapshot)
-        await store.ensure_snapshot(snapshot)
+        await store.ensure(snapshot)
+        await store.ensure(snapshot)
         with pytest.raises(PricingSnapshotCollisionError):
-            await store.ensure_snapshot(colliding)
+            await store.ensure(colliding)
 
     assert [entry[1]["outcome"] for entry in metrics.counters] == [
         "persisted",
@@ -223,3 +227,57 @@ async def test_ensure_snapshot_emits_persisted_reused_and_collision(
         assert set(span.attributes) <= _ALLOWED_LABEL_KEYS, (
             f"span attributes must stay bounded; got {span.attributes!r}"
         )
+
+
+@pytest.mark.asyncio
+async def test_get_emits_found_and_not_found_outcomes(
+    session_factory: SessionFactory,
+) -> None:
+    """Reading a stored snapshot reports found; a miss reports not_found."""
+    tracer = RecordingTracer()
+    metrics = _RecordingMetrics()
+    snapshot = pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8fa1")
+    missing_id = PricingSnapshotId("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8fa2")
+
+    async with session_factory() as session:
+        store = SqlAlchemyPricingSnapshotStore(
+            session,
+            metrics=metrics,
+            tracer=tracer,
+            clock=_SteppingClock(),
+        )
+        await store.ensure(snapshot)
+        stored = await store.get(snapshot.pricing_snapshot_id)
+        with pytest.raises(PricingSnapshotNotFoundError):
+            await store.get(missing_id)
+
+    assert stored.pricing_snapshot_id == snapshot.pricing_snapshot_id, (
+        "the found outcome must return the stored snapshot"
+    )
+    get_counters = [
+        labels for name, labels in metrics.counters if name == "pricing_snapshot.get"
+    ]
+    assert [labels["outcome"] for labels in get_counters] == ["found", "not_found"], (
+        f"expected the read outcome sequence, got {get_counters!r}"
+    )
+    assert get_counters[1]["failure_category"] == "pricing_snapshot.not_found", (
+        f"expected the fixed not-found category, got {get_counters[1]!r}"
+    )
+    assert [
+        name
+        for name, _value, _labels in metrics.latencies
+        if name == "pricing_snapshot.get.duration_ms"
+    ] == ["pricing_snapshot.get.duration_ms"] * 2, (
+        f"expected one latency observation per read, got {metrics.latencies!r}"
+    )
+    spans = [
+        span for span in tracer.spans if span.name == "pricing_snapshot.get_snapshot"
+    ]
+    assert [span.attributes["outcome"] for span in spans] == ["found", "not_found"], (
+        f"expected one span per read, got {tracer.spans!r}"
+    )
+    for span in spans:
+        assert set(span.attributes) <= _ALLOWED_LABEL_KEYS, (
+            f"span attributes must stay bounded; got {span.attributes!r}"
+        )
+    _assert_bounded(metrics, str(snapshot.pricing_snapshot_id))

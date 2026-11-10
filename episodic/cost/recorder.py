@@ -1,12 +1,14 @@
 """Application coordinator for cost recording.
 
-`CostRecorder` composes a pricing catalogue, the pure `PricingEngine`, and a
-ledger port. Orchestration code submits a `ProviderCallRecord`; the recorder
-resolves the pricing snapshot, computes a `PricedCall`, builds the ledger
-entry, and delegates persistence to `CostLedgerPort`.
+`CostRecorder` composes a pricing catalogue, the pure `PricingEngine`, a
+snapshot repository, and a ledger port. Orchestration code submits a
+`ProviderCallRecord`; the recorder resolves the pricing snapshot, computes a
+`PricedCall`, builds the ledger entry, and delegates persistence to
+`CostLedgerPort`. Pinned runs are priced from the persisted snapshot, so edits
+to the source rate card never reprice recorded history.
 
 ```python
-recorder = CostRecorder(ledger, catalogue, PricingEngine())
+recorder = CostRecorder(ledger, snapshots, catalogue, PricingEngine())
 entry_id = await recorder.record_provider_call(record)
 ```
 """
@@ -37,6 +39,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.cost.engine import PricingEngine
+    from episodic.cost.pricing_snapshot_ports import PricingSnapshotRepository
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -103,6 +106,7 @@ class CostRecorder:
     """Coordinate pricing and ledger writes for orchestration code."""
 
     ledger: CostLedgerPort
+    snapshots: PricingSnapshotRepository
     pricing_catalogue: PricingCataloguePort
     pricing_engine: PricingEngine
 
@@ -171,10 +175,10 @@ class CostRecorder:
                 provider.operation,
                 billing_period_key,
             )
-            await self.ledger.ensure_snapshot(snapshot)
+            ensured = await self.snapshots.ensure(snapshot)
             await self.ledger.pin_run_pricing(
                 key,
-                snapshot.pricing_snapshot_id,
+                ensured.pricing_snapshot_id,
                 pinned_at,
             )
 
@@ -226,7 +230,7 @@ class CostRecorder:
                 record.billing_period_key,
             )
             return snapshot, False
-        return await self.pricing_catalogue.get_snapshot(pinned_snapshot_id), True
+        return await self.snapshots.get(pinned_snapshot_id), True
 
     async def record_provider_call(
         self,
@@ -256,7 +260,7 @@ class CostRecorder:
             # Unpinned calls must persist the snapshot before the ledger row
             # references it; pinned calls skip this because the pin's foreign
             # key already guarantees the stored row exists.
-            await self.ledger.ensure_snapshot(snapshot)
+            await self.snapshots.ensure(snapshot)
         priced_call = self.pricing_engine.price(
             snapshot,
             PricingRequest(

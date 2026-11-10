@@ -8,6 +8,8 @@ SQLAlchemy ``AsyncSession`` owned by the caller:
 async with session_factory() as session:
     store = SqlAlchemyCostLedgerStore(session)
     await store.record_call(entry)
+    snapshots = SqlAlchemyPricingSnapshotStore(session)
+    await snapshots.ensure(snapshot)
 ```
 """
 
@@ -20,6 +22,7 @@ from .models import (
     PricingSnapshotRecord,
     RunPricingPinRecord,
 )
+from .pricing_snapshot_store import SqlAlchemyPricingSnapshotStore
 
 __all__ = [
     "CostLedgerEntryRecord",
@@ -29,4 +32,5 @@ __all__ = [
     "RunPricingPinRecord",
     "SqlAlchemyCostLedgerStore",
     "SqlAlchemyMeteringCounterStore",
+    "SqlAlchemyPricingSnapshotStore",
 ]

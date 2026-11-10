@@ -1355,6 +1355,7 @@ prefixes = [
     "episodic.canonical.upload_protocols",
     "episodic.canonical.uploads",
     "episodic.cost.ports",
+    "episodic.cost.pricing_snapshot_ports",
     "episodic.cost.engine",
     "episodic.cost.primitives",
     "episodic.json_canonicalization",

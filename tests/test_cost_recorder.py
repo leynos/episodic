@@ -19,6 +19,10 @@ from episodic.cost.ports import (
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.cost.pricing_snapshot_ports import (
+    EnsuredPricingSnapshot,
+    SnapshotEnsureOutcome,
+)
 from episodic.cost.recorder import (
     CostProviderOperation,
     CostRecorder,
@@ -61,19 +65,42 @@ def _snapshot(
 
 
 @dc.dataclass(slots=True)
+class _PinnedSnapshots:
+    """Snapshot repository fake holding one pinned snapshot."""
+
+    pinned_snapshot: PricingSnapshot
+    calls: list[tuple[str, PricingSnapshotId]] = dc.field(default_factory=list)
+    ensured_snapshots: list[PricingSnapshot] = dc.field(default_factory=list)
+
+    async def ensure(self, snapshot: PricingSnapshot) -> EnsuredPricingSnapshot:
+        """Capture snapshots the recorder persists, mirroring idempotency."""
+        self.calls.append(("ensure", snapshot.pricing_snapshot_id))
+        if snapshot in self.ensured_snapshots:
+            outcome = SnapshotEnsureOutcome.REUSED
+        else:
+            self.ensured_snapshots.append(snapshot)
+            outcome = SnapshotEnsureOutcome.PERSISTED
+        return EnsuredPricingSnapshot(
+            pricing_snapshot_id=snapshot.pricing_snapshot_id,
+            outcome=outcome,
+        )
+
+    async def get(self, pricing_snapshot_id: PricingSnapshotId) -> PricingSnapshot:
+        """Return the pinned snapshot by identifier."""
+        self.calls.append(("get", pricing_snapshot_id))
+        assert pricing_snapshot_id == self.pinned_snapshot.pricing_snapshot_id, (
+            "Expected the pinned snapshot identifier"
+        )
+        return self.pinned_snapshot
+
+
+@dc.dataclass(slots=True)
 class _PinnedLedger:
     """Ledger fake that exposes one existing run pricing pin."""
 
     pinned_snapshot_id: PricingSnapshotId | None
     recorded_call: ProviderCallLedgerEntry | None = None
-    ensured_snapshots: list[PricingSnapshot] = dc.field(default_factory=list)
     calls: list[tuple[str, PricingSnapshotId]] = dc.field(default_factory=list)
-
-    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Capture snapshots the recorder persists, mirroring idempotency."""
-        self.calls.append(("ensure", snapshot.pricing_snapshot_id))
-        if snapshot not in self.ensured_snapshots:
-            self.ensured_snapshots.append(snapshot)
 
     async def pin_run_pricing(
         self,
@@ -111,20 +138,9 @@ class _PinnedLedger:
 
 @dc.dataclass(frozen=True, slots=True)
 class _DriftingCatalogue:
-    """Catalogue fake with a latest snapshot and an older pinned snapshot."""
+    """Catalogue fake that always resolves the latest authored snapshot."""
 
-    pinned_snapshot: PricingSnapshot
     latest_snapshot: PricingSnapshot
-
-    async def get_snapshot(
-        self,
-        pricing_snapshot_id: PricingSnapshotId,
-    ) -> PricingSnapshot:
-        """Return the exact pinned snapshot by identifier."""
-        assert pricing_snapshot_id == self.pinned_snapshot.pricing_snapshot_id, (
-            "Expected values to match"
-        )
-        return self.pinned_snapshot
 
     async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
@@ -144,12 +160,11 @@ async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None
     pinned_snapshot = _snapshot("snapshot:old", input_token_rate=1_000_000)
     latest_snapshot = _snapshot("snapshot:new", input_token_rate=9_000_000)
     ledger = _PinnedLedger(pinned_snapshot_id=pinned_snapshot.pricing_snapshot_id)
+    snapshots = _PinnedSnapshots(pinned_snapshot=pinned_snapshot)
     recorder = CostRecorder(
         ledger=ledger,
-        pricing_catalogue=_DriftingCatalogue(
-            pinned_snapshot=pinned_snapshot,
-            latest_snapshot=latest_snapshot,
-        ),
+        snapshots=snapshots,
+        pricing_catalogue=_DriftingCatalogue(latest_snapshot=latest_snapshot),
         pricing_engine=PricingEngine(),
     )
 
@@ -180,9 +195,8 @@ async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None
     assert ledger.recorded_call.computed_cost_minor == 3, (
         "cost must be computed from the pinned 1_000_000 rate, not drifted rates"
     )
-    assert not ledger.ensured_snapshots, (
-        "pinned calls must skip snapshot persistence; the pin's foreign key "
-        "already guarantees the stored row exists"
+    assert snapshots.calls == [("get", pinned_snapshot.pricing_snapshot_id)], (
+        "pinned calls must read the stored snapshot rather than the catalogue"
     )
 
 
@@ -191,12 +205,11 @@ async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> N
     """Unpinned calls persist the resolved snapshot before the ledger row."""
     latest_snapshot = _snapshot("snapshot:new", input_token_rate=1_000_000)
     ledger = _PinnedLedger(pinned_snapshot_id=None)
+    snapshots = _PinnedSnapshots(pinned_snapshot=latest_snapshot)
     recorder = CostRecorder(
         ledger=ledger,
-        pricing_catalogue=_DriftingCatalogue(
-            pinned_snapshot=latest_snapshot,
-            latest_snapshot=latest_snapshot,
-        ),
+        snapshots=snapshots,
+        pricing_catalogue=_DriftingCatalogue(latest_snapshot=latest_snapshot),
         pricing_engine=PricingEngine(),
     )
 
@@ -220,7 +233,7 @@ async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> N
         ),
     )
 
-    assert ledger.ensured_snapshots == [latest_snapshot], (
+    assert snapshots.ensured_snapshots == [latest_snapshot], (
         "unpinned calls must persist the resolved snapshot before recording"
     )
 
@@ -229,13 +242,13 @@ async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> N
 async def test_cost_recorder_persists_snapshot_before_pinning() -> None:
     """The real pin method ensures the snapshot before writing the pin."""
     snapshot = _snapshot("snapshot:pin-order", input_token_rate=1_000_000)
-    ledger = _PinnedLedger(pinned_snapshot_id=None)
+    calls: list[tuple[str, PricingSnapshotId]] = []
+    ledger = _PinnedLedger(pinned_snapshot_id=None, calls=calls)
+    snapshots = _PinnedSnapshots(pinned_snapshot=snapshot, calls=calls)
     recorder = CostRecorder(
         ledger=ledger,
-        pricing_catalogue=_DriftingCatalogue(
-            pinned_snapshot=snapshot,
-            latest_snapshot=snapshot,
-        ),
+        snapshots=snapshots,
+        pricing_catalogue=_DriftingCatalogue(latest_snapshot=snapshot),
         pricing_engine=PricingEngine(),
     )
 
@@ -251,7 +264,7 @@ async def test_cost_recorder_persists_snapshot_before_pinning() -> None:
         BillingPeriodKey("2026-06"),
     )
 
-    assert ledger.calls == [
+    assert calls == [
         ("ensure", snapshot.pricing_snapshot_id),
         ("pin", snapshot.pricing_snapshot_id),
-    ], f"the snapshot must be persisted before it is pinned; got {ledger.calls!r}"
+    ], f"the snapshot must be persisted before it is pinned; got {calls!r}"

@@ -5,7 +5,9 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from episodic.cost.storage.adapters import _is_pricing_snapshot_hash_collision
+from episodic.cost.storage.pricing_snapshot_store import (
+    _is_pricing_snapshot_hash_collision,
+)
 
 _HASH_CONSTRAINT_ERROR = (
     'duplicate key value violates unique constraint "uq_pricing_snapshots_content_hash"'

@@ -8,6 +8,7 @@ import typing as typ
 import uuid
 
 from episodic.canonical.domain import (
+    GenerationEvent,
     GenerationRun,
     GenerationRunStatus,
     IngestionJob,
@@ -286,6 +287,23 @@ def _run(episode_id: uuid.UUID, source_bundle_id: uuid.UUID) -> GenerationRun:
         qa_status=QaStatus.SKIPPED,
         skip_qa_rationale="Vertical slice draft.",
     )
+
+
+async def launch_and_load_run(
+    factory: async_sessionmaker[AsyncSession],
+    run_id: uuid.UUID,
+    run_launcher: InProcessGenerationRunLauncher,
+) -> tuple[GenerationRun, tuple[GenerationEvent, ...]]:
+    """Launch a run and return its persisted terminal state and events."""
+    await run_launcher.launch(run_id)
+    await run_launcher.drain()
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        run = await uow.generation_runs.get_run(run_id)
+        events = await uow.generation_runs.list_events(run_id)
+    if run is None:
+        msg = f"run {run_id} was not persisted; events={events!r}"
+        raise LookupError(msg)
+    return run, events
 
 
 async def prepare_pending_run(

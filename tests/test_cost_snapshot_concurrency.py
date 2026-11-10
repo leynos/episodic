@@ -20,6 +20,7 @@ from episodic.cost.storage import (
     PricingSnapshotRecord,
     RunPricingPinRecord,
     SqlAlchemyCostLedgerStore,
+    SqlAlchemyPricingSnapshotStore,
 )
 
 if typ.TYPE_CHECKING:
@@ -86,7 +87,7 @@ async def test_concurrent_ensure_persists_exactly_one_snapshot(
         """Ensure the snapshot and commit once the start event is set."""
         async with session_factory() as session:
             await start.wait()
-            await SqlAlchemyCostLedgerStore(session).ensure_snapshot(snapshot)
+            await SqlAlchemyPricingSnapshotStore(session).ensure(snapshot)
             await session.commit()
 
     tasks = [asyncio.create_task(ensure_once()), asyncio.create_task(ensure_once())]
@@ -124,9 +125,8 @@ async def test_concurrent_ensure_and_pin_persist_one_snapshot_and_pin(
         """Ensure the snapshot, pin the run and commit once started."""
         async with session_factory() as session:
             await start.wait()
-            store = SqlAlchemyCostLedgerStore(session)
-            await store.ensure_snapshot(snapshot)
-            await store.pin_run_pricing(
+            await SqlAlchemyPricingSnapshotStore(session).ensure(snapshot)
+            await SqlAlchemyCostLedgerStore(session).pin_run_pricing(
                 key,
                 snapshot.pricing_snapshot_id,
                 "2026-06-04T10:00:00Z",
@@ -176,9 +176,8 @@ async def test_cancelled_transaction_leaves_no_partial_snapshot(
     async def ensure_then_stall() -> None:
         """Ensure the snapshot and pin the run, then hold the transaction open."""
         async with session_factory() as session:
-            store = SqlAlchemyCostLedgerStore(session)
-            await store.ensure_snapshot(snapshot)
-            await store.pin_run_pricing(
+            await SqlAlchemyPricingSnapshotStore(session).ensure(snapshot)
+            await SqlAlchemyCostLedgerStore(session).pin_run_pricing(
                 key,
                 snapshot.pricing_snapshot_id,
                 "2026-06-04T10:00:00Z",
@@ -208,9 +207,8 @@ async def test_cancelled_transaction_leaves_no_partial_snapshot(
     assert pins == 0, "a cancelled transaction must roll back its uncommitted pin row"
 
     async with session_factory() as session:
-        store = SqlAlchemyCostLedgerStore(session)
-        await store.ensure_snapshot(snapshot)
-        await store.pin_run_pricing(
+        await SqlAlchemyPricingSnapshotStore(session).ensure(snapshot)
+        await SqlAlchemyCostLedgerStore(session).pin_run_pricing(
             key,
             snapshot.pricing_snapshot_id,
             "2026-06-04T10:00:00Z",

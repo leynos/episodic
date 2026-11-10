@@ -10,7 +10,7 @@ Typical application code wires concrete adapters at the composition root,
 then coordinates pricing through `CostRecorder`:
 
 ```python
-recorder = CostRecorder(ledger, catalogue, PricingEngine())
+recorder = CostRecorder(ledger, snapshots, catalogue, PricingEngine())
 entry_id = await recorder.record_provider_call(record)
 ```
 
@@ -39,6 +39,14 @@ from episodic.cost.ports import (
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.cost.pricing_snapshot_ports import (
+    EnsuredPricingSnapshot,
+    PricingSnapshotError,
+    PricingSnapshotIntegrityError,
+    PricingSnapshotNotFoundError,
+    PricingSnapshotRepository,
+    SnapshotEnsureOutcome,
+)
 from episodic.cost.recorder import CostRecorderPort
 
 __all__ = [
@@ -47,6 +55,7 @@ __all__ = [
     "CostLedgerPort",
     "CostRecorderPort",
     "CurrencyCode",
+    "EnsuredPricingSnapshot",
     "IdempotencyKey",
     "LedgerScope",
     "MeteringCounterKey",
@@ -57,10 +66,15 @@ __all__ = [
     "PricingModel",
     "PricingSnapshot",
     "PricingSnapshotCollisionError",
+    "PricingSnapshotError",
     "PricingSnapshotId",
+    "PricingSnapshotIntegrityError",
+    "PricingSnapshotNotFoundError",
+    "PricingSnapshotRepository",
     "PricingSourceKind",
     "ProviderCallLedgerEntry",
     "RunPricingKey",
+    "SnapshotEnsureOutcome",
     "TaskRollupLedgerEntry",
     "UsageSource",
 ]

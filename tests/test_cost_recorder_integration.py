@@ -11,13 +11,13 @@ import sqlalchemy as sa
 from episodic.cost import (
     BillingPeriodKey,
     PricingSnapshot,
-    PricingSnapshotId,
 )
 from episodic.cost.storage import (
     CostLedgerEntryRecord,
     PricingSnapshotRecord,
     RunPricingPinRecord,
     SqlAlchemyCostLedgerStore,
+    SqlAlchemyPricingSnapshotStore,
 )
 from tests.fixtures.cost import pricing_snapshot
 
@@ -67,16 +67,6 @@ class _SingleSnapshotCatalogue:
 
     snapshot: PricingSnapshot
 
-    async def get_snapshot(
-        self,
-        pricing_snapshot_id: PricingSnapshotId,
-    ) -> PricingSnapshot:
-        """Return the fixture snapshot for its identifier."""
-        assert pricing_snapshot_id == self.snapshot.pricing_snapshot_id, (
-            "Expected the fixture snapshot identifier"
-        )
-        return self.snapshot
-
     async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         provider_name: str,
@@ -101,6 +91,7 @@ async def test_cost_recorder_pins_on_a_fresh_database(
     async with session_factory() as session:
         recorder = CostRecorder(
             ledger=SqlAlchemyCostLedgerStore(session),
+            snapshots=SqlAlchemyPricingSnapshotStore(session),
             pricing_catalogue=_SingleSnapshotCatalogue(snapshot),
             pricing_engine=PricingEngine(),
         )
@@ -151,6 +142,7 @@ def _build_pinned_run_recorder(
 
     return CostRecorder(
         ledger=SqlAlchemyCostLedgerStore(session),
+        snapshots=SqlAlchemyPricingSnapshotStore(session),
         pricing_catalogue=FilePricingCatalogue(directory, now=lambda: _NOW),
         pricing_engine=PricingEngine(),
     )
@@ -226,10 +218,6 @@ async def _record_pinned_provider_call(
         ).scalar_one()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="pinned calls still read the rate card file instead of the stored row",
-)
 @pytest.mark.asyncio
 async def test_pinned_call_prices_from_persisted_snapshot_after_file_removal(
     session_factory: async_sessionmaker[AsyncSession],
@@ -247,10 +235,6 @@ async def test_pinned_call_prices_from_persisted_snapshot_after_file_removal(
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="pinned calls still read the rate card file instead of the stored row",
-)
 @pytest.mark.asyncio
 async def test_pinned_call_prices_from_persisted_snapshot_after_file_edit(
     session_factory: async_sessionmaker[AsyncSession],

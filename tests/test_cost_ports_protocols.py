@@ -25,6 +25,12 @@ from episodic.cost.ports import (
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.cost.pricing_snapshot_ports import (
+    EnsuredPricingSnapshot,
+    PricingSnapshotNotFoundError,
+    PricingSnapshotRepository,
+    SnapshotEnsureOutcome,
+)
 from episodic.cost.recorder import CostRecorderPort
 from episodic.llm.ports import LLMResponse, LLMUsage, ProviderCallUsage
 from tests.generation_run_launcher_support import RecordingCostRecorder
@@ -63,10 +69,6 @@ def _make_snapshot(
 class _InMemoryCostLedger:
     """Fake cost ledger for protocol conformance tests."""
 
-    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Accept a fake snapshot persistence request."""
-        _ = snapshot
-
     async def pin_run_pricing(
         self,
         key: RunPricingKey,
@@ -98,15 +100,37 @@ class _InMemoryCostLedger:
         return CostLedgerEntryId(f"rollup:{rollup.idempotency_key}")
 
 
+class _InMemoryPricingSnapshots:
+    """Fake snapshot repository backed by a dictionary."""
+
+    def __init__(self) -> None:
+        """Start with no stored snapshots."""
+        self._stored: dict[PricingSnapshotId, PricingSnapshot] = {}
+
+    async def ensure(self, snapshot: PricingSnapshot) -> EnsuredPricingSnapshot:
+        """Store the snapshot once and report whether this call inserted it."""
+        outcome = (
+            SnapshotEnsureOutcome.REUSED
+            if snapshot.pricing_snapshot_id in self._stored
+            else SnapshotEnsureOutcome.PERSISTED
+        )
+        self._stored.setdefault(snapshot.pricing_snapshot_id, snapshot)
+        return EnsuredPricingSnapshot(
+            pricing_snapshot_id=snapshot.pricing_snapshot_id,
+            outcome=outcome,
+        )
+
+    async def get(self, pricing_snapshot_id: PricingSnapshotId) -> PricingSnapshot:
+        """Return the stored snapshot or raise the not-found port error."""
+        try:
+            return self._stored[pricing_snapshot_id]
+        except KeyError as exc:
+            msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
+            raise PricingSnapshotNotFoundError(msg) from exc
+
+
 class _StaticPricingCatalogue:
     """Fake pricing catalogue that returns deterministic snapshots."""
-
-    async def get_snapshot(
-        self,
-        pricing_snapshot_id: PricingSnapshotId,
-    ) -> PricingSnapshot:
-        """Return a deterministic snapshot for protocol conformance tests."""
-        return _make_snapshot(pricing_snapshot_id)
 
     async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
@@ -146,6 +170,7 @@ class _InMemoryMetering:
 def test_cost_protocol_fakes_satisfy_public_ports() -> None:
     """Concrete cost collaborators expose the published protocol surfaces."""
     ledger = _InMemoryCostLedger()
+    snapshots = _InMemoryPricingSnapshots()
     catalogue = _StaticPricingCatalogue()
     metering = _InMemoryMetering()
 
@@ -165,11 +190,13 @@ def test_cost_protocol_fakes_satisfy_public_ports() -> None:
     assert inspect.iscoroutinefunction(ledger.record_task_rollup), (
         "Expected condition to hold"
     )
-    assert isinstance(catalogue, PricingCataloguePort), (
+    assert isinstance(snapshots, PricingSnapshotRepository), (
         "Expected value to have the required type"
     )
-    assert inspect.iscoroutinefunction(catalogue.get_snapshot), (
-        "Expected condition to hold"
+    assert inspect.iscoroutinefunction(snapshots.ensure), "Expected condition to hold"
+    assert inspect.iscoroutinefunction(snapshots.get), "Expected condition to hold"
+    assert isinstance(catalogue, PricingCataloguePort), (
+        "Expected value to have the required type"
     )
     assert inspect.iscoroutinefunction(catalogue.resolve), "Expected condition to hold"
     assert isinstance(metering, MeteringPort), (

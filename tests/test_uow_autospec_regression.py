@@ -75,7 +75,12 @@ async def test_unit_of_work_runtime_reaches_storage_adapters(
             uow_module,
             "SqlAlchemyCostLedgerStore",
             autospec=True,
-        ) as cost_ledger_store,
+        ),
+        mock.patch.object(
+            uow_module,
+            "SqlAlchemyPricingSnapshotStore",
+            autospec=True,
+        ) as pricing_snapshot_store,
         mock.patch.object(
             uow_module,
             "SqlAlchemyWorkflowCheckpointStore",
@@ -95,15 +100,15 @@ async def test_unit_of_work_runtime_reaches_storage_adapters(
                 generation_run_store.call_args.kwargs["runtime"]
                 is runtime.generation_run_runtime
             ), "generation-run storage must receive the supplied runtime"
-            cost_ledger_kwargs = cost_ledger_store.call_args.kwargs
-            assert cost_ledger_kwargs["metrics"] is runtime.metrics, (
-                "cost storage must receive the supplied metrics sink"
+            pricing_snapshot_kwargs = pricing_snapshot_store.call_args.kwargs
+            assert pricing_snapshot_kwargs["metrics"] is runtime.metrics, (
+                "pricing-snapshot storage must receive the supplied metrics sink"
             )
-            assert cost_ledger_kwargs["tracer"] is runtime.tracer, (
-                "cost storage must receive the supplied tracer"
+            assert pricing_snapshot_kwargs["tracer"] is runtime.tracer, (
+                "pricing-snapshot storage must receive the supplied tracer"
             )
-            assert cost_ledger_kwargs["clock"] is runtime.monotonic_clock, (
-                "cost storage must receive the supplied monotonic clock"
+            assert pricing_snapshot_kwargs["clock"] is runtime.monotonic_clock, (
+                "pricing-snapshot storage must receive the supplied monotonic clock"
             )
 
             workflow_checkpoint_kwargs = workflow_checkpoint_store.call_args.kwargs

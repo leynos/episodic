@@ -16,7 +16,10 @@ from episodic.cost import (
     PricingSnapshotId,
     PricingSourceKind,
 )
-from episodic.cost.storage import PricingSnapshotRecord, SqlAlchemyCostLedgerStore
+from episodic.cost.storage import (
+    PricingSnapshotRecord,
+    SqlAlchemyPricingSnapshotStore,
+)
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -91,15 +94,15 @@ async def test_ensure_snapshot_keeps_persisted_identifiers_immutable(
         snapshot_id = identifiers[id_index]
         content_hash = hashes[hash_index]
         async with session_factory() as session:
-            store = SqlAlchemyCostLedgerStore(session)
+            store = SqlAlchemyPricingSnapshotStore(session)
             if (
                 snapshot_id not in recorded
                 and claimed_hashes.get(content_hash, snapshot_id) != snapshot_id
             ):
                 with pytest.raises(PricingSnapshotCollisionError):
-                    await store.ensure_snapshot(snapshot)
+                    await store.ensure(snapshot)
                 continue
-            await store.ensure_snapshot(snapshot)
+            await store.ensure(snapshot)
             await session.commit()
         if snapshot_id not in recorded:
             recorded[snapshot_id] = (content_hash, _RATE_VARIANTS[rates_index])

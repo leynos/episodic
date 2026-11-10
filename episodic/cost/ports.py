@@ -207,24 +207,6 @@ class RunPricingKey:
 class CostLedgerPort(typ.Protocol):
     """Port for append-only cost ledger persistence."""
 
-    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Persist an immutable pricing snapshot; reuse an existing row.
-
-        Run pricing pins and ledger entries reference snapshots by
-        identifier, so the snapshot must be persisted before it is pinned.
-
-        Parameters
-        ----------
-        snapshot : PricingSnapshot
-            Immutable snapshot to persist.
-
-        Examples
-        --------
-        Repeated ``await ledger.ensure_snapshot(snapshot)`` calls with
-        one ``pricing_snapshot_id`` reuse the persisted row.
-        """
-        raise NotImplementedError
-
     async def pin_run_pricing(
         self,
         key: RunPricingKey,
@@ -281,29 +263,6 @@ class CostLedgerPort(typ.Protocol):
 @typ.runtime_checkable
 class PricingCataloguePort(typ.Protocol):
     """Port for resolving immutable pricing snapshots."""
-
-    async def get_snapshot(
-        self,
-        pricing_snapshot_id: PricingSnapshotId,
-    ) -> PricingSnapshot:
-        """Return one immutable pricing snapshot by identifier.
-
-        Parameters
-        ----------
-        pricing_snapshot_id : PricingSnapshotId
-            Snapshot identifier pinned to a workflow run.
-
-        Returns
-        -------
-        PricingSnapshot
-            Immutable snapshot matching the requested identifier.
-
-        Raises
-        ------
-        LookupError
-            Raised when the snapshot identifier is unknown.
-        """
-        raise NotImplementedError
 
     async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
