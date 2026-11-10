@@ -319,10 +319,10 @@ async def launch_and_load_run(
     await run_launcher.drain()
     async with SqlAlchemyUnitOfWork(factory) as uow:
         run = await uow.generation_runs.get_run(run_id)
+        if run is None:
+            msg = f"run {run_id} was not persisted"
+            raise LookupError(msg)
         events = await uow.generation_runs.list_events(run_id)
-    if run is None:
-        msg = f"run {run_id} was not persisted; events={events!r}"
-        raise LookupError(msg)
     return run, events
 
 
