@@ -753,7 +753,8 @@ REST error contract:
 
 - Every Falcon `HTTPError` raised by the canonical API is serialized as
   `{"code": "<machine-readable>", "message": "<human>", "details": {...}}` by
-  `episodic/api/errors.py`.
+  `episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
+  exceptions and re-exports the envelope helpers.
 - Validation helpers attach field-level details where the request parser knows
   the field and constraint, for example
   `{"field": "limit", "constraint": "range"}`.
