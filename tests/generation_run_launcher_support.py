@@ -294,7 +294,27 @@ async def launch_and_load_run(
     run_id: uuid.UUID,
     run_launcher: InProcessGenerationRunLauncher,
 ) -> tuple[GenerationRun, tuple[GenerationEvent, ...]]:
-    """Launch a run and return its persisted terminal state and events."""
+    """Launch a run and return its persisted terminal state and events.
+
+    Parameters
+    ----------
+    factory : async_sessionmaker[AsyncSession]
+        Session factory bound to the test database.
+    run_id : uuid.UUID
+        Identifier of the pending run to launch.
+    run_launcher : InProcessGenerationRunLauncher
+        Launcher under test.
+
+    Returns
+    -------
+    tuple[GenerationRun, tuple[GenerationEvent, ...]]
+        Persisted terminal run state and the events recorded for it.
+
+    Raises
+    ------
+    LookupError
+        If the run was not persisted or could not be loaded.
+    """
     await run_launcher.launch(run_id)
     await run_launcher.drain()
     async with SqlAlchemyUnitOfWork(factory) as uow:

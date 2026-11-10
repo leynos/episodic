@@ -29,7 +29,7 @@ That first cut does not yet deliver the `2.5.1` promises:
   priced per character or per minute of audio have no representation, and
   nothing distinguishes an LLM snapshot from a TTS one.
 - Helper-service pricing documents such as Service-Level Agreements for
-  OpenAPI (SLA4OAI) plans[^2] have nowhere to live, and the snapshot "version"
+  OpenAPI (SLA4OAI) plans[^1] have nowhere to live, and the snapshot "version"
   is an implicit mixture of a hand-assigned identifier, a raw-file digest, a
   billing-period key, and an effective date.
 
@@ -176,7 +176,7 @@ Normative encoding rules:
   `episodic.json_canonicalization.canonical_json_bytes`, and the hash is
   `"sha256:"` followed by the lowercase hexadecimal SHA-256 digest of those
   bytes. The encoding is RFC 8785-equivalent for this document because every
-  key is ASCII and every number is an integer no larger than `2**53 - 1`[^1].
+  key is ASCII and every number is an integer no larger than `2**53 - 1`[^2].
 
 Canonical bytes and hashes for one LLM, one TTS, and one SLA4OAI snapshot are
 recorded as test vectors in the ExecPlan and its syrupy snapshots. The vectors
@@ -212,15 +212,16 @@ a field never changes the hash of a version 1 row.
 2. Introduce `PricingSnapshotRepository` and price pinned calls from the
    persisted snapshot on the existing schema.
 3. Replace the snapshot representation with schema version 1, content
-   addressing, exact rates, TTS and helper support, and migration `000014`.
+   addressing, exact rates, TTS and helper support, and migration
+   `20261110_000017`.
 4. Add behavioural coverage, including a Vidai Mock scenario and the 7.5-cent
    correction to the shipped card.
 5. Update the design document, ADR-015, the users' guide, the developers'
    guide, and the roadmap.
 
-Migration `000014` runs stop-the-world: operators scale launchers and workers
-to zero, back up the three cost tables, upgrade, then roll out the new image.
-The offline (`--sql`) upgrade emits a guard that raises unless
+Migration `20261110_000017` runs stop-the-world: operators scale launchers and
+workers to zero, back up the three cost tables, upgrade, then roll out the new
+image. The offline (`--sql`) upgrade emits a guard that raises unless
 `pricing_snapshots` is empty, because hash recomputation needs Python and live
 rows. Downgrade refuses unless the table is empty.
 
@@ -266,7 +267,7 @@ them, so no snapshot written now has to be rewritten later.
   `docs/adr/adr-014-hexagonal-architecture-enforcement.md`.
 - ExecPlan: `docs/execplans/2-5-1-immutable-pricing-snapshots.md`.
 
-[^1]: RFC 8785, JSON Canonicalization Scheme:
-  <https://www.rfc-editor.org/rfc/rfc8785>
-[^2]: SLA4OAI Specification 0.10.0:
+[^1]: SLA4OAI Specification 0.10.0:
   <https://github.com/isa-group/SLA4OAI-Specification>
+[^2]: RFC 8785, JSON Canonicalization Scheme:
+  <https://www.rfc-editor.org/rfc/rfc8785>

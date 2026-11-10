@@ -21,6 +21,7 @@ from episodic.cost.ports import (
     BillingPeriodKey,
     IdempotencyKey,
     PricingModel,
+    PricingSnapshotCollisionError,
     UsageSource,
 )
 from episodic.cost.pricing_snapshot_ports import PricingSnapshotError
@@ -128,6 +129,9 @@ _FAILURE_CATEGORIES: tuple[
     (DraftScriptResponseFormatError, "draft.response_format", False),
     (DraftScriptGenerationError, "draft.generation", False),
     (PricingSnapshotError, "cost.pricing_snapshot", False),
+    # Collisions still subclass `CostAccountingError`, not `PricingSnapshotError`,
+    # so this category needs its own entry to stay stable.
+    (PricingSnapshotCollisionError, "cost.pricing_snapshot", False),
 )
 
 

@@ -21,6 +21,7 @@ from episodic.cost.ports import (
 )
 from episodic.cost.pricing_snapshot_ports import (
     EnsuredPricingSnapshot,
+    PricingSnapshotNotFoundError,
     SnapshotEnsureOutcome,
 )
 from episodic.cost.recorder import (
@@ -65,10 +66,10 @@ def _snapshot(
 
 
 @dc.dataclass(slots=True)
-class _PinnedSnapshots:
-    """Snapshot repository fake holding one pinned snapshot."""
+class _RecordingSnapshots:
+    """Snapshot repository fake recording calls while holding one snapshot."""
 
-    pinned_snapshot: PricingSnapshot
+    stored_snapshot: PricingSnapshot
     calls: list[tuple[str, PricingSnapshotId]] = dc.field(default_factory=list)
     ensured_snapshots: list[PricingSnapshot] = dc.field(default_factory=list)
 
@@ -86,12 +87,12 @@ class _PinnedSnapshots:
         )
 
     async def get(self, pricing_snapshot_id: PricingSnapshotId) -> PricingSnapshot:
-        """Return the pinned snapshot by identifier."""
+        """Return the stored snapshot or raise the port's not-found error."""
         self.calls.append(("get", pricing_snapshot_id))
-        assert pricing_snapshot_id == self.pinned_snapshot.pricing_snapshot_id, (
-            "Expected the pinned snapshot identifier"
-        )
-        return self.pinned_snapshot
+        if pricing_snapshot_id != self.stored_snapshot.pricing_snapshot_id:
+            msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
+            raise PricingSnapshotNotFoundError(msg)
+        return self.stored_snapshot
 
 
 @dc.dataclass(slots=True)
@@ -160,7 +161,7 @@ async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None
     pinned_snapshot = _snapshot("snapshot:old", input_token_rate=1_000_000)
     latest_snapshot = _snapshot("snapshot:new", input_token_rate=9_000_000)
     ledger = _PinnedLedger(pinned_snapshot_id=pinned_snapshot.pricing_snapshot_id)
-    snapshots = _PinnedSnapshots(pinned_snapshot=pinned_snapshot)
+    snapshots = _RecordingSnapshots(stored_snapshot=pinned_snapshot)
     recorder = CostRecorder(
         ledger=ledger,
         snapshots=snapshots,
@@ -205,7 +206,7 @@ async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> N
     """Unpinned calls persist the resolved snapshot before the ledger row."""
     latest_snapshot = _snapshot("snapshot:new", input_token_rate=1_000_000)
     ledger = _PinnedLedger(pinned_snapshot_id=None)
-    snapshots = _PinnedSnapshots(pinned_snapshot=latest_snapshot)
+    snapshots = _RecordingSnapshots(stored_snapshot=latest_snapshot)
     recorder = CostRecorder(
         ledger=ledger,
         snapshots=snapshots,
@@ -244,7 +245,7 @@ async def test_cost_recorder_persists_snapshot_before_pinning() -> None:
     snapshot = _snapshot("snapshot:pin-order", input_token_rate=1_000_000)
     calls: list[tuple[str, PricingSnapshotId]] = []
     ledger = _PinnedLedger(pinned_snapshot_id=None, calls=calls)
-    snapshots = _PinnedSnapshots(pinned_snapshot=snapshot, calls=calls)
+    snapshots = _RecordingSnapshots(stored_snapshot=snapshot, calls=calls)
     recorder = CostRecorder(
         ledger=ledger,
         snapshots=snapshots,

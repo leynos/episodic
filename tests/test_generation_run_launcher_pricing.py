@@ -5,7 +5,10 @@ import typing as typ
 import pytest
 
 from episodic.canonical.domain import GenerationRunStatus
-from episodic.cost import PricingSnapshotNotFoundError
+from episodic.cost import (
+    PricingSnapshotCollisionError,
+    PricingSnapshotNotFoundError,
+)
 from episodic.observability import RecordingTracer
 from tests.generation_run_launcher_support import (
     FailingDraftGenerator,
@@ -18,19 +21,23 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
+@pytest.mark.parametrize(
+    "failure",
+    [
+        PricingSnapshotNotFoundError("No pricing snapshot found for id pinned."),
+        PricingSnapshotCollisionError("hash already stored under another id."),
+    ],
+    ids=["not-found", "collision"],
+)
 @pytest.mark.asyncio
 async def test_launcher_records_pricing_snapshot_failure(
     session_factory: object,
+    failure: Exception,
 ) -> None:
     """A pricing-snapshot failure should become a failed run with its category."""
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
     run_id, _ = await prepare_pending_run(factory)
-    run_launcher = launcher(
-        factory,
-        FailingDraftGenerator(
-            PricingSnapshotNotFoundError("No pricing snapshot found for id pinned.")
-        ),
-    )
+    run_launcher = launcher(factory, FailingDraftGenerator(failure))
     tracer = RecordingTracer()
     run_launcher.tracer = tracer
 

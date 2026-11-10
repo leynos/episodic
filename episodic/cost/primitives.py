@@ -31,8 +31,23 @@ class CostAccountingError(Exception):
     """Base exception for cost accounting failures."""
 
 
-def _validate_currency_code(currency: CurrencyCode) -> None:
-    """Validate an ISO 4217-style currency code."""
+def validate_currency_code(currency: CurrencyCode) -> None:
+    """Validate an ISO 4217-style currency code.
+
+    Parameters
+    ----------
+    currency : CurrencyCode
+        Three-letter uppercase currency code to validate.
+
+    Raises
+    ------
+    ValueError
+        If the code is not three alphabetic uppercase characters.
+
+    Examples
+    --------
+    >>> validate_currency_code(CurrencyCode("USD"))
+    """
     currency_value = str(currency)
     if len(currency_value) != _ISO_CURRENCY_CODE_LENGTH or not currency_value.isalpha():
         msg = "currency must be a three-letter ISO 4217 code."

@@ -227,7 +227,14 @@ Success is observable as follows:
 - [x] (2026-11-10) EP-M1 rebased onto `main` at `92663d12` after 20 upstream
   commits; Hecate and Skylos entries survived the weave. Upstream drift
   reconciled into this plan (see `Surprises & discoveries`).
-- [ ] EP-M2: persisted read path and `PricingSnapshotRepository`.
+- [x] (2026-11-10) EP-M2: persisted read path and
+  `PricingSnapshotRepository`. Red commit `840ffa54`; green commit `9eb67a65`.
+  Gates green at `9eb67a65`: `make check-fmt`, `make typecheck`, `make lint`
+  (ruff, pylint 10.00/10, df12 lints, ambrleaks, Skylos, nose duplication gate,
+  docstring coverage 100%), `make test` (2127 passed, 1 skipped),
+  `make check-migrations`, `make markdownlint`, `make nixie`. Milestone
+  CodeRabbit CLI review completed against `92663d12..9eb67a65`; valid findings
+  actioned and the id-reuse major finding deferred to EP-M3 by design.
 - [ ] EP-M3: schema version 1 snapshots, content addressing, and migration
   `20261110_000017`.
 - [ ] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
@@ -237,15 +244,21 @@ Success is observable as follows:
 ## Surprises & discoveries
 
 - Observation: pinned provider calls are priced from the YAML file, not the
-  persisted row. Evidence: `episodic/cost/recorder.py:229` returns
-  `await self.pricing_catalogue.get_snapshot(pinned_snapshot_id)`. Impact:
-  closing this is the first behavioural milestone (EP-M2).
+  persisted row. Evidence was `episodic/cost/recorder.py:229` returning
+  `await self.pricing_catalogue.get_snapshot(pinned_snapshot_id)`. Resolved by
+  EP-M2: the recorder now reads `await self.snapshots.get(pinned_snapshot_id)`
+  through `PricingSnapshotRepository`, and the pinned-path integration tests
+  pass after the rate-card file is edited or deleted.
 - Observation: an in-place edit of a rate card under the same identifier is
   reported as `reused` and leaves the old row, while pricing uses the edited
-  file. Evidence: `_snapshot_insert_statement` uses
-  `on_conflict_do_nothing(index_elements=["id"])`
-  (`episodic/cost/storage/adapters.py:138-161`). Impact: motivates content
-  addressing (EP-M3).
+  file. Evidence: `_snapshot_insert_statement` still uses
+  `on_conflict_do_nothing(index_elements=["id"])`, now in
+  `episodic/cost/storage/pricing_snapshot_store.py`. The id remains the
+  identity, so `ensure` cannot tell a reused row from a silently different one;
+  the milestone CodeRabbit review raised this as its only major finding.
+  Impact: EP-M2 deliberately leaves it for content addressing (EP-M3), which
+  makes the content hash the identity; the migration and the collision tests
+  inherit the responsibility.
 - Observation: shipped rate cards round real prices. Evidence:
   `config/pricing-snapshots/openai-2026-05.yaml` sets `cached_input_tokens: 8`
   where the provider price is 7.5 cents per million tokens. Impact: exact
@@ -260,8 +273,10 @@ Success is observable as follows:
 - Observation: `episodic/cost/ports.py` and `episodic/cost/storage/adapters.py`
   are both exactly 400 lines. Impact: extraction precedes every addition.
   Update (2026-11-10): `ports.py` is 380 lines after EP-M1 extracted
-  `episodic/cost/primitives.py`; `adapters.py` is still 400, so EP-M2's
-  extraction of the snapshot store is a precondition, not a nicety.
+  `episodic/cost/primitives.py`; `adapters.py` was still 400, so EP-M2's
+  extraction of the snapshot store was a precondition, not a nicety. After
+  EP-M2, `adapters.py` is 243 lines and the snapshot store holds the
+  instrumentation that moved with it.
 - Observation: there are three ADR-015 files and the cost ADR-015 is missing
   from `docs/contents.md`; the `2.4.4` ExecPlan is also unlisted. Impact: the
   new ADR is numbered 024 and EP-M5 fixes the index entries.
@@ -304,6 +319,21 @@ Success is observable as follows:
 
 ## Decision log
 
+- Decision (2026-11-10, EP-M2): snapshot persistence and reads get their own
+  port and adapter instead of staying on the ledger and catalogue ports.
+  Rationale: the ledger is an append-only cost journal and the catalogue is a
+  file-backed resolver; neither owns the stored snapshot lifecycle, and the
+  ledger store was already at the 400-line limit. The instrumentation moved
+  with the code, so the ledger store no longer accepts metrics, tracer, or
+  clock parameters it would not use. Trade-off: one more unit-of-work member
+  and one more Hecate `domain_ports` entry.
+- Decision (2026-11-10, EP-M2): `ensure` keeps the identifier as the conflict
+  target and does not compare stored content before returning `REUSED`.
+  Rationale: EP-M3 makes the content hash the identity, at which point a
+  same-identifier/different-content row cannot exist; adding a comparison now
+  would be deleted by the next milestone. The milestone CodeRabbit review
+  raised this as its only major finding, and it is recorded in
+  `Surprises & discoveries` as EP-M3's responsibility.
 - Decision: content-addressed identity replaces authored revision numbers.
   The version identity of a snapshot is its canonical content hash; the
   database assigns a UUIDv7 surrogate `id` the first time it stores a hash and
@@ -434,6 +464,50 @@ Success is observable as follows:
   persisted-format change. Gates: `check-fmt`, `typecheck`, `lint`, `test`,
   `check-migrations`, `markdownlint`, `nixie` all green.
 
+### EP-M2 (2026-11-10)
+
+- `PricingSnapshotRepository` now owns persistence and reads:
+  `ensure(snapshot)` returns `EnsuredPricingSnapshot` (`PERSISTED` or
+  `REUSED`), and `get(id)` rebuilds the snapshot from the stored row or raises
+  `PricingSnapshotNotFoundError` (a `LookupError`). `ensure_snapshot` left
+  `CostLedgerPort` and `get_snapshot` left `PricingCataloguePort`; the file
+  catalogue now only resolves the latest card.
+- `SqlAlchemyPricingSnapshotStore`
+  (`episodic/cost/storage/pricing_snapshot_store.py`) keeps the id-conflict
+  no-op insert and named content-hash collision check, and carries the snapshot
+  telemetry that used to live in the ledger store: `pricing_snapshot.ensure` /
+  `pricing_snapshot.get` counters, matching duration metrics, spans
+  `pricing_snapshot.ensure_snapshot` and `pricing_snapshot.get_snapshot`, and
+  the `input_invalid`, `collision`, `integrity`, and `not_found` failure
+  categories.
+- `CostRecorder` takes `snapshots` and prices pinned calls with
+  `await self.snapshots.get(pinned_snapshot_id)`. Integration tests edit and
+  delete the rate-card file after pinning and still record the pinned cost.
+- The unit of work exposes `pricing_snapshots` next to `cost_ledger`, built in
+  `_open_instrumented_stores` with the runtime metrics, tracer, and monotonic
+  clock. The ledger store no longer takes unused instrumentation parameters.
+- `PricingSnapshotError` maps to `cost.pricing_snapshot`, and
+  `PricingSnapshotCollisionError` is mapped explicitly because it still
+  subclasses `CostAccountingError` rather than `PricingSnapshotError`.
+- Deviations recorded: the snapshot store tests moved out of
+  `tests/test_cost_storage_ledger.py` into
+  `tests/test_cost_storage_pricing_snapshots.py`; the shared
+  `launch_and_load_run` helper moved to
+  `tests/generation_run_launcher_support.py` to keep
+  `tests/test_generation_run_launcher.py` inside the 400-line limit; the
+  pricing launcher test lives in
+  `tests/test_generation_run_launcher_pricing.py`; the currency validator
+  became public as `episodic.cost.primitives.validate_currency_code` so
+  `ports.py` stops importing a private name across modules.
+- Conformance check: the persisted schema is unchanged, the only public
+  interface change is the split snapshot port, and pinned costs are now
+  reproducible from the database. Gates at `9eb67a65`: `check-fmt`, `typecheck`,
+  `lint`, `test` (2127 passed, 1 skipped), `check-migrations`, `markdownlint`,
+  `nixie` all green. The milestone CodeRabbit CLI review found the delegated
+  id-reuse comparison (EP-M3), the launcher collision category, and
+  documentation corrections; all in-scope findings were actioned before the
+  final gate run.
+
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
 
@@ -447,13 +521,16 @@ edge. Hecate checks the import boundaries during `make lint`.
 
 Cost accounting lives in `episodic/cost/`:
 
-- `episodic/cost/ports.py` (400 lines) defines identifiers
+- `episodic/cost/ports.py` (380 lines) defines identifiers
   (`PricingSnapshotId`, `CurrencyCode`, `BillingPeriodKey`, …), enums
   (`LedgerScope`, `PricingModel`, `PricingSourceKind`, `UsageSource`), errors
   (`CostAccountingError`, `PricingSnapshotCollisionError`, …), value objects
   (`PricingSnapshot`, `PricedCall`, `ProviderCallLedgerEntry`,
   `TaskRollupLedgerEntry`, `RunPricingKey`), and the ports `CostLedgerPort`,
   `PricingCataloguePort`, and `MeteringPort`.
+- `episodic/cost/pricing_snapshot_ports.py` defines
+  `PricingSnapshotRepository`, `EnsuredPricingSnapshot`,
+  `SnapshotEnsureOutcome`, and the `PricingSnapshotError` hierarchy.
 - `episodic/cost/engine.py` defines `PricingRequest` and `PricingEngine`, a
   pure function that prices usage metrics against a snapshot.
 - `episodic/cost/recorder.py` defines `CostRecorder` (application layer),
@@ -463,12 +540,14 @@ Cost accounting lives in `episodic/cost/`:
   `PRICING_SNAPSHOT_DIRECTORY` (default `config/pricing-snapshots`).
 - `episodic/cost/storage/models.py` defines the SQLAlchemy records
   (`PricingSnapshotRecord`, `CostLedgerEntryRecord`, `RunPricingPinRecord`,
-  metering records); `episodic/cost/storage/adapters.py` (400 lines) defines
-  `SqlAlchemyCostLedgerStore`, including `ensure_snapshot`.
+  metering records); `episodic/cost/storage/adapters.py` (243 lines) defines
+  `SqlAlchemyCostLedgerStore`, and
+  `episodic/cost/storage/pricing_snapshot_store.py` defines
+  `SqlAlchemyPricingSnapshotStore` with `ensure` and `get`.
 - The unit of work (`episodic/canonical/storage/uow.py`, protocol in
-  `episodic/canonical/unit_of_work_protocols.py`) exposes `uow.cost_ledger`.
-  `episodic/api/runtime.py:163-190` wires `FilePricingCatalogue` and
-  `CostRecorder`.
+  `episodic/canonical/unit_of_work_protocols.py`) exposes `uow.cost_ledger` and
+  `uow.pricing_snapshots`. `episodic/api/runtime.py` wires
+  `FilePricingCatalogue` and `CostRecorder`.
 - Callers: `episodic/orchestration/_planning_orchestrator.py`,
   `episodic/orchestration/langgraph_costs.py`,
   `episodic/generation/launcher_persistence.py`, and

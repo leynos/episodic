@@ -28,7 +28,7 @@ from episodic.cost.primitives import (
     MeteringCounterKey,
     PricingSnapshotId,
     PricingSourceKind,
-    _validate_currency_code,
+    validate_currency_code,
 )
 
 if typ.TYPE_CHECKING:
@@ -109,7 +109,7 @@ class PricingSnapshot:
 
     def __post_init__(self) -> None:
         """Validate value-object invariants."""
-        _validate_currency_code(self.currency)
+        validate_currency_code(self.currency)
         _validate_usage_metrics(self.rates_minor_per_metric)
         if self.effective_from is None:
             return
@@ -131,7 +131,7 @@ class PricedCall:
 
     def __post_init__(self) -> None:
         """Validate cost invariants."""
-        _validate_currency_code(self.currency)
+        validate_currency_code(self.currency)
         if self.computed_cost_minor < 0:
             msg = "computed_cost_minor must be non-negative."
             raise ValueError(msg)
@@ -162,7 +162,7 @@ class ProviderCallLedgerEntry:
 
     def __post_init__(self) -> None:
         """Validate ledger entry invariants."""
-        _validate_currency_code(self.currency)
+        validate_currency_code(self.currency)
         _validate_usage_metrics(self.usage)
         if self.computed_cost_minor < 0:
             msg = "computed_cost_minor must be non-negative."
@@ -186,7 +186,7 @@ class TaskRollupLedgerEntry:
 
     def __post_init__(self) -> None:
         """Validate roll-up entry invariants."""
-        _validate_currency_code(self.currency)
+        validate_currency_code(self.currency)
         if self.computed_cost_minor < 0:
             msg = "computed_cost_minor must be non-negative."
             raise ValueError(msg)
