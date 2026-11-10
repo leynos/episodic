@@ -10,9 +10,9 @@ import falcon
 
 from episodic.api.errors import http_error, validation_error
 from episodic.api.helpers import parse_uuid
-from episodic.canonical.idempotency_service import canonical_json_bytes
 from episodic.canonical.ingestion_sources import AttachmentKind
 from episodic.canonical.source_intake_service import AttachSourceRequest
+from episodic.json_canonicalization import canonical_json_bytes
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc

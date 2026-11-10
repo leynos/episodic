@@ -701,7 +701,7 @@ reason = "Clock, no-op, and recording adapters satisfy runtime-selected protocol
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
-    "episodic.cost.ports._validate_currency_code",
+    "episodic.cost.primitives._validate_currency_code",
     "episodic.cost.ports._validate_usage_metrics",
     "episodic.generation.field_validation.ensure_non_empty_fields",
     "episodic.generation.show_notes_models._ensure_optional_iso8601_duration",
@@ -1356,6 +1356,8 @@ prefixes = [
     "episodic.canonical.uploads",
     "episodic.cost.ports",
     "episodic.cost.engine",
+    "episodic.cost.primitives",
+    "episodic.json_canonicalization",
     "episodic.llm.ports",
     "episodic.metrics_ports",
     "episodic.observability",

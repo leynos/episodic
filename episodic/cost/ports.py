@@ -19,10 +19,20 @@ import datetime as dt
 import enum
 import typing as typ
 
+from episodic.cost.primitives import (
+    BillingPeriodKey,
+    CostAccountingError,
+    CostLedgerEntryId,
+    CurrencyCode,
+    IdempotencyKey,
+    MeteringCounterKey,
+    PricingSnapshotId,
+    PricingSourceKind,
+    _validate_currency_code,
+)
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-_ISO_CURRENCY_CODE_LENGTH = 3
 
 
 class LedgerScope(enum.StrEnum):
@@ -43,31 +53,12 @@ class PricingModel(enum.StrEnum):
     SUBSCRIPTION_ALLOCATED = "subscription_allocated"
 
 
-class PricingSourceKind(enum.StrEnum):
-    """Source document type for a pricing snapshot."""
-
-    PROVIDER_RATE_CARD = "provider_rate_card"
-    SLA4OAI_PLAN = "sla4oai_plan"
-
-
 class UsageSource(enum.StrEnum):
     """How usage metrics were obtained."""
 
     PROVIDER = "provider"
     ESTIMATED = "estimated"
     ROLLUP = "rollup"
-
-
-PricingSnapshotId = typ.NewType("PricingSnapshotId", str)
-CostLedgerEntryId = typ.NewType("CostLedgerEntryId", str)
-IdempotencyKey = typ.NewType("IdempotencyKey", str)
-CurrencyCode = typ.NewType("CurrencyCode", str)
-BillingPeriodKey = typ.NewType("BillingPeriodKey", str)
-MeteringCounterKey = typ.NewType("MeteringCounterKey", str)
-
-
-class CostAccountingError(Exception):
-    """Base exception for cost accounting failures."""
 
 
 class UnknownPricedMetricError(CostAccountingError):
@@ -84,17 +75,6 @@ class BillingPeriodMismatchError(CostAccountingError):
 
 class PricingSnapshotCollisionError(CostAccountingError):
     """Raised when one content hash maps to two snapshot identifiers."""
-
-
-def _validate_currency_code(currency: CurrencyCode) -> None:
-    """Validate an ISO 4217-style currency code."""
-    currency_value = str(currency)
-    if len(currency_value) != _ISO_CURRENCY_CODE_LENGTH or not currency_value.isalpha():
-        msg = "currency must be a three-letter ISO 4217 code."
-        raise ValueError(msg)
-    if currency_value != currency_value.upper():
-        msg = "currency must use uppercase ISO 4217 letters."
-        raise ValueError(msg)
 
 
 def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:

@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: APPROVED (2026-11-10)
 
 ## Purpose / big picture
 
@@ -220,8 +220,10 @@ Success is observable as follows:
   from the worktree, gated, and committed.
 - [x] (2026-10-24) Final read-only consistency review of the written plan
   against the code; corrections applied (see revision note).
-- [ ] Plan approved by the user.
-- [ ] EP-M1: shared leaf modules and ADR-024 draft.
+- [x] (2026-11-10) Plan approved by the user; implementation started.
+- [x] (2026-11-10) EP-M1: shared leaf modules and ADR-024 draft. Gates green:
+  `make check-fmt`, `make typecheck`, `make lint`, `make test` (1725 passed, 1
+  skipped), `make check-migrations`, `make markdownlint`, `make nixie`.
 - [ ] EP-M2: persisted read path and `PricingSnapshotRepository`.
 - [ ] EP-M3: schema version 1 snapshots, content addressing, and migration
   `000014`.
@@ -389,8 +391,24 @@ Success is observable as follows:
 
 ## Outcomes & retrospective
 
-Not started. Record outcomes at each milestone boundary and at completion,
-including the conformance check results and any upstream document changes.
+### EP-M1 (2026-11-10)
+
+- `canonical_json_bytes` moved to `episodic/json_canonicalization.py` and both
+  source-intake call sites now import it there. `episodic.cost.primitives`
+  holds the shared identifiers, `CostAccountingError`, `PricingSourceKind`, and
+  the currency validator; `episodic.cost.ports` re-exports them through its
+  imports.
+- `pyproject.toml` adds both leaf modules to the Hecate `domain_ports` group
+  and repoints the Skylos entry at `episodic.cost.primitives`.
+- ADR-024 is drafted with status `Proposed`, the normative schema version 1
+  canonical form, and migration and risk notes. Test vectors are filled in
+  EP-M3.
+- Conformance check: no behaviour change, no public interface change, no
+  persisted-format change. Gates: `check-fmt`, `typecheck`, `lint`, `test`,
+  `check-migrations`, `markdownlint`, `nixie` all green.
+
+Record outcomes at each milestone boundary and at completion, including the
+conformance check results and any upstream document changes.
 
 ## Context and orientation
 

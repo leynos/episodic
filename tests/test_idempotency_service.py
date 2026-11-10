@@ -2,10 +2,8 @@
 
 import hashlib
 
-from episodic.canonical.idempotency_service import (
-    canonical_json_bytes,
-    multipart_request_hash,
-)
+from episodic.canonical.idempotency_service import multipart_request_hash
+from episodic.json_canonicalization import canonical_json_bytes
 
 
 def test_canonical_json_bytes_are_sorted_and_compact() -> None:
