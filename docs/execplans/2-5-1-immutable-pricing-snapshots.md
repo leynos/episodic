@@ -234,7 +234,12 @@ Success is observable as follows:
   docstring coverage 100%), `make test` (2127 passed, 1 skipped),
   `make check-migrations`, `make markdownlint`, `make nixie`. Milestone
   CodeRabbit CLI review completed against `92663d12..9eb67a65`; valid findings
-  actioned and the id-reuse major finding deferred to EP-M3 by design.
+  actioned and the id-reuse major finding deferred to EP-M3 by design. Final
+  candidate `b7a873f2` re-gated green (2128 passed, 1 skipped) and re-reviewed:
+  35/35 changed files, 0 findings, outcome `completed_with_warnings`
+  ("unverified findings"), so the zero is recorded as no verified findings
+  rather than a guaranteed clean diff. The CLI's included-review allowance was
+  exhausted during that run; no retry was attempted.
 - [ ] EP-M3: schema version 1 snapshots, content addressing, and migration
   `20261110_000017`.
 - [ ] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
@@ -506,7 +511,10 @@ Success is observable as follows:
   `nixie` all green. The milestone CodeRabbit CLI review found the delegated
   id-reuse comparison (EP-M3), the launcher collision category, and
   documentation corrections; all in-scope findings were actioned before the
-  final gate run.
+  final gate run. The final candidate `b7a873f2` re-gated green and the fresh
+  CLI review covered 35/35 files with 0 findings, but reported
+  `completed_with_warnings`; the milestone is therefore recorded as reviewed
+  with a verification caveat, not as a guaranteed clean diff.
 
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
