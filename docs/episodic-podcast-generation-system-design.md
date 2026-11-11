@@ -2117,9 +2117,9 @@ envelope.
 
 The middleware records adapter failures in
 `authorization_adapter_failure_total` with one bounded `category` label. Known
-categories cover attribute, key, operating-system, runtime, type, and value
-errors; other exceptions use `unknown_error`. Recording is best-effort, so a
-metrics-sink failure does not mask the `503` response.
+categories cover assertion, attribute, index, key, operating-system, runtime,
+type, and value errors; other exceptions use `unknown_error`. Recording is
+best-effort, so a metrics-sink failure does not mask the `503` response.
 
 The warning log includes the fixed category, an allow-listed method, and an
 allow-listed resource root. It omits exception text, traceback details, raw

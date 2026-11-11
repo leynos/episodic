@@ -131,6 +131,8 @@ def test_authorization_decision_serializes_to_canonical_envelope(
     "exception_type",
     [
         AttributeError,
+        AssertionError,
+        IndexError,
         KeyError,
         LookupError,
         OSError,
@@ -140,6 +142,8 @@ def test_authorization_decision_serializes_to_canonical_envelope(
     ],
     ids=[
         "attribute-error",
+        "assertion-error",
+        "index-error",
         "key-error",
         "lookup-error",
         "os-error",

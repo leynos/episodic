@@ -15,7 +15,9 @@ logger = get_logger(__name__)
 _AUTHORIZATION_ADAPTER_FAILURE_TOTAL = "authorization_adapter_failure_total"
 # Exceptions outside this table intentionally use the fixed `unknown_error` label.
 _AUTHORIZATION_FAILURE_CATEGORIES = (
+    (AssertionError, "assertion_error"),
     (AttributeError, "attribute_error"),
+    (IndexError, "index_error"),
     (KeyError, "key_error"),
     (OSError, "os_error"),
     (RuntimeError, "runtime_error"),

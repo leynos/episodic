@@ -53,7 +53,11 @@ episode, the evaluation, or its launcher run is missing or belongs to someone
 else. A row written by a newer release returns
 `422 qa_artefact_schema_unsupported` instead of being misread.
 
-## Authorization adapter failures
+## Authorization logging and adapter failures
+
+Authorization denials now emit a `WARNING` record for each `401` and `403`
+response through the central logging port. The record uses bounded decision,
+method, and resource labels; it excludes credentials and raw request paths.
 
 If the authorization adapter fails while handling a `/v1` request, the API
 returns `503 service_unavailable` in the standard error envelope. The service
