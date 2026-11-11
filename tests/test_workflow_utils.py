@@ -14,6 +14,8 @@ import pytest
 from tests.utils import podman_socket_path
 
 ACT_RUNNER_IMAGE = "catthehacker/ubuntu:act-latest"
+# The cold runner-image pull and container cleanup share this process timeout.
+ACT_SUBPROCESS_TIMEOUT_SECONDS = 120
 _UNSUPPORTED_ARTIFACT_FIELD = 'unknown field "mime_type"'
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -222,7 +224,7 @@ def _run_act_subprocess(cmd: list[str], env: dict[str, str]) -> tuple[int, str]:
             capture_output=True,
             env=env,
             check=False,
-            timeout=60,
+            timeout=ACT_SUBPROCESS_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as exc:
         msg = (
