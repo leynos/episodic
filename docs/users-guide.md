@@ -465,7 +465,8 @@ The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
 `403 Forbidden`, respectively. The service records each decision through the
 application logging port at `WARNING`. Each record contains the fixed decision
 label, an allow-listed HTTP method, and an allow-listed resource root. Invalid
-adapter decisions use `unknown`; other method tokens use `<other>`. Dynamic and
+adapter decisions use `unknown`; other method tokens use `<other>`. An
+unrecognized resource root uses the fixed `/v1/<unknown>` label. Dynamic and
 unrecognized path segments are omitted because URLs can carry credentials.
 Records exclude the `Authorization` header and bearer token. Adapter-failure
 warnings use a fixed category and omit exception details.
