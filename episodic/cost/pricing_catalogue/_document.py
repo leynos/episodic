@@ -53,6 +53,7 @@ _REQUIRED_KEYS = frozenset({
     "retrieved_at",
 })
 _OPTIONAL_KEYS = frozenset({"source_metadata", "effective_from"})
+_RATE_KEYS = frozenset({"amount_minor", "per_units", "unit"})
 _TIMESTAMP_ERROR = "pricing snapshot timestamps must include timezone information."
 # A decimal string can name an exponent far larger than any price: ``1e999999999``
 # would make ``as_integer_ratio`` build a billion-digit integer. No representable
@@ -205,6 +206,10 @@ def _parse_rate(
 ) -> MeteredRate:
     """Parse one metric rate into an exact lowest-terms fraction."""
     rate = _require_mapping(value, path=path, field=f"rates.{metric}")
+    unknown = set(rate) - _RATE_KEYS
+    if unknown:
+        joined = ", ".join(sorted(unknown))
+        _fail(path, f"unknown fields in rate {metric!r}: {joined}.")
     amount, amount_denominator = _amount_fraction(
         rate.get("amount_minor"),
         path,

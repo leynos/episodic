@@ -74,7 +74,14 @@ def test_engine_truncates_each_metric_independently() -> None:
     ), "each metric must truncate on its own denominator"
 
 
-def test_engine_prices_non_token_units() -> None:
+@pytest.mark.parametrize(
+    ("metric", "unit"),
+    [
+        ("input_characters", UsageUnit.CHARACTER),
+        ("output_audio_milliseconds", UsageUnit.MILLISECOND),
+    ],
+)
+def test_engine_prices_non_token_units(metric: str, unit: UsageUnit) -> None:
     """Rates carry their unit, so characters and milliseconds price alike."""
     snapshot = PricingSnapshot(
         service_kind=PricedService.TTS,
@@ -83,12 +90,12 @@ def test_engine_prices_non_token_units() -> None:
         operation="synthesize",
         source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
         currency=CurrencyCode("USD"),
-        rates={"characters": MeteredRate.reduced(5, 60_000, UsageUnit.MILLISECOND)},
+        rates={metric: MeteredRate.reduced(5, 60_000, unit)},
         retrieved_at=dt.datetime(2026, 5, 1, tzinfo=dt.UTC),
     )
     priced = PricingEngine().price(
         snapshot,
-        PricingRequest(usage={"characters": 60_000}, operation="synthesize"),
+        PricingRequest(usage={metric: 60_000}, operation="synthesize"),
     )
 
     assert priced.computed_cost_minor == 5, (

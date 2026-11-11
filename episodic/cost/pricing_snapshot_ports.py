@@ -55,7 +55,12 @@ class PricingSnapshotNotFoundError(PricingSnapshotError, LookupError):
 
 
 class PricingSnapshotIntegrityError(PricingSnapshotError):
-    """Raised when a stored snapshot no longer matches its content hash."""
+    """Raised when stored pricing content cannot be trusted.
+
+    Either the stored row no longer hashes to its recorded content hash, or a
+    run pin names a snapshot that prices a different subject than the call
+    being recorded.
+    """
 
 
 @typ.runtime_checkable

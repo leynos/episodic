@@ -100,7 +100,13 @@ async def _stored_snapshot_id(
 async def test_concurrent_ensure_persists_exactly_one_snapshot(
     session_factory: SessionFactory,
 ) -> None:
-    """Two sessions ensuring one snapshot leave exactly one immutable row."""
+    """Two sessions ensuring one snapshot leave exactly one immutable row.
+
+    The py-pglite fixture serves one backend and blocks a second session
+    rather than racing it, so this exercises the serialized path: the second
+    ensure sees the committed row and reuses it. Genuine writer concurrency
+    needs a real PostgreSQL tier, which this repository does not yet provide.
+    """
     snapshot = _snapshot("concurrency-test")
     start = asyncio.Event()
 

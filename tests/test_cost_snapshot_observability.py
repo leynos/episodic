@@ -80,7 +80,11 @@ class _SteppingClock:
 
 def _assert_bounded(metrics: _RecordingMetrics, snapshot_id: str) -> None:
     """Assert no unbounded or sensitive values reached the metric labels."""
-    for name, labels in metrics.counters:
+    labelled = [
+        *metrics.counters,
+        *((name, labels) for name, _, labels in metrics.latencies),
+    ]
+    for name, labels in labelled:
         assert name.startswith("pricing_snapshot."), f"unexpected metric {name!r}"
         assert set(labels) <= {"operation", "outcome", "failure_category"}, (
             f"labels must stay bounded; got {labels!r}"

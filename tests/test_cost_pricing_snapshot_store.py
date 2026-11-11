@@ -128,6 +128,42 @@ async def test_get_rejects_a_tampered_row(session_factory: SessionFactory) -> No
 
 
 @pytest.mark.asyncio
+async def test_ensure_verifies_a_row_before_reusing_it(
+    session_factory: SessionFactory,
+) -> None:
+    """A tampered row is refused rather than handed back as reusable."""
+    original = v1_pricing_snapshot()
+    async with session_factory() as session:
+        ensured = await SqlAlchemyPricingSnapshotStore(session).ensure(original)
+        await session.commit()
+
+    async with session_factory() as session:
+        await session.execute(
+            sa
+            .update(PricingSnapshotRecord)
+            .where(
+                PricingSnapshotRecord.id == uuid.UUID(str(ensured.pricing_snapshot_id))
+            )
+            .values(
+                rates={
+                    "input_tokens": {
+                        "amount_minor": 99,
+                        "per_units": 1,
+                        "unit": "token",
+                    }
+                }
+            )
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        snapshots = SqlAlchemyPricingSnapshotStore(session)
+
+        with pytest.raises(PricingSnapshotIntegrityError, match="content hash"):
+            await snapshots.ensure(original)
+
+
+@pytest.mark.asyncio
 async def test_ensure_satisfies_a_run_pricing_pin(
     session_factory: SessionFactory,
 ) -> None:

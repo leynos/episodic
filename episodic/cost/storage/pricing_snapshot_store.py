@@ -267,19 +267,26 @@ class SqlAlchemyPricingSnapshotStore:
                 pricing_snapshot_id=PricingSnapshotId(str(inserted_id)),
                 outcome=SnapshotEnsureOutcome.PERSISTED,
             )
-        stored_id = await self._session.scalar(
-            sa.select(PricingSnapshotRecord.id).where(
-                PricingSnapshotRecord.content_hash == snapshot.content_hash
+        stored = (
+            await self._session.execute(
+                sa.select(PricingSnapshotRecord).where(
+                    PricingSnapshotRecord.content_hash == snapshot.content_hash
+                )
             )
-        )
-        if stored_id is None:
+        ).scalar_one_or_none()
+        if stored is None:
             msg = (
                 "pricing snapshot insert conflicted without an existing "
                 f"content hash {snapshot.content_hash!r}"
             )
             raise PricingSnapshotIntegrityError(msg)
+        # Reusing an identifier hands it to a ledger row that will be read back
+        # later, so the row must still hash to the content it claims. A row
+        # edited without updating its hash would otherwise be pinned and only
+        # fail on a later read, after the cost was already recorded.
+        self._verified_snapshot(stored)
         return EnsuredPricingSnapshot(
-            pricing_snapshot_id=PricingSnapshotId(str(stored_id)),
+            pricing_snapshot_id=PricingSnapshotId(str(stored.id)),
             outcome=SnapshotEnsureOutcome.REUSED,
         )
 

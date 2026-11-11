@@ -31,14 +31,20 @@ Examples
 
 import dataclasses as dc
 import datetime as dt
-import enum
-import hashlib
-import math
 import re
 import types
 import typing as typ
 
 from episodic.cost.pricing_snapshot_hash import pricing_snapshot_content_hash
+from episodic.cost.pricing_snapshot_values import (
+    MeteredRate,
+    PricedService,
+    PricingSubject,
+    PricingSubjectFields,
+    SourceDocument,
+    UsageUnit,
+    pricing_subject_of,
+)
 from episodic.cost.primitives import (
     CurrencyCode,
     PricingSourceKind,
@@ -48,188 +54,31 @@ from episodic.cost.primitives import (
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-_MAX_JSON_INT = 2**53 - 1
-_MAX_SOURCE_DOCUMENT_BYTES = 262_144
+__all__ = [
+    "MeteredRate",
+    "PricedService",
+    "PricingSnapshot",
+    "PricingSubject",
+    "PricingSubjectFields",
+    "SourceDocument",
+    "UsageUnit",
+    "pricing_subject_of",
+]
+
 _IDENTIFIER_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
-
-
-class PricedService(enum.StrEnum):
-    """Kind of service a snapshot prices."""
-
-    LLM = "llm"
-    TTS = "tts"
-    HELPER_SERVICE = "helper_service"
-
-
-class UsageUnit(enum.StrEnum):
-    """Unit each metered rate is expressed in."""
-
-    TOKEN = "token"  # ruff: ignore[hardcoded-password-string]  # A usage unit, not a credential.
-    CHARACTER = "character"
-    MILLISECOND = "millisecond"
-    REQUEST = "request"
-
-
-def _is_json_int(value: object) -> bool:
-    """Return whether a value is a non-boolean integer safe for canonical JSON."""
-    return (
-        isinstance(value, int)
-        and not isinstance(value, bool)
-        and 0 <= value <= _MAX_JSON_INT
-    )
-
-
-@dc.dataclass(frozen=True, slots=True)
-class MeteredRate:
-    """Exact price of ``amount_minor`` minor units per ``per_units`` units."""
-
-    amount_minor: int
-    per_units: int
-    unit: UsageUnit
-
-    def __post_init__(self) -> None:
-        """Reject out-of-range fractions and rates not in lowest terms."""
-        if not _is_json_int(self.amount_minor):
-            msg = f"amount_minor must be an integer in [0, {_MAX_JSON_INT}]."
-            raise ValueError(msg)
-        if not _is_json_int(self.per_units) or self.per_units == 0:
-            msg = f"per_units must be an integer in [1, {_MAX_JSON_INT}]."
-            raise ValueError(msg)
-        if not isinstance(self.unit, UsageUnit):
-            msg = f"unit must be a UsageUnit, not {type(self.unit).__name__}."
-            raise TypeError(msg)
-        if math.gcd(self.amount_minor, self.per_units) != 1:
-            msg = (
-                "rate must be in lowest terms: "
-                f"{self.amount_minor}/{self.per_units}; "
-                "use MeteredRate.reduced()."
-            )
-            raise ValueError(msg)
-
-    @classmethod
-    def reduced(
-        cls,
-        amount_minor: int,
-        per_units: int,
-        unit: UsageUnit,
-    ) -> MeteredRate:
-        """Build a rate normalized to lowest terms.
-
-        Parameters
-        ----------
-        amount_minor : int
-            Minor-unit amount; zero normalizes to ``0/1``.
-        per_units : int
-            Number of units the amount covers.
-        unit : UsageUnit
-            Unit the rate is expressed in.
-
-        Returns
-        -------
-        MeteredRate
-            Equivalent rate with the greatest common divisor removed.
-
-        Raises
-        ------
-        ValueError
-            If either integer is out of range or ``per_units`` is zero.
-        """
-        if not _is_json_int(amount_minor):
-            msg = f"amount_minor must be an integer in [0, {_MAX_JSON_INT}]."
-            raise ValueError(msg)
-        if not _is_json_int(per_units) or per_units == 0:
-            msg = f"per_units must be an integer in [1, {_MAX_JSON_INT}]."
-            raise ValueError(msg)
-        if amount_minor == 0:
-            return cls(0, 1, unit)
-        divisor = math.gcd(amount_minor, per_units)
-        return cls(amount_minor // divisor, per_units // divisor, unit)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class SourceDocument:
-    """Verbatim source document carried beside a snapshot."""
-
-    media_type: str
-    content: str
-
-    def __post_init__(self) -> None:
-        """Reject blank media types and oversized content."""
-        if not self.media_type.strip():
-            msg = "source document media_type must not be blank."
-            raise ValueError(msg)
-        if len(self.content.encode("utf-8")) > _MAX_SOURCE_DOCUMENT_BYTES:
-            msg = (
-                "source document content must be at most "
-                f"{_MAX_SOURCE_DOCUMENT_BYTES} UTF-8 bytes."
-            )
-            raise ValueError(msg)
-
-    @property
-    def sha256(self) -> str:
-        """The ``sha256:<hex>`` digest of the UTF-8 content."""
-        digest = hashlib.sha256(self.content.encode("utf-8")).hexdigest()
-        return f"sha256:{digest}"
-
-
-@dc.dataclass(frozen=True, slots=True)
-class PricingSubject:
-    """What a snapshot prices: service kind, provider, model, and operation."""
-
-    service_kind: PricedService
-    provider_name: str
-    model: str
-    operation: str
-
-
-class PricingSubjectFields(typ.Protocol):
-    """The four fields every priced subject is built from.
-
-    The members are read-only properties so a frozen snapshot and a mutable
-    record both satisfy the protocol; a writable attribute would exclude the
-    frozen value objects this protocol exists to describe.
-    """
-
-    @property
-    def service_kind(self) -> PricedService:
-        """Kind of service the subject prices."""
-        ...
-
-    @property
-    def provider_name(self) -> str:
-        """Provider that publishes the rate."""
-        ...
-
-    @property
-    def model(self) -> str:
-        """Model or voice the rate applies to."""
-        ...
-
-    @property
-    def operation(self) -> str:
-        """Provider operation the rate prices."""
-        ...
-
-
-def pricing_subject_of(source: PricingSubjectFields) -> PricingSubject:
-    """Build the priced subject described by a snapshot or pinned operation.
-
-    Parameters
-    ----------
-    source : PricingSubjectFields
-        Value carrying a service kind, provider, model, and operation.
-
-    Returns
-    -------
-    PricingSubject
-        Subject assembled from those four fields.
-    """
-    return PricingSubject(
-        service_kind=source.service_kind,
-        provider_name=source.provider_name,
-        model=source.model,
-        operation=source.operation,
-    )
+# Metrics the system itself reports count tokens, so a card that denominates
+# one of them in characters or milliseconds would price a token count with a
+# rate for a different quantity. The list mirrors the legacy conversion table
+# in migration 20261110_000017; a new token metric must be added in both places.
+_TOKEN_METRICS = frozenset({
+    "input_tokens",
+    "output_tokens",
+    "cached_input_tokens",
+    "cache_write_tokens",
+    "reasoning_tokens",
+    "audio_input_tokens",
+    "audio_output_tokens",
+})
 
 
 def _require_identifier(value: str, *, field: str) -> None:
@@ -273,6 +122,12 @@ def _validated_rates(
         if not isinstance(rate, MeteredRate):
             msg = f"rate for {metric!r} must be a MeteredRate."
             raise TypeError(msg)
+        if metric in _TOKEN_METRICS and rate.unit is not UsageUnit.TOKEN:
+            msg = (
+                f"rate for {metric!r} must be denominated in tokens, "
+                f"not {rate.unit.value!r}."
+            )
+            raise ValueError(msg)
     return frozen
 
 
@@ -291,7 +146,45 @@ def _validated_metadata(
 
 @dc.dataclass(frozen=True, slots=True)
 class PricingSnapshot:
-    """Immutable pricing inputs used to price one provider operation."""
+    """Immutable pricing inputs used to price one provider operation.
+
+    Attributes
+    ----------
+    service_kind : PricedService
+        Kind of service the snapshot prices.
+    provider_name : str
+        Provider the rates belong to; must not be blank.
+    model : str
+        Provider model or voice the rates apply to; must not be blank.
+    operation : str
+        Provider operation the rates price; must not be blank.
+    source_kind : PricingSourceKind
+        Whether the rates came from a provider rate card or an SLA4OAI plan.
+    currency : CurrencyCode
+        Three-letter uppercase ISO 4217 code the rates are denominated in.
+    rates : Mapping[str, MeteredRate]
+        Exact rate per usage metric, frozen on construction.
+    retrieved_at : datetime
+        Timezone-aware instant the rates were retrieved.
+    effective_from : datetime or None
+        Timezone-aware instant the rates take effect, when the source states
+        one.
+    source_document : SourceDocument or None
+        Verbatim source document; required for an SLA4OAI plan.
+    source_metadata : Mapping[str, str]
+        Identifier-keyed provenance strings, frozen on construction.
+    schema_version : int
+        Canonical-form version; only ``1`` is understood.
+    content_hash : str
+        ``sha256:<hex>`` identity derived from the canonical form.
+
+    Notes
+    -----
+    The content hash covers every field above except itself, so two snapshots
+    with equal content are the same version and share one stored row. The
+    billing period is deliberately absent: it belongs to run pins and ledger
+    rows, not to the price.
+    """
 
     service_kind: PricedService
     provider_name: str

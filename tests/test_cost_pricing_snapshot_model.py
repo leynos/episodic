@@ -111,6 +111,16 @@ def test_invalid_metric_names_are_rejected(metric: str) -> None:
         _snapshot(rates={metric: _INPUT_RATE})
 
 
+def test_token_metric_requires_a_token_unit() -> None:
+    """A token metric denominated in another unit would price the wrong quantity."""
+    with pytest.raises(ValueError, match="denominated in tokens"):
+        _snapshot(
+            rates={
+                "input_tokens": MeteredRate.reduced(5, 1_000, UsageUnit.CHARACTER),
+            }
+        )
+
+
 def test_invalid_source_metadata_key_is_rejected() -> None:
     """Source metadata keys are identifiers, not free-form labels."""
     with pytest.raises(ValueError, match="source_metadata key"):

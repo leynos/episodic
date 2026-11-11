@@ -14,6 +14,7 @@ EXPECTED_PRODUCTION_COST_GROUPS = {
     "episodic.cost.pricing_snapshot": "domain_ports",
     "episodic.cost.pricing_snapshot_hash": "domain_ports",
     "episodic.cost.pricing_snapshot_ports": "domain_ports",
+    "episodic.cost.pricing_snapshot_values": "domain_ports",
     "episodic.cost.primitives": "domain_ports",
     "episodic.cost.recorder": "application",
     "episodic.cost.storage": "outbound_adapter",

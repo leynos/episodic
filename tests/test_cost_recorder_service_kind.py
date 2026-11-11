@@ -24,6 +24,7 @@ from episodic.cost.recorder import (
 from tests.fixtures.cost import (
     RecordingLedger,
     RecordingSnapshots,
+    surrogate_snapshot_id,
     v1_pricing_snapshot,
 )
 
@@ -36,9 +37,15 @@ class _RecordingCatalogue:
     subjects: list[PricingSubject] = dc.field(default_factory=list)
 
     async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
-        """Capture the subject and return the configured snapshot."""
+        """Capture the subject and return a snapshot that prices it."""
         self.subjects.append(subject)
-        return self.snapshot
+        return dc.replace(
+            self.snapshot,
+            service_kind=subject.service_kind,
+            provider_name=subject.provider_name,
+            model=subject.model,
+            operation=subject.operation,
+        )
 
 
 def _record(provider_type: str = "llm") -> ProviderCallRecord:
@@ -106,8 +113,9 @@ async def test_unknown_provider_type_is_rejected() -> None:
 async def test_pin_run_pricing_uses_the_operation_service_kind() -> None:
     """Pinned operations name their service kind explicitly."""
     catalogue = _RecordingCatalogue(snapshot=v1_pricing_snapshot())
+    ledger = RecordingLedger()
 
-    await _recorder(catalogue, RecordingLedger()).pin_run_pricing(
+    await _recorder(catalogue, ledger).pin_run_pricing(
         "run-pin",
         (
             CostProviderOperation(
@@ -122,4 +130,14 @@ async def test_pin_run_pricing_uses_the_operation_service_kind() -> None:
 
     assert catalogue.subjects[0].service_kind is PricedService.TTS, (
         "a pinned operation must use its declared service kind"
+    )
+    tts_snapshot = dc.replace(
+        v1_pricing_snapshot(),
+        service_kind=PricedService.TTS,
+        provider_name="tts-vendor",
+        model="voice-v1",
+        operation="synthesize",
+    )
+    assert ledger.calls == [("pin", surrogate_snapshot_id(tts_snapshot))], (
+        "the pin must identify the snapshot that prices the TTS operation"
     )

@@ -132,6 +132,11 @@ def test_loader_rejects_a_non_string_effective_from(
             id="unknown-rate-unit",
         ),
         pytest.param(
+            _card().replace("unit: token", "unit: token, rounding: up"),
+            "unknown fields in rate",
+            id="unknown-rate-field",
+        ),
+        pytest.param(
             _card().replace("amount_minor: 15", 'amount_minor: "1e999999999"'),
             "exponent is out of range",
             id="huge-positive-exponent",

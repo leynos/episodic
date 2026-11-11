@@ -5,7 +5,11 @@ import datetime as dt
 
 import pytest
 
-from episodic.cost import CurrencyCode, PricingSourceKind
+from episodic.cost import (
+    CurrencyCode,
+    PricingSnapshotIntegrityError,
+    PricingSourceKind,
+)
 from episodic.cost.engine import PricingEngine
 from episodic.cost.ports import (
     BillingPeriodKey,
@@ -124,6 +128,25 @@ async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None
     assert snapshots.calls == [("get", surrogate_snapshot_id(pinned_snapshot))], (
         "pinned calls must read the stored snapshot rather than the catalogue"
     )
+
+
+@pytest.mark.asyncio
+async def test_cost_recorder_rejects_a_pin_for_another_subject() -> None:
+    """A pin that prices a different subject must not price this call."""
+    pinned_snapshot = _snapshot(input_token_rate=1_000_000)
+    other_subject = dc.replace(pinned_snapshot, operation="synthesize")
+    ledger = RecordingLedger(pinned_snapshot_id=surrogate_snapshot_id(other_subject))
+    recorder = CostRecorder(
+        ledger=ledger,
+        snapshots=RecordingSnapshots(snapshot=other_subject),
+        pricing_catalogue=_DriftingCatalogue(latest_snapshot=pinned_snapshot),
+        pricing_engine=PricingEngine(),
+    )
+
+    with pytest.raises(PricingSnapshotIntegrityError, match="prices"):
+        await recorder.record_provider_call(_provider_call_record())
+
+    assert ledger.recorded_call is None, "a mismatched pin must not record a cost"
 
 
 @pytest.mark.asyncio

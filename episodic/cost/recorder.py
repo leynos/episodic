@@ -39,6 +39,7 @@ from episodic.cost.pricing_snapshot import (
     PricingSubject,
     pricing_subject_of,
 )
+from episodic.cost.pricing_snapshot_ports import PricingSnapshotIntegrityError
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -234,7 +235,18 @@ class CostRecorder:
         )
         pinned_snapshot_id = await self.ledger.get_run_pricing_pin(key)
         if pinned_snapshot_id is not None:
-            return await self.snapshots.get(pinned_snapshot_id), pinned_snapshot_id
+            pinned = await self.snapshots.get(pinned_snapshot_id)
+            subject = self._record_subject(record)
+            if pinned.subject != subject:
+                # The pin key omits the service kind, so two service kinds that
+                # share every other field would collide. Refuse rather than
+                # price this call with another service's rates.
+                msg = (
+                    f"pinned pricing snapshot {pinned_snapshot_id} prices "
+                    f"{pinned.subject!r}, not {subject!r}."
+                )
+                raise PricingSnapshotIntegrityError(msg)
+            return pinned, pinned_snapshot_id
         snapshot = await self._resolve_pricing_snapshot(self._record_subject(record))
         # Unpinned calls must persist the snapshot before the ledger row
         # references it; pinned calls skip this because the pin's foreign key

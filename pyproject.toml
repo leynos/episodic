@@ -1368,6 +1368,7 @@ prefixes = [
     "episodic.cost.pricing_snapshot",
     "episodic.cost.pricing_snapshot_hash",
     "episodic.cost.pricing_snapshot_ports",
+    "episodic.cost.pricing_snapshot_values",
     "episodic.cost.engine",
     "episodic.cost.primitives",
     "episodic.json_canonicalization",
