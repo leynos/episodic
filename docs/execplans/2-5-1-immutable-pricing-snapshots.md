@@ -342,7 +342,19 @@ Success is observable as follows:
   `record_completion`. Both modules are now under 400 lines and Pylint scores
   10.00/10 on them. The new module also omits
   `from __future__ import annotations`, which the 3.14 baseline rejects outside
-  the `test_*_steps.py` files the Makefile excludes from that check.
+  the `test_*_steps.py` files the Makefile excludes from that check. All seven
+  gates then passed on `426439cb` (`make test` 2215 passed, 1 skipped, 71
+  snapshots); the first `check-migrations` attempt exited 2 on a transient
+  PGlite failure and passed on re-run with no drift. The milestone review
+  covered 72 of 72 changed files with three findings. Two were valid and are
+  fixed: the legacy-card rejection now points to the conversion guidance, with
+  the test asserting it, and the shipped-card test anchors its directory to the
+  repository root. The third — fail startup when the pricing directory is
+  absent — is already satisfied: `_pricing_snapshot_directory` in
+  `episodic/api/runtime_config.py` raises `RuntimeConfigurationError` unless
+  the resolved path is a directory, and `tests/test_runtime_configuration.py`
+  covers it; the catalogue's empty-cache behaviour is reachable only for
+  callers that bypass runtime configuration.
 - [ ] EP-M5: documentation, roadmap, and final gates.
 
 ## Surprises & discoveries

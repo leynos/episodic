@@ -144,7 +144,10 @@ def test_legacy_document_format_is_rejected(tmp_path: pathlib.Path) -> None:
         """,
     )
 
-    with pytest.raises(PricingCatalogueError, match=r"legacy\.yaml"):
+    with pytest.raises(
+        PricingCatalogueError,
+        match=r"legacy\.yaml.*schema version 1.*users-guide",
+    ):
         _catalogue(tmp_path, "2026-06-04T00:00:00Z")
 
 

@@ -13,7 +13,8 @@ from episodic.cost.pricing_snapshot import (
     UsageUnit,
 )
 
-_CARD_DIRECTORY = pathlib.Path("config/pricing-snapshots")
+_REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[1]
+_CARD_DIRECTORY = _REPOSITORY_ROOT / "config" / "pricing-snapshots"
 _CARD = _CARD_DIRECTORY / "openai-2026-05.yaml"
 _NOW = "2026-06-04T00:00:00Z"
 _SUBJECT = PricingSubject(

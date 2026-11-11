@@ -35,6 +35,10 @@ if typ.TYPE_CHECKING:
 
 _LEGACY_KEYS = frozenset({"pricing_snapshot_id", "billing_period_key"})
 _LEGACY_RATE_KEY = "rates_minor_per_metric"
+_CONVERSION_GUIDANCE = (
+    "Convert the card to schema version 1; see ADR-024 and the rate-card "
+    "conversion section of docs/users-guide.md."
+)
 _REQUIRED_KEYS = frozenset({
     "schema_version",
     "service_kind",
@@ -210,7 +214,11 @@ def _reject_legacy_document(
         legacy |= {_LEGACY_RATE_KEY}
     if legacy:
         joined = ", ".join(sorted(legacy))
-        _fail(path, f"legacy document fields are not supported: {joined}.")
+        _fail(
+            path,
+            f"legacy document fields are not supported: {joined}. "
+            f"{_CONVERSION_GUIDANCE}",
+        )
 
 
 def _reject_unknown_keys(data: cabc.Mapping[str, object], path: pathlib.Path) -> None:
