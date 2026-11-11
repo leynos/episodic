@@ -8,10 +8,10 @@ import uuid
 import pytest
 import sqlalchemy as sa
 from alembic.util import CommandError
-from sqlalchemy.dialects import postgresql
 
 from alembic import command
 from episodic.canonical.storage.alembic_helpers import alembic_config
+from tests.fixtures.legacy_pricing_snapshots import LEGACY_REVISION, LEGACY_TABLE
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -21,24 +21,7 @@ if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
 
 
-_LEGACY_REVISION = "20261031_000016"
 _NEW_REVISION = "20261110_000017"
-
-_LEGACY_TABLE = sa.table(
-    "pricing_snapshots",
-    sa.column("id", postgresql.UUID(as_uuid=True)),
-    sa.column("provider_name", sa.Text),
-    sa.column("model", sa.Text),
-    sa.column("operation", sa.Text),
-    sa.column("source_kind", sa.Text),
-    sa.column("currency", sa.String(3)),
-    sa.column("billing_period_key", sa.Text),
-    sa.column("rates_minor_per_metric", postgresql.JSONB),
-    sa.column("source_metadata", postgresql.JSONB),
-    sa.column("content_hash", sa.Text),
-    sa.column("retrieved_at", sa.DateTime(timezone=True)),
-    sa.column("effective_from", sa.DateTime(timezone=True)),
-)
 
 _LEGACY_ROW = {
     "provider_name": "openai",
@@ -72,8 +55,8 @@ async def _seed_legacy_rows(
     rows: cabc.Sequence[dict[str, object]],
 ) -> None:
     """Return the schema to the legacy revision and insert rows."""
-    await connection.run_sync(_migrate, "downgrade", _LEGACY_REVISION)
-    await connection.execute(sa.insert(_LEGACY_TABLE), list(rows))
+    await connection.run_sync(_migrate, "downgrade", LEGACY_REVISION)
+    await connection.execute(sa.insert(LEGACY_TABLE), list(rows))
 
 
 async def _upgrade(connection: AsyncConnection) -> None:
@@ -120,7 +103,7 @@ async def _assert_legacy_schema(connection: AsyncConnection) -> None:
     assert "schema_version" not in columns, (
         "a rejected upgrade must not add the v1 columns"
     )
-    assert await _recorded_revision(connection) == _LEGACY_REVISION, (
+    assert await _recorded_revision(connection) == LEGACY_REVISION, (
         "a rejected upgrade must leave the recorded revision unchanged"
     )
 
@@ -239,7 +222,7 @@ async def test_downgrade_refuses_when_rows_exist(
         await _seed_legacy_rows(connection, [_legacy_row(uuid.UUID(int=51))])
         await _upgrade(connection)
         with pytest.raises(CommandError, match="empty"):
-            await connection.run_sync(_migrate, "downgrade", _LEGACY_REVISION)
+            await connection.run_sync(_migrate, "downgrade", LEGACY_REVISION)
 
 
 def test_offline_upgrade_guards_against_existing_rows() -> None:
@@ -247,7 +230,7 @@ def test_offline_upgrade_guards_against_existing_rows() -> None:
     config = alembic_config("postgresql://offline.example/episodic")
     output = io.StringIO()
     config.output_buffer = output
-    command.upgrade(config, f"{_LEGACY_REVISION}:{_NEW_REVISION}", sql=True)
+    command.upgrade(config, f"{LEGACY_REVISION}:{_NEW_REVISION}", sql=True)
 
     emitted = output.getvalue()
     assert "DO $$" in emitted, "offline upgrade must emit a guard block"
@@ -262,7 +245,7 @@ def test_offline_downgrade_guards_against_existing_rows() -> None:
     config = alembic_config("postgresql://offline.example/episodic")
     output = io.StringIO()
     config.output_buffer = output
-    command.downgrade(config, f"{_NEW_REVISION}:{_LEGACY_REVISION}", sql=True)
+    command.downgrade(config, f"{_NEW_REVISION}:{LEGACY_REVISION}", sql=True)
 
     emitted = output.getvalue()
     assert "DO $$" in emitted, "offline downgrade must emit a guard block"

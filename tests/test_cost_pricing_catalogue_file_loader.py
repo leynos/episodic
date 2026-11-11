@@ -29,6 +29,13 @@ def _write_card(directory: pathlib.Path, body: str, name: str = "openai.yaml") -
     )
 
 
+def _write_bytes(directory: pathlib.Path, body: bytes) -> pathlib.Path:
+    """Write one raw pricing-card fixture and return its path."""
+    path = directory / "broken.yaml"
+    path.write_bytes(body)
+    return path
+
+
 def _card(
     *,
     effective_from: str = '"2026-06-01T00:00:00Z"',
@@ -122,4 +129,24 @@ def test_loader_rejects_a_missing_required_field(tmp_path: pathlib.Path) -> None
     _write_card(tmp_path, body)
 
     with pytest.raises(PricingCatalogueError, match="missing required fields: rates"):
+        FilePricingCatalogue.from_directory(tmp_path)
+
+
+def test_loader_reports_undecodable_bytes_with_the_file_name(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Invalid UTF-8 surfaces as a catalogue error that names the card."""
+    path = _write_bytes(tmp_path, b"\xff\xfe")
+
+    with pytest.raises(PricingCatalogueError, match=rf"{path.name}: cannot read card"):
+        FilePricingCatalogue.from_directory(tmp_path)
+
+
+def test_loader_reports_unreadable_cards_with_the_file_name(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A card path that cannot be read surfaces as a catalogue error."""
+    (tmp_path / "broken.yaml").mkdir()
+
+    with pytest.raises(PricingCatalogueError, match=r"cannot read card.*broken\.yaml"):
         FilePricingCatalogue.from_directory(tmp_path)

@@ -247,9 +247,14 @@ def load_snapshot(path: pathlib.Path) -> PricingSnapshot:
     Raises
     ------
     PricingCatalogueError
-        If the file is not a valid schema-version-1 card.
+        If the file cannot be read or is not a valid schema-version-1 card.
     """
-    raw_text = path.read_text(encoding="utf-8")
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        # Both failures must name the card: a startup traceback otherwise
+        # leaves the operator without the offending path.
+        _fail(path, f"cannot read card: {exc}")
     try:
         raw_data = yaml.safe_load(raw_text) or {}
     except yaml.YAMLError as exc:

@@ -295,8 +295,16 @@ Success is observable as follows:
   module and names it in the docstring; the concurrency test asserts the
   surviving pin references the stored snapshot; and the observability test now
   drives the real insert-conflict path through an autospecced session instead
-  of patching `_ensure_snapshot`. Results recorded below once the re-gate and
-  re-review complete.
+  of patching `_ensure_snapshot`. The re-gate on `1c1cab9d` passed all seven
+  gates (`make test` 2205 passed, 1 skipped, 71 snapshots), and the second
+  milestone review covered 64 of 64 changed files with two findings, no high or
+  medium ones. Both were valid and are fixed: `load_snapshot` now guards
+  `read_text` so an unreadable or undecodable card raises
+  `PricingCatalogueError` naming the file (with regression tests for invalid
+  UTF-8 and an unreadable path), and the legacy `pricing_snapshots` table
+  definition and its revision moved to
+  `tests/fixtures/legacy_pricing_snapshots.py`, imported by both migration
+  suites instead of duplicated. A third gate and review round follows.
 - [ ] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
   correction.
 - [ ] EP-M5: documentation, roadmap, and final gates.
