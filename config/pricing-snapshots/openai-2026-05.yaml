@@ -15,8 +15,8 @@ rates:
     per_units: 50000
     unit: token
   cached_input_tokens:
-    amount_minor: 1
-    per_units: 125000
+    amount_minor: "7.5"
+    per_units: 1000000
     unit: token
   reasoning_tokens:
     amount_minor: 3

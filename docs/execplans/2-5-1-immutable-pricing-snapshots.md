@@ -308,8 +308,32 @@ Success is observable as follows:
   (`make test` 2207 passed, 1 skipped, 71 snapshots), and the third milestone
   review covered 65 of 65 changed files with zero findings
   (`outcome: completed`). EP-M3 is complete.
-- [ ] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
-  correction.
+- [x] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
+  correction. `tests/features/pricing_snapshots.feature` holds the six
+  scenarios from `Validation and acceptance`, declared in
+  `tests/steps/test_pricing_snapshots_steps.py`. Shared card writers, recorder
+  builders, and persist/read/tamper helpers live in
+  `tests/steps/pricing_snapshots_support.py`; the Vidai Mock provider config
+  and cached-token template live in
+  `tests/steps/pricing_snapshots_vidaimock.py`, and process startup reuses
+  `tests/steps/vidaimock_harness.py` rather than copying its orchestration.
+  Every scenario writes its own pre-correction card into `tmp_path` and rebuilds
+  `FilePricingCatalogue` after a revision or deletion, since the catalogue
+  loads eagerly. The Vidai Mock scenario calls the server through
+  `OpenAICompatibleLLMAdapter`, records the provider-reported usage through the
+  real `CostRecorder` on py-pglite, and so proves the cached-token split prices
+  at 52 minor units after the revision.
+  `config/pricing-snapshots/openai-2026-05.yaml` now charges
+  `amount_minor: "7.5"` per million cached input tokens, replacing the rounded
+  `1 / 125000` (8 per million); this is an in-place edit, so it becomes a new
+  content-addressed version while historical runs keep the earlier one.
+  `tests/test_shipped_pricing_cards.py` loads the shipped directory, asserts
+  the corrected rate is `MeteredRate.reduced(3, 400_000, UsageUnit.TOKEN)`,
+  prices the behavioural usage at 22 minor units, and shows the corrected card
+  has a different content hash from the pre-correction text. The behavioural
+  suite passed (6 passed), the shipped-card tests passed (2 passed), and the
+  affected set including the wiring and chart contracts passed (31 passed, 1
+  skipped).
 - [ ] EP-M5: documentation, roadmap, and final gates.
 
 ## Surprises & discoveries
