@@ -1,4 +1,4 @@
-"""Tests for file-backed pricing catalogue resolution."""
+"""Strictness tests for schema-version-1 pricing-card parsing."""
 
 import datetime as dt
 import textwrap
@@ -6,176 +6,120 @@ import typing as typ
 
 import pytest
 
-from episodic.cost import BillingPeriodKey, PricingSnapshotId
-from episodic.cost.pricing_catalogue import FilePricingCatalogue
+from episodic.cost.pricing_catalogue import FilePricingCatalogue, PricingCatalogueError
+from episodic.cost.pricing_snapshot import PricedService, PricingSubject
 
 if typ.TYPE_CHECKING:
     import pathlib
 
 
-def _write_snapshot(directory: pathlib.Path, name: str, body: str) -> None:
-    """Write a YAML pricing snapshot fixture."""
+_SUBJECT = PricingSubject(
+    service_kind=PricedService.LLM,
+    provider_name="openai",
+    model="gpt-4o-mini",
+    operation="chat_completions",
+)
+
+
+def _write_card(directory: pathlib.Path, body: str, name: str = "openai.yaml") -> None:
+    """Write one YAML pricing card fixture."""
     (directory / name).write_text(
-        textwrap.dedent(body).strip() + "\n", encoding="utf-8"
+        textwrap.dedent(body).strip() + "\n",
+        encoding="utf-8",
     )
+
+
+def _card(
+    *,
+    effective_from: str = '"2026-06-01T00:00:00Z"',
+    extra: str = "",
+) -> str:
+    """Build a minimal schema-version-1 rate card body."""
+    return f"""
+    schema_version: 1
+    service_kind: llm
+    provider_name: openai
+    model: gpt-4o-mini
+    operation: chat_completions
+    source_kind: provider_rate_card
+    currency: USD
+    rates:
+      input_tokens: {{amount_minor: 15, per_units: 1000000, unit: token}}
+    source_metadata:
+      source_url: https://example.test/pricing
+    retrieved_at: "2026-06-01T00:00:00Z"
+    effective_from: {effective_from}
+    {extra}
+    """
 
 
 @pytest.mark.asyncio
-async def test_file_pricing_catalogue_resolves_latest_effective_snapshot(
+async def test_loader_propagates_the_effective_instant(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Resolve selects the latest effective matching snapshot."""
-    _write_snapshot(
-        tmp_path,
-        "openai-old.yaml",
-        """
-        pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f
-        provider_name: openai
-        model: gpt-4o-mini
-        operation: chat_completions
-        source_kind: provider_rate_card
-        currency: USD
-        billing_period_key: "2026-06"
-        rates_minor_per_metric:
-          input_tokens: 100
-          output_tokens: 200
-        source_metadata:
-          source_url: https://example.test/old
-        retrieved_at: "2026-05-01T00:00:00Z"
-        effective_from: "2026-05-01T00:00:00Z"
-        """,
+    """The parsed effective date reaches the domain snapshot as an aware instant."""
+    _write_card(tmp_path, _card())
+
+    snapshot = await FilePricingCatalogue.from_directory(tmp_path).resolve(_SUBJECT)
+
+    assert snapshot.effective_from == dt.datetime(2026, 6, 1, tzinfo=dt.UTC), (
+        f"expected the parsed effective date, got {snapshot.effective_from!r}"
     )
-    _write_snapshot(
-        tmp_path,
-        "openai-new.yaml",
-        """
-        pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f90
-        provider_name: openai
-        model: gpt-4o-mini
-        operation: chat_completions
-        source_kind: provider_rate_card
-        currency: USD
-        billing_period_key: "2026-06"
-        rates_minor_per_metric:
-          input_tokens: 150
-          output_tokens: 250
-        source_metadata:
-          source_url: https://example.test/new
-        retrieved_at: "2026-05-15T00:00:00Z"
-        effective_from: "2026-05-15T00:00:00Z"
-        """,
+    assert snapshot.effective_from is not None, (
+        "the loaded card declares an effective date"
     )
-    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-04T00:00:00Z")
-
-    snapshot = await catalogue.resolve(
-        "openai",
-        "gpt-4o-mini",
-        "chat_completions",
-        BillingPeriodKey("2026-06"),
-    )
-
-    assert snapshot.pricing_snapshot_id == PricingSnapshotId(
-        "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f90"
-    ), "unexpected pricing_snapshot_id"
-    assert snapshot.rates_minor_per_metric["input_tokens"] == 150, (
-        "input_tokens rate mismatch"
-    )
-    assert snapshot.content_hash, "content_hash is missing or empty"
-
-
-@pytest.mark.asyncio
-async def test_file_pricing_catalogue_rejects_missing_snapshot(
-    tmp_path: pathlib.Path,
-) -> None:
-    """Resolve raises LookupError when no snapshot matches."""
-    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-04T00:00:00Z")
-
-    with pytest.raises(LookupError, match="No pricing snapshot"):
-        await catalogue.resolve(
-            "openai",
-            "gpt-4o-mini",
-            "chat_completions",
-            BillingPeriodKey("2026-06"),
-        )
-
-
-@pytest.mark.asyncio
-async def test_file_pricing_catalogue_propagates_effective_from(
-    tmp_path: pathlib.Path,
-) -> None:
-    """The loader carries the snapshot's effective date into the domain."""
-    _write_snapshot(
-        tmp_path,
-        "openai.yaml",
-        """
-        pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f95
-        provider_name: openai
-        model: gpt-4o-mini
-        operation: chat_completions
-        source_kind: provider_rate_card
-        currency: USD
-        billing_period_key: "2026-06"
-        rates_minor_per_metric:
-          input_tokens: 100
-          output_tokens: 200
-        source_metadata:
-          source_url: https://example.test/current
-        retrieved_at: "2026-06-01T00:00:00Z"
-        effective_from: "2026-06-01T00:00:00Z"
-        """,
-    )
-
-    catalogue = FilePricingCatalogue(tmp_path)
-    snapshot = await catalogue.resolve(
-        "openai",
-        "gpt-4o-mini",
-        "chat_completions",
-        BillingPeriodKey("2026-06"),
-    )
-
-    effective_from = snapshot.effective_from
-    assert effective_from is not None, "expected a loaded effective date"
-    assert effective_from == dt.datetime(2026, 6, 1, tzinfo=dt.UTC), (
-        f"expected the parsed YAML effective date, got {effective_from!r}"
-    )
-    assert effective_from.tzinfo is not None, (
+    assert snapshot.effective_from.tzinfo is not None, (
         "the loaded effective date must be timezone-aware"
     )
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("invalid_value", ["false", "0", "[]", "{}"])
-async def test_file_pricing_catalogue_rejects_invalid_effective_from(
+def test_loader_rejects_a_non_string_effective_from(
     tmp_path: pathlib.Path,
     invalid_value: str,
 ) -> None:
     """Present but non-string effective dates must fail loading."""
-    _write_snapshot(
+    _write_card(tmp_path, _card(effective_from=invalid_value))
+
+    with pytest.raises(PricingCatalogueError, match="effective_from"):
+        FilePricingCatalogue.from_directory(tmp_path)
+
+
+def test_loader_rejects_an_unknown_field(tmp_path: pathlib.Path) -> None:
+    """A key outside the schema version fails rather than being ignored."""
+    _write_card(tmp_path, _card(extra="unexpected_field: 1"))
+
+    with pytest.raises(PricingCatalogueError, match="unexpected_field"):
+        FilePricingCatalogue.from_directory(tmp_path)
+
+
+def test_loader_rejects_a_non_identifier_metadata_key(tmp_path: pathlib.Path) -> None:
+    """Canonical metadata keys must be identifiers."""
+    _write_card(
         tmp_path,
-        "openai.yaml",
-        f"""
-        pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f96
-        provider_name: openai
-        model: gpt-4o-mini
-        operation: chat_completions
-        source_kind: provider_rate_card
-        currency: USD
-        billing_period_key: "2026-06"
-        rates_minor_per_metric:
-          input_tokens: 100
-          output_tokens: 200
-        source_metadata:
-          source_url: https://example.test/invalid
-        retrieved_at: "2026-06-01T00:00:00Z"
-        effective_from: {invalid_value}
-        """,
+        _card().replace("source_url:", '"Source URL":'),
     )
 
-    catalogue = FilePricingCatalogue(tmp_path)
-    with pytest.raises(ValueError, match="effective_from"):
-        await catalogue.resolve(
-            "openai",
-            "gpt-4o-mini",
-            "chat_completions",
-            BillingPeriodKey("2026-06"),
-        )
+    with pytest.raises(PricingCatalogueError, match="source_metadata"):
+        FilePricingCatalogue.from_directory(tmp_path)
+
+
+def test_loader_rejects_an_unknown_rate_unit(tmp_path: pathlib.Path) -> None:
+    """A rate unit outside the supported set cannot be priced."""
+    _write_card(tmp_path, _card().replace("unit: token", "unit: kilogram"))
+
+    with pytest.raises(PricingCatalogueError, match="kilogram"):
+        FilePricingCatalogue.from_directory(tmp_path)
+
+
+def test_loader_rejects_a_missing_required_field(tmp_path: pathlib.Path) -> None:
+    """A card missing a required field names the field and the file."""
+    body = _card().replace(
+        "    rates:\n"
+        "      input_tokens: {amount_minor: 15, per_units: 1000000, unit: token}\n",
+        "",
+    )
+    _write_card(tmp_path, body)
+
+    with pytest.raises(PricingCatalogueError, match="missing required fields: rates"):
+        FilePricingCatalogue.from_directory(tmp_path)

@@ -15,7 +15,6 @@ Tests can use in-memory fakes; see ``tests/test_cost_ports_protocols.py``.
 """
 
 import dataclasses as dc
-import datetime as dt
 import enum
 import typing as typ
 
@@ -27,12 +26,16 @@ from episodic.cost.primitives import (
     IdempotencyKey,
     MeteringCounterKey,
     PricingSnapshotId,
-    PricingSourceKind,
     validate_currency_code,
+)
+from episodic.cost.primitives import (
+    PricingSourceKind as PricingSourceKind,
 )
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from episodic.cost.pricing_snapshot import PricingSnapshot, PricingSubject
 
 
 class LedgerScope(enum.StrEnum):
@@ -69,14 +72,6 @@ class OperationMismatchError(CostAccountingError):
     """Raised when a pricing snapshot is used for the wrong operation."""
 
 
-class BillingPeriodMismatchError(CostAccountingError):
-    """Raised when a pricing snapshot is used for the wrong billing period."""
-
-
-class PricingSnapshotCollisionError(CostAccountingError):
-    """Raised when one content hash maps to two snapshot identifiers."""
-
-
 def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:
     """Reject negative usage values before they reach pricing or storage."""
     negative_metrics = [metric for metric, value in usage.items() if value < 0]
@@ -84,41 +79,6 @@ def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:
         joined_metrics = ", ".join(sorted(negative_metrics))
         msg = f"usage metrics must be non-negative: {joined_metrics}"
         raise ValueError(msg)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class PricingSnapshot:
-    """Immutable pricing input used by the deterministic pricing engine.
-
-    ``effective_from`` is an optional timezone-aware ``datetime``; the
-    catalogue keeps snapshots unset or not after now, selecting the latest.
-    """
-
-    pricing_snapshot_id: PricingSnapshotId
-    provider_name: str
-    model: str
-    operation: str
-    source_kind: PricingSourceKind
-    currency: CurrencyCode
-    billing_period_key: BillingPeriodKey
-    rates_minor_per_metric: cabc.Mapping[str, int]
-    source_metadata: cabc.Mapping[str, str]
-    content_hash: str
-    retrieved_at: str
-    effective_from: dt.datetime | None = None
-
-    def __post_init__(self) -> None:
-        """Validate value-object invariants."""
-        validate_currency_code(self.currency)
-        _validate_usage_metrics(self.rates_minor_per_metric)
-        if self.effective_from is None:
-            return
-        if not isinstance(self.effective_from, dt.datetime):
-            msg = "effective_from must be a datetime or None."
-            raise TypeError(msg)
-        if self.effective_from.tzinfo is None:
-            msg = "effective_from must be timezone-aware."
-            raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -264,30 +224,18 @@ class CostLedgerPort(typ.Protocol):
 class PricingCataloguePort(typ.Protocol):
     """Port for resolving immutable pricing snapshots."""
 
-    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
-        self,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-    ) -> PricingSnapshot:
-        """Resolve the pricing snapshot for a provider operation.
+    async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
+        """Resolve the pricing snapshot for a priced subject.
 
         Parameters
         ----------
-        provider_name : str
-            Provider identifier, for example `openai`.
-        model : str
-            Provider model identifier.
-        operation : str
-            Provider operation, for example `chat_completions`.
-        billing_period_key : BillingPeriodKey
-            Billing period used to select the immutable rate card.
+        subject : PricingSubject
+            Service kind, provider, model, and operation to price.
 
         Returns
         -------
         PricingSnapshot
-            Immutable snapshot that prices the provider operation.
+            Immutable snapshot that prices the subject.
 
         Raises
         ------
@@ -296,8 +244,9 @@ class PricingCataloguePort(typ.Protocol):
 
         Notes
         -----
-        Implementations must return the snapshot pinned for the provider,
-        model, operation, and billing period tuple.
+        Implementations must return the snapshot applicable to the subject.
+        A snapshot is effective-dated, not billing-period-scoped, so the same
+        card keeps pricing later periods until a newer one takes effect.
         """
         raise NotImplementedError
 

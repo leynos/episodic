@@ -30,14 +30,19 @@ from episodic.cost.ports import (
     PricedCall,
     PricingCataloguePort,
     PricingModel,
-    PricingSnapshot,
-    PricingSnapshotCollisionError,
     PricingSnapshotId,
-    PricingSourceKind,
     ProviderCallLedgerEntry,
     RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
+)
+from episodic.cost.pricing_snapshot import (
+    MeteredRate,
+    PricedService,
+    PricingSnapshot,
+    PricingSubject,
+    SourceDocument,
+    UsageUnit,
 )
 from episodic.cost.pricing_snapshot_ports import (
     EnsuredPricingSnapshot,
@@ -47,6 +52,7 @@ from episodic.cost.pricing_snapshot_ports import (
     PricingSnapshotRepository,
     SnapshotEnsureOutcome,
 )
+from episodic.cost.primitives import PricingSourceKind
 from episodic.cost.recorder import CostRecorderPort
 
 __all__ = [
@@ -58,23 +64,27 @@ __all__ = [
     "EnsuredPricingSnapshot",
     "IdempotencyKey",
     "LedgerScope",
+    "MeteredRate",
     "MeteringCounterKey",
     "MeteringPort",
     "PricedCall",
+    "PricedService",
     "PricingCataloguePort",
     "PricingEngine",
     "PricingModel",
     "PricingSnapshot",
-    "PricingSnapshotCollisionError",
     "PricingSnapshotError",
     "PricingSnapshotId",
     "PricingSnapshotIntegrityError",
     "PricingSnapshotNotFoundError",
     "PricingSnapshotRepository",
     "PricingSourceKind",
+    "PricingSubject",
     "ProviderCallLedgerEntry",
     "RunPricingKey",
     "SnapshotEnsureOutcome",
+    "SourceDocument",
     "TaskRollupLedgerEntry",
     "UsageSource",
+    "UsageUnit",
 ]

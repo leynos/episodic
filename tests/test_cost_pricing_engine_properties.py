@@ -1,19 +1,23 @@
 """Property tests for deterministic cost pricing."""
 
+import datetime as dt
+
 import hypothesis.strategies as st
 import pytest
 from hypothesis import given, settings
 
+from episodic.cost import CurrencyCode, PricingSourceKind
 from episodic.cost.engine import PricingEngine, PricingRequest
 from episodic.cost.ports import (
-    BillingPeriodKey,
-    CurrencyCode,
     OperationMismatchError,
     PricedCall,
-    PricingSnapshot,
-    PricingSnapshotId,
-    PricingSourceKind,
     UnknownPricedMetricError,
+)
+from episodic.cost.pricing_snapshot import (
+    MeteredRate,
+    PricedService,
+    PricingSnapshot,
+    UsageUnit,
 )
 
 _METRICS = (
@@ -22,24 +26,21 @@ _METRICS = (
     "cached_input_tokens",
     "reasoning_tokens",
 )
-_BILLING_PERIOD = BillingPeriodKey("2026-06")
 _OPERATION = "chat_completions"
 
 
-def _snapshot(rates: dict[str, int]) -> PricingSnapshot:
+def _snapshot(rates: dict[str, MeteredRate]) -> PricingSnapshot:
     """Build a representative pricing snapshot for property tests."""
     return PricingSnapshot(
-        pricing_snapshot_id=PricingSnapshotId("018fd8b2-test-snapshot"),
+        service_kind=PricedService.LLM,
         provider_name="vidai",
         model="mock-gpt",
         operation=_OPERATION,
         source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
         currency=CurrencyCode("USD"),
-        billing_period_key=_BILLING_PERIOD,
-        rates_minor_per_metric=rates,
+        rates=rates,
         source_metadata={"source": "test"},
-        content_hash="sha256:test",
-        retrieved_at="2026-06-04T00:00:00Z",
+        retrieved_at=dt.datetime(2026, 6, 4, tzinfo=dt.UTC),
     )
 
 
@@ -57,18 +58,17 @@ def _usage_maps(draw: st.DrawFn) -> dict[str, int]:
 
 
 @st.composite
-def _exact_rates(draw: st.DrawFn) -> dict[str, int]:
-    """Generate per-metric rates that price whole minor units per token."""
-    return draw(
+def _exact_rates(draw: st.DrawFn) -> dict[str, MeteredRate]:
+    """Generate whole minor-unit-per-token rates in exact form."""
+    amounts = draw(
         st.fixed_dictionaries(
-            {
-                metric: st.integers(min_value=0, max_value=20).map(
-                    lambda value: value * 1_000_000,
-                )
-                for metric in _METRICS
-            },
+            {metric: st.integers(min_value=0, max_value=20) for metric in _METRICS},
         ),
     )
+    return {
+        metric: MeteredRate.reduced(amount, 1, UsageUnit.TOKEN)
+        for metric, amount in amounts.items()
+    }
 
 
 def _add_usage(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:
@@ -81,21 +81,17 @@ def _price(
     snapshot: PricingSnapshot,
     usage: dict[str, int],
 ) -> PricedCall:
-    """Price usage with the module's fixed operation and billing period."""
+    """Price usage with the module's fixed operation."""
     return engine.price(
         snapshot,
-        PricingRequest(
-            usage=usage,
-            operation=_OPERATION,
-            billing_period_key=_BILLING_PERIOD,
-        ),
+        PricingRequest(usage=usage, operation=_OPERATION),
     )
 
 
 @given(rates=_exact_rates(), usage_a=_usage_maps(), usage_b=_usage_maps())
 @settings(max_examples=100)
 def test_pricing_is_additive_for_exact_minor_unit_rates(
-    rates: dict[str, int],
+    rates: dict[str, MeteredRate],
     usage_a: dict[str, int],
     usage_b: dict[str, int],
 ) -> None:
@@ -115,7 +111,7 @@ def test_pricing_is_additive_for_exact_minor_unit_rates(
 @given(rates=_exact_rates(), usage_a=_usage_maps(), increments=_usage_maps())
 @settings(max_examples=100)
 def test_pricing_is_monotone_in_each_metric(
-    rates: dict[str, int],
+    rates: dict[str, MeteredRate],
     usage_a: dict[str, int],
     increments: dict[str, int],
 ) -> None:
@@ -136,7 +132,7 @@ def test_pricing_is_monotone_in_each_metric(
 
 @given(rates=_exact_rates())
 @settings(max_examples=50)
-def test_zero_usage_produces_zero_cost(rates: dict[str, int]) -> None:
+def test_zero_usage_produces_zero_cost(rates: dict[str, MeteredRate]) -> None:
     """A call with no usage has no computed cost."""
     priced_call = _price(
         PricingEngine(),
@@ -149,7 +145,7 @@ def test_zero_usage_produces_zero_cost(rates: dict[str, int]) -> None:
 
 def test_unknown_usage_metric_raises() -> None:
     """Unknown priced metrics must not be silently ignored."""
-    snapshot = _snapshot({"input_tokens": 1_000_000})
+    snapshot = _snapshot({"input_tokens": MeteredRate.reduced(1, 1, UsageUnit.TOKEN)})
 
     with pytest.raises(UnknownPricedMetricError, match="unpriced metrics"):
         PricingEngine().price(
@@ -157,23 +153,18 @@ def test_unknown_usage_metric_raises() -> None:
             PricingRequest(
                 usage={"input_tokens": 1, "output_tokens": 1},
                 operation=_OPERATION,
-                billing_period_key=_BILLING_PERIOD,
             ),
         )
 
 
 def test_operation_mismatch_raises() -> None:
     """Snapshots are bound to their provider operation."""
-    snapshot = _snapshot({"input_tokens": 1_000_000})
+    snapshot = _snapshot({"input_tokens": MeteredRate.reduced(1, 1, UsageUnit.TOKEN)})
 
     with pytest.raises(OperationMismatchError, match="operation"):
         PricingEngine().price(
             snapshot,
-            PricingRequest(
-                usage={"input_tokens": 1},
-                operation="responses",
-                billing_period_key=_BILLING_PERIOD,
-            ),
+            PricingRequest(usage={"input_tokens": 1}, operation="responses"),
         )
 
 
@@ -181,15 +172,13 @@ def test_invalid_currency_code_raises() -> None:
     """Pricing snapshots validate ISO-style currency codes at construction."""
     with pytest.raises(ValueError, match="currency"):
         PricingSnapshot(
-            pricing_snapshot_id=PricingSnapshotId("018fd8b2-test-snapshot"),
+            service_kind=PricedService.LLM,
             provider_name="vidai",
             model="mock-gpt",
             operation=_OPERATION,
             source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
             currency=CurrencyCode("usd"),
-            billing_period_key=_BILLING_PERIOD,
-            rates_minor_per_metric={"input_tokens": 1},
+            rates={"input_tokens": MeteredRate.reduced(1, 1, UsageUnit.TOKEN)},
             source_metadata={"source": "test"},
-            content_hash="sha256:test",
-            retrieved_at="2026-06-04T00:00:00Z",
+            retrieved_at=dt.datetime(2026, 6, 4, tzinfo=dt.UTC),
         )

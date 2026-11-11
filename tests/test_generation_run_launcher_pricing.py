@@ -6,7 +6,7 @@ import pytest
 
 from episodic.canonical.domain import GenerationRunStatus
 from episodic.cost import (
-    PricingSnapshotCollisionError,
+    PricingSnapshotIntegrityError,
     PricingSnapshotNotFoundError,
 )
 from episodic.observability import RecordingTracer
@@ -25,9 +25,9 @@ if typ.TYPE_CHECKING:
     "failure",
     [
         PricingSnapshotNotFoundError("No pricing snapshot found for id pinned."),
-        PricingSnapshotCollisionError("hash already stored under another id."),
+        PricingSnapshotIntegrityError("stored content no longer matches its hash."),
     ],
-    ids=["not-found", "collision"],
+    ids=["not-found", "integrity"],
 )
 @pytest.mark.asyncio
 async def test_launcher_records_pricing_snapshot_failure(

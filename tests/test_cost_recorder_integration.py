@@ -3,14 +3,15 @@
 import dataclasses as dc
 import textwrap
 import typing as typ
-import uuid
 
 import pytest
 import sqlalchemy as sa
 
-from episodic.cost import (
-    BillingPeriodKey,
+from episodic.cost import BillingPeriodKey
+from episodic.cost.pricing_snapshot import (
+    PricedService,
     PricingSnapshot,
+    PricingSubject,
 )
 from episodic.cost.storage import (
     CostLedgerEntryRecord,
@@ -19,7 +20,7 @@ from episodic.cost.storage import (
     SqlAlchemyCostLedgerStore,
     SqlAlchemyPricingSnapshotStore,
 )
-from tests.fixtures.cost import pricing_snapshot
+from tests.fixtures.cost import v1_pricing_snapshot
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -31,25 +32,30 @@ if typ.TYPE_CHECKING:
 
 _PINNED_RUN_ID = "workflow-run-pinned-rates"
 _RATE_CARD_FILE = "openai-2026-06.yaml"
-_PINNED_SNAPSHOT_ID = "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8fa0"
 _NOW = "2026-06-04T00:00:00Z"
 
 
 def _write_rate_card(directory: pathlib.Path, *, input_rate: int) -> None:
-    """Write one legacy-format rate card whose input-token rate is settable."""
+    """Write one v1 rate card whose input-token rate is settable."""
     (directory / _RATE_CARD_FILE).write_text(
         textwrap.dedent(
             f"""
-            pricing_snapshot_id: {_PINNED_SNAPSHOT_ID}
+            schema_version: 1
+            service_kind: llm
             provider_name: openai
             model: gpt-4o-mini
             operation: chat_completions
             source_kind: provider_rate_card
             currency: USD
-            billing_period_key: "2026-06"
-            rates_minor_per_metric:
-              input_tokens: {input_rate}
-              output_tokens: 1
+            rates:
+              input_tokens:
+                amount_minor: {input_rate}
+                per_units: 1000000
+                unit: token
+              output_tokens:
+                amount_minor: 1
+                per_units: 1000000
+                unit: token
             source_metadata:
               source_url: https://example.test/pricing
             retrieved_at: "2026-06-01T00:00:00Z"
@@ -67,15 +73,9 @@ class _SingleSnapshotCatalogue:
 
     snapshot: PricingSnapshot
 
-    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
-        self,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-    ) -> PricingSnapshot:
+    async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
         """Return the fixture snapshot for any lookup."""
-        _ = (provider_name, model, operation, billing_period_key)
+        _ = subject
         return self.snapshot
 
 
@@ -87,18 +87,18 @@ async def test_cost_recorder_pins_on_a_fresh_database(
     from episodic.cost.engine import PricingEngine
     from episodic.cost.recorder import CostProviderOperation, CostRecorder
 
-    snapshot = pricing_snapshot("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f97")
     async with session_factory() as session:
         recorder = CostRecorder(
             ledger=SqlAlchemyCostLedgerStore(session),
             snapshots=SqlAlchemyPricingSnapshotStore(session),
-            pricing_catalogue=_SingleSnapshotCatalogue(snapshot),
+            pricing_catalogue=_SingleSnapshotCatalogue(v1_pricing_snapshot()),
             pricing_engine=PricingEngine(),
         )
         await recorder.pin_run_pricing(
             "workflow-run-fresh-pin",
             (
                 CostProviderOperation(
+                    service_kind=PricedService.LLM,
                     provider_name="openai",
                     model="gpt-4o-mini",
                     operation="chat_completions",
@@ -110,23 +110,22 @@ async def test_cost_recorder_pins_on_a_fresh_database(
 
     async with session_factory() as session:
         stored = (
-            await session.execute(
-                sa.select(sa.func.count(PricingSnapshotRecord.id)).where(
-                    PricingSnapshotRecord.id
-                    == uuid.UUID("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f97")
-                )
-            )
+            await session.execute(sa.select(sa.func.count(PricingSnapshotRecord.id)))
         ).scalar_one()
         pinned = (
             await session.execute(
-                sa.select(RunPricingPinRecord.pricing_snapshot_id).where(
-                    RunPricingPinRecord.workflow_run_id == "workflow-run-fresh-pin"
+                sa
+                .select(PricingSnapshotRecord.content_hash)
+                .join(
+                    RunPricingPinRecord,
+                    RunPricingPinRecord.pricing_snapshot_id == PricingSnapshotRecord.id,
                 )
+                .where(RunPricingPinRecord.workflow_run_id == "workflow-run-fresh-pin")
             )
         ).scalar_one()
 
     assert stored == 1, "pinning on a fresh database must persist the snapshot"
-    assert str(pinned) == "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f97", (
+    assert pinned == v1_pricing_snapshot().content_hash, (
         "the pin must reference the persisted snapshot"
     )
 
@@ -161,6 +160,7 @@ async def _pin_rate_card_run(
             _PINNED_RUN_ID,
             (
                 CostProviderOperation(
+                    service_kind=PricedService.LLM,
                     provider_name="openai",
                     model="gpt-4o-mini",
                     operation="chat_completions",

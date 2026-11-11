@@ -1,20 +1,19 @@
 """Property tests for idempotent, immutable pricing-snapshot persistence."""
 
+import datetime as dt
 import typing as typ
-import uuid
 
 import hypothesis.strategies as st
 import pytest
 import sqlalchemy as sa
 from hypothesis import HealthCheck, given, settings
 
-from episodic.cost import (
-    BillingPeriodKey,
-    CurrencyCode,
+from episodic.cost import CurrencyCode, PricingSourceKind
+from episodic.cost.pricing_snapshot import (
+    MeteredRate,
+    PricedService,
     PricingSnapshot,
-    PricingSnapshotCollisionError,
-    PricingSnapshotId,
-    PricingSourceKind,
+    UsageUnit,
 )
 from episodic.cost.storage import (
     PricingSnapshotRecord,
@@ -29,40 +28,42 @@ else:  # pragma: no cover - runtime alias for evaluated test annotations.
     type SessionFactory = object
 
 _RATE_VARIANTS = (
-    {"input_tokens": 100, "output_tokens": 200},
-    {"input_tokens": 150, "output_tokens": 250},
+    {"input_tokens": MeteredRate.reduced(100, 1_000_000, UsageUnit.TOKEN)},
+    {"input_tokens": MeteredRate.reduced(150, 1_000_000, UsageUnit.TOKEN)},
 )
 
 _OPERATIONS = st.lists(
-    st.tuples(
-        st.integers(min_value=0, max_value=1),
-        st.integers(min_value=0, max_value=1),
-        st.integers(min_value=0, max_value=1),
-    ),
+    st.integers(min_value=0, max_value=len(_RATE_VARIANTS) - 1),
     min_size=1,
     max_size=6,
 )
 
 
-def _snapshot(
-    snapshot_id: str,
-    content_hash: str,
-    rates: dict[str, int],
-) -> PricingSnapshot:
+def _snapshot(rates: dict[str, MeteredRate]) -> PricingSnapshot:
     """Build a pricing snapshot from the example's finite domains."""
     return PricingSnapshot(
-        pricing_snapshot_id=PricingSnapshotId(snapshot_id),
+        service_kind=PricedService.LLM,
         provider_name="openai",
         model="gpt-4o-mini",
         operation="chat_completions",
         source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
         currency=CurrencyCode("USD"),
-        billing_period_key=BillingPeriodKey("2026-06"),
-        rates_minor_per_metric=rates,
+        rates=rates,
         source_metadata={"source": "property-test"},
-        content_hash=content_hash,
-        retrieved_at="2026-06-04T09:00:00Z",
+        retrieved_at=dt.datetime(2026, 6, 4, 9, tzinfo=dt.UTC),
     )
+
+
+def _stored_rates(snapshot: PricingSnapshot) -> dict[str, dict[str, object]]:
+    """Render a snapshot's rates the way the store persists them."""
+    return {
+        metric: {
+            "amount_minor": rate.amount_minor,
+            "per_units": rate.per_units,
+            "unit": str(rate.unit),
+        }
+        for metric, rate in snapshot.rates.items()
+    }
 
 
 @given(operations=_OPERATIONS)
@@ -72,57 +73,49 @@ def _snapshot(
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @pytest.mark.asyncio
-async def test_ensure_snapshot_keeps_persisted_identifiers_immutable(
+async def test_ensure_keeps_one_immutable_row_per_content(
     session_factory: SessionFactory,
-    operations: list[tuple[int, int, int]],
+    operations: list[int],
 ) -> None:
-    """No operation ordering can mutate a persisted snapshot identifier."""
-    # This function-scoped database persists rows across Hypothesis examples,
-    # which may reuse generated UUIDs. Give each example a fresh storage scope.
-    scope = uuid.uuid4()
-    identifiers = (str(uuid.uuid5(scope, "id-0")), str(uuid.uuid5(scope, "id-1")))
-    hashes = (f"hash-{scope}-0", f"hash-{scope}-1")
-    recorded: dict[str, tuple[str, dict[str, int]]] = {}
-    claimed_hashes: dict[str, str] = {}
+    """No operation ordering can duplicate or mutate a content-addressed row."""
+    snapshots = [_snapshot(rates) for rates in _RATE_VARIANTS]
+    identifiers: dict[str, object] = {}
 
-    for id_index, hash_index, rates_index in operations:
-        snapshot = _snapshot(
-            identifiers[id_index],
-            hashes[hash_index],
-            _RATE_VARIANTS[rates_index],
-        )
-        snapshot_id = identifiers[id_index]
-        content_hash = hashes[hash_index]
+    for index in operations:
+        snapshot = snapshots[index]
         async with session_factory() as session:
-            store = SqlAlchemyPricingSnapshotStore(session)
-            if (
-                snapshot_id not in recorded
-                and claimed_hashes.get(content_hash, snapshot_id) != snapshot_id
-            ):
-                with pytest.raises(PricingSnapshotCollisionError):
-                    await store.ensure(snapshot)
-                continue
-            await store.ensure(snapshot)
+            ensured = await SqlAlchemyPricingSnapshotStore(session).ensure(snapshot)
             await session.commit()
-        if snapshot_id not in recorded:
-            recorded[snapshot_id] = (content_hash, _RATE_VARIANTS[rates_index])
-            claimed_hashes[content_hash] = snapshot_id
+        previous = identifiers.setdefault(
+            snapshot.content_hash,
+            ensured.pricing_snapshot_id,
+        )
+        assert ensured.pricing_snapshot_id == previous, (
+            "equal content must always resolve to the same stored identifier"
+        )
 
+    # Persisted rows outlive Hypothesis examples in the shared database
+    # fixture, so only this example's content hashes are in scope.
     async with session_factory() as session:
-        for snapshot_id, (content_hash, rates) in recorded.items():
-            stored_hash, stored_rates = (
-                await session.execute(
-                    sa.select(
-                        PricingSnapshotRecord.content_hash,
-                        PricingSnapshotRecord.rates_minor_per_metric,
-                    ).where(PricingSnapshotRecord.id == uuid.UUID(snapshot_id))
-                )
-            ).one()
-            assert stored_hash == content_hash, (
-                f"snapshot {snapshot_id} changed its content hash; "
-                f"expected {content_hash!r}, got {stored_hash!r}"
+        rows = [
+            row
+            for row in (
+                (await session.execute(sa.select(PricingSnapshotRecord)))
+                .scalars()
+                .all()
             )
-            assert stored_rates == rates, (
-                f"snapshot {snapshot_id} changed its rates; "
-                f"expected {rates!r}, got {stored_rates!r}"
-            )
+            if row.content_hash in identifiers
+        ]
+
+    assert len(rows) == len(identifiers), (
+        "content addressing must keep exactly one row per distinct content"
+    )
+    for row in rows:
+        expected = next(
+            snapshot
+            for snapshot in snapshots
+            if snapshot.content_hash == row.content_hash
+        )
+        assert row.rates == _stored_rates(expected), (
+            f"snapshot {row.content_hash} changed its rates"
+        )

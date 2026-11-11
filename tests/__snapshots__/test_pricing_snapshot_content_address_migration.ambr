@@ -1,0 +1,15 @@
+# serializer version: 1
+# name: test_upgrade_converts_legacy_rows
+  dict({
+    'input_tokens': dict({
+      'amount_minor': 1,
+      'per_units': 10000,
+      'unit': 'token',
+    }),
+    'output_tokens': dict({
+      'amount_minor': 1,
+      'per_units': 5000,
+      'unit': 'token',
+    }),
+  })
+# ---

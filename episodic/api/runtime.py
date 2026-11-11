@@ -162,7 +162,11 @@ def _build_generation_launcher(
     config: RuntimeConfig,
 ) -> InProcessGenerationRunLauncher:
     """Build the no-QA generation-run launcher from configured runtime inputs."""
-    pricing_catalogue = FilePricingCatalogue(config.pricing_snapshot_directory)
+    # Load eagerly so a malformed or ambiguous catalogue fails at startup
+    # rather than mid-run.
+    pricing_catalogue = FilePricingCatalogue.from_directory(
+        config.pricing_snapshot_directory
+    )
 
     def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
         """Build a cost recorder over the unit of work's cost stores."""

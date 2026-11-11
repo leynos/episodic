@@ -7,6 +7,7 @@ database lookup. Construct it with a snapshot directory, then call
 to obtain the matching pricing snapshot.
 """
 
+from ._errors import PricingCatalogueError
 from .file_loader import FilePricingCatalogue
 
-__all__ = ["FilePricingCatalogue"]
+__all__ = ["FilePricingCatalogue", "PricingCatalogueError"]

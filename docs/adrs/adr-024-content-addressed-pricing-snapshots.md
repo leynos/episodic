@@ -179,9 +179,90 @@ Normative encoding rules:
   key is ASCII and every number is an integer no larger than `2**53 - 1`[^2].
 
 Canonical bytes and hashes for one LLM, one TTS, and one SLA4OAI snapshot are
-recorded as test vectors in the ExecPlan and its syrupy snapshots. The vectors
-include a non-UTC `retrieved_at`, a null `effective_from`, a non-reduced
-authored rate, and a source document.
+recorded as test vectors in `tests/test_cost_pricing_snapshot_hash.py` and its
+syrupy snapshot, and are repeated below. The vectors include a non-UTC
+`retrieved_at`, a null `effective_from`, a non-reduced authored rate, and a
+source document.
+
+#### Test vectors
+
+The documents below are pretty-printed for readability. The canonical bytes are
+the compact encoding produced by `canonical_json_bytes`, and each hash is the
+SHA-256 digest of those compact bytes.
+
+| Vector        | Distinguishing inputs                                                                                            | Content hash                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| LLM rate card | `retrieved_at` at `+02:00`, null `effective_from`, per-million rates reduced on construction, no source document | `sha256:6fda0bd585c7380f6b26ebe14e914e8ab4d3bff383063f17870a125408fb4369` |
+| TTS rate card | five cents per minute reduced to `1/12000` milliseconds                                                          | `sha256:31f5ede6303e271994e141b54203e510d97aa6b65ff3dc2179a6f3aa6f9d85c6` |
+| SLA4OAI plan  | required source document, verbatim content hashed by digest                                                      | `sha256:912f19b822917adbaa268a6b08384fe8a101528a86733eb6ec39f43039c1e0d7` |
+
+LLM rate card:
+
+```json
+{
+  "currency": "USD",
+  "effective_from": null,
+  "model": "gpt-4o-mini",
+  "operation": "chat_completions",
+  "provider_name": "openai",
+  "rates": {
+    "input_tokens": {"amount_minor": 3, "per_units": 200000, "unit": "token"},
+    "output_tokens": {"amount_minor": 3, "per_units": 50000, "unit": "token"}
+  },
+  "retrieved_at": "2026-05-01T00:30:00.000000Z",
+  "schema_version": 1,
+  "service_kind": "llm",
+  "source_document": null,
+  "source_kind": "provider_rate_card",
+  "source_metadata": {"source_url": "https://openai.com/api/pricing/"}
+}
+```
+
+TTS rate card:
+
+```json
+{
+  "currency": "USD",
+  "effective_from": "2026-04-01T00:00:00.000000Z",
+  "model": "tts-1",
+  "operation": "speech",
+  "provider_name": "openai",
+  "rates": {
+    "milliseconds": {"amount_minor": 1, "per_units": 12000, "unit": "millisecond"}
+  },
+  "retrieved_at": "2026-05-01T00:00:00.000000Z",
+  "schema_version": 1,
+  "service_kind": "tts",
+  "source_document": null,
+  "source_kind": "provider_rate_card",
+  "source_metadata": {}
+}
+```
+
+SLA4OAI plan:
+
+```json
+{
+  "currency": "USD",
+  "effective_from": "2026-05-01T00:00:00.000000Z",
+  "model": "gpt-4o-mini",
+  "operation": "chat_completions",
+  "provider_name": "openai",
+  "rates": {
+    "input_tokens": {"amount_minor": 3, "per_units": 200000, "unit": "token"},
+    "output_tokens": {"amount_minor": 3, "per_units": 50000, "unit": "token"}
+  },
+  "retrieved_at": "2026-05-01T00:30:00.000000Z",
+  "schema_version": 1,
+  "service_kind": "llm",
+  "source_document": {
+    "media_type": "application/yaml",
+    "sha256": "sha256:c357cca0909f1a2aaf833a0d7f277925abb283937c2210525c374af9d61b9c0c"
+  },
+  "source_kind": "sla4oai_plan",
+  "source_metadata": {"source_url": "https://openai.com/api/pricing/"}
+}
+```
 
 A future schema version defines its own field tuple and encoder; rows are
 re-hashed with the encoder selected by their stored `schema_version`, so adding

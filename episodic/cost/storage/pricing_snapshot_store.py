@@ -2,8 +2,9 @@
 
 Use `SqlAlchemyPricingSnapshotStore` inside the canonical unit of work. It
 implements `PricingSnapshotRepository`: ``ensure`` inserts a snapshot without
-ever rewriting an existing row, and ``get`` rebuilds the snapshot a pinned run
-was priced from.
+ever rewriting an existing row, keyed by its canonical content hash, and
+``get`` rebuilds the snapshot a pinned run was priced from and verifies that
+the stored row still hashes to its recorded identity.
 
 Callers own the transaction boundary; create the store with an open
 ``AsyncSession``, call the port method, then commit or roll back.
@@ -26,15 +27,21 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
 from episodic import observability
-from episodic.cost._time import parse_instant
-from episodic.cost.ports import PricingSnapshot, PricingSnapshotCollisionError
+from episodic.cost.pricing_snapshot import (
+    MeteredRate,
+    PricedService,
+    PricingSnapshot,
+    SourceDocument,
+    UsageUnit,
+)
+from episodic.cost.pricing_snapshot_hash import canonical_rates
 from episodic.cost.pricing_snapshot_ports import (
     EnsuredPricingSnapshot,
+    PricingSnapshotIntegrityError,
     PricingSnapshotNotFoundError,
     SnapshotEnsureOutcome,
 )
 from episodic.cost.primitives import (
-    BillingPeriodKey,
     CurrencyCode,
     PricingSnapshotId,
     PricingSourceKind,
@@ -46,7 +53,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.dml import Insert
 
-_PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT = "uq_pricing_snapshots_content_hash"
+_CONTENT_HASH_CONSTRAINT = "uq_pricing_snapshots_content_hash"
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -70,71 +77,81 @@ _GET_TELEMETRY = _OperationTelemetry(
 )
 
 
-def _is_pricing_snapshot_hash_collision(exc: IntegrityError) -> bool:
-    """Identify a duplicate pricing snapshot through its named constraint."""
-    # Keep driver inspection local: canonical storage's package initializer
-    # composes this adapter, so importing its helper would create an import cycle.
-    name: str | None = None
-    for candidate in (exc, exc.orig):
-        name = getattr(candidate, "constraint_name", None)
-        if name is None:
-            diagnostic = getattr(candidate, "diag", None)
-            name = getattr(diagnostic, "constraint_name", None)
-        if name is not None:
-            break
-    if name is not None:
-        return name == _PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT
-    # Some DB-API wrappers omit diagnostics; match only PostgreSQL's exact
-    # duplicate-constraint form so unrelated content_hash errors stay visible.
-    return (
-        f'violates unique constraint "{_PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT}"'
-        in str(exc.orig)
-    )
-
-
-def _snapshot_insert_statement(snapshot: PricingSnapshot) -> Insert:
-    """Build the idempotent insert statement for one pricing snapshot."""
+def _snapshot_insert_statement(
+    snapshot: PricingSnapshot,
+    pricing_snapshot_id: PricingSnapshotId,
+) -> Insert:
+    """Build the content-addressed insert statement for one snapshot."""
+    document = snapshot.source_document
     return (
         insert(PricingSnapshotRecord)
         .values(
-            id=uuid.UUID(str(snapshot.pricing_snapshot_id)),
+            id=uuid.UUID(str(pricing_snapshot_id)),
+            schema_version=snapshot.schema_version,
+            service_kind=str(snapshot.service_kind),
             provider_name=snapshot.provider_name,
             model=snapshot.model,
             operation=snapshot.operation,
             source_kind=str(snapshot.source_kind),
             currency=str(snapshot.currency),
-            billing_period_key=str(snapshot.billing_period_key),
-            rates_minor_per_metric=dict(snapshot.rates_minor_per_metric),
+            rates=canonical_rates(snapshot.rates),
             source_metadata=dict(snapshot.source_metadata),
-            content_hash=snapshot.content_hash,
-            retrieved_at=parse_instant(
-                snapshot.retrieved_at,
-                error_message="timestamp must include timezone information.",
-            ),
+            retrieved_at=snapshot.retrieved_at,
             effective_from=snapshot.effective_from,
+            source_document_media_type=(
+                None if document is None else document.media_type
+            ),
+            source_document_content=None if document is None else document.content,
+            content_hash=snapshot.content_hash,
         )
-        .on_conflict_do_nothing(index_elements=["id"])
+        .on_conflict_do_nothing(constraint=_CONTENT_HASH_CONSTRAINT)
         .returning(PricingSnapshotRecord.id)
+    )
+
+
+def _rates_from_record(record: PricingSnapshotRecord) -> dict[str, MeteredRate]:
+    """Rebuild exact rates from their stored representation."""
+    raw_rates = typ.cast("dict[str, dict[str, object]]", dict(record.rates))
+    return {
+        metric: MeteredRate(
+            typ.cast("int", rate["amount_minor"]),
+            typ.cast("int", rate["per_units"]),
+            UsageUnit(typ.cast("str", rate["unit"])),
+        )
+        for metric, rate in raw_rates.items()
+    }
+
+
+def _source_document_from_record(
+    record: PricingSnapshotRecord,
+) -> SourceDocument | None:
+    """Rebuild an optional verbatim source document."""
+    if (
+        record.source_document_media_type is None
+        or record.source_document_content is None
+    ):
+        return None
+    return SourceDocument(
+        media_type=record.source_document_media_type,
+        content=record.source_document_content,
     )
 
 
 def _snapshot_from_record(record: PricingSnapshotRecord) -> PricingSnapshot:
     """Rebuild the domain snapshot from its stored row."""
     return PricingSnapshot(
-        pricing_snapshot_id=PricingSnapshotId(str(record.id)),
+        service_kind=PricedService(record.service_kind),
         provider_name=record.provider_name,
         model=record.model,
         operation=record.operation,
         source_kind=PricingSourceKind(record.source_kind),
         currency=CurrencyCode(record.currency),
-        billing_period_key=BillingPeriodKey(record.billing_period_key),
-        rates_minor_per_metric=typ.cast(
-            "dict[str, int]", dict(record.rates_minor_per_metric)
-        ),
+        rates=_rates_from_record(record),
         source_metadata=typ.cast("dict[str, str]", dict(record.source_metadata)),
-        content_hash=record.content_hash,
-        retrieved_at=record.retrieved_at.isoformat(),
+        retrieved_at=record.retrieved_at,
         effective_from=record.effective_from,
+        source_document=_source_document_from_record(record),
+        schema_version=record.schema_version,
     )
 
 
@@ -201,41 +218,17 @@ class SqlAlchemyPricingSnapshotStore:
 
         Raises
         ------
-        PricingSnapshotCollisionError
-            If ``snapshot.content_hash`` is stored under a different identifier.
+        PricingSnapshotIntegrityError
+            If the insert conflicts without a matching stored content hash.
         sqlalchemy.exc.IntegrityError
-            If a constraint other than identifier or content-hash uniqueness fails.
-        ValueError
-            If ``snapshot.retrieved_at`` lacks a timezone; ``parse_instant`` raises
-            ``"timestamp must include timezone information."``.
-        """  # ruff: ignore[docstring-extraneous-exception]  # parse_instant raises on the adapter's behalf.
-        try:
-            statement = _snapshot_insert_statement(snapshot)
-        except ValueError:
-            labels = {
-                "operation": _ENSURE_TELEMETRY.operation,
-                "outcome": "error",
-                "failure_category": "pricing_snapshot.input_invalid",
-            }
-            with self._tracer.start_span(
-                "pricing_snapshot.input_validation", attributes=labels
-            ):
-                self._metrics.increment_counter(
-                    "pricing_snapshot.input_validation", labels=labels
-                )
-                raise
-        outcome = await self._record_snapshot_insert(snapshot, statement)
-        return EnsuredPricingSnapshot(
-            pricing_snapshot_id=snapshot.pricing_snapshot_id,
-            outcome=outcome,
+            If any constraint other than content-hash uniqueness fails.
+        """
+        # Statement construction is CPU-only and must not inflate the
+        # persistence latency operators use to spot database trouble.
+        statement = _snapshot_insert_statement(
+            snapshot,
+            PricingSnapshotId(str(uuid.uuid7())),
         )
-
-    async def _record_snapshot_insert(
-        self,
-        snapshot: PricingSnapshot,
-        statement: Insert,
-    ) -> SnapshotEnsureOutcome:
-        """Instrument snapshot persistence while preserving its outcome."""
         started = self._clock.monotonic_seconds()
         outcome = "error"
         failure_category: str | None = None
@@ -244,47 +237,51 @@ class SqlAlchemyPricingSnapshotStore:
             attributes={"operation": _ENSURE_TELEMETRY.operation},
         ) as span:
             try:
-                ensure_outcome = await self._persist_snapshot(snapshot, statement)
-            except PricingSnapshotCollisionError:
-                outcome = "collision"
-                failure_category = "pricing_snapshot.collision"
-                raise
-            except IntegrityError:
+                ensured = await self._ensure_snapshot(snapshot, statement)
+            except IntegrityError, PricingSnapshotIntegrityError:
                 failure_category = "pricing_snapshot.integrity"
                 raise
             else:
-                outcome = ensure_outcome.value
-                return ensure_outcome
+                outcome = ensured.outcome.value
+                return ensured
             finally:
                 span.set_attribute("outcome", outcome)
                 if failure_category is not None:
                     span.set_attribute("failure_category", failure_category)
                 self._record_outcome(
-                    _ENSURE_TELEMETRY, started, outcome, failure_category
+                    _ENSURE_TELEMETRY,
+                    started,
+                    outcome,
+                    failure_category,
                 )
 
-    async def _persist_snapshot(
+    async def _ensure_snapshot(
         self,
         snapshot: PricingSnapshot,
         statement: Insert,
-    ) -> SnapshotEnsureOutcome:
-        """Insert or reuse a row, translating content-hash collisions."""
-        try:
-            result = await self._session.execute(statement)
-        except IntegrityError as exc:
-            # The id conflict target excludes unique content hashes: a duplicate
-            # hash under another ID is a catalogue defect.
-            if not _is_pricing_snapshot_hash_collision(exc):
-                raise
-            msg = (
-                "pricing snapshot content hash "
-                f"{snapshot.content_hash!r} is already stored under a "
-                "different snapshot identifier"
+    ) -> EnsuredPricingSnapshot:
+        """Insert the snapshot, or return the row with the same content hash."""
+        inserted_id = (await self._session.execute(statement)).scalar_one_or_none()
+        if inserted_id is not None:
+            return EnsuredPricingSnapshot(
+                pricing_snapshot_id=PricingSnapshotId(str(inserted_id)),
+                outcome=SnapshotEnsureOutcome.PERSISTED,
             )
-            raise PricingSnapshotCollisionError(msg) from exc
-        if result.scalar_one_or_none() is not None:
-            return SnapshotEnsureOutcome.PERSISTED
-        return SnapshotEnsureOutcome.REUSED
+        stored_id = await self._session.scalar(
+            sa.select(PricingSnapshotRecord.id).where(
+                PricingSnapshotRecord.content_hash == snapshot.content_hash
+            )
+        )
+        if stored_id is None:
+            msg = (
+                "pricing snapshot insert conflicted without an existing "
+                f"content hash {snapshot.content_hash!r}"
+            )
+            raise PricingSnapshotIntegrityError(msg)
+        return EnsuredPricingSnapshot(
+            pricing_snapshot_id=PricingSnapshotId(str(stored_id)),
+            outcome=SnapshotEnsureOutcome.REUSED,
+        )
 
     async def get(self, pricing_snapshot_id: PricingSnapshotId) -> PricingSnapshot:
         """Return the stored snapshot for one identifier.
@@ -292,12 +289,14 @@ class SqlAlchemyPricingSnapshotStore:
         Returns
         -------
         PricingSnapshot
-            Snapshot rebuilt from the stored row.
+            Snapshot rebuilt from the stored row and verified against its hash.
 
         Raises
         ------
         PricingSnapshotNotFoundError
             If no row is stored for ``pricing_snapshot_id``.
+        PricingSnapshotIntegrityError
+            If the stored row no longer hashes to its recorded content hash.
         """
         started = self._clock.monotonic_seconds()
         outcome = "error"
@@ -312,6 +311,13 @@ class SqlAlchemyPricingSnapshotStore:
                 outcome = "not_found"
                 failure_category = "pricing_snapshot.not_found"
                 raise
+            except PricingSnapshotIntegrityError:
+                outcome = "integrity_mismatch"
+                failure_category = "pricing_snapshot.tampered"
+                # The identifier is unbounded and may be sensitive; keep it on
+                # the span only, never on a metric label.
+                span.set_attribute("pricing_snapshot_id", str(pricing_snapshot_id))
+                raise
             else:
                 outcome = "found"
                 return snapshot
@@ -322,17 +328,39 @@ class SqlAlchemyPricingSnapshotStore:
                 self._record_outcome(_GET_TELEMETRY, started, outcome, failure_category)
 
     async def _load_snapshot(
-        self, pricing_snapshot_id: PricingSnapshotId
+        self,
+        pricing_snapshot_id: PricingSnapshotId,
     ) -> PricingSnapshot:
-        """Load one stored row or raise when it is absent."""
+        """Load one stored row, verifying its content hash."""
+        try:
+            row_id = uuid.UUID(str(pricing_snapshot_id))
+        except ValueError:
+            msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
+            raise PricingSnapshotNotFoundError(msg) from None
         record = (
             await self._session.execute(
                 sa.select(PricingSnapshotRecord).where(
-                    PricingSnapshotRecord.id == uuid.UUID(str(pricing_snapshot_id))
+                    PricingSnapshotRecord.id == row_id
                 )
             )
         ).scalar_one_or_none()
         if record is None:
             msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
             raise PricingSnapshotNotFoundError(msg)
-        return _snapshot_from_record(record)
+        return self._verified_snapshot(record)
+
+    @staticmethod
+    def _verified_snapshot(record: PricingSnapshotRecord) -> PricingSnapshot:
+        """Rebuild a row and refuse it when its content no longer matches."""
+        try:
+            snapshot = _snapshot_from_record(record)
+        except (KeyError, TypeError, ValueError) as exc:
+            msg = (
+                "stored pricing snapshot content no longer matches its content "
+                f"hash: {exc}"
+            )
+            raise PricingSnapshotIntegrityError(msg) from exc
+        if snapshot.content_hash != record.content_hash:
+            msg = "stored pricing snapshot content no longer matches its content hash."
+            raise PricingSnapshotIntegrityError(msg)
+        return snapshot

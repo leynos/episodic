@@ -816,6 +816,21 @@ full_name = ["episodic.observability._structured._emit_structured_event"]
 reason = "StructuredLogMetrics.increment_counter, StructuredLogMetrics._emit_value, _NoopSpan.__exit__, and StructuredLogTracer.start_span call this shared helper; Skylos flags it despite these local callers."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.cost.pricing_snapshot._validated_rates",
+    "episodic.cost.pricing_snapshot._validated_metadata",
+    "episodic.cost.pricing_snapshot._require_identifier",
+    "episodic.cost.pricing_snapshot._freeze_mapping",
+]
+reason = "PricingSnapshot.__post_init__ reaches these validators, directly or through the validators it calls, on every construction from the recorder, snapshot store, and catalogue; Skylos does not follow the dataclass __post_init__ hook."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = ["episodic.cost.pricing_snapshot.PricingSnapshot._validate_source"]
+reason = "PricingSnapshot.__post_init__ calls this source-kind validator on every construction; Skylos does not follow the dataclass __post_init__ hook."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "variable"
 full_name = [
     "episodic.api.runtime.GRANIAN_FACTORY_TARGET",
@@ -914,10 +929,6 @@ reason = "Port re-export blocks; the package surface and the ports facade delibe
 [[tool.duplication_gate.allow]]
 members = ["episodic/canonical/reference_documents/__init__.py", "episodic/canonical/reference_documents/services.py"]
 reason = "Service re-export blocks; the package surface and the services facade list the same operations."
-
-[[tool.duplication_gate.allow]]
-members = ["episodic/cost/__init__.py", "episodic/cost/recorder.py", "episodic/cost/storage/adapters.py"]
-reason = "Cost port import blocks: the package surface, the recorder, and the storage adapter name the same ports."
 
 [[tool.duplication_gate.allow]]
 members = ["episodic/orchestration/_guest_bios_executor.py", "episodic/orchestration/_show_notes_executor.py"]
@@ -1355,6 +1366,8 @@ prefixes = [
     "episodic.canonical.upload_protocols",
     "episodic.canonical.uploads",
     "episodic.cost.ports",
+    "episodic.cost.pricing_snapshot",
+    "episodic.cost.pricing_snapshot_hash",
     "episodic.cost.pricing_snapshot_ports",
     "episodic.cost.engine",
     "episodic.cost.primitives",

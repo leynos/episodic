@@ -60,13 +60,17 @@ def _pricing_snapshot_record() -> PricingSnapshotRecord:
     """Build the pricing snapshot referenced by provider-call fixtures."""
     return PricingSnapshotRecord(
         id=uuid.UUID("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"),
+        schema_version=1,
+        service_kind="llm",
         provider_name="openai",
         model="gpt-4o-mini",
         operation="chat_completions",
         source_kind="provider_rate_card",
         currency="USD",
-        billing_period_key="2026-06",
-        rates_minor_per_metric={"input_tokens": 100, "output_tokens": 200},
+        rates={
+            "input_tokens": {"amount_minor": 1, "per_units": 10_000, "unit": "token"},
+            "output_tokens": {"amount_minor": 1, "per_units": 5_000, "unit": "token"},
+        },
         source_metadata={"source_url": "https://example.test/pricing"},
         content_hash="fixture-hash",
         retrieved_at=dt.datetime(2026, 6, 4, 9, 0, tzinfo=dt.UTC),

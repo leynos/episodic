@@ -8,11 +8,11 @@ import uuid
 import pytest
 import sqlalchemy as sa
 from alembic.util import CommandError
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
 from episodic.canonical.storage.alembic_helpers import alembic_config
-from episodic.cost.storage import PricingSnapshotRecord
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -26,6 +26,25 @@ _PREVIOUS_REVISION = "20260624_000012"
 #: this suite exercises one migration, so pinning the revision keeps a later
 #: revision's SQL out of these assertions and out of the offline snapshots.
 _PRICING_REVISION = "20261010_000013"
+#: The revision immediately before the content-address migration. Downgrade
+#: scenarios start here because that migration refuses to rewind converted rows.
+_LEGACY_HEAD = "20261031_000016"
+
+_LEGACY_TABLE = sa.table(
+    "pricing_snapshots",
+    sa.column("id", postgresql.UUID(as_uuid=True)),
+    sa.column("provider_name", sa.Text),
+    sa.column("model", sa.Text),
+    sa.column("operation", sa.Text),
+    sa.column("source_kind", sa.Text),
+    sa.column("currency", sa.String(3)),
+    sa.column("billing_period_key", sa.Text),
+    sa.column("rates_minor_per_metric", postgresql.JSONB),
+    sa.column("source_metadata", postgresql.JSONB),
+    sa.column("content_hash", sa.Text),
+    sa.column("retrieved_at", sa.DateTime(timezone=True)),
+    sa.column("effective_from", sa.DateTime(timezone=True)),
+)
 
 
 def _migrate(
@@ -55,7 +74,7 @@ async def _constraint(connection: AsyncConnection) -> tuple[str, str, int]:
 async def _insert_snapshot(connection: AsyncConnection, snapshot_id: uuid.UUID) -> None:
     """Insert one deterministic snapshot with a shared content hash."""
     await connection.execute(
-        sa.insert(PricingSnapshotRecord).values(
+        sa.insert(_LEGACY_TABLE).values(
             id=snapshot_id,
             provider_name="openai",
             model="migration-test",
@@ -93,6 +112,9 @@ async def _migration_target(
     if direction == "upgrade":
         await _prepare_legacy_schema(connection)
         return _PRICING_REVISION, _LEGACY_NAME
+    # The content-address migration refuses to rewind converted rows, so step
+    # back to its predecessor while the table is still empty.
+    await connection.run_sync(_migrate, "downgrade", _LEGACY_HEAD)
     return _PREVIOUS_REVISION, _CURRENT_NAME
 
 
@@ -156,7 +178,7 @@ async def test_legacy_pricing_snapshot_constraint_upgrade_and_downgrade(
             async with connection.begin_nested():
                 await _insert_snapshot(connection, uuid.UUID(int=3))
         row_count = await connection.scalar(
-            sa.select(sa.func.count()).select_from(PricingSnapshotRecord)
+            sa.text("SELECT count(*) FROM pricing_snapshots")
         )
         assert row_count == 1, "the persisted snapshot must survive both migrations"
         await connection.run_sync(_migrate, "upgrade", _PRICING_REVISION)
@@ -297,9 +319,7 @@ async def test_rejected_pricing_snapshot_migration_obeys_full_caller_rollback(
             "full caller rollback must restore the dropped constraint and its index"
         )
         assert (
-            await connection.scalar(
-                sa.select(sa.func.count()).select_from(PricingSnapshotRecord)
-            )
+            await connection.scalar(sa.text("SELECT count(*) FROM pricing_snapshots"))
             == 0
         ), "full caller rollback must remove writes made before migration rejection"
 

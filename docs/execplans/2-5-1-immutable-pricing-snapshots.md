@@ -240,8 +240,52 @@ Success is observable as follows:
   ("unverified findings"), so the zero is recorded as no verified findings
   rather than a guaranteed clean diff. The CLI's included-review allowance was
   exhausted during that run; no retry was attempted.
-- [ ] EP-M3: schema version 1 snapshots, content addressing, and migration
-  `20261110_000017`.
+- [x] EP-M3: schema version 1 snapshots, content addressing, and migration
+  `20261110_000017`. Red tests were committed with strict `xfail` markers: the
+  v1 domain model, canonical hash, and their property tests passed (48 passed);
+  the engine, catalogue, store, recorder service-kind, and migration tests were
+  strict `xfail` (28 xfailed) because the integration surface still used the
+  legacy representation. Deviation recorded in the `Decision log`: the two new
+  domain modules are additive and were committed with their passing tests,
+  because a module-level import cannot be expressed as a strict `xfail` without
+  lazy-import scaffolding. Implementation now replaces the legacy
+  representation end to end: domain model, canonical hash, engine, v1 catalogue
+  parser, recorder service kind, content-addressed store, ORM model, migration,
+  and the three shipped cards. The `INV-ARCH` structural test
+  `tests/test_production_hecate_cost_config.py` was added and its negative
+  control run: a temporary `import sqlalchemy` in `pricing_snapshot.py` was
+  rejected with
+  `ARCH001: episodic.cost.pricing_snapshot:30 imports forbidden
+  module sqlalchemy (domain_ports -> external_libraries)`.
+  ADR-024 now carries the three hash vectors from
+  `tests/__snapshots__/test_cost_pricing_snapshot_hash.ambr`. The first
+  milestone gate run failed only at the df12-pylint stage: 68 `C9102`
+  (assert-missing-message) findings across ten new test modules and one `R9108`
+  (prefer-snapshot-assertion) at
+  `tests/test_pricing_snapshot_content_address_migration.py`. Every flagged
+  assertion now states the invariant it checks, and the converted `rates`
+  comparison became a syrupy snapshot
+  (`tests/__snapshots__/test_pricing_snapshot_content_address_migration.ambr`).
+  The focused df12-pylint run then scored 10.00/10 and the ten affected modules
+  passed (90 passed, 4 snapshots). The next gate run cleared every earlier
+  stage and then stopped at `ambrleaks`, which flagged the four documented
+  content hashes and the public `https://openai.com/api/pricing/` URL inside
+  the new hash snapshot. `ambrleaks.toml` now allowlists those exact values, as
+  the developers' guide prescribes for deterministic public test data. That
+  run's `make test` also timed out once at py-pglite setup in the pre-existing
+  `tests/test_env_runtime_wiring.py`; the test then passed alone and with its
+  sibling parameter, so the timeout was host contention rather than a
+  regression. With lint reaching past `ambrleaks` for the first time, Skylos
+  reported nine dead-code findings, all in EP-M3 files: `parse_retrieved_at`
+  and the docstring-only `_example_snapshot` were genuinely unused and are
+  deleted; the unused `path` parameter of `_source_document` is removed; the
+  migration's one-call `_row_count` helper is inlined into `downgrade`; and the
+  five `PricingSnapshot` validators reached only from the dataclass
+  `__post_init__` hook gained precise entry-point rules in `pyproject.toml`
+  naming that hook as the verified runtime caller. A standalone Skylos run now
+  exits 0, and the nose duplication gate passes standalone (`make duplication`,
+  30 allowed by reasoned exceptions). Gates pending at this entry; results
+  recorded below once the milestone gate run completes.
 - [ ] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
   correction.
 - [ ] EP-M5: documentation, roadmap, and final gates.
@@ -450,6 +494,15 @@ Success is observable as follows:
   supplies wire-accurate usage (including cached-token details) that exercises
   normalization and fractional rates, while the integration test is the minimal
   proof of reproducibility. Date/Author: 2026-10-16, planning agent.
+- Decision: EP-M3's red commit carries the two new domain modules
+  (`pricing_snapshot.py`, `pricing_snapshot_hash.py`) and their passing tests,
+  while the integration tests for the engine, catalogue, store, recorder, and
+  migration carry strict `xfail` markers. Rationale: a module-level import of a
+  not-yet-committed module is a collection error, not an `xfail`, and lazy
+  imports inside every test would be scaffolding that the implementation commit
+  immediately deletes. The red evidence is therefore the 28 strict `xfail`
+  integration tests, which fail against the legacy representation for the
+  intended reason. Date/Author: 2026-11-10, implementation agent.
 
 ## Outcomes & retrospective
 
@@ -1552,3 +1605,11 @@ effective_from: "2026-05-01T00:00:00Z"
   ADR template reference, the Skylos entry, the legacy migration defaults, the
   `INV-LEGACY-EQ` control wording, and the `canonical_json_bytes` rationale;
   added the pin-key residual risk. No change to the approved design direction.
+- Decision (2026-11-10, EP-M3): the cost package facade `episodic.cost` and
+  its stdlib-only helper `episodic.cost._time` stay outside every Hecate group,
+  and `tests/test_production_hecate_cost_config.py` pins that fact. Rationale:
+  the facade re-exports ports beside the application `CostRecorder`, so no
+  single policy group describes it, and `_time` imports nothing from the
+  project. The structural test globs the package recursively, so a new module
+  without a group fails, which is the property `INV-ARCH` needs. Date/Author:
+  2026-11-10, implementation agent.

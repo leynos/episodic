@@ -85,8 +85,11 @@ async def test_qa_migration_round_trips_through_its_downgrade(
 ) -> None:
     """Downgrading removes the artefacts and upgrading restores a usable schema."""
     async with migrated_engine.begin() as connection:
+        # Later revisions may sit above the QA migration, so step back to the
+        # revision this test owns before asserting its schema.
+        await connection.run_sync(_migrate, "downgrade", _QA_REVISION)
         assert await _recorded_revision(connection) == _QA_REVISION, (
-            "the migrated database should record the QA revision"
+            "the stepped-back database should record the QA revision"
         )
         await _assert_schema_state(connection, present=True)
 
