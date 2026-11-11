@@ -129,8 +129,8 @@ def test_authorization_decision_serializes_to_canonical_envelope(
 
 @pytest.mark.parametrize(
     "exception_type",
-    [OSError, RuntimeError, TypeError, ValueError],
-    ids=["os-error", "runtime-error", "type-error", "value-error"],
+    [KeyError, OSError, RuntimeError, TypeError, ValueError],
+    ids=["key-error", "os-error", "runtime-error", "type-error", "value-error"],
 )
 def test_authorization_adapter_failure_types_return_service_unavailable(
     session_factory: async_sessionmaker[AsyncSession],

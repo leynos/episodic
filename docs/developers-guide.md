@@ -846,7 +846,10 @@ Authorization scaffold:
 - Non-permit decisions short-circuit with the canonical error envelope:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
-  `503`, so policy-backend outages are not reported as resource failures.
+  `503`, so policy-backend outages are not reported as resource failures. When
+  a metrics sink is configured, each failure also increments
+  `authorization_adapter_failure_total` with only the bounded `category` label,
+  providing an aggregate diagnostic signal without exposing exception details.
 - Denial and adapter-failure warning records include only a fixed decision or
   failure-category label, an allow-listed standard HTTP method or the `<other>`
   placeholder, and an allow-listed resource root for recognized `/v1/`
