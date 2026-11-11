@@ -43,6 +43,32 @@ class _RecordCollector:
         return True
 
 
+class _SynchronousLogger:
+    """Record logging-port messages without backend-specific flush support."""
+
+    def __init__(self) -> None:
+        """Start an empty synchronous message record."""
+        self.messages: list[str] = []
+
+    # pylint: disable-next=too-many-arguments  # mirrors the logging protocol
+    def log(
+        self,
+        level: int | episodic_logging.LogLevel,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record one message after checking the logging call contract."""
+        assert isinstance(level, (int, episodic_logging.LogLevel)), (
+            "logging levels must satisfy the integer or LogLevel contract"
+        )
+        assert exc_info is None, "this test event has no exception metadata"
+        assert stack_info is False, "this test event has no stack metadata"
+        self.messages.append(message)
+
+
 class _SupportsFlushHandlers(typ.Protocol):
     """Minimal backend surface needed to drain asynchronous records."""
 
@@ -119,6 +145,37 @@ def test_logging_port_delivers_records_to_backend(
     )
     assert exception_metadata.get("message") == "boom", (
         "the backend record should retain the active exception message"
+    )
+
+
+def test_logger_handle_flushes_queued_records(
+    isolated_femtologging: None,
+) -> None:
+    """The logging handle drains queued records before process exit."""
+    import femtologging
+
+    backend = femtologging.get_logger("root")
+    collector = _RecordCollector()
+    backend.clear_handlers()
+    backend.set_propagate(False)
+    backend.add_handler(collector)
+
+    logger = episodic_logging.get_logger("root")
+    episodic_logging.log_info(logger, "queued event")
+
+    logger.flush()
+    assert len(collector.records) == 1, "flush should deliver the queued record"
+
+
+def test_logger_handle_without_backend_flush_is_already_drained() -> None:
+    """Synchronous custom loggers need no backend-specific flush support."""
+    backend = _SynchronousLogger()
+    logger = episodic_logging.LoggerHandle(backend)
+
+    episodic_logging.log_info(logger, "synchronous event")
+    assert logger.flush(), "a backend without queued handlers is already drained"
+    assert backend.messages == ["synchronous event"], (
+        "the synchronous backend should record the logging-port message"
     )
 
 

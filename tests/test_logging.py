@@ -294,6 +294,7 @@ def test_femtologging_exposes_stdlib_style_logger_surface() -> None:
         "critical",
         "exception",
         "isEnabledFor",
+        "flush_handlers",
     ):
         assert hasattr(logger, method_name), method_name
 
@@ -309,6 +310,7 @@ def test_episodic_logging_get_logger_returns_opaque_handle() -> None:
         "critical",
         "exception",
         "isEnabledFor",
+        "flush_handlers",
     ):
         assert not hasattr(logger, method_name), method_name
 

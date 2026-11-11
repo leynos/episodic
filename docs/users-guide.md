@@ -578,7 +578,9 @@ percent-style message template and its arguments. `log_exception` sets
 `get_logger(__name__).info(...)` are no longer supported. Use
 `format_log_event(event, **fields)` when a structured JSON message must use a
 particular handle; `log_event(level, message, **fields)` continues to emit
-through the port's configured logger.
+through the port's configured logger. At a short-lived process boundary,
+`LoggerHandle.flush()` drains queued records and reports whether the handlers
+completed their flush.
 
 Use `episodic.logging.log_event(level, message, **fields)` to emit an event.
 Its signature is
@@ -612,7 +614,8 @@ log_info(logger, "Started workflow %s", "workflow-42")
 
 The `episodic` command reports one structured span and one latency observation
 per API call. Those records go to standard error, so standard output stays a
-single JSON or table document.
+single JSON or table document. The command drains queued telemetry before it
+returns, including when an API call fails.
 
 Telemetry is off by default: with nothing configured, a successful run writes
 nothing to standard error. Set `EPISODIC_LOG_LEVEL` to `INFO`, `DEBUG`, or

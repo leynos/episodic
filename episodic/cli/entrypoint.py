@@ -15,6 +15,7 @@ import cyclopts
 from episodic.cli.app import build_app
 from episodic.cli.client import CliSinks
 from episodic.cli.errors import CliError
+from episodic.logging import get_logger
 from episodic.observability import (
     PerfCounterClock,
     StructuredLogMetrics,
@@ -107,9 +108,10 @@ def main(
     2
     """
     tokens = list(sys.argv[1:] if argv is None else argv)
+    is_production_invocation = sinks is None
     application = build_app(
         transport,
-        sinks=_production_sinks() if sinks is None else sinks,
+        sinks=_production_sinks() if is_production_invocation else sinks,
     )
     try:
         rendered = application.run(tokens)
@@ -121,11 +123,14 @@ def main(
         return USAGE_EXIT_CODE
     except SystemExit as error:
         return typ.cast("int", error.code or 0)
-
-    if rendered is not None:
-        text = str(rendered)
-        print(text, end="" if text.endswith("\n") else "\n")
-    return 0
+    else:
+        if rendered is not None:
+            text = str(rendered)
+            print(text, end="" if text.endswith("\n") else "\n")
+        return 0
+    finally:
+        if is_production_invocation:
+            get_logger("root").flush()
 
 
 def _report(error: CliError) -> None:

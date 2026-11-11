@@ -1975,8 +1975,9 @@ database client. See
 
 - The CLI may import its own modules, `domain_ports`, and the
   `external_libraries` group that holds its `httpx` transport and `cyclopts`
-  parser. The Hecate group `cli` enforces this, so an import of `episodic.api`
-  or a canonical service fails `make check-architecture`.
+  parser. It may use `logging_port` to drain queued records at the process
+  boundary. The Hecate group `cli` enforces these dependencies, so an import of
+  `episodic.api` or a canonical service fails `make check-architecture`.
 - Keep renderers pure functions from a parsed payload to a string. They must
   not print, exit, or read the environment; that is what makes them
   snapshottable.
@@ -1994,13 +1995,16 @@ database client. See
   a second command group.
 - `main` accepts a `CliSinks` keyword and forwards it through `build_app` into
   `CliRuntime`. `CliSinks` groups the tracer, metrics sink, and monotonic clock
-  so the entry point's parameter list stays bounded as sinks are added;
-  production leaves it unset, so the no-op adapters apply and instrumentation
-  changes no output or exit code. `QaApiClient.list_evaluations` opens one
-  `cli.qa_evaluations.list` span with a bounded outcome (`success`, `api_error`,
-  `rate_limited`, `transport_failure`, `invalid_url`) and emits its latency;
-  tests inject `CliSinks` built from `RecordingTracer`, `RecordingMetrics`, and
-  `StepClock` through `main`.
+  so the entry point's parameter list stays bounded as sinks are added. The
+  production entry point selects structured-log adapters when
+  `EPISODIC_LOG_LEVEL` enables INFO telemetry and flushes the root handler
+  queue before returning, including on non-zero exit codes. Calls with injected
+  `CliSinks` do not flush process-global handlers.
+  `QaApiClient.list_evaluations` opens one `cli.qa_evaluations.list` span with
+  a bounded outcome (`success`, `api_error`, `rate_limited`,
+  `transport_failure`, `invalid_url`) and emits its latency; tests inject
+  `CliSinks` built from `RecordingTracer`, `RecordingMetrics`, and `StepClock`
+  through `main`.
 
 ### Adding a command
 
