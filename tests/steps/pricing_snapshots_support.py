@@ -41,6 +41,11 @@ from episodic.cost.storage import (
     SqlAlchemyCostLedgerStore,
     SqlAlchemyPricingSnapshotStore,
 )
+from episodic.llm import LLMRequest
+from episodic.llm.openai_api.adapter import (
+    OpenAICompatibleLLMAdapter,
+    OpenAICompatibleLLMConfig,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -83,6 +88,15 @@ plans:
       - name: response_quality
         target: 0.99
 """
+
+
+@dc.dataclass(frozen=True, slots=True)
+class CallOptions:
+    """Optional identity and provenance for one recorded provider call."""
+
+    call_label: str
+    model: str = "gpt-4o-mini"
+    usage_source: UsageSource = UsageSource.PROVIDER
 
 
 @dc.dataclass(slots=True)
@@ -220,26 +234,22 @@ async def pin_llm_run(
 
 
 async def record_llm_call(
-    session_factory: SessionFactory,
-    directory: pathlib.Path,
+    context: PricingSnapshotContext,
     run_id: str,
     usage: cabc.Mapping[str, int],
-    *,
-    call_label: str,
-    model: str = "gpt-4o-mini",
-    usage_source: UsageSource = UsageSource.PROVIDER,
+    options: CallOptions,
 ) -> RecordedCall:
     """Record one call through the real recorder and return its cost."""
     record = ProviderCallRecord(
-        idempotency_key=IdempotencyKey(f"run:{run_id}:call:{call_label}"),
+        idempotency_key=IdempotencyKey(f"run:{run_id}:call:{options.call_label}"),
         parent_cost_entry_id=None,
         provider_type=PricedService.LLM.value,
         provider_name="openai",
-        model=model,
+        model=options.model,
         workflow_node="bdd",
         operation="chat_completions",
         usage=dict(usage),
-        usage_source=usage_source,
+        usage_source=options.usage_source,
         usage_complete=True,
         pricing_model=PricingModel.PAYG,
         retry_attempt=0,
@@ -247,10 +257,37 @@ async def record_llm_call(
         workflow_run_id=run_id,
         recorded_at=NOW,
     )
-    async with session_factory() as session:
-        entry_id = await build_recorder(session, directory).record_provider_call(record)
+    async with context.session_factory() as session:
+        entry_id = await build_recorder(
+            session, context.directory
+        ).record_provider_call(record)
         await session.commit()
-    return await _recorded_call(session_factory, entry_id)
+    return await _recorded_call(context.session_factory, entry_id)
+
+
+async def record_completion(
+    context: PricingSnapshotContext,
+) -> tuple[dict[str, int], RecordedCall]:
+    """Call the completion endpoint and record the usage the provider reports."""
+    config = OpenAICompatibleLLMConfig(base_url=context.base_url, api_key="test-key")
+    async with OpenAICompatibleLLMAdapter(config=config) as adapter:
+        response = await adapter.generate(
+            LLMRequest(model="gpt-4o-mini", prompt="price this call")
+        )
+    usage = response.provider_call_usage
+    assert usage is not None, "the provider must report usage for pricing"
+    metrics = dict(usage.usage_metrics)
+    recorded = await record_llm_call(
+        context,
+        context.run_id,
+        metrics,
+        CallOptions(
+            call_label="vidaimock",
+            model=response.model,
+            usage_source=usage.usage_source,
+        ),
+    )
+    return metrics, recorded
 
 
 async def _recorded_call(

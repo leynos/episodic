@@ -333,7 +333,14 @@ Success is observable as follows:
   has a different content hash from the pre-correction text. The behavioural
   suite passed (6 passed), the shipped-card tests passed (2 passed), and the
   affected set including the wiring and chart contracts passed (31 passed, 1
-  skipped).
+  skipped). The first gate run stopped at Pylint: the step module exceeded 400
+  lines and `record_llm_call` took seven arguments. The step definitions moved
+  to `tests/steps/pricing_snapshots_step_definitions.py`, registered through
+  `pytest_plugins` in `tests/conftest.py` because pytest-bdd installs each step
+  as a fixture in its defining module; the optional call identity became a
+  `CallOptions` value object, and the Vidai Mock call moved into
+  `record_completion`. Both modules are now under 400 lines and Pylint scores
+  10.00/10 on them.
 - [ ] EP-M5: documentation, roadmap, and final gates.
 
 ## Surprises & discoveries
