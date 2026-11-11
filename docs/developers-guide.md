@@ -858,8 +858,11 @@ Authorization scaffold:
   unrecognized path segments are omitted because URLs can carry credentials.
   The adapter still receives the unmodified `AuthorizationContext.path`.
   Adapter-failure categories are scoped to these authorization audit warnings;
-  they do not form a general exception taxonomy. Warnings omit exception
-  metadata, which could contain the raw authorization header.
+  they do not form a general exception taxonomy. The `os_error` category
+  includes `OSError`, `ConnectionError`, and `TimeoutError`; `RuntimeError`,
+  `TypeError`, and `ValueError` map to their corresponding category names.
+  Other caught exceptions, including `KeyError`, use `unknown_error`. Warnings
+  omit exception metadata, which could contain the raw authorization header.
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
 
