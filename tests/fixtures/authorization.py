@@ -1,5 +1,6 @@
 """Authorization adapters and client builders for API tests."""
 
+import dataclasses as dc
 import typing as typ
 
 from falcon import testing
@@ -14,6 +15,8 @@ from tests.fixtures.api import build_api_dependencies
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from episodic.observability import MetricsPort
 
 
 class DenyAllAuthorization:
@@ -52,6 +55,8 @@ class RaisingAuthorization:
 def build_authorization_test_client(
     session_factory: async_sessionmaker[AsyncSession],
     authorization: AuthorizationPort,
+    *,
+    metrics: MetricsPort | None = None,
 ) -> testing.TestClient:
     """Build a canonical API client with an authorization adapter.
 
@@ -61,17 +66,18 @@ def build_authorization_test_client(
         Session factory wired into the API dependencies.
     authorization : AuthorizationPort
         Adapter used to decide requests to protected endpoints.
+    metrics : MetricsPort or None, optional
+        Metrics sink used by the authorization middleware.
 
     Returns
     -------
     testing.TestClient
         Client configured with the supplied authorization adapter.
     """
-    return testing.TestClient(
-        create_app(
-            build_api_dependencies(
-                session_factory,
-                authorization=authorization,
-            )
-        )
+    dependencies = build_api_dependencies(
+        session_factory,
+        authorization=authorization,
     )
+    if metrics is not None:
+        dependencies = dc.replace(dependencies, metrics=metrics)
+    return testing.TestClient(create_app(dependencies))

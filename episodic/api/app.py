@@ -157,7 +157,9 @@ class _ShutdownHooksMiddleware:
 def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
-    app.add_middleware(AuthorizationMiddleware(dependencies.authorization))
+    app.add_middleware(
+        AuthorizationMiddleware(dependencies.authorization, dependencies.metrics)
+    )
     app.add_middleware(
         _GenerationRouteMetricsMiddleware(
             dependencies.metrics,

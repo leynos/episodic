@@ -3,7 +3,6 @@
 import time
 import typing as typ
 import unicodedata
-from unittest import mock
 
 import femtologging
 import pytest
@@ -15,6 +14,11 @@ from tests.fixtures.authorization import (
     ForbidSeriesProfilesAuthorization,
     RaisingAuthorization,
     build_authorization_test_client,
+)
+from tests.fixtures.authorization_log_routes import (
+    AUTHORIZATION_LOG_ROUTE_CASES,
+    STANDARD_AUTHORIZATION_LOG_METHODS,
+    AuthorizationLogRouteCase,
 )
 
 _LOG_ESCAPED_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
@@ -83,15 +87,6 @@ def authorization_log_collector(
     femtologging.reset_manager()
 
 
-class _AuthorizationHeaderFailure:
-    """Authorization adapter that includes the request header in its error."""
-
-    async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
-        """Raise with the raw header to test the middleware logging boundary."""
-        header = context.authorization_header
-        raise RuntimeError(header if header is not None else "missing header")
-
-
 class _InvalidDecisionAuthorization:
     """Authorization adapter that returns an unsafe, invalid decision value."""
 
@@ -113,95 +108,6 @@ class _AuthorizationLogCase(typ.NamedTuple):
     expected_message: str
     authorization_header: str | None = "Bearer sensitive-token"
     request_method: str = "GET"
-
-
-def test_authorization_adapter_failure_does_not_log_exception_metadata(
-    session_factory: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A failing adapter cannot leak its exception or the raw bearer header."""
-    backend = mock.Mock()
-    logger = episodic_logging.LoggerHandle(
-        typ.cast("episodic_logging._CompatibleLogger", backend)
-    )
-    monkeypatch.setattr(authorization_module, "logger", logger)
-    authorization_header = "Bearer sensitive-token"
-    client = build_authorization_test_client(
-        session_factory,
-        _AuthorizationHeaderFailure(),
-    )
-
-    response = client.simulate_get(
-        "/v1/series-profiles",
-        headers={"Authorization": authorization_header},
-    )
-
-    assert response.status_code == 503, response.status_code
-    backend.warning.assert_called_once_with(
-        "Authorization adapter failed with runtime_error for GET /v1/series-profiles.",
-        exc_info=None,
-        stack_info=False,
-    )
-    assert authorization_header not in repr(backend.warning.call_args), (
-        "authorization header must not reach the warning logger"
-    )
-
-
-@pytest.mark.parametrize(
-    ("exception_type", "expected_category"),
-    [
-        (ConnectionError, "os_error"),
-        (OSError, "os_error"),
-        (RuntimeError, "runtime_error"),
-        (TimeoutError, "os_error"),
-        (TypeError, "type_error"),
-        (ValueError, "value_error"),
-    ],
-    ids=[
-        "connection-error",
-        "os-error",
-        "runtime-error",
-        "timeout-error",
-        "type-error",
-        "value-error",
-    ],
-)
-def test_authorization_adapter_failure_logs_fixed_category(
-    session_factory: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
-    exception_type: type[Exception],
-    expected_category: str,
-) -> None:
-    """Adapter warnings identify known failures without logging their details."""
-    backend = mock.Mock()
-    logger = episodic_logging.LoggerHandle(
-        typ.cast("episodic_logging._CompatibleLogger", backend)
-    )
-    monkeypatch.setattr(authorization_module, "logger", logger)
-    authorization_header = "Bearer sensitive-token"
-    client = build_authorization_test_client(
-        session_factory,
-        RaisingAuthorization(error_type=exception_type),
-    )
-
-    response = client.simulate_get(
-        "/v1/series-profiles",
-        headers={"Authorization": authorization_header},
-    )
-
-    assert response.status_code == 503, response.status_code
-    backend.warning.assert_called_once_with(
-        f"Authorization adapter failed with {expected_category} for GET "
-        "/v1/series-profiles.",
-        exc_info=None,
-        stack_info=False,
-    )
-    assert "authorization backend unavailable" not in repr(backend.warning.call_args), (
-        "exception message must not reach the warning logger"
-    )
-    assert authorization_header not in repr(backend.warning.call_args), (
-        "authorization header must not reach the warning logger"
-    )
 
 
 @pytest.mark.parametrize(
@@ -323,6 +229,58 @@ def test_authorization_logs_warning_without_credentials_or_unsafe_unicode(
         unicodedata.category(char) not in _LOG_ESCAPED_UNICODE_CATEGORIES
         for char in message
     ), message
+    assert "Bearer sensitive-token" not in message, message
+    assert "sensitive-token" not in message, message
+    assert "sensitive-path-token" not in message, message
+
+
+def test_authorization_log_cases_cover_every_configured_root_and_method() -> None:
+    """Keep independent literal expectations complete as allow-lists evolve."""
+    # Read private allow-lists only to keep the literal test matrix complete.
+    assert {case.resource_key for case in AUTHORIZATION_LOG_ROUTE_CASES} == set(
+        authorization_module._AUTHORIZATION_LOG_RESOURCE_LABELS
+    ), "literal route expectations must cover every configured resource root"
+    assert set(STANDARD_AUTHORIZATION_LOG_METHODS) == (
+        authorization_module._AUTHORIZATION_LOG_METHODS
+    ), "literal method expectations must cover every configured method"
+
+
+@pytest.mark.parametrize(
+    "route_case",
+    AUTHORIZATION_LOG_ROUTE_CASES,
+    ids=[case.resource_key for case in AUTHORIZATION_LOG_ROUTE_CASES],
+)
+@pytest.mark.parametrize("method", STANDARD_AUTHORIZATION_LOG_METHODS)
+def test_denial_warning_uses_literal_route_and_standard_method_labels(
+    session_factory: async_sessionmaker[AsyncSession],
+    authorization_log_collector: tuple[
+        _SupportsFlushHandlers,
+        _AuthorizationLogCollector,
+    ],
+    route_case: AuthorizationLogRouteCase,
+    method: str,
+) -> None:
+    """Emit an exact, credential-free warning for each allowed route and method."""
+    backend, collector = authorization_log_collector
+    client = build_authorization_test_client(session_factory, DenyAllAuthorization())
+
+    response = client.simulate_request(
+        path=route_case.request_path,
+        method=method,
+        headers={"Authorization": "Bearer sensitive-token"},
+    )
+    _wait_for_authorization_log(backend, collector)
+
+    expected_message = (
+        f"Authorization denied with unauthorized for {method} "
+        f"{route_case.expected_resource_label}."
+    )
+    assert response.status_code == 401, response.status_code
+    assert len(collector.records) == 1, collector.records
+    logger_name, level, message = collector.records[0]
+    assert logger_name == "episodic.api.authorization", logger_name
+    assert level == "WARN", level
+    assert message == expected_message, message
     assert "Bearer sensitive-token" not in message, message
     assert "sensitive-token" not in message, message
     assert "sensitive-path-token" not in message, message

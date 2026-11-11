@@ -8,9 +8,18 @@ import typing as typ
 import falcon
 
 from episodic.logging import get_logger, log_warning
+from episodic.observability import MetricsPort, NoopMetrics
 
 logger = get_logger(__name__)
 
+_AUTHORIZATION_ADAPTER_FAILURE_TOTAL = "authorization_adapter_failure_total"
+# Exceptions outside this table intentionally use the fixed `unknown_error` label.
+_AUTHORIZATION_FAILURE_CATEGORIES = (
+    (OSError, "os_error"),
+    (RuntimeError, "runtime_error"),
+    (TypeError, "type_error"),
+    (ValueError, "value_error"),
+)
 _AUTHORIZATION_LOG_RESOURCE_LABELS = {
     "episode-templates": "/v1/episode-templates",
     "episodes": "/v1/episodes",
@@ -114,9 +123,14 @@ class StaticBearerTokenAuthorization:
 class AuthorizationMiddleware:
     """Falcon middleware that short-circuits unauthorized `/v1` requests."""
 
-    def __init__(self, authorization: AuthorizationPort) -> None:
-        """Store the authorization port used to decide each `/v1` request."""
+    def __init__(
+        self,
+        authorization: AuthorizationPort,
+        metrics: MetricsPort | None = None,
+    ) -> None:
+        """Store the authorization and optional metrics ports."""
         self._authorization = authorization
+        self._metrics = NoopMetrics() if metrics is None else metrics
 
     async def process_request(
         self,
@@ -134,9 +148,20 @@ class AuthorizationMiddleware:
         )
         try:
             result = _authorization_result(await self._authorization.decide(context))
-        except (OSError, RuntimeError, TypeError, ValueError) as error:  # fmt: skip
+        except Exception as error:  # ruff: ignore[blind-except]  # Adapter errors may contain credentials.
             # Adapter exception text may contain credentials from its context.
-            failure_category = self._authorization_failure_category(error)
+            failure_category = next(
+                (
+                    category
+                    for error_type, category in _AUTHORIZATION_FAILURE_CATEGORIES
+                    if isinstance(error, error_type)
+                ),
+                "unknown_error",
+            )
+            self._metrics.increment_counter(
+                _AUTHORIZATION_ADAPTER_FAILURE_TOTAL,
+                labels={"category": failure_category},
+            )
             log_warning(
                 logger,
                 "Authorization adapter failed with %s for %s %s.",
@@ -182,21 +207,6 @@ class AuthorizationMiddleware:
                 }
                 resp.status = falcon.HTTP_503
         resp.complete = True
-
-    @staticmethod
-    def _authorization_failure_category(error: Exception) -> str:
-        """Return a fixed label for a caught authorization adapter failure."""
-        match error:
-            case OSError():
-                return "os_error"
-            case RuntimeError():
-                return "runtime_error"
-            case TypeError():
-                return "type_error"
-            case ValueError():
-                return "value_error"
-            case _:
-                return "unknown_error"
 
 
 def _authorization_result(

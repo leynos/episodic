@@ -35,6 +35,18 @@ def test_authorization_route_labels_omit_sensitive_path_characters(
     )
 
 
+@given(log_character=st.characters(categories=_LOG_SENSITIVE_CATEGORIES))
+def test_authorization_route_labels_redact_sensitive_first_segment(
+    log_character: str,
+) -> None:
+    """Sensitive characters in the resource segment yield an unknown label."""
+    actual = _authorization_route_label(f"/v1/series-profiles{log_character}")
+
+    assert actual == _UNKNOWN_AUTHORIZATION_LOG_RESOURCE, (
+        f"expected the unknown resource label, got {actual!r}"
+    )
+
+
 @given(path_text=st.text())
 def test_authorization_route_labels_are_always_allow_listed(path_text: str) -> None:
     """Arbitrary first-segment text can only yield a fixed route label."""

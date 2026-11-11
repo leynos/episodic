@@ -101,18 +101,58 @@ class _DecoratedFailingDebugBackend(_LogOnlyBackend):
         raise TypeError(msg)
 
 
+class _NonCallableLogFallbackBackend:
+    """Expose a legacy DEBUG method beside a non-callable generic fallback."""
+
+    log = None
+
+    def __init__(self) -> None:
+        """Initialize the DEBUG attempt counter."""
+        self.debug_calls = 0
+
+    def debug(self, message: str, /) -> None:
+        """Count a DEBUG call if the unsupported keyword guard regresses."""
+        del message
+        self.debug_calls += 1
+
+
+class _UninspectableDebugMethod:
+    """Represent a callable whose DEBUG signature cannot be inspected."""
+
+    @property
+    def __signature__(self) -> typ.Never:
+        """Make signature inspection report that metadata is unavailable."""
+        msg = "signature unavailable"
+        raise ValueError(msg)
+
+    def __call__(self, message: str, /) -> None:
+        """Expose a legacy call shape that rejects helper keyword arguments."""
+        del message
+
+
+class _UninspectableDebugBackend(_LogOnlyBackend):
+    """Pair an uninspectable DEBUG callable with a working generic logger."""
+
+    def __init__(self) -> None:
+        """Initialize generic logging and the uninspectable DEBUG callable."""
+        super().__init__()
+        self.debug = _UninspectableDebugMethod()
+
+
 @pytest.mark.parametrize(
-    ("wrapper", "method_name"),
+    ("wrapper", "method_name", "expected_exc_info"),
     [
-        (episodic_logging.log_info, "info"),
-        (episodic_logging.log_warning, "warning"),
-        (episodic_logging.log_error, "error"),
+        (episodic_logging.log_info, "info", None),
+        (episodic_logging.log_warning, "warning", None),
+        (episodic_logging.log_error, "error", None),
+        (episodic_logging.log_exception, "exception", True),
     ],
-    ids=["info", "warning", "error"],
+    ids=["info", "warning", "error", "exception"],
 )
 def test_non_debug_helpers_do_not_retry_failed_convenience_methods(
     wrapper: cabc.Callable[..., None],
     method_name: str,
+    expected_exc_info: object | None,
 ) -> None:
     """Propagate emission failures without a second generic log call."""
     backend = mock.Mock()
@@ -127,7 +167,7 @@ def test_non_debug_helpers_do_not_retry_failed_convenience_methods(
 
     convenience_method.assert_called_once_with(
         "Loaded 3 documents",
-        exc_info=None,
+        exc_info=expected_exc_info,
         stack_info=False,
     )
     backend.log.assert_not_called()
@@ -189,3 +229,27 @@ def test_debug_preserves_signature_error_without_generic_fallback() -> None:
 
     with pytest.raises(TypeError, match="exc_info"):
         episodic_logging.log_debug(logger, "Loaded %s documents", 3)
+
+
+def test_debug_preserves_signature_error_when_generic_log_is_not_callable() -> None:
+    """Keep the original call error when the fallback attribute is not callable."""
+    backend = _NonCallableLogFallbackBackend()
+    logger = episodic_logging.LoggerHandle(
+        typ.cast("episodic_logging._CompatibleLogger", backend)
+    )
+
+    with pytest.raises(TypeError, match="exc_info"):
+        episodic_logging.log_debug(logger, "Loaded %s documents", 3)
+
+    assert backend.debug_calls == 0, "signature mismatch must fail before method entry"
+
+
+def test_debug_preserves_signature_error_when_method_is_uninspectable() -> None:
+    """Avoid a generic retry when DEBUG signature inspection is inconclusive."""
+    backend = _UninspectableDebugBackend()
+    logger = episodic_logging.LoggerHandle(backend)
+
+    with pytest.raises(TypeError, match="exc_info"):
+        episodic_logging.log_debug(logger, "Loaded %s documents", 3)
+
+    assert not backend.calls, "an uninspectable method must not fall back through log()"
