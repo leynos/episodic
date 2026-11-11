@@ -765,12 +765,24 @@ Success is observable as follows:
   `PricingSnapshotIntegrityError`. Fixed in `95b524d5` with the same anchored
   pattern, kept local to the migration so a later domain change cannot alter
   how historical rows convert, plus a migration test case.
+- Round 4 on the candidate carrying round 3: all seven gates green (`make test`
+  2229 passed, 1 skipped, 71 snapshots). The CLI review covered 78 files and
+  raised one finding: a quoted amount such as `"1e999999999"` is a valid
+  `Decimal`, and `as_integer_ratio` would build a billion-digit integer before
+  the rate range check rejected it, hanging startup. Fixed in `52e14676` by
+  rejecting an exponent beyond 30 decimal places, with positive and negative
+  exponent cases in the loader tests.
 - Lesson: the currency validator's shape check and its uppercase check were
   two separate conditions, so a non-ASCII letter such as `É` passed the
   alphabetic test. One anchored pattern expresses the whole contract and cannot
   drift between the two halves. The same defect existed in two places, in the
   domain and in the migration, so fixing one copy is not evidence that the
   other is correct.
+- Lesson: validation order is part of a parser's contract. The finite and
+  non-negative checks ran before `as_integer_ratio`, but the cost of conversion
+  is driven by the exponent, so an amplification attack passed every earlier
+  check. Cheap bounds belong ahead of any conversion whose cost the input
+  controls.
 
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
