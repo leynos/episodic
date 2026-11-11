@@ -3,7 +3,7 @@
 `CostRecorder` persists the snapshot it prices from and later reads that
 stored row, so a pinned run keeps its rates after the source rate card is
 edited or removed. This module owns the repository port and its errors; the
-snapshot value object itself lives in `episodic.cost.ports`.
+snapshot value object itself lives in `episodic.cost.pricing_snapshot`.
 
 Examples
 --------
@@ -20,7 +20,7 @@ import typing as typ
 from episodic.cost.primitives import CostAccountingError, PricingSnapshotId
 
 if typ.TYPE_CHECKING:
-    from episodic.cost.ports import PricingSnapshot
+    from episodic.cost.pricing_snapshot import PricingSnapshot
 
 
 class SnapshotEnsureOutcome(enum.StrEnum):

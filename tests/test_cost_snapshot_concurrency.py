@@ -28,6 +28,8 @@ from episodic.cost.storage import (
 )
 
 if typ.TYPE_CHECKING:
+    import uuid
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     type SessionFactory = async_sessionmaker[AsyncSession]
@@ -73,6 +75,21 @@ async def _snapshot_row_count(
         return (
             await session.execute(
                 sa.select(sa.func.count(PricingSnapshotRecord.id)).where(
+                    PricingSnapshotRecord.content_hash == content_hash
+                )
+            )
+        ).scalar_one()
+
+
+async def _stored_snapshot_id(
+    session_factory: SessionFactory,
+    content_hash: str,
+) -> uuid.UUID:
+    """Return the identifier stored for one content hash."""
+    async with session_factory() as session:
+        return (
+            await session.execute(
+                sa.select(PricingSnapshotRecord.id).where(
                     PricingSnapshotRecord.content_hash == content_hash
                 )
             )
@@ -148,6 +165,10 @@ async def test_concurrent_ensure_and_pin_persist_one_snapshot_and_pin(
             .all()
         )
     assert len(pins) == 1, "concurrent pinning must persist exactly one pin row"
+    stored_id = await _stored_snapshot_id(session_factory, snapshot.content_hash)
+    assert pins[0].pricing_snapshot_id == stored_id, (
+        "the surviving pin must reference the stored snapshot"
+    )
 
 
 @pytest.mark.asyncio

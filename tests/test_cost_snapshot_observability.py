@@ -192,6 +192,12 @@ async def test_ensure_snapshot_emits_persisted_and_reused(
 async def test_ensure_snapshot_emits_integrity_on_a_conflict_without_a_row() -> None:
     """A conflict with no stored content hash reports the integrity category."""
     session = mock.create_autospec(AsyncSession, instance=True)
+    # Drive the real conflict branch: the insert returns no identifier and the
+    # fallback lookup finds no row for the content hash.
+    result = mock.Mock()
+    result.scalar_one_or_none.return_value = None
+    session.execute.return_value = result
+    session.scalar.return_value = None
     tracer = RecordingTracer()
     metrics = _RecordingMetrics()
     store = SqlAlchemyPricingSnapshotStore(
@@ -200,16 +206,8 @@ async def test_ensure_snapshot_emits_integrity_on_a_conflict_without_a_row() -> 
         tracer=tracer,
         clock=_SteppingClock(),
     )
-    conflict = mock.AsyncMock(
-        side_effect=PricingSnapshotIntegrityError(
-            "insert conflicted without an existing content hash"
-        )
-    )
 
-    with (
-        mock.patch.object(store, "_ensure_snapshot", new=conflict),
-        pytest.raises(PricingSnapshotIntegrityError, match="content hash"),
-    ):
+    with pytest.raises(PricingSnapshotIntegrityError, match="content hash"):
         await store.ensure(v1_pricing_snapshot())
 
     labels = {

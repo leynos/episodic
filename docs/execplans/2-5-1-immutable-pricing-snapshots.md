@@ -284,8 +284,19 @@ Success is observable as follows:
   `__post_init__` hook gained precise entry-point rules in `pyproject.toml`
   naming that hook as the verified runtime caller. A standalone Skylos run now
   exits 0, and the nose duplication gate passes standalone (`make duplication`,
-  30 allowed by reasoned exceptions). Gates pending at this entry; results
-  recorded below once the milestone gate run completes.
+  30 allowed by reasoned exceptions). All seven gates then passed on candidate
+  `f3e75c8a` (`make test` 2204 passed, 1 skipped, 71 snapshots; no timeout),
+  and the milestone CodeRabbit CLI review completed over 64 of 64 changed files
+  against `92663d12`, reporting five `trivial` findings and no high or medium
+  ones. All five were valid and are fixed: the ExecPlan's machine-specific
+  checkout path became a branch-relative instruction; the stale
+  `episodic.cost.primitives._validate_currency_code` Skylos entry was deleted;
+  `pricing_snapshot_ports` now imports `PricingSnapshot` from its defining
+  module and names it in the docstring; the concurrency test asserts the
+  surviving pin references the stored snapshot; and the observability test now
+  drives the real insert-conflict path through an autospecced session instead
+  of patching `_ensure_snapshot`. Results recorded below once the re-gate and
+  re-review complete.
 - [ ] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
   correction.
 - [ ] EP-M5: documentation, roadmap, and final gates.
@@ -1188,9 +1199,8 @@ passes all scenarios; all gates pass.
 
 ## Concrete steps
 
-Run everything from the repository root:
-`/home/leynos/.lody/repos/github---leynos---episodic/worktrees/cfeea8a5-844d-4bd3-b412-44c729d0d188`
-(or the implementer's checkout of branch `2-5-1-immutable-pricing-snapshots`).
+Run everything from the root of your checkout of branch
+`2-5-1-immutable-pricing-snapshots`.
 
 Focused red and green runs, for example:
 
