@@ -165,24 +165,52 @@ async def test_upgrade_converts_legacy_rows(
 
 
 @pytest.mark.asyncio
-async def test_upgrade_rejects_a_recomputed_hash_collision(
+async def test_upgrade_merges_rows_that_differ_only_by_billing_period(
     migrated_engine: AsyncEngine,
 ) -> None:
-    """Two legacy rows with equal content cannot share one v1 identity."""
-    first = uuid.UUID(int=21)
-    second = uuid.UUID(int=22)
-    # The legacy rows differ only in their stored hash, which keeps the seed
-    # within the pre-existing uniqueness constraint; the conversion still
-    # produces one shared identity.
+    """Equivalent legacy rows collapse into one version and keep their pins."""
+    survivor = uuid.UUID(int=21)
+    duplicate = uuid.UUID(int=22)
+    # The legacy rows differ only in billing period and stored hash, which keeps
+    # the seed within the pre-existing uniqueness constraint; the conversion
+    # still produces one shared identity.
     async with migrated_engine.begin() as connection:
         await _seed_legacy_rows(
             connection,
             [
-                _legacy_row(first, content_hash="legacy-first"),
-                _legacy_row(second, content_hash="legacy-second"),
+                _legacy_row(
+                    survivor,
+                    billing_period_key="2026-05",
+                    content_hash="legacy-may",
+                ),
+                _legacy_row(
+                    duplicate,
+                    billing_period_key="2026-06",
+                    content_hash="legacy-june",
+                ),
             ],
         )
-        await _upgrade_is_rejected(connection, str(first))
+        await connection.execute(
+            sa.text(
+                "INSERT INTO run_pricing_pins (workflow_run_id, provider_name, "
+                "model, operation, billing_period_key, pricing_snapshot_id) "
+                "VALUES ('run-1', 'openai', 'gpt-4o-mini', 'chat_completions', "
+                "'2026-06', :snapshot)"
+            ),
+            {"snapshot": duplicate},
+        )
+        await _upgrade(connection)
+        rows = await _rows(connection)
+        pinned = (
+            await connection.execute(
+                sa.text("SELECT pricing_snapshot_id FROM run_pricing_pins")
+            )
+        ).scalar_one()
+
+    assert [row["id"] for row in rows] == [survivor], (
+        "equivalent rows must merge into the earliest snapshot"
+    )
+    assert pinned == survivor, "a pin on the duplicate must follow the survivor"
 
 
 @pytest.mark.asyncio

@@ -43,16 +43,10 @@ _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _REQUIRED_TEXT_FIELDS = ("provider_name", "model", "operation")
 _SOURCE_KINDS = frozenset({"provider_rate_card", "sla4oai_plan"})
 _CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")
-_EMPTY_TABLE_GUARD = """
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pricing_snapshots) THEN
-        RAISE EXCEPTION
-            'pricing_snapshots must be empty to run this migration';
-    END IF;
-END
-$$;
-"""
+_EMPTY_TABLE_GUARD = (
+    "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pricing_snapshots) THEN RAISE EXCEPTION "
+    "'pricing_snapshots must be empty to run this migration'; END IF; END $$;"
+)
 
 
 def _instant(value: dt.datetime) -> str:
@@ -115,10 +109,7 @@ def _convert_metadata(
         if not isinstance(key, str) or not _IDENTIFIER.fullmatch(key):
             _reject(snapshot_id, f"source metadata key {key!r} is not an identifier")
         if not isinstance(value, str):
-            _reject(
-                snapshot_id,
-                f"source metadata value for {key!r} must be a string",
-            )
+            _reject(snapshot_id, f"source metadata value for {key!r} must be a string")
         converted[key] = value
     return converted
 
@@ -194,24 +185,15 @@ def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
         if not isinstance(value, str) or not value.strip():
             _reject(snapshot_id, f"{field} must be a non-blank string")
     if not _is_currency_code(row["currency"]):
-        _reject(
-            snapshot_id,
-            "currency must be a three-letter uppercase ASCII code",
-        )
+        _reject(snapshot_id, "currency must be a three-letter uppercase ASCII code")
     source_kind = row["source_kind"]
     if source_kind not in _SOURCE_KINDS:
         _reject(snapshot_id, f"unknown source kind {source_kind!r}")
     if source_kind == "sla4oai_plan":
-        _reject(
-            snapshot_id,
-            "a legacy sla4oai_plan row carries no source document",
-        )
+        _reject(snapshot_id, "a legacy sla4oai_plan row carries no source document")
     _require_json_objects(row, snapshot_id)
     if not row["rates_minor_per_metric"]:
-        _reject(
-            snapshot_id,
-            "a provider_rate_card snapshot must price at least one metric",
-        )
+        _reject(snapshot_id, "a snapshot must price at least one metric")
 
 
 def _converted_row(
@@ -237,14 +219,8 @@ def _add_new_columns() -> None:
     op.add_column("pricing_snapshots", sa.Column("schema_version", sa.Integer))
     op.add_column("pricing_snapshots", sa.Column("service_kind", sa.Text))
     op.add_column("pricing_snapshots", sa.Column("rates", postgresql.JSONB))
-    op.add_column(
-        "pricing_snapshots",
-        sa.Column("source_document_media_type", sa.Text),
-    )
-    op.add_column(
-        "pricing_snapshots",
-        sa.Column("source_document_content", sa.Text),
-    )
+    for column in ("source_document_media_type", "source_document_content"):
+        op.add_column("pricing_snapshots", sa.Column(column, sa.Text))
     op.add_column(
         "pricing_snapshots",
         sa.Column(
@@ -259,31 +235,23 @@ def _tighten_new_columns() -> None:
     """Make the required new columns non-null and add their checks."""
     for column in ("schema_version", "service_kind", "rates", "recorded_at"):
         op.alter_column("pricing_snapshots", column, nullable=False)
-    op.create_check_constraint(
-        "ck_pricing_snapshots_schema_version",
-        "pricing_snapshots",
-        "schema_version = 1",
-    )
-    op.create_check_constraint(
-        "ck_pricing_snapshots_service_kind",
-        "pricing_snapshots",
-        "service_kind IN ('llm', 'tts', 'helper_service')",
-    )
-    op.create_check_constraint(
-        "ck_pricing_snapshots_source_kind",
-        "pricing_snapshots",
-        "source_kind IN ('provider_rate_card', 'sla4oai_plan')",
-    )
-    op.create_check_constraint(
-        "ck_pricing_snapshots_source_document_pair",
-        "pricing_snapshots",
-        "(source_document_media_type IS NULL) = (source_document_content IS NULL)",
-    )
-    op.create_check_constraint(
-        "ck_pricing_snapshots_source_document_required",
-        "pricing_snapshots",
-        "source_kind <> 'sla4oai_plan' OR source_document_content IS NOT NULL",
-    )
+    checks = {
+        "ck_pricing_snapshots_schema_version": "schema_version = 1",
+        "ck_pricing_snapshots_service_kind": (
+            "service_kind IN ('llm', 'tts', 'helper_service')"
+        ),
+        "ck_pricing_snapshots_source_kind": (
+            "source_kind IN ('provider_rate_card', 'sla4oai_plan')"
+        ),
+        "ck_pricing_snapshots_source_document_pair": (
+            "(source_document_media_type IS NULL) = (source_document_content IS NULL)"
+        ),
+        "ck_pricing_snapshots_source_document_required": (
+            "source_kind <> 'sla4oai_plan' OR source_document_content IS NOT NULL"
+        ),
+    }
+    for name, condition in checks.items():
+        op.create_check_constraint(name, "pricing_snapshots", condition)
 
 
 def _drop_legacy_columns() -> None:
@@ -293,33 +261,61 @@ def _drop_legacy_columns() -> None:
 
 
 def _legacy_rows(connection: sa.Connection) -> list[dict[str, object]]:
-    """Read every legacy row before conversion."""
+    """Read every legacy row before conversion, oldest first."""
+    # A stable order makes the first row for a content hash the survivor when
+    # equivalent rows are merged, so the choice does not depend on heap order.
     result = connection.execute(
         sa.text(
             "SELECT id, provider_name, model, operation, source_kind, currency, "
             "rates_minor_per_metric, source_metadata, retrieved_at, "
-            "effective_from FROM pricing_snapshots"
+            "effective_from FROM pricing_snapshots "
+            "ORDER BY retrieved_at, id"
         )
     )
     return [dict(row._mapping) for row in result]
+
+
+def _merge_equivalent_row(
+    connection: sa.Connection,
+    *,
+    duplicate: object,
+    survivor: object,
+) -> None:
+    """Point every reference at the survivor, then delete the duplicate."""
+    # Legacy rows that differed only by billing period collapse into one
+    # version once the period leaves the snapshot. Both rows are valid and may
+    # be pinned, so the references move rather than the upgrade aborting.
+    params = {"duplicate": duplicate, "survivor": survivor}
+    for statement in (
+        sa.text(
+            "UPDATE cost_ledger_entries SET pricing_snapshot_id = :survivor "
+            "WHERE pricing_snapshot_id = :duplicate"
+        ),
+        sa.text(
+            "UPDATE run_pricing_pins SET pricing_snapshot_id = :survivor "
+            "WHERE pricing_snapshot_id = :duplicate"
+        ),
+    ):
+        connection.execute(statement, params)
+    connection.execute(
+        sa.text("DELETE FROM pricing_snapshots WHERE id = :duplicate"),
+        {"duplicate": duplicate},
+    )
 
 
 def _write_converted_rows(
     connection: sa.Connection,
     rows: cabc.Sequence[dict[str, object]],
 ) -> None:
-    """Convert and write every legacy row, rejecting hash collisions."""
-    seen: dict[str, object] = {}
+    """Convert and write every legacy row, merging equivalent content."""
+    survivors: dict[str, object] = {}
     for row in rows:
         rates, metadata, content_hash = _converted_row(row)
-        previous = seen.get(content_hash)
-        if previous is not None:
-            msg = (
-                f"pricing snapshots {previous} and {row['id']} convert to the "
-                f"same content hash {content_hash}"
-            )
-            raise CommandError(msg)
-        seen[content_hash] = row["id"]
+        survivor = survivors.get(content_hash)
+        if survivor is not None:
+            _merge_equivalent_row(connection, duplicate=row["id"], survivor=survivor)
+            continue
+        survivors[content_hash] = row["id"]
         connection.execute(
             sa.text(
                 "UPDATE pricing_snapshots SET schema_version = 1, "
