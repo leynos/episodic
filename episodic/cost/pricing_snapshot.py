@@ -24,7 +24,9 @@ Examples
 ...     retrieved_at=dt.datetime(2026, 5, 1, tzinfo=dt.UTC),
 ... )
 >>> snapshot.rates["input_tokens"].amount_minor
-15
+3
+>>> snapshot.rates["input_tokens"].per_units
+200000
 """
 
 import dataclasses as dc

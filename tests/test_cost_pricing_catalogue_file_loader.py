@@ -118,6 +118,15 @@ def test_loader_rejects_a_non_string_effective_from(
             id="duplicate-key",
         ),
         pytest.param(
+            _card().replace(
+                "    rates:\n",
+                "    ? [a, b]\n    : 1\n    rates:\n",
+                1,
+            ),
+            "unhashable key",
+            id="unhashable-key",
+        ),
+        pytest.param(
             _card().replace("unit: token", "unit: kilogram"),
             "kilogram",
             id="unknown-rate-unit",

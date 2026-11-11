@@ -932,13 +932,21 @@ A missing pinned snapshot or a stored row that no longer matches its content
 hash fails the generation under the stable `cost.pricing_snapshot` category. An
 invalid card stops the process at startup with an error naming the file.
 
-Upgrading a deployment that holds `2.4.4` rows is stop-the-world. Scale
-launchers and workers to zero, take a complete database backup that includes
-`pricing_snapshots`, `run_pricing_pins`, `cost_ledger_entries`, and
-`alembic_version`, run `alembic upgrade head`, then roll out the new image. The
-migration converts every existing row to schema version 1; its offline
-(`--sql`) form refuses to run unless `pricing_snapshots` is empty, because hash
-recomputation needs Python. Downgrade refuses unless the table is empty.
+Upgrading a deployment that holds `2.4.4` rows is stop-the-world. Stop every
+writer first: scale launchers, workers, and API pods to zero, and wait for
+in-flight requests to drain, because a row committed after the backup is not in
+it. Then take a complete database backup that includes `pricing_snapshots`,
+`run_pricing_pins`, `cost_ledger_entries`, and `alembic_version`, run
+`alembic upgrade head`, and roll out the new image. Keep the writers stopped
+until the migration has committed and the new image is serving: the migration
+reads every existing row under an exclusive lock on `pricing_snapshots`, so a
+writer that resumes early either blocks or races the conversion. In the local
+Podman/kind preview, replacing the application pod also deletes the `emptyDir`
+source-blob store, so re-upload source documents after the upgrade as described
+in the preview notes above. The migration converts every existing row to schema
+version 1; its offline (`--sql`) form refuses to run unless `pricing_snapshots`
+is empty, because hash recomputation needs Python. Downgrade refuses unless the
+table is empty.
 
 ### Advanced Topics
 

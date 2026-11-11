@@ -1566,8 +1566,9 @@ snapshot pinning strategy, and deterministic pricing rules for this design.
   recording an unpinned provider call, so those foreign keys reference an
   existing row; a call with an existing pin relies on the pin's foreign key.
 - `PricingEngine` computes the cost of an individual call deterministically
-  from provider, model, operation, usage metrics, billing period,
-  `pricing_snapshot_id`, and organization identifier.
+  from the pricing snapshot's provider, model, operation, and exact rates, plus
+  the call's usage metrics and operation. The billing period is not an input:
+  it lives on run pins and ledger rows, not on the snapshot.
 - When quotas and overage pricing apply, `PricingEngine` relies on a
   concurrency-safe `MeteringPort` to atomically consume per-metric usage within
   the relevant billing period. This avoids parallel tasks randomly

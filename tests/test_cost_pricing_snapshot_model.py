@@ -83,10 +83,11 @@ def test_blank_identity_fields_are_rejected(field: str, value: str) -> None:
         _snapshot(**{field: value})
 
 
-def test_invalid_currency_is_rejected() -> None:
-    """Currency codes must be three uppercase letters."""
+@pytest.mark.parametrize("code", ["usd", "ÉÉÉ", "US1"])
+def test_invalid_currency_is_rejected(code: str) -> None:
+    """Currency codes must be three uppercase ASCII letters."""
     with pytest.raises(ValueError, match="currency"):
-        _snapshot(currency=CurrencyCode("usd"))
+        _snapshot(currency=CurrencyCode(code))
 
 
 def test_naive_retrieved_at_is_rejected() -> None:

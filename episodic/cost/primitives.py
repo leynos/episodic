@@ -7,9 +7,10 @@ application services and therefore must not sit inside the domain boundary.
 """
 
 import enum
+import re
 import typing as typ
 
-_ISO_CURRENCY_CODE_LENGTH = 3
+_ISO_CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")
 
 
 class PricingSourceKind(enum.StrEnum):
@@ -42,16 +43,12 @@ def validate_currency_code(currency: CurrencyCode) -> None:
     Raises
     ------
     ValueError
-        If the code is not three alphabetic uppercase characters.
+        If the code is not three uppercase ASCII letters.
 
     Examples
     --------
     >>> validate_currency_code(CurrencyCode("USD"))
     """
-    currency_value = str(currency)
-    if len(currency_value) != _ISO_CURRENCY_CODE_LENGTH or not currency_value.isalpha():
-        msg = "currency must be a three-letter ISO 4217 code."
-        raise ValueError(msg)
-    if currency_value != currency_value.upper():
-        msg = "currency must use uppercase ISO 4217 letters."
+    if _ISO_CURRENCY_CODE.fullmatch(str(currency)) is None:
+        msg = "currency must be a three-letter uppercase ISO 4217 code."
         raise ValueError(msg)

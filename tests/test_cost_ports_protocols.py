@@ -66,11 +66,6 @@ def _make_snapshot(subject: PricingSubject = _DEFAULT_SUBJECT) -> PricingSnapsho
     )
 
 
-def _surrogate_id(snapshot: PricingSnapshot) -> PricingSnapshotId:
-    """Derive a stable surrogate identifier from a snapshot's content hash."""
-    return PricingSnapshotId(str(uuid.uuid5(uuid.NAMESPACE_URL, snapshot.content_hash)))
-
-
 class _InMemoryCostLedger:
     """Fake cost ledger for protocol conformance tests."""
 
@@ -106,24 +101,29 @@ class _InMemoryCostLedger:
 
 
 class _InMemoryPricingSnapshots:
-    """Fake snapshot repository keyed by content hash."""
+    """Fake snapshot repository keyed by content hash, like the real store."""
 
     def __init__(self) -> None:
         """Start with no stored snapshots."""
         self._stored: dict[PricingSnapshotId, PricingSnapshot] = {}
+        self._by_content_hash: dict[str, PricingSnapshotId] = {}
 
     async def ensure(self, snapshot: PricingSnapshot) -> EnsuredPricingSnapshot:
         """Store the snapshot once and report whether this call inserted it."""
-        pricing_snapshot_id = _surrogate_id(snapshot)
-        outcome = (
-            SnapshotEnsureOutcome.REUSED
-            if pricing_snapshot_id in self._stored
-            else SnapshotEnsureOutcome.PERSISTED
-        )
-        self._stored.setdefault(pricing_snapshot_id, snapshot)
+        existing = self._by_content_hash.get(snapshot.content_hash)
+        if existing is not None:
+            return EnsuredPricingSnapshot(
+                pricing_snapshot_id=existing,
+                outcome=SnapshotEnsureOutcome.REUSED,
+            )
+        # The real store assigns a UUIDv7 surrogate on first insert and reuses
+        # it for the same content hash thereafter.
+        pricing_snapshot_id = PricingSnapshotId(str(uuid.uuid7()))
+        self._by_content_hash[snapshot.content_hash] = pricing_snapshot_id
+        self._stored[pricing_snapshot_id] = snapshot
         return EnsuredPricingSnapshot(
             pricing_snapshot_id=pricing_snapshot_id,
-            outcome=outcome,
+            outcome=SnapshotEnsureOutcome.PERSISTED,
         )
 
     async def get(self, pricing_snapshot_id: PricingSnapshotId) -> PricingSnapshot:

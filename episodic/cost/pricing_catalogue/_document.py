@@ -11,6 +11,7 @@ Examples
 1
 """
 
+import collections.abc as cabc
 import decimal
 import typing as typ
 
@@ -31,7 +32,6 @@ from episodic.cost.primitives import CurrencyCode, PricingSourceKind
 from ._errors import PricingCatalogueError
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import datetime as dt
     import pathlib
 
@@ -76,6 +76,17 @@ def _construct_unique_mapping(
     mapping: dict[object, object] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
+        if not isinstance(key, cabc.Hashable):
+            # A sequence key such as ``? [a, b]`` constructs to a list, which
+            # cannot be a mapping key; report it as a YAML error so the caller
+            # still gets a catalogue error naming the file.
+            msg = f"found unhashable key {key!r}"
+            raise yaml.constructor.ConstructorError(  # ruff: ignore[raise-vanilla-args]  # PyYAML needs the context and problem marks.
+                "while constructing a mapping",
+                node.start_mark,
+                msg,
+                key_node.start_mark,
+            )
         if key in mapping:
             msg = f"found duplicate key {key!r}"
             raise yaml.constructor.ConstructorError(  # ruff: ignore[raise-vanilla-args]  # PyYAML needs the context and problem marks.
