@@ -756,10 +756,21 @@ Success is observable as follows:
   documentation inaccuracies. All seven were actioned in `17449258`, which also
   replaced the three-condition currency check with one anchored regular
   expression to satisfy the boolean-expression lint rule.
+- Round 3 at `e9b7db88`: all seven gates green (`make test` 2228 passed, 1
+  skipped, 71 snapshots; `check-migrations` applied all 17 revisions cleanly;
+  `markdownlint` 0 issues in 135 files; `nixie` all diagrams validated). The
+  CLI review covered 79 files and raised one finding: the migration held its
+  own copy of the defect fixed in round 2, so a legacy row with a code such as
+  `ÉÜÖ` migrated cleanly and then failed `get` with
+  `PricingSnapshotIntegrityError`. Fixed in `95b524d5` with the same anchored
+  pattern, kept local to the migration so a later domain change cannot alter
+  how historical rows convert, plus a migration test case.
 - Lesson: the currency validator's shape check and its uppercase check were
   two separate conditions, so a non-ASCII letter such as `É` passed the
   alphabetic test. One anchored pattern expresses the whole contract and cannot
-  drift between the two halves.
+  drift between the two halves. The same defect existed in two places, in the
+  domain and in the migration, so fixing one copy is not evidence that the
+  other is correct.
 
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
