@@ -54,6 +54,11 @@ _REQUIRED_KEYS = frozenset({
 })
 _OPTIONAL_KEYS = frozenset({"source_metadata", "effective_from"})
 _TIMESTAMP_ERROR = "pricing snapshot timestamps must include timezone information."
+# A decimal string can name an exponent far larger than any price: ``1e999999999``
+# would make ``as_integer_ratio`` build a billion-digit integer. No representable
+# rate needs more than a few dozen decimal places, so a larger exponent is a
+# malformed card rather than a price.
+_MAX_DECIMAL_EXPONENT = 30
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -186,6 +191,9 @@ def _amount_fraction(
         _fail(path, f"rate {metric!r} amount_minor {amount!r} is not a decimal.")
     if not value.is_finite() or value < 0:
         _fail(path, f"rate {metric!r} amount_minor must be finite and non-negative.")
+    exponent = value.as_tuple().exponent
+    if isinstance(exponent, int) and abs(exponent) > _MAX_DECIMAL_EXPONENT:
+        _fail(path, f"rate {metric!r} amount_minor exponent is out of range.")
     numerator, denominator = value.as_integer_ratio()
     return numerator, denominator
 
