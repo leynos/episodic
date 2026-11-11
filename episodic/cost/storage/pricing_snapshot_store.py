@@ -344,13 +344,16 @@ class SqlAlchemyPricingSnapshotStore:
         except ValueError:
             msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
             raise PricingSnapshotNotFoundError(msg) from None
-        record = (
-            await self._session.execute(
-                sa.select(PricingSnapshotRecord).where(
-                    PricingSnapshotRecord.id == row_id
+        # A read must not flush pending writes: the caller may be mid-transaction
+        # and an implicit flush here would persist unrelated work.
+        with self._session.no_autoflush:
+            record = (
+                await self._session.execute(
+                    sa.select(PricingSnapshotRecord).where(
+                        PricingSnapshotRecord.id == row_id
+                    )
                 )
-            )
-        ).scalar_one_or_none()
+            ).scalar_one_or_none()
         if record is None:
             msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
             raise PricingSnapshotNotFoundError(msg)
