@@ -304,7 +304,10 @@ Success is observable as follows:
   UTF-8 and an unreadable path), and the legacy `pricing_snapshots` table
   definition and its revision moved to
   `tests/fixtures/legacy_pricing_snapshots.py`, imported by both migration
-  suites instead of duplicated. A third gate and review round follows.
+  suites instead of duplicated. The re-gate on `058925bf` passed all seven gates
+  (`make test` 2207 passed, 1 skipped, 71 snapshots), and the third milestone
+  review covered 65 of 65 changed files with zero findings
+  (`outcome: completed`). EP-M3 is complete.
 - [ ] EP-M4: behavioural coverage, Vidai Mock scenario, and the 7.5-cent
   correction.
 - [ ] EP-M5: documentation, roadmap, and final gates.
