@@ -186,6 +186,26 @@ def test_debug_falls_back_when_signature_rejects_helper_keywords() -> None:
     )
 
 
+def test_debug_fallback_preserves_explicit_exc_info() -> None:
+    """Forward caller-supplied exception information through the fallback."""
+    backend = _LegacyDebugBackend()
+    logger = episodic_logging.LoggerHandle(backend)
+    exc_info = (RuntimeError, RuntimeError("adapter failed"), None)
+
+    episodic_logging.log_debug(
+        logger,
+        "Loaded %s documents",
+        3,
+        exc_info=exc_info,
+    )
+
+    assert backend.debug_calls == 0, "signature mismatch must fail before method entry"
+    assert backend.calls == [(logging.DEBUG, "Loaded 3 documents", exc_info, False)], (
+        "fallback logging must preserve the caller's exception information"
+    )
+    assert backend.calls[0][2] is exc_info, "fallback should forward the same object"
+
+
 def test_debug_preserves_internal_type_error_without_retry() -> None:
     """Propagate a compatible DEBUG failure to avoid a duplicate record."""
     backend = _FailingDebugBackend()

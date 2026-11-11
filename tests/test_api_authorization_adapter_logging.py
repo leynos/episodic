@@ -8,6 +8,8 @@ import pytest
 from episodic import logging as episodic_logging
 from episodic.api import authorization as authorization_module
 from tests.fixtures.authorization import (
+    DenyAllAuthorization,
+    ForbidSeriesProfilesAuthorization,
     RaisingAuthorization,
     build_authorization_test_client,
 )
@@ -59,6 +61,14 @@ class _AuthorizationFailureLogCase(typ.NamedTuple):
     [
         pytest.param(
             _AuthorizationFailureLogCase(
+                _AuthorizationHeaderFailure(AssertionError),
+                "assertion_error",
+                ("Bearer sensitive-token",),
+            ),
+            id="header-assertion-error",
+        ),
+        pytest.param(
+            _AuthorizationFailureLogCase(
                 _AuthorizationHeaderFailure(KeyError),
                 "key_error",
                 ("Bearer sensitive-token",),
@@ -88,6 +98,14 @@ class _AuthorizationFailureLogCase(typ.NamedTuple):
                 ("authorization backend unavailable", "Bearer sensitive-token"),
             ),
             id="connection-error",
+        ),
+        pytest.param(
+            _AuthorizationFailureLogCase(
+                RaisingAuthorization(error_type=IndexError),
+                "index_error",
+                ("authorization backend unavailable", "Bearer sensitive-token"),
+            ),
+            id="index-error",
         ),
         pytest.param(
             _AuthorizationFailureLogCase(
@@ -234,3 +252,52 @@ def test_metrics_failure_does_not_interrupt_authorization_adapter_response(
     assert "Bearer sensitive-token" not in repr(
         warning_calls,
     ), "authorization credentials must not reach either warning"
+
+
+@pytest.mark.parametrize(
+    ("authorization", "authorization_header", "expected_status"),
+    [
+        pytest.param(
+            authorization_module.StaticBearerTokenAuthorization(
+                token="".join(("configured", "-token")),
+                principal_id="configured-principal",
+            ),
+            "Bearer configured-token",
+            200,
+            id="permitted",
+        ),
+        pytest.param(
+            DenyAllAuthorization(),
+            "Bearer sensitive-token",
+            401,
+            id="unauthorized",
+        ),
+        pytest.param(
+            ForbidSeriesProfilesAuthorization(),
+            "Bearer sensitive-token",
+            403,
+            id="forbidden",
+        ),
+    ],
+)
+def test_nonfailure_authorization_decisions_do_not_increment_adapter_metric(
+    session_factory: async_sessionmaker[AsyncSession],
+    authorization: AuthorizationPort,
+    authorization_header: str,
+    expected_status: int,
+) -> None:
+    """Permits and denials leave the adapter-failure counter untouched."""
+    metrics = mock.Mock()
+    client = build_authorization_test_client(
+        session_factory,
+        authorization,
+        metrics=metrics,
+    )
+
+    response = client.simulate_get(
+        "/v1/series-profiles",
+        headers={"Authorization": authorization_header},
+    )
+
+    assert response.status_code == expected_status, response.status_code
+    metrics.increment_counter.assert_not_called()
