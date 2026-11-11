@@ -6,8 +6,6 @@ decorators register before collection. Keeping the definitions here holds each
 module under the repository's 400-line limit.
 """
 
-from __future__ import annotations
-
 import asyncio  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.
 
 import pytest

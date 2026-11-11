@@ -340,7 +340,9 @@ Success is observable as follows:
   as a fixture in its defining module; the optional call identity became a
   `CallOptions` value object, and the Vidai Mock call moved into
   `record_completion`. Both modules are now under 400 lines and Pylint scores
-  10.00/10 on them.
+  10.00/10 on them. The new module also omits
+  `from __future__ import annotations`, which the 3.14 baseline rejects outside
+  the `test_*_steps.py` files the Makefile excludes from that check.
 - [ ] EP-M5: documentation, roadmap, and final gates.
 
 ## Surprises & discoveries
