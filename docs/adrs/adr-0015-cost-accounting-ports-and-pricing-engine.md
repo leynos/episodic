@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted.
+Accepted. Amended by ADR-028: content-addressed identity, exact rates,
+Text-to-Speech (TTS) and helper documents, and the billing period removed from
+snapshots.
 
 ## Context
 
@@ -156,8 +158,8 @@ Normalized metrics:
 
 - Budget reservation, commitment, and release semantics remain out of scope for
   this roadmap slice.
-- Text-to-Speech pricing is reserved in schema names and enum values but is not
-  exercised by the initial implementation.
+- TTS pricing is representable in a snapshot, but no TTS adapter or usage
+  producer exercises it yet.
 
 ## Addendum (2026-10-10)
 
@@ -194,12 +196,30 @@ validation without another rename. The offline migration emits SQL with
 equivalent catalogue guards. Downgrade restores the historical name after the
 same validation.
 
+## Addendum (2026-11-11)
+
+ADR-028 supersedes the snapshot representation in the 2026-10-10 addendum.
+Snapshots are now schema version 1 with a domain-derived SHA-256 content hash,
+exact `MeteredRate(amount_minor, per_units, unit)` rates normalized to lowest
+terms, a service kind, and optional verbatim helper-service documents.
+`billing_period_key` leaves the snapshot; billing periods stay on run pins,
+ledger rows, and metering counters. `PricingSnapshotRepository.ensure` replaces
+`CostLedgerPort.ensure_snapshot` and inserts by content hash with
+`ON CONFLICT ... DO NOTHING RETURNING id`, so identical content always maps to
+one identifier and an existing row is never rewritten.
+`PricingSnapshotIntegrityError` replaces `PricingSnapshotCollisionError`; `get`
+additionally verifies that a stored row still hashes to its recorded identity.
+The `rates_minor_per_metric` JSONB column and the raw-file-digest content hash
+described above no longer exist. Migration `20261110_000017` converts the
+`2.4.4` rows.
+
 ## References
 
 Roadmap item `2.4.4` in `docs/roadmap.md`.[^1] ExecPlan:
 `docs/execplans/2-4-4-cost-accounting-and-usage-metering.md`.[^2] System design
 section "Cost accounting and budget enforcement".[^3] Hexagonal architecture
-enforcement decision ADR-014.[^4]
+enforcement decision ADR-014.[^4] Content-addressed pricing snapshots
+ADR-028.[^5]
 
 [^1]: Roadmap item `2.4.4` in `docs/roadmap.md`
 [^2]: ExecPlan:
@@ -207,3 +227,5 @@ enforcement decision ADR-014.[^4]
 [^3]: System design section "Cost accounting and budget enforcement" in
   `docs/episodic-podcast-generation-system-design.md`
 [^4]: ADR-014: `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`
+[^5]: ADR-028:
+  `docs/adrs/adr-0028-content-addressed-pricing-snapshots.md`

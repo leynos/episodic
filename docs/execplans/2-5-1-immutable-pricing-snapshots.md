@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: APPROVED (2026-11-10)
+Status: COMPLETE (2026-11-11)
 
 ## Purpose / big picture
 
@@ -156,7 +156,7 @@ Success is observable as follows:
   by the domain (date encoding, key order, rate reduction), so every converted
   row fails its integrity check after deploy. Severity: high. Likelihood:
   medium. Mitigation: a byte-level v1 hash specification with test vectors in
-  ADR-024; the migration's frozen inline canonicalizer is tested against the
+  ADR-028; the migration's frozen inline canonicalizer is tested against the
   domain function on the same rows, and against each rewritten shipped YAML
   card.
 - Risk: a rolling deployment runs old pods against the migrated schema (old
@@ -187,7 +187,7 @@ Success is observable as follows:
   stable failure category `cost.pricing_snapshot`; record the broader "persist
   the draft, mark cost unpriced" option for `2.5.5` in `Decision log`.
 - Risk: removing `billing_period_key` from the snapshot surprises readers of
-  `2.4.4` documentation. Severity: low. Likelihood: medium. Mitigation: ADR-024
+  `2.4.4` documentation. Severity: low. Likelihood: medium. Mitigation: ADR-028
   and the design document explain that billing periods belong to run pins,
   ledger rows, and quotas, and rate applicability is governed by
   `effective_from`.
@@ -221,7 +221,7 @@ Success is observable as follows:
 - [x] (2026-10-24) Final read-only consistency review of the written plan
   against the code; corrections applied (see revision note).
 - [x] (2026-11-10) Plan approved by the user; implementation started.
-- [x] (2026-11-10) EP-M1: shared leaf modules and ADR-024 draft. Gates green:
+- [x] (2026-11-10) EP-M1: shared leaf modules and ADR-028 draft. Gates green:
   `make check-fmt`, `make typecheck`, `make lint`, `make test` (1725 passed, 1
   skipped), `make check-migrations`, `make markdownlint`, `make nixie`.
 - [x] (2026-11-10) EP-M1 rebased onto `main` at `92663d12` after 20 upstream
@@ -257,7 +257,7 @@ Success is observable as follows:
   rejected with
   `ARCH001: episodic.cost.pricing_snapshot:30 imports forbidden
   module sqlalchemy (domain_ports -> external_libraries)`.
-  ADR-024 now carries the three hash vectors from
+  ADR-028 now carries the three hash vectors from
   `tests/__snapshots__/test_cost_pricing_snapshot_hash.ambr`. The first
   milestone gate run failed only at the df12-pylint stage: 68 `C9102`
   (assert-missing-message) findings across ten new test modules and one `R9108`
@@ -354,8 +354,37 @@ Success is observable as follows:
   `episodic/api/runtime_config.py` raises `RuntimeConfigurationError` unless
   the resolved path is a directory, and `tests/test_runtime_configuration.py`
   covers it; the catalogue's empty-cache behaviour is reachable only for
-  callers that bypass runtime configuration.
-- [ ] EP-M5: documentation, roadmap, and final gates.
+  callers that bypass runtime configuration. The re-gate on `9821d178` passed
+  all seven gates (`make test` 2215 passed, 1 skipped, 71 snapshots; lint exit
+  0 with no findings; `make check-migrations` passed first attempt), and the
+  final milestone review covered 72 of 72 changed files with zero findings
+  (`outcome: completed`). EP-M4 is complete.
+- [x] EP-M5: documentation, roadmap, and final gates. The pricing ADR is
+  `docs/adr/adr-028-content-addressed-pricing-snapshots.md`, status
+  `Accepted on 2026-11-11`; it was renumbered from 024 because
+  `adr-024-review-checkpoint-persistence.md` already held that number (see
+  `Surprises & discoveries` and the decision log). ADR-015 gained an amendment
+  note, a corrected Neutral TTS bullet, and a 2026-11-11 addendum recording
+  that ADR-028 supersedes its 2026-10-10 snapshot representation. The design
+  document now lists ADR-028, describes `PricingSnapshotRepository`, and
+  replaces the provider-rate-card-only cost bullets, the future SLA contract,
+  and the `pricing_snapshots` data-model bullet with the content-addressed
+  model. `docs/users-guide.md` gained a `#### Pricing snapshots` section: the
+  schema-version-1 field list, an exact 7.5-per-million rate, full LLM and TTS
+  cards, how to correct a card, legacy conversion, the `cost.pricing_snapshot`
+  failure category, and the stop-the-world upgrade order.
+  `docs/developers-guide.md` replaced the stale `ensure_snapshot` and
+  `PricingSnapshotCollisionError` paragraph and gained a "Cost accounting and
+  pricing snapshots" section covering the repository, integrity check,
+  telemetry, canonical form, metric vocabulary, and test fixtures.
+  `docs/contents.md` now indexes ADR-028, the cost ADR-015, the `2.4.4`
+  ExecPlan, and this ExecPlan; `docs/repository-layout.md` adds `config/` and
+  `episodic/cost/`; `docs/roadmap.md` marks `2.5.1` done and hands the rounding
+  rule to `2.5.3` and `2.5.4`. Every documented claim was checked against the
+  source: the `UsageUnit` and `PricedService` values, the
+  `^[a-z][a-z0-9_]{0,63}$` metric pattern, the `pricing_snapshot.ensure` and
+  `pricing_snapshot.get` telemetry, the `cost.pricing_snapshot` mapping, and
+  `v1_pricing_snapshot()` in `tests/fixtures/cost.py`.
 
 ## Surprises & discoveries
 
@@ -394,8 +423,14 @@ Success is observable as follows:
   EP-M2, `adapters.py` is 243 lines and the snapshot store holds the
   instrumentation that moved with it.
 - Observation: there are three ADR-015 files and the cost ADR-015 is missing
-  from `docs/contents.md`; the `2.4.4` ExecPlan is also unlisted. Impact: the
-  new ADR is numbered 024 and EP-M5 fixes the index entries.
+  from `docs/contents.md`; the `2.4.4` ExecPlan is also unlisted. Impact: EP-M5
+  fixes the index entries.
+- Observation (2026-11-11): the planned ADR number 024 was already taken by
+  `adr-024-review-checkpoint-persistence.md`, which upstream landed while this
+  branch was in flight; the original reconnoitre saw the directory ending at
+  023. Impact: the pricing ADR is renumbered to 028 and every reference was
+  updated. Lesson: an ADR number claimed in a plan is only a reservation that
+  upstream can invalidate, so recheck `docs/adr/` before the final index pass.
 - Observation: the migration-head revision `20261010_000013` is hard-coded in
   `tests/test_pricing_snapshot_constraint_migration.py:207`, and that file's
   offline test migrates to `head`. Impact: EP-M3 pins those tests to
@@ -435,6 +470,15 @@ Success is observable as follows:
 
 ## Decision log
 
+- Decision (2026-11-11, EP-M5): the pricing ADR is renumbered from 024 to 028.
+  Rationale: `adr-024-review-checkpoint-persistence.md` landed from upstream
+  before this branch reached EP-M5, so keeping 024 would leave two different
+  decision records with one number. Renumbering costs one file move and a
+  mechanical reference update; a duplicate number would persist indefinitely in
+  the index, the design document, and the catalogue's conversion guidance.
+  ADR-015's amendment note, the design document, the developers' guide,
+  `docs/contents.md`, `episodic/cost/pricing_catalogue/_document.py`, and
+  `tests/test_cost_pricing_snapshot_hash.py` all point at 028.
 - Decision (2026-11-10, EP-M2): snapshot persistence and reads get their own
   port and adapter instead of staying on the ledger and catalogue ports.
   Rationale: the ledger is an append-only cost journal and the catalogue is a
@@ -582,7 +626,7 @@ Success is observable as follows:
   imports.
 - `pyproject.toml` adds both leaf modules to the Hecate `domain_ports` group
   and repoints the Skylos entry at `episodic.cost.primitives`.
-- ADR-024 is drafted with status `Proposed`, the normative schema version 1
+- ADR-028 is drafted with status `Proposed`, the normative schema version 1
   canonical form, and migration and risk notes. Test vectors are filled in
   EP-M3.
 - Conformance check: no behaviour change, no public interface change, no
@@ -635,6 +679,49 @@ Success is observable as follows:
   CLI review covered 35/35 files with 0 findings, but reported
   `completed_with_warnings`; the milestone is therefore recorded as reviewed
   with a verification caveat, not as a guaranteed clean diff.
+
+### EP-M3 (2026-11-10)
+
+- Schema version 1 replaced the `2.4.4` snapshot representation: a
+  domain-derived SHA-256 `content_hash`, exact `MeteredRate` fractions, a
+  service kind, optional verbatim source documents, and no `billing_period_key`.
+  `PricingSnapshotRepository.ensure` inserts by content hash and `get`
+  verifies the stored row against its hash.
+- Migration `20261110_000017` converts existing rows stop-the-world; its
+  offline form refuses a non-empty table and its downgrade refuses unless the
+  table is empty.
+- Conformance check: the persisted format changed as designed, the public
+  snapshot interface changed, and historical costs are reproducible from the
+  database. Gates at `058925bf`: all seven green (`make test` 2207 passed, 1
+  skipped, 71 snapshots). The milestone review covered 65/65 files with zero
+  findings.
+
+### EP-M4 (2026-11-10)
+
+- Six behavioural scenarios in `tests/features/pricing_snapshots.feature`
+  cover pinning, revision, deletion, re-pricing from the stored snapshot, TTS,
+  and SLA4OAI documents. The Vidai Mock scenario drives the real
+  OpenAI-compatible adapter and records provider-reported usage through the
+  real recorder on py-pglite.
+- The shipped `openai-2026-05.yaml` card now charges the exact 7.5 minor units
+  per million cached tokens, and `tests/test_shipped_pricing_cards.py` proves
+  the corrected rate, the 22-minor-unit behavioural price, and the new content
+  hash.
+- Conformance check: no further schema change; the correction is a new
+  content-addressed version. Gates at `9821d178`: all seven green (`make test`
+  2215 passed, 1 skipped, 71 snapshots). The final milestone review covered
+  72/72 files with zero findings.
+
+### EP-M5 (2026-11-11)
+
+- Documentation, index, and roadmap updates landed as described in `Progress`.
+  The pricing ADR is ADR-028, not ADR-024, because the review-checkpoint ADR
+  already held 024.
+- Conformance check: documentation only, plus one user-facing error string
+  (`_CONVERSION_GUIDANCE`) and one test docstring that name the ADR. No
+  behaviour, interface, or persisted-format change. Gates: `check-fmt`,
+  `markdownlint`, `spelling`, and `nixie` green; the full gate set is run on
+  the final candidate before publication.
 
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
@@ -720,7 +807,7 @@ Read these before implementing; each entry says why.
   versioning rules this plan must follow.
 - `docs/adr/adr-014-hexagonal-architecture-enforcement.md` and
   `docs/adr/adr-022-orchestration-architecture-enforcement.md`: Hecate groups;
-  ADR-022 is also the layout model for ADR-024.
+  ADR-022 is also the layout model for ADR-028.
 - `docs/execplans/2-4-4-cost-accounting-and-usage-metering.md`: how the
   current cost code was built and tested.
 - `docs/cost-management-in-langgraph-agentic-systems.md`: cost-accounting
@@ -788,20 +875,20 @@ Upstream identifiers used for tracing:
   not permission-protected."
 - `ADR-018-INV-PIN`: "Consumers pin versions rather than resolving latest."
 - `ADR-014`, `ADR-022`: Hecate boundary enforcement.
-- `ADR-024` (new, this plan): content-addressed pricing snapshots.
+- `ADR-028` (new, this plan): content-addressed pricing snapshots.
 
 Trace links:
 
 ```plaintext
 RM-2.5.1-C -> ADR-018-INV-PIN -> EP-M2
   -> tests/test_cost_recorder_integration.py::test_pinned_call_prices_from_persisted_snapshot_after_file_removal
-RM-2.5.1-C -> ADR-018-INV-IMM -> ADR-024 -> EP-M3
+RM-2.5.1-C -> ADR-018-INV-IMM -> ADR-028 -> EP-M3
   -> tests/test_cost_pricing_snapshot_hash_properties.py
   -> tests/test_cost_pricing_snapshot_store.py::test_tampered_row_fails_integrity_check
 RM-2.5.1-C -> EP-M4 -> tests/features/pricing_snapshots.feature (reprice scenarios, Vidai Mock scenario)
-RM-2.5.1-A -> TDD-COST-SNAPSHOTS -> ADR-024 -> EP-M3 -> tests/test_cost_metered_rate_properties.py
+RM-2.5.1-A -> TDD-COST-SNAPSHOTS -> ADR-028 -> EP-M3 -> tests/test_cost_metered_rate_properties.py
   -> EP-M4 -> pricing_snapshots.feature (TTS scenario)
-RM-2.5.1-B -> TDD-COST-SLA -> ADR-024 -> EP-M3 -> tests/test_cost_pricing_snapshot_model.py (source documents)
+RM-2.5.1-B -> TDD-COST-SLA -> ADR-028 -> EP-M3 -> tests/test_cost_pricing_snapshot_model.py (source documents)
   -> EP-M4 -> pricing_snapshots.feature (SLA4OAI scenario)
 ADR-014/ADR-022 -> every milestone -> make lint (Hecate check)
 ```
@@ -861,7 +948,7 @@ non-vacuity evidence.
   control: omitting `source_metadata` from the canonical form must fail.
 - Obligation `INV-HASH-VECTORS`: the canonical form is byte-stable. Method:
   syrupy snapshots of canonical bytes and hashes for one LLM, one TTS, and one
-  SLA4OAI snapshot; the same vectors appear in ADR-024. Artefact:
+  SLA4OAI snapshot; the same vectors appear in ADR-028. Artefact:
   `tests/test_cost_pricing_snapshot_hash.py` and
   `tests/__snapshots__/test_cost_pricing_snapshot_hash.ambr`. Non-vacuity: the
   vectors include a non-UTC `retrieved_at`, a null `effective_from`, a
@@ -957,7 +1044,7 @@ commit. Red tests are committed with
 `@pytest.mark.xfail(strict=True, reason="…")` and the marker is removed in the
 green step; no marker survives the milestone.
 
-### EP-M1: shared leaf modules and ADR-024 draft
+### EP-M1: shared leaf modules and ADR-028 draft
 
 Purely structural, no behaviour change.
 
@@ -980,7 +1067,7 @@ Purely structural, no behaviour change.
    `episodic.cost.ports._validate_currency_code` (`pyproject.toml`, near line
    641) to its new path; `_validate_usage_metrics` stays in `ports.py`. Add
    `episodic.cost.primitives` to `domain_ports`.
-3. Write `docs/adr/adr-024-content-addressed-pricing-snapshots.md` with status
+3. Write `docs/adr/adr-028-content-addressed-pricing-snapshots.md` with status
    `Proposed`, following the ADR template in
    `docs/documentation-style-guide.md` (Status, Date, Context and problem
    statement, Decision drivers, Requirements, Options considered, Decision
@@ -1144,7 +1231,7 @@ expected-failure markers, then the implementation.
    seeds legacy rows after upgrading to `20261031_000016` with `sa.table`),
    `tests/test_env_runtime_wiring.py`, `tests/test_runtime_configuration.py`,
    and the new `tests/test_production_hecate_cost_config.py`.
-10. Fill the hash vectors in ADR-024 from the syrupy snapshots.
+10. Fill the hash vectors in ADR-028 from the syrupy snapshots.
 
 Acceptance: strict `xfail` markers removed; all gates pass;
 `make check-migrations` reports no drift.
@@ -1182,23 +1269,23 @@ passes all scenarios; all gates pass.
 
 ### EP-M5: documentation, roadmap, and final gates
 
-1. ADR-024 status `Accepted` with the date; ADR-015 gains a status note
-   ("Amended by ADR-024: content-addressed identity, exact rates, TTS and
+1. ADR-028 status `Accepted` with the date; ADR-015 gains a status note
+   ("Amended by ADR-028: content-addressed identity, exact rates, TTS and
    helper documents; billing period removed from snapshots") and its Neutral
    TTS bullet is updated.
 2. Design document: amend the cost bullets near lines 1501–1511, the future
    SLA contract near lines 1520–1532, the `pricing_snapshots` data-model bullet
    near lines 1673–1676, and the port description near lines 809–815 (also
-   fixing the `run_pricing_pins` key wording); reference ADR-024.
+   fixing the `run_pricing_pins` key wording); reference ADR-028.
 3. `docs/users-guide.md` §"Cost Management": the v1 rate-card format with an
    LLM and a TTS example, how to correct a rate card (edit the file; earlier
    runs keep the earlier version), legacy-file conversion, the
    `cost.pricing_snapshot` failure category, and the stop-the-world upgrade
    order.
 4. `docs/developers-guide.md`: `PricingSnapshotRepository`, the integrity
-   check, the v1 canonical form (pointing to ADR-024), metric naming and
+   check, the v1 canonical form (pointing to ADR-028), metric naming and
    recommended vocabulary including TTS metrics, units, and test fixtures.
-5. `docs/contents.md`: ADR-024, this ExecPlan, the missing cost ADR-015 entry,
+5. `docs/contents.md`: ADR-028, this ExecPlan, the missing cost ADR-015 entry,
    and the missing `2.4.4` ExecPlan entry. `docs/repository-layout.md`: the
    `episodic/cost/` package and `config/pricing-snapshots/`.
 6. `docs/roadmap.md`: mark `2.5.1` done; add hand-off bullets to `2.5.3`
@@ -1209,7 +1296,7 @@ passes all scenarios; all gates pass.
 
 ## Milestones and plateaus
 
-- EP-M1: shared leaf modules exist; ADR-024 proposed.
+- EP-M1: shared leaf modules exist; ADR-028 proposed.
   - Requirements and gaps: enabling work only.
   - Acceptance evidence: gates green; Hecate passes.
   - Conformance check: no behaviour change; no public interface change; no
@@ -1222,7 +1309,7 @@ passes all scenarios; all gates pass.
   - Acceptance evidence:
     `test_pinned_call_prices_from_persisted_snapshot_after_file_removal`.
   - Conformance check: ADR-018 pinning honoured; Hecate passes; no
-    persisted-format change; new port documented in ADR-024 draft.
+    persisted-format change; new port documented in ADR-028 draft.
   - Recovery: revert; the schema is untouched.
   - Remaining gaps: G2–G6.
   - Compatibility decision: none (internal ports change with all callers).
@@ -1231,7 +1318,7 @@ passes all scenarios; all gates pass.
   - Acceptance evidence: hash, rate, store, catalogue, and migration tests.
   - Conformance check: ADR-018 invariants (content addressing, insert-only,
     no triggers); rounding unchanged; persisted-format change approved via
-    ADR-024; trace links updated.
+    ADR-028; trace links updated.
   - Recovery: downgrade is supported only on an empty table; to recover a
     populated database, restore the pre-upgrade backup taken in `Concrete
     steps`.
@@ -1543,7 +1630,7 @@ def canonical_pricing_document(snapshot: PricingSnapshot) -> dict[str, object]: 
 def pricing_snapshot_content_hash(snapshot: PricingSnapshot) -> str: ...
 ```
 
-Canonical form, schema version 1 (normative; ADR-024 repeats it with vectors):
+Canonical form, schema version 1 (normative; ADR-028 repeats it with vectors):
 a JSON object whose keys are exactly `PRICING_SNAPSHOT_V1_FIELDS`; enum values
 as their string values; `rates` as an object mapping metric name to
 `{"amount_minor": int, "per_units": int, "unit": str}` in lowest terms;

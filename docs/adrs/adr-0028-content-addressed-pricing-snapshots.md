@@ -1,8 +1,8 @@
-# Architectural decision record (ADR) 024: Content-addressed pricing snapshots
+# Architectural decision record (ADR) 028: Content-addressed pricing snapshots
 
 ## Status
 
-Proposed.
+Accepted on 2026-11-11.
 
 ## Date
 
@@ -341,11 +341,11 @@ them, so no snapshot written now has to be rewritten later.
 
 - Roadmap item `2.5.1`: `docs/roadmap.md`.
 - Cost accounting ports and pricing engine: ADR-015,
-  `docs/adr/adr-015-cost-accounting-ports-and-pricing-engine.md`.
+  `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md`.
 - Explicit versioning and history strategy: ADR-018,
-  `docs/adr/adr-018-explicit-versioning-and-history-strategy.md`.
+  `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`.
 - Hexagonal architecture enforcement: ADR-014,
-  `docs/adr/adr-014-hexagonal-architecture-enforcement.md`.
+  `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`.
 - ExecPlan: `docs/execplans/2-5-1-immutable-pricing-snapshots.md`.
 
 [^1]: SLA4OAI Specification 0.10.0:

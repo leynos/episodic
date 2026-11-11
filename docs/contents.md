@@ -107,6 +107,9 @@ or delivery planning.
   - import-boundary enforcement model.
 - [ADR 015: Upload and idempotency ports](adrs/adr-0015-upload-and-idempotency-ports.md)
   - source-intake upload storage and idempotency port decisions.
+- [ADR 015: Cost accounting ports and pricing engine](adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md)
+  - cost-accounting port family, canonical usage metrics, snapshot pinning, and
+    deterministic pricing rules.
 - [ADR 016: Adopt Skylos dead-code detection](adrs/adr-0016-adopt-skylos-dead-code-detection.md)
   - blocking static dead-code detection and exception policy.
 - [ADR 017: No-QA generation execution and TEI persistence][adr-017]
@@ -142,6 +145,10 @@ or delivery planning.
 - [ADR 027: CLI client boundary](adrs/adr-0027-cli-client-boundary.md)
   - the CLI as a REST client, its enforced import boundary, and its output and
     exit-code policy.
+- [ADR 028: Content-addressed pricing
+  snapshots](adr/adr-028-content-addressed-pricing-snapshots.md)
+  - content-addressed snapshot identity, the schema-version-1 canonical form,
+    exact rates, and helper-document storage.
 
 [adr-017]: adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md
 
@@ -196,8 +203,12 @@ or delivery planning.
   - orchestration checkpoint plan.
 - [Configure Celery queue routing](execplans/2-4-3-configure-celery-queue-routing.md)
   - worker routing plan.
+- [Cost accounting and usage metering](execplans/2-4-4-cost-accounting-and-usage-metering.md)
+  - cost ledger, pricing snapshots, and usage metering plan.
 - [Extend architecture enforcement to orchestration code](execplans/2-4-5-extend-architecture-enforcement-to-orchestration-code.md)
   - orchestration architecture enforcement plan.
+- [Immutable pricing snapshots](execplans/2-5-1-immutable-pricing-snapshots.md)
+  - content-addressed pricing snapshot plan.
 - [LLM port adapter](execplans/3-2-1-llm-port-adapter.md) - large language
   model adapter plan.
 - [Introduce v1 target API prefix](execplans/4-1-1-introduce-v1-target-api-prefix.md)

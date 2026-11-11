@@ -40,7 +40,7 @@ _EXPECTED_HASH = (
 
 
 def _vector_snapshot() -> PricingSnapshot:
-    """Build the snapshot pinned by the ADR-024 hash vector."""
+    """Build the snapshot pinned by the ADR-028 hash vector."""
     return PricingSnapshot(
         service_kind=PricedService.LLM,
         provider_name="openai",

@@ -2573,28 +2573,23 @@ must never be captured by a background task.
 
 When configured, `CostRecorder` records the provider call and final run roll-up
 in the persistence unit of work. It first calls
-`CostLedgerPort.ensure_snapshot` to persist the resolved pricing snapshot
+`PricingSnapshotRepository.ensure` to persist the resolved pricing snapshot
 idempotently, either before pinning it to the run or before recording an
-unpinned provider call; repeated calls with the same snapshot identifier reuse
-the stored row. This ordering ensures the snapshot exists before the run-pin or
-provider-call foreign key references it; a call with an existing pin relies on
-that pin's foreign key. Pricing snapshots are immutable and content-addressed,
-so a content-hash collision against another identifier raises
-`PricingSnapshotCollisionError` rather than silently overwriting the stored
-snapshot. `ensure_snapshot` carries the validated timezone-aware
-`effective_from` datetime from the resolved catalogue snapshot through to the
-persisted row without parsing it; when the catalogue entry has none, the stored
-value remains unset. This preserves the same effective-date precedence the
-catalogue used to resolve it. Invalid statement construction emits the
-`pricing_snapshot.input_validation` span and counter with
-`operation=ensure_snapshot`, `outcome=error`, and
-`failure_category=pricing_snapshot.input_invalid`; it records no persistence
-duration because execution has not started. `CostRecorder` then records usage
-with a run-scoped idempotency key. `PRICING_SNAPSHOT_DIRECTORY` is optional:
-its default is `config/pricing-snapshots`; a configured relative path is
-resolved from the repository root, and startup rejects a path that is not an
-existing directory. The runtime constructs `FilePricingCatalogue` from the
-validated directory, so the same pricing source is used when costs are recorded.
+unpinned provider call; identical content always maps to the same stored row.
+This ordering ensures the snapshot exists before the run-pin or provider-call
+foreign key references it; a call with an existing pin relies on that pin's
+foreign key. Pricing snapshots are immutable and content-addressed, so an
+edited rate card becomes a new version rather than overwriting the stored one.
+`ensure` carries the validated timezone-aware `effective_from` datetime from
+the resolved catalogue snapshot through to the persisted row without parsing
+it; when the catalogue entry has none, the stored value remains unset. This
+preserves the same effective-date precedence the catalogue used to resolve it.
+`CostRecorder` then records usage with a run-scoped idempotency key.
+`PRICING_SNAPSHOT_DIRECTORY` is optional: its default is
+`config/pricing-snapshots`; a configured relative path is resolved from the
+repository root, and startup rejects a path that is not an existing directory.
+The runtime constructs `FilePricingCatalogue` from the validated directory, so
+the same pricing source is used when costs are recorded.
 
 Generation input is bounded before it reaches the draft provider. The optional
 `GENERATION_MAX_SOURCE_COUNT`, `GENERATION_MAX_SOURCE_BYTES`,
@@ -2903,6 +2898,74 @@ absent.
 - Durable checkpoint coverage lives in
   `tests/canonical_storage/test_workflow_checkpoints.py` and uses py-pglite via
   the migrated SQLAlchemy fixtures.
+
+## Cost accounting and pricing snapshots
+
+`episodic.cost` owns the cost-accounting ports and their adapters.
+`PricingCataloguePort` resolves a `PricingSnapshot` for a subject;
+`FilePricingCatalogue` is the file-backed adapter and parses schema-version-1
+cards strictly, rejecting unknown keys, legacy fields, and malformed rates with
+`PricingCatalogueError` that names the file. `PricingSnapshotRepository`
+persists and reads snapshots, and `SqlAlchemyPricingSnapshotStore` implements
+it inside the canonical unit of work. `CostRecorder` composes the ledger,
+snapshot repository, catalogue, and `PricingEngine`, and prices a pinned call
+from the stored row rather than from the card file.
+
+### Snapshot identity and integrity
+
+`PricingSnapshot` is a frozen value object whose `content_hash` is derived in
+`__post_init__`; adapters never supply one. `ensure` inserts with
+`ON CONFLICT ON CONSTRAINT uq_pricing_snapshots_content_hash DO NOTHING
+RETURNING id`
+and falls back to a `SELECT` by content hash, so identical content always maps
+to one identifier and an existing row is never rewritten. `get` rebuilds the
+snapshot from the stored columns, recomputes the hash, and raises
+`PricingSnapshotIntegrityError` when the two differ. A missing identifier raises
+`PricingSnapshotNotFoundError`; both derive from `PricingSnapshotError`, which
+the launcher maps to `cost.pricing_snapshot`.
+
+`ensure` and `get` emit the `pricing_snapshot.ensure` and
+`pricing_snapshot.get` counters with `operation` and `outcome` labels, plus
+matching `*.duration_ms` latency observations. Statement construction happens
+before the timer starts, so CPU-only work does not inflate the persistence
+latency operators use to spot database trouble.
+
+### Schema version 1 canonical form
+
+The canonical document is the JSON object defined by
+`PRICING_SNAPSHOT_V1_FIELDS` and encoded with
+`episodic.json_canonicalization.canonical_json_bytes`. Instants are UTC strings
+with exactly six fractional digits, absent optional fields are `null`, and a
+source document is represented by its media type and SHA-256 digest. The hash is
+`sha256:` followed by the lowercase digest. ADR-028 records the normative
+encoding rules and test vectors; a new schema version defines its own field
+tuple and encoder, so adding a field never changes the hash of a version 1 row.
+
+### Metric vocabulary and units
+
+Metric names are validated against `^[a-z][a-z0-9_]{0,63}$` but are not a
+closed set, because no TTS usage producer exists yet. Each rate carries a
+`UsageUnit` from `token`, `character`, `millisecond`, or `request`. The
+recommended vocabulary is:
+
+- LLM: `input_tokens`, `output_tokens`, `cached_input_tokens`,
+  `cache_write_tokens`, `reasoning_tokens`, `audio_input_tokens`, and
+  `audio_output_tokens`.
+- TTS: `input_characters`, `output_characters`, and
+  `output_audio_milliseconds`.
+- Helper services: `requests`.
+
+`episodic.llm.openai_validation` makes cached and audio token counts mutually
+exclusive with their parent metric before pricing, so a card never needs a rate
+for a modality the provider did not report.
+
+### Test fixtures
+
+`tests/fixtures/cost.py` provides `v1_pricing_snapshot()` for store and
+recorder tests. `tests/steps/pricing_snapshots_support.py` writes temporary
+cards and drives the real recorder over py-pglite for the behavioural
+scenarios, and `tests/test_shipped_pricing_cards.py` loads the shipped
+directory and asserts the corrected cached-input rate.
 
 ## LLM adapter boundary
 
