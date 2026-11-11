@@ -826,6 +826,30 @@ Success is observable as follows:
   - `schema_version=True` passed the `!= 1` check because `True == 1`, and the
     canonical encoder then wrote JSON `true`. The version must now be a
     non-boolean integer equal to 1.
+- Round 8 on `9ff10bbd`: all seven gates green (`make test` 2244 passed, 1
+  skipped, 71 snapshots). The CLI review covered 82 files and raised three
+  findings, two actioned and one declined:
+  - Legacy rows that differed only by `billing_period_key` collapse to one
+    content hash once the period leaves the snapshot, and the new unique
+    `content_hash` then rejected the second row. The upgrade now keeps the
+    earliest row for a hash, repoints `cost_ledger_entries` and
+    `run_pricing_pins` at it, and deletes the duplicate. A migration case seeds
+    two periods with a pin on the later row and asserts one survivor and a
+    repointed pin.
+  - `_load_snapshot` ran its `SELECT` without `no_autoflush`, so a read could
+    flush the caller's pending writes. The read now runs under
+    `self._session.no_autoflush`.
+  - The reviewer asked the catalogue to preserve the original SLA4OAI plan
+    document. Declined: the approved card schema has no plan input, and
+    `_source_document` already stores the verbatim YAML it parsed. Adding a
+    separate plan input is 2.5.2 work, not a defect in this change.
+  - The merge helpers pushed the migration module past the 400-line limit, so
+    the empty-table guard, the source-document columns, and the check
+    constraints are now built from loops. The module is 395 lines.
+- Lesson: a uniqueness constraint added by a migration is a merge instruction.
+  The legacy table allowed rows that the new identity cannot distinguish, so
+  the upgrade must decide which row survives and move every reference before
+  the constraint is enforced; rejecting the data would strand valid pins.
 - Lesson: equality is not a type check. `True == 1`, and a `tzinfo` that
   reports no offset still satisfies a non-null `tzinfo` test, yet both change
   the canonical bytes. A validator that guards a content hash must test the
