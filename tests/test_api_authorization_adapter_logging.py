@@ -60,10 +60,18 @@ class _AuthorizationFailureLogCase(typ.NamedTuple):
         pytest.param(
             _AuthorizationFailureLogCase(
                 _AuthorizationHeaderFailure(KeyError),
-                "unknown_error",
+                "key_error",
                 ("Bearer sensitive-token",),
             ),
             id="header-key-error",
+        ),
+        pytest.param(
+            _AuthorizationFailureLogCase(
+                _AuthorizationHeaderFailure(AttributeError),
+                "attribute_error",
+                ("Bearer sensitive-token",),
+            ),
+            id="header-attribute-error",
         ),
         pytest.param(
             _AuthorizationFailureLogCase(
@@ -84,10 +92,26 @@ class _AuthorizationFailureLogCase(typ.NamedTuple):
         pytest.param(
             _AuthorizationFailureLogCase(
                 RaisingAuthorization(error_type=KeyError),
-                "unknown_error",
+                "key_error",
                 ("authorization backend unavailable", "Bearer sensitive-token"),
             ),
             id="key-error",
+        ),
+        pytest.param(
+            _AuthorizationFailureLogCase(
+                RaisingAuthorization(error_type=AttributeError),
+                "attribute_error",
+                ("authorization backend unavailable", "Bearer sensitive-token"),
+            ),
+            id="attribute-error",
+        ),
+        pytest.param(
+            _AuthorizationFailureLogCase(
+                RaisingAuthorization(error_type=LookupError),
+                "unknown_error",
+                ("authorization backend unavailable", "Bearer sensitive-token"),
+            ),
+            id="unknown-error",
         ),
         pytest.param(
             _AuthorizationFailureLogCase(

@@ -472,11 +472,11 @@ Records exclude the `Authorization` header and bearer token. If an
 authorization adapter fails, the service returns `503 Service Unavailable` in
 the standard error envelope and records an
 `authorization_adapter_failure_total` counter through its metrics port. The
-counter has only a bounded `category` label: `os_error`, `runtime_error`,
-`type_error`, `value_error`, or `unknown_error`. `ConnectionError` and
-`TimeoutError` use `os_error`. Metric recording is best-effort and does not
-change the `503` response. Adapter-failure warnings use the fixed category and
-omit exception details.
+counter has only a bounded `category` label: `attribute_error`, `key_error`,
+`os_error`, `runtime_error`, `type_error`, `value_error`, or `unknown_error`.
+`ConnectionError` and `TimeoutError` use `os_error`. Metric recording is
+best-effort and does not change the `503` response. Adapter-failure warnings
+use the fixed category and omit exception details.
 
 ### Migration note for the next minor release
 
