@@ -78,7 +78,9 @@ Success is observable as follows:
 4. Upgrading an alpha database that holds rows written by the `2.4.4` schema
    converts those rows in place; each converted row passes the integrity check
    and hashes identically to the rewritten shipped YAML card of the same
-   content.
+   content, except the corrected `openai-2026-05.yaml` cached-input rate. That
+   legacy row keeps the earlier hash, and the corrected card is a new
+   content-addressed version.
 5. `make check-fmt`, `make typecheck`, `make lint`, and `make test` all pass
    at the end of every milestone, and `make markdownlint` and `make nixie` pass
    after documentation changes.
@@ -137,7 +139,9 @@ Success is observable as follows:
   (for example an RFC 8785 library), stop and escalate.
 - Persisted format: if the migration cannot convert every `2.4.4` row so that
   it hashes identically to its rewritten YAML card, stop and escalate rather
-  than weakening the integrity check.
+  than weakening the integrity check. The deliberately corrected
+  `openai-2026-05.yaml` cached-input rate is the one exception: its legacy row
+  keeps the earlier hash and the corrected card is a new version.
 - Rounding: if any test can only pass by changing the floor-per-metric
   rounding rule, stop and escalate; that decision belongs to `2.5.3`.
 - Architecture: if Hecate needs a new group or a new allowed edge, stop and
@@ -384,7 +388,21 @@ Success is observable as follows:
   source: the `UsageUnit` and `PricedService` values, the
   `^[a-z][a-z0-9_]{0,63}$` metric pattern, the `pricing_snapshot.ensure` and
   `pricing_snapshot.get` telemetry, the `cost.pricing_snapshot` mapping, and
-  `v1_pricing_snapshot()` in `tests/fixtures/cost.py`.
+  `v1_pricing_snapshot()` in `tests/fixtures/cost.py`. The first full gate run
+  on `295af018` passed all seven gates, and the milestone review covered 79 of
+  79 changed files with 17 advisory findings. All were verified against the
+  source and actioned: the migration now rejects a legacy row that cannot
+  become a valid version 1 snapshot (blank subject, malformed currency, unknown
+  source kind, a plan without its document, or an empty rate card);
+  `PricingSubjectFields` declares read-only properties so frozen snapshots
+  satisfy it; the card loader rejects duplicate YAML keys; the port docstrings
+  document `LookupError` and `PricingSnapshotIntegrityError`; the catalogue
+  tests assert the empty-catalogue `LookupError` and use tuple comparisons; the
+  loader rejection tests are parametrized; and the ADR, ExecPlan, and users'
+  guide were corrected for the corrected-card hash exception, the backup and
+  shutdown order, the complete-backup requirement, the legacy rate denominator,
+  effective-date selection, the `ports.py` inventory, and `set -e`/`pipefail`
+  around the `tee` gate commands.
 
 ## Surprises & discoveries
 
@@ -736,13 +754,15 @@ edge. Hecate checks the import boundaries during `make lint`.
 
 Cost accounting lives in `episodic/cost/`:
 
-- `episodic/cost/ports.py` (380 lines) defines identifiers
-  (`PricingSnapshotId`, `CurrencyCode`, `BillingPeriodKey`, …), enums
-  (`LedgerScope`, `PricingModel`, `PricingSourceKind`, `UsageSource`), errors
-  (`CostAccountingError`, `PricingSnapshotCollisionError`, …), value objects
-  (`PricingSnapshot`, `PricedCall`, `ProviderCallLedgerEntry`,
-  `TaskRollupLedgerEntry`, `RunPricingKey`), and the ports `CostLedgerPort`,
-  `PricingCataloguePort`, and `MeteringPort`.
+- `episodic/cost/ports.py` (290 lines) defines the ledger enums
+  (`LedgerScope`, `PricingModel`, `UsageSource`), the ledger errors
+  (`UnknownPricedMetricError`, `OperationMismatchError`), the ledger value
+  objects (`PricedCall`, `ProviderCallLedgerEntry`, `TaskRollupLedgerEntry`,
+  `RunPricingKey`), and the ports `CostLedgerPort`, `PricingCataloguePort`, and
+  `MeteringPort`. Shared identifiers, `CostAccountingError`,
+  `PricingSourceKind`, and the currency validator live in
+  `episodic/cost/primitives.py`; `PricingSnapshot` and its rates live in
+  `episodic/cost/pricing_snapshot.py`.
 - `episodic/cost/pricing_snapshot_ports.py` defines
   `PricingSnapshotRepository`, `EnsuredPricingSnapshot`,
   `SnapshotEnsureOutcome`, and the `PricingSnapshotError` hierarchy.
@@ -1014,11 +1034,12 @@ non-vacuity evidence.
   parent, which carries the same `pricing_snapshots` shape as
   `20261010_000013`) converts each legacy row so that the domain store reads it
   without an integrity error, and its hash equals the hash of the corresponding
-  rewritten shipped card; a recomputed-hash collision aborts with
-  `CommandError` naming both identifiers and leaves the schema at
-  `20261031_000016`; offline upgrade SQL contains the non-empty-table guard;
-  downgrade refuses on a non-empty table and succeeds on an empty one. Method:
-  py-pglite migration tests plus syrupy snapshots of offline SQL. Artefact:
+  rewritten shipped card (except the corrected cached-input row described in
+  `Success` item 4); a recomputed-hash collision aborts with `CommandError`
+  naming both identifiers and leaves the schema at `20261031_000016`; offline
+  upgrade SQL contains the non-empty-table guard; downgrade refuses on a
+  non-empty table and succeeds on an empty one. Method: py-pglite migration
+  tests plus syrupy snapshots of offline SQL. Artefact:
   `tests/test_pricing_snapshot_content_address_migration.py` and its `.ambr`.
   Non-vacuity: legacy fixtures are byte copies of the three shipped `2.4.4`
   YAML files inserted through `sa.table` at the old schema.
@@ -1363,6 +1384,8 @@ Gates, run sequentially (never in parallel), each through `tee`; prefer
 delegating the full sequence to the `scrutineer` agent:
 
 ```bash
+set -e
+set -o pipefail
 make check-fmt 2>&1 | tee /tmp/check-fmt-episodic-2-5-1-immutable-pricing-snapshots.out
 make typecheck 2>&1 | tee /tmp/typecheck-episodic-2-5-1-immutable-pricing-snapshots.out
 make lint 2>&1 | tee /tmp/lint-episodic-2-5-1-immutable-pricing-snapshots.out
@@ -1376,15 +1399,16 @@ Local `make test` needs Vidai Mock 0.2.8 or later on `PATH`. Shared-host pytest
 timeouts above 180 seconds are usually host contention; re-run the failing
 module alone before treating them as failures.
 
-Before applying migration `000017` to any alpha database, take a backup:
+Before applying migration `000017` to any alpha database, scale launchers and
+workers to zero so no write lands between the dump and the upgrade, then take a
+complete database backup. A table-only dump omits `alembic_version`, so a
+restore would leave the schema and the recorded revision disagreeing:
 
 ```bash
-pg_dump --table=pricing_snapshots --table=run_pricing_pins --table=cost_ledger_entries \
-  "$DATABASE_URL" > /tmp/pricing-backup.sql
+pg_dump "$DATABASE_URL" > /tmp/episodic-backup.sql
 ```
 
-Then scale launchers and workers to zero, run `uv run alembic upgrade head`,
-and roll out the new image.
+Then run `uv run alembic upgrade head` and roll out the new image.
 
 ## Validation and acceptance
 

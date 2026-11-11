@@ -181,12 +181,32 @@ class PricingSubject:
 
 
 class PricingSubjectFields(typ.Protocol):
-    """The four fields every priced subject is built from."""
+    """The four fields every priced subject is built from.
 
-    service_kind: PricedService
-    provider_name: str
-    model: str
-    operation: str
+    The members are read-only properties so a frozen snapshot and a mutable
+    record both satisfy the protocol; a writable attribute would exclude the
+    frozen value objects this protocol exists to describe.
+    """
+
+    @property
+    def service_kind(self) -> PricedService:
+        """Kind of service the subject prices."""
+        ...
+
+    @property
+    def provider_name(self) -> str:
+        """Provider that publishes the rate."""
+        ...
+
+    @property
+    def model(self) -> str:
+        """Model or voice the rate applies to."""
+        ...
+
+    @property
+    def operation(self) -> str:
+        """Provider operation the rate prices."""
+        ...
 
 
 def pricing_subject_of(source: PricingSubjectFields) -> PricingSubject:

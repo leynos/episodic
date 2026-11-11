@@ -1,9 +1,10 @@
 """Step definitions for the pricing-snapshot behavioural tests.
 
 The scenarios and their shared fixture live in
-`tests.steps.test_pricing_snapshots_steps`, which imports this module so the
-decorators register before collection. Keeping the definitions here holds each
-module under the repository's 400-line limit.
+`tests.steps.test_pricing_snapshots_steps`, and this module is registered
+through `pytest_plugins` in `tests/conftest.py` so its step fixtures exist
+before collection. Keeping the definitions here holds each module under the
+repository's 400-line limit.
 """
 
 import asyncio  # ruff: ignore[typing-only-standard-library-import]  # pytest-bdd evaluates step annotations.

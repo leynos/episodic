@@ -239,6 +239,8 @@ class PricingCataloguePort(typ.Protocol):
 
         Raises
         ------
+        LookupError
+            Raised when no applicable snapshot exists for the subject.
         NotImplementedError
             Raised by the protocol stub.
 

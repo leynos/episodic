@@ -92,43 +92,57 @@ def test_loader_rejects_a_non_string_effective_from(
         FilePricingCatalogue.from_directory(tmp_path)
 
 
-def test_loader_rejects_an_unknown_field(tmp_path: pathlib.Path) -> None:
-    """A key outside the schema version fails rather than being ignored."""
-    _write_card(tmp_path, _card(extra="unexpected_field: 1"))
-
-    with pytest.raises(PricingCatalogueError, match="unexpected_field"):
-        FilePricingCatalogue.from_directory(tmp_path)
-
-
-def test_loader_rejects_a_non_identifier_metadata_key(tmp_path: pathlib.Path) -> None:
-    """Canonical metadata keys must be identifiers."""
-    _write_card(
-        tmp_path,
-        _card().replace("source_url:", '"Source URL":'),
-    )
-
-    with pytest.raises(PricingCatalogueError, match="source_metadata"):
-        FilePricingCatalogue.from_directory(tmp_path)
-
-
-def test_loader_rejects_an_unknown_rate_unit(tmp_path: pathlib.Path) -> None:
-    """A rate unit outside the supported set cannot be priced."""
-    _write_card(tmp_path, _card().replace("unit: token", "unit: kilogram"))
-
-    with pytest.raises(PricingCatalogueError, match="kilogram"):
-        FilePricingCatalogue.from_directory(tmp_path)
-
-
-def test_loader_rejects_a_missing_required_field(tmp_path: pathlib.Path) -> None:
-    """A card missing a required field names the field and the file."""
-    body = _card().replace(
-        "    rates:\n"
-        "      input_tokens: {amount_minor: 15, per_units: 1000000, unit: token}\n",
-        "",
-    )
+@pytest.mark.parametrize(
+    ("body", "match"),
+    [
+        pytest.param(
+            _card(extra="unexpected_field: 1"),
+            "unexpected_field",
+            id="unknown-field",
+        ),
+        pytest.param(
+            _card().replace("source_url:", '"Source URL":'),
+            "source_metadata",
+            id="non-identifier-metadata-key",
+        ),
+        pytest.param(
+            _card().replace(
+                "    rates:\n",
+                "    rates:\n"
+                "      output_tokens: "
+                "{amount_minor: 3, per_units: 50000, unit: token}\n"
+                "    rates:\n",
+                1,
+            ),
+            "duplicate key",
+            id="duplicate-key",
+        ),
+        pytest.param(
+            _card().replace("unit: token", "unit: kilogram"),
+            "kilogram",
+            id="unknown-rate-unit",
+        ),
+        pytest.param(
+            _card().replace(
+                "    rates:\n"
+                "      input_tokens: "
+                "{amount_minor: 15, per_units: 1000000, unit: token}\n",
+                "",
+            ),
+            "missing required fields: rates",
+            id="missing-required-field",
+        ),
+    ],
+)
+def test_loader_rejects_an_invalid_card(
+    tmp_path: pathlib.Path,
+    body: str,
+    match: str,
+) -> None:
+    """A card outside the schema version fails with a message naming the problem."""
     _write_card(tmp_path, body)
 
-    with pytest.raises(PricingCatalogueError, match="missing required fields: rates"):
+    with pytest.raises(PricingCatalogueError, match=match):
         FilePricingCatalogue.from_directory(tmp_path)
 
 

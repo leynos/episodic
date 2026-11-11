@@ -214,6 +214,39 @@ async def test_upgrade_rejects_a_non_identifier_metadata_key(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("overrides", "match"),
+    [
+        pytest.param({"provider_name": "  "}, "provider_name", id="blank-provider"),
+        pytest.param({"model": ""}, "model", id="blank-model"),
+        pytest.param({"operation": ""}, "operation", id="blank-operation"),
+        pytest.param({"currency": "US"}, "currency", id="short-currency"),
+        pytest.param({"source_kind": "mystery"}, "source kind", id="unknown-source"),
+        pytest.param(
+            {"source_kind": "sla4oai_plan"},
+            "no source document",
+            id="plan-without-document",
+        ),
+        pytest.param(
+            {"rates_minor_per_metric": {}},
+            "at least one metric",
+            id="empty-rates",
+        ),
+    ],
+)
+async def test_upgrade_rejects_a_row_that_cannot_be_version_one(
+    migrated_engine: AsyncEngine,
+    overrides: dict[str, object],
+    match: str,
+) -> None:
+    """A row the application would reject must not migrate into a broken snapshot."""
+    identifier = uuid.UUID(int=61)
+    async with migrated_engine.begin() as connection:
+        await _seed_legacy_rows(connection, [_legacy_row(identifier, **overrides)])
+        await _upgrade_is_rejected(connection, match)
+
+
+@pytest.mark.asyncio
 async def test_downgrade_refuses_when_rows_exist(
     migrated_engine: AsyncEngine,
 ) -> None:

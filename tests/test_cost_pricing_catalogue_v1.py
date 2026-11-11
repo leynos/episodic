@@ -1,4 +1,10 @@
-"""Schema-version-1 file catalogue loading and resolution."""
+"""Schema-version-1 file catalogue loading and resolution.
+
+Each test writes one or more YAML cards into ``tmp_path`` and loads them with
+``FilePricingCatalogue.from_directory`` under a frozen clock, so effective-date
+selection and strict parsing are exercised without touching the shipped cards.
+Run the module with ``pytest tests/test_cost_pricing_catalogue_v1.py``.
+"""
 
 import datetime as dt
 import textwrap
@@ -81,11 +87,9 @@ async def test_resolves_the_latest_effective_card(tmp_path: pathlib.Path) -> Non
 
     snapshot = await catalogue.resolve(_SUBJECT)
 
-    assert snapshot.rates["input_tokens"].amount_minor == 1, (
-        "20/1_000_000 reduces to 1/50_000"
-    )
-    assert snapshot.rates["input_tokens"].per_units == 50_000, (
-        "20/1_000_000 reduces to 1/50_000"
+    rate = snapshot.rates["input_tokens"]
+    assert (rate.amount_minor, rate.per_units) == (1, 50_000), (
+        f"20/1_000_000 must reduce to 1/50_000, got {rate!r}"
     )
 
 
@@ -167,8 +171,12 @@ async def test_decimal_string_amounts_convert_exactly(
     )
 
 
-def test_missing_directory_is_an_empty_catalogue(tmp_path: pathlib.Path) -> None:
+@pytest.mark.asyncio
+async def test_missing_directory_is_an_empty_catalogue(
+    tmp_path: pathlib.Path,
+) -> None:
     """A deployment without cards loads, then fails to resolve."""
     catalogue = _catalogue(tmp_path / "absent", "2026-06-04T00:00:00Z")
 
-    assert catalogue is not None, "an absent directory must still load a catalogue"
+    with pytest.raises(LookupError, match="No pricing snapshot"):
+        await catalogue.resolve(_SUBJECT)

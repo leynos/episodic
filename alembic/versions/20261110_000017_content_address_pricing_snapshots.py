@@ -41,6 +41,9 @@ _LEGACY_METRIC_UNITS: typ.Final = {
     "audio_output_tokens": "token",
 }
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_REQUIRED_TEXT_FIELDS = ("provider_name", "model", "operation")
+_SOURCE_KINDS = frozenset({"provider_rate_card", "sla4oai_plan"})
+_CURRENCY_LENGTH = 3
 _EMPTY_TABLE_GUARD = """
 DO $$
 BEGIN
@@ -161,11 +164,59 @@ def _content_hash(document: dict[str, object]) -> str:
     return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
+def _is_currency_code(value: object) -> bool:
+    """Return whether a value is a three-letter alphabetic currency code."""
+    return isinstance(value, str) and len(value) == _CURRENCY_LENGTH and value.isalpha()
+
+
+def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
+    """Reject a legacy row that cannot become a valid version 1 snapshot.
+
+    The application rejects blank subjects, a malformed currency, an unknown
+    source kind, an empty provider rate card, and a plan without its document.
+    A row that slipped past those checks would migrate into a snapshot that
+    ``get`` can never rebuild, so the migration fails loudly instead.
+
+    Raises
+    ------
+    CommandError
+        If the row cannot become a valid version 1 snapshot.
+    """
+    for field in _REQUIRED_TEXT_FIELDS:
+        value = row[field]
+        if not isinstance(value, str) or not value.strip():
+            msg = f"pricing snapshot {snapshot_id}: {field} must be a non-blank string"
+            raise CommandError(msg)
+    if not _is_currency_code(row["currency"]):
+        msg = (
+            f"pricing snapshot {snapshot_id}: currency must be a three-letter "
+            "ISO 4217 code"
+        )
+        raise CommandError(msg)
+    source_kind = row["source_kind"]
+    if source_kind not in _SOURCE_KINDS:
+        msg = f"pricing snapshot {snapshot_id}: unknown source kind {source_kind!r}"
+        raise CommandError(msg)
+    if source_kind == "sla4oai_plan":
+        msg = (
+            f"pricing snapshot {snapshot_id}: a legacy sla4oai_plan row carries "
+            "no source document and cannot be converted"
+        )
+        raise CommandError(msg)
+    if not row["rates_minor_per_metric"]:
+        msg = (
+            f"pricing snapshot {snapshot_id}: a provider_rate_card snapshot "
+            "must price at least one metric"
+        )
+        raise CommandError(msg)
+
+
 def _converted_row(
     row: cabc.Mapping[str, object],
 ) -> tuple[dict[str, dict[str, object]], dict[str, str], str]:
     """Convert one legacy row and return its rates, metadata, and hash."""
     snapshot_id = row["id"]
+    _validate_row(row, snapshot_id)
     rates = _convert_rates(
         typ.cast("cabc.Mapping[str, object]", row["rates_minor_per_metric"]),
         snapshot_id,

@@ -914,28 +914,31 @@ effective_from: "2026-05-01T00:00:00Z"
 
 To correct a rate, edit the card in place and deploy it. The corrected file has
 a new content hash, so it becomes a new snapshot version; runs that already
-pinned the earlier version keep pricing from the stored row, and only runs
-pinned after the change use the new rate.
+pinned the earlier version keep pricing from the stored row. A new run uses the
+corrected rate only when the corrected card is the applicable card for its
+subject, meaning it has the latest `effective_from` that is not in the future.
 
 Cards written for the earlier `2.4.4` format are rejected at startup with an
 error naming the file and the legacy fields it found (`pricing_snapshot_id`,
 `billing_period_key`, or `rates_minor_per_metric`). Convert each card to the
 schema-version-1 shape above: drop the legacy identifier and billing period,
 rename `rates_minor_per_metric` to `rates`, and give every rate an explicit
-`per_units` and `unit`. The billing period now lives on run pins and ledger
-rows, not on the snapshot.
+`per_units` and `unit`. Each legacy integer rate was minor units per 1,000,000
+tokens, so it becomes `amount_minor: <value>`, `per_units: 1000000`, and
+`unit: token`. The billing period now lives on run pins and ledger rows, not on
+the snapshot.
 
 A missing pinned snapshot or a stored row that no longer matches its content
 hash fails the generation under the stable `cost.pricing_snapshot` category. An
 invalid card stops the process at startup with an error naming the file.
 
 Upgrading a deployment that holds `2.4.4` rows is stop-the-world. Scale
-launchers and workers to zero, back up `pricing_snapshots`, `run_pricing_pins`,
-and `cost_ledger_entries`, run `alembic upgrade head`, then roll out the new
-image. The migration converts every existing row to schema version 1; its
-offline (`--sql`) form refuses to run unless `pricing_snapshots` is empty,
-because hash recomputation needs Python. Downgrade refuses unless the table is
-empty.
+launchers and workers to zero, take a complete database backup that includes
+`pricing_snapshots`, `run_pricing_pins`, `cost_ledger_entries`, and
+`alembic_version`, run `alembic upgrade head`, then roll out the new image. The
+migration converts every existing row to schema version 1; its offline
+(`--sql`) form refuses to run unless `pricing_snapshots` is empty, because hash
+recomputation needs Python. Downgrade refuses unless the table is empty.
 
 ### Advanced Topics
 

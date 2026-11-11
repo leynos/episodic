@@ -15,6 +15,8 @@ import decimal
 import typing as typ
 
 import yaml
+import yaml.constructor
+import yaml.resolver
 
 from episodic.cost._time import parse_instant
 from episodic.cost.pricing_snapshot import (
@@ -52,6 +54,44 @@ _REQUIRED_KEYS = frozenset({
 })
 _OPTIONAL_KEYS = frozenset({"source_metadata", "effective_from"})
 _TIMESTAMP_ERROR = "pricing snapshot timestamps must include timezone information."
+
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects a mapping with a duplicated key.
+
+    ``safe_load`` keeps the last value for a repeated key, so a card with two
+    ``rates`` blocks would silently drop one. A pricing error is worse than a
+    startup failure, so the duplicate is rejected instead.
+    """
+
+
+def _construct_unique_mapping(
+    loader: _UniqueKeyLoader,
+    node: yaml.MappingNode,
+    *,
+    deep: bool = False,
+) -> dict[object, object]:
+    """Build a mapping, failing on the first duplicated key."""
+    loader.flatten_mapping(node)
+    mapping: dict[object, object] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            msg = f"found duplicate key {key!r}"
+            raise yaml.constructor.ConstructorError(  # ruff: ignore[raise-vanilla-args]  # PyYAML needs the context and problem marks.
+                "while constructing a mapping",
+                node.start_mark,
+                msg,
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_UniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
 
 
 def _fail(path: pathlib.Path, message: str) -> typ.NoReturn:
@@ -263,10 +303,13 @@ def load_snapshot(path: pathlib.Path) -> PricingSnapshot:
         # Both failures must name the card: a startup traceback otherwise
         # leaves the operator without the offending path.
         _fail(path, f"cannot read card: {exc}")
+    loader = _UniqueKeyLoader(raw_text)
     try:
-        raw_data = yaml.safe_load(raw_text) or {}
+        raw_data = loader.get_single_data() or {}
     except yaml.YAMLError as exc:
         _fail(path, f"invalid YAML: {exc}")
+    finally:
+        loader.dispose()
     data = _require_mapping(raw_data, path=path, field="document")
     _reject_legacy_document(data, path)
     _reject_unknown_keys(data, path)

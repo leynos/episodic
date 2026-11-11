@@ -77,7 +77,10 @@ helper-service document fits the same model.
 - Integers inside the canonical document lie in `0 ..= 2**53 - 1`.
 - Pinned provider calls are priced from the persisted snapshot.
 - The migration converts every `2.4.4` row so that it hashes identically to the
-  rewritten shipped YAML card of the same content.
+  rewritten shipped YAML card of the same content, except where a shipped card
+  was deliberately corrected. The corrected `openai-2026-05.yaml` cached-input
+  rate is a new content-addressed version: its legacy row keeps the earlier
+  hash and only runs pinned after the correction use the new rate.
 
 ## Options considered
 

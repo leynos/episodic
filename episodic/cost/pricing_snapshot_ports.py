@@ -75,6 +75,13 @@ class PricingSnapshotRepository(typ.Protocol):
         EnsuredPricingSnapshot
             Stored identifier and whether this call inserted the row.
 
+        Raises
+        ------
+        PricingSnapshotIntegrityError
+            Raised when the insert conflicts without a row for the same
+            content hash. A match against an existing row is a successful
+            reuse, not an integrity failure.
+
         Notes
         -----
         Repeated calls for the same snapshot identity reuse the stored row
@@ -99,5 +106,8 @@ class PricingSnapshotRepository(typ.Protocol):
         ------
         PricingSnapshotNotFoundError
             Raised when no row is stored for the identifier.
+        PricingSnapshotIntegrityError
+            Raised when the stored row no longer hashes to its recorded
+            content hash.
         """
         raise NotImplementedError

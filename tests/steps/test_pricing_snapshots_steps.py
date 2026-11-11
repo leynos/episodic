@@ -1,8 +1,9 @@
 """Behavioural tests for immutable, content-addressed pricing snapshots.
 
 The step definitions live in
-`tests.steps.pricing_snapshots_step_definitions`; importing that module
-registers its decorators before these scenarios are collected.
+`tests.steps.pricing_snapshots_step_definitions`. That module is registered
+through `pytest_plugins` in `tests/conftest.py`, because pytest-bdd installs
+each step as a fixture in its defining module.
 """
 
 from __future__ import annotations
