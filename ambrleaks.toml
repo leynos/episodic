@@ -8,7 +8,7 @@ values = [
   '^http://episodic\.localhost(?::[0-9]+)?/health/live$',
   '^/(?:var/lib/apt/lists|app/\.venv/bin|usr/sbin/nologin)$',
   '^018fdcf0-0000-7000-8000-00000000000[1-4]$',
-  # ADR-024 pins these content-addressed pricing vectors. The digests are
+  # ADR-028 pins these content-addressed pricing vectors. The digests are
   # deterministic hashes of public test documents, and the URL is the public
   # provider pricing page the vectors cite.
   '^https://openai\.com/api/pricing/$',

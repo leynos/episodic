@@ -31,6 +31,7 @@ branch_labels: str | None = None
 depends_on: str | None = None
 
 _RATE_SCALE = 1_000_000
+_MAX_JSON_INT = 2**53 - 1
 _LEGACY_METRIC_UNITS: typ.Final = {
     "input_tokens": "token",
     "output_tokens": "token",
@@ -61,11 +62,16 @@ def _instant(value: dt.datetime) -> str:
     return value.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
+def _reject(snapshot_id: object, detail: str) -> typ.NoReturn:
+    """Raise a conversion error naming the offending snapshot."""
+    msg = f"pricing snapshot {snapshot_id}: {detail}"
+    raise CommandError(msg)
+
+
 def _row_instant(value: object, snapshot_id: object) -> dt.datetime:
     """Reject a legacy row whose instant is not a datetime."""
     if not isinstance(value, dt.datetime):
-        msg = f"pricing snapshot {snapshot_id}: instant is not a datetime"
-        raise CommandError(msg)
+        _reject(snapshot_id, "instant is not a datetime")
     return value
 
 
@@ -82,20 +88,19 @@ def _convert_rates(
     converted: dict[str, dict[str, object]] = {}
     for metric, amount in legacy_rates.items():
         if metric not in _LEGACY_METRIC_UNITS:
-            msg = (
-                f"pricing snapshot {snapshot_id}: legacy metric {metric!r} has "
-                "no declared unit"
-            )
-            raise CommandError(msg)
+            _reject(snapshot_id, f"legacy metric {metric!r} has no declared unit")
         if not _is_legacy_amount(amount):
-            msg = (
-                f"pricing snapshot {snapshot_id}: legacy rate for {metric!r} "
-                "must be a non-negative integer"
-            )
-            raise CommandError(msg)
+            _reject(snapshot_id, f"rate for {metric!r} must be a non-negative integer")
         divisor = math.gcd(amount, _RATE_SCALE)
+        amount_minor = amount // divisor
+        if amount_minor > _MAX_JSON_INT:
+            _reject(
+                snapshot_id,
+                f"rate for {metric!r} exceeds the canonical JSON integer limit "
+                f"{_MAX_JSON_INT}",
+            )
         converted[metric] = {
-            "amount_minor": amount // divisor,
+            "amount_minor": amount_minor,
             "per_units": _RATE_SCALE // divisor,
             "unit": _LEGACY_METRIC_UNITS[metric],
         }
@@ -110,17 +115,12 @@ def _convert_metadata(
     converted: dict[str, str] = {}
     for key, value in legacy_metadata.items():
         if not isinstance(key, str) or not _IDENTIFIER.fullmatch(key):
-            msg = (
-                f"pricing snapshot {snapshot_id}: source metadata key {key!r} "
-                "is not an identifier"
-            )
-            raise CommandError(msg)
+            _reject(snapshot_id, f"source metadata key {key!r} is not an identifier")
         if not isinstance(value, str):
-            msg = (
-                f"pricing snapshot {snapshot_id}: source metadata value for "
-                f"{key!r} must be a string"
+            _reject(
+                snapshot_id,
+                f"source metadata value for {key!r} must be a string",
             )
-            raise CommandError(msg)
         converted[key] = value
     return converted
 
@@ -165,50 +165,36 @@ def _content_hash(document: dict[str, object]) -> str:
 
 
 def _is_currency_code(value: object) -> bool:
-    """Return whether a value is a three-letter alphabetic currency code."""
-    return isinstance(value, str) and len(value) == _CURRENCY_LENGTH and value.isalpha()
+    """Return whether a value is a three-letter uppercase currency code."""
+    text = value if isinstance(value, str) else ""
+    return len(text) == _CURRENCY_LENGTH and text.isalpha() and text.isupper()
 
 
 def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
     """Reject a legacy row that cannot become a valid version 1 snapshot.
 
-    The application rejects blank subjects, a malformed currency, an unknown
-    source kind, an empty provider rate card, and a plan without its document.
-    A row that slipped past those checks would migrate into a snapshot that
-    ``get`` can never rebuild, so the migration fails loudly instead.
-
-    Raises
-    ------
-    CommandError
-        If the row cannot become a valid version 1 snapshot.
+    A row that escaped these checks would migrate into a snapshot that ``get``
+    can never rebuild, so the migration fails loudly instead.
     """
     for field in _REQUIRED_TEXT_FIELDS:
         value = row[field]
         if not isinstance(value, str) or not value.strip():
-            msg = f"pricing snapshot {snapshot_id}: {field} must be a non-blank string"
-            raise CommandError(msg)
+            _reject(snapshot_id, f"{field} must be a non-blank string")
     if not _is_currency_code(row["currency"]):
-        msg = (
-            f"pricing snapshot {snapshot_id}: currency must be a three-letter "
-            "ISO 4217 code"
-        )
-        raise CommandError(msg)
+        _reject(snapshot_id, "currency must be a three-letter uppercase code")
     source_kind = row["source_kind"]
     if source_kind not in _SOURCE_KINDS:
-        msg = f"pricing snapshot {snapshot_id}: unknown source kind {source_kind!r}"
-        raise CommandError(msg)
+        _reject(snapshot_id, f"unknown source kind {source_kind!r}")
     if source_kind == "sla4oai_plan":
-        msg = (
-            f"pricing snapshot {snapshot_id}: a legacy sla4oai_plan row carries "
-            "no source document and cannot be converted"
+        _reject(
+            snapshot_id,
+            "a legacy sla4oai_plan row carries no source document",
         )
-        raise CommandError(msg)
     if not row["rates_minor_per_metric"]:
-        msg = (
-            f"pricing snapshot {snapshot_id}: a provider_rate_card snapshot "
-            "must price at least one metric"
+        _reject(
+            snapshot_id,
+            "a provider_rate_card snapshot must price at least one metric",
         )
-        raise CommandError(msg)
 
 
 def _converted_row(
