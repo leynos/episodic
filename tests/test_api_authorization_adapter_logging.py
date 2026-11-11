@@ -166,3 +166,47 @@ def test_authorization_adapter_failures_log_fixed_categories_without_details(
         assert forbidden_value not in warning_call, (
             f"{forbidden_value!r} must not reach the warning logger"
         )
+
+
+def test_metrics_failure_does_not_interrupt_authorization_adapter_response(
+    session_factory: async_sessionmaker[AsyncSession],
+    authorization_warning_backend: mock.Mock,
+) -> None:
+    """Metrics errors cannot mask the adapter failure response or leak details."""
+    metrics = mock.Mock()
+    metrics.increment_counter.side_effect = RuntimeError("Bearer sensitive-token")
+    client = build_authorization_test_client(
+        session_factory,
+        _AuthorizationHeaderFailure(),
+        metrics=metrics,
+    )
+
+    response = client.simulate_get(
+        "/v1/series-profiles",
+        headers={"Authorization": "Bearer sensitive-token"},
+    )
+
+    assert response.status_code == 503, "metrics failure must preserve the 503 response"
+    warning_calls = authorization_warning_backend.warning.call_args_list
+    assert len(warning_calls) == 2, "both fixed warnings must be recorded"
+    metric_warning, adapter_warning = warning_calls
+    assert metric_warning.args == (
+        "Authorization adapter failure metric could not be recorded.",
+    ), "metrics failures must use a fixed warning"
+    assert metric_warning.kwargs == {
+        "exc_info": None,
+        "stack_info": False,
+    }, "metrics warnings must not include exception metadata"
+    expected_adapter_message = (
+        "Authorization adapter failed with runtime_error for GET /v1/series-profiles."
+    )
+    assert adapter_warning.args == (expected_adapter_message,), (
+        "adapter failures must still be logged after metrics fail"
+    )
+    assert adapter_warning.kwargs == {
+        "exc_info": None,
+        "stack_info": False,
+    }, "adapter warnings must not include exception metadata"
+    assert "Bearer sensitive-token" not in repr(
+        warning_calls,
+    ), "authorization credentials must not reach either warning"

@@ -25,6 +25,7 @@ _AUTHORIZATION_LOG_RESOURCE_LABELS = {
     "episodes": "/v1/episodes",
     "generation-runs": "/v1/generation-runs",
     "ingestion-jobs": "/v1/ingestion-jobs",
+    "qa-evaluations": "/v1/qa-evaluations",
     "reference-bindings": "/v1/reference-bindings",
     "reference-document-revisions": "/v1/reference-document-revisions",
     "series-profiles": "/v1/series-profiles",
@@ -158,10 +159,16 @@ class AuthorizationMiddleware:
                 ),
                 "unknown_error",
             )
-            self._metrics.increment_counter(
-                _AUTHORIZATION_ADAPTER_FAILURE_TOTAL,
-                labels={"category": failure_category},
-            )
+            try:
+                self._metrics.increment_counter(
+                    _AUTHORIZATION_ADAPTER_FAILURE_TOTAL,
+                    labels={"category": failure_category},
+                )
+            except Exception:  # ruff: ignore[blind-except]  # Metrics must not mask adapter failures.
+                log_warning(
+                    logger,
+                    "Authorization adapter failure metric could not be recorded.",
+                )
             log_warning(
                 logger,
                 "Authorization adapter failed with %s for %s %s.",

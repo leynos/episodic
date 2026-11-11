@@ -33,6 +33,11 @@ AUTHORIZATION_LOG_ROUTE_CASES = (
         "/v1/ingestion-jobs",
     ),
     AuthorizationLogRouteCase(
+        "qa-evaluations",
+        "/v1/qa-evaluations/Bearer%20sensitive-path-token",
+        "/v1/qa-evaluations",
+    ),
+    AuthorizationLogRouteCase(
         "reference-bindings",
         "/v1/reference-bindings/Bearer%20sensitive-path-token",
         "/v1/reference-bindings",
