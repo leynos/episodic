@@ -557,7 +557,9 @@ Success is observable as follows:
   `output_audio_milliseconds` for TTS. Rationale: no TTS usage producer exists
   yet, so a closed metric table would be a guess; `2.5.3` may close the
   vocabulary when usage producers exist. Date/Author: 2026-10-16, planning
-  agent.
+  agent. Amended 2026-11-11: a metric whose quantity the system already reports
+  must use that quantity's unit, so the documented vocabulary is a table of
+  metric to required unit. Names outside the table remain open.
 - Decision: the source document is stored as verbatim text plus media type,
   and the canonical form hashes its SHA-256 digest. Required when `source_kind`
   is `sla4oai_plan`; optional otherwise; capped at 262,144 UTF-8 bytes. No
@@ -799,6 +801,21 @@ Success is observable as follows:
     writers. The reviewer's request for an opt-in PostgreSQL concurrency tier
     is declined: no such tier exists in this repository, and adding one is a
     separate infrastructure change rather than part of this plan.
+- Round 6 on the candidate carrying round 5: all seven gates green (`make test`
+  2236 passed, 1 skipped, 71 snapshots). The CLI review covered 76 files and
+  raised two findings, both actioned:
+  - The round-5 unit check covered only token metrics, so a TTS card could
+    denominate `output_audio_milliseconds` in characters and the engine would
+    multiply a duration by a character rate. The check is now a table of every
+    documented metric and its required unit (`input_characters` in characters,
+    `output_audio_milliseconds` in milliseconds, `requests` in requests, and
+    the seven token metrics in tokens). Undocumented metric names stay open, as
+    the decision log requires.
+  - The migration's legacy JSONB columns can hold an array or a scalar, and
+    `.items()` on one raised `AttributeError` without naming the snapshot. The
+    row validator now rejects a non-object `rates_minor_per_metric` or
+    `source_metadata` with the snapshot identifier, and two migration cases
+    cover it.
 - Lesson: the currency validator's shape check and its uppercase check were
   two separate conditions, so a non-ASCII letter such as `É` passed the
   alphabetic test. One anchored pattern expresses the whole contract and cannot

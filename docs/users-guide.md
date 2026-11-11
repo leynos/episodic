@@ -858,6 +858,14 @@ cached_input_tokens:
 normalized to lowest terms when loaded, so `"7.5"` per 1000000 and `3` per
 400000 describe the same rate and produce the same content hash.
 
+A metric whose quantity the system already reports must use that quantity's
+unit: the token metrics (`input_tokens`, `output_tokens`, `cached_input_tokens`,
+`cache_write_tokens`, `reasoning_tokens`, `audio_input_tokens`,
+`audio_output_tokens`) use `token`, `input_characters` uses `character`,
+`output_audio_milliseconds` uses `millisecond`, and `requests` uses `request`.
+A card that pairs one of these names with another unit is rejected at startup.
+Other metric names are open and keep whatever unit the card states.
+
 An LLM card:
 
 ```yaml

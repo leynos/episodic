@@ -9,6 +9,7 @@ logic. A migration must keep producing the same bytes after the application
 code moves on, so it may not import from ``episodic``.
 """
 
+import collections.abc as cabc
 import datetime as dt
 import hashlib
 import json
@@ -21,9 +22,6 @@ from alembic.util import CommandError
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
 
 revision: str = "20261110_000017"
 down_revision: str | None = "20261031_000016"
@@ -172,6 +170,19 @@ def _is_currency_code(value: object) -> bool:
     return isinstance(value, str) and _CURRENCY_CODE.fullmatch(value) is not None
 
 
+def _require_json_objects(
+    row: cabc.Mapping[str, object],
+    snapshot_id: object,
+) -> None:
+    """Reject legacy JSONB columns that do not hold objects."""
+    # The columns are JSONB, so a row can hold an array or a scalar. Converting
+    # one would fail on ``.items()`` without naming the row, so the shape is
+    # checked where the snapshot identifier is in hand.
+    for field in ("rates_minor_per_metric", "source_metadata"):
+        if not isinstance(row[field], cabc.Mapping):
+            _reject(snapshot_id, f"{field} must be a JSON object")
+
+
 def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
     """Reject a legacy row that cannot become a valid version 1 snapshot.
 
@@ -195,6 +206,7 @@ def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
             snapshot_id,
             "a legacy sla4oai_plan row carries no source document",
         )
+    _require_json_objects(row, snapshot_id)
     if not row["rates_minor_per_metric"]:
         _reject(
             snapshot_id,

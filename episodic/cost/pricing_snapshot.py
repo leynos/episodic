@@ -66,19 +66,24 @@ __all__ = [
 ]
 
 _IDENTIFIER_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
-# Metrics the system itself reports count tokens, so a card that denominates
-# one of them in characters or milliseconds would price a token count with a
-# rate for a different quantity. The list mirrors the legacy conversion table
-# in migration 20261110_000017; a new token metric must be added in both places.
-_TOKEN_METRICS = frozenset({
-    "input_tokens",
-    "output_tokens",
-    "cached_input_tokens",
-    "cache_write_tokens",
-    "reasoning_tokens",
-    "audio_input_tokens",
-    "audio_output_tokens",
-})
+# Metrics the system itself reports measure a known quantity, so a card that
+# denominates one of them in another unit would price that quantity with a
+# rate for something else. The token entries mirror the legacy conversion table
+# in migration 20261110_000017; a new token metric must be added in both
+# places. Metric names stay open: a name absent here is priced in whatever unit
+# its card states, because no usage producer fixes its quantity yet.
+_METRIC_UNITS: cabc.Mapping[str, UsageUnit] = {
+    "input_tokens": UsageUnit.TOKEN,
+    "output_tokens": UsageUnit.TOKEN,
+    "cached_input_tokens": UsageUnit.TOKEN,
+    "cache_write_tokens": UsageUnit.TOKEN,
+    "reasoning_tokens": UsageUnit.TOKEN,
+    "audio_input_tokens": UsageUnit.TOKEN,
+    "audio_output_tokens": UsageUnit.TOKEN,
+    "input_characters": UsageUnit.CHARACTER,
+    "output_audio_milliseconds": UsageUnit.MILLISECOND,
+    "requests": UsageUnit.REQUEST,
+}
 
 
 def _require_identifier(value: str, *, field: str) -> None:
@@ -122,10 +127,11 @@ def _validated_rates(
         if not isinstance(rate, MeteredRate):
             msg = f"rate for {metric!r} must be a MeteredRate."
             raise TypeError(msg)
-        if metric in _TOKEN_METRICS and rate.unit is not UsageUnit.TOKEN:
+        required_unit = _METRIC_UNITS.get(metric)
+        if required_unit is not None and rate.unit is not required_unit:
             msg = (
-                f"rate for {metric!r} must be denominated in tokens, "
-                f"not {rate.unit.value!r}."
+                f"rate for {metric!r} must be denominated in "
+                f"{required_unit.value!r}, not {rate.unit.value!r}."
             )
             raise ValueError(msg)
     return frozen

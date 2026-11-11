@@ -239,6 +239,16 @@ async def test_upgrade_rejects_a_non_identifier_metadata_key(
             "at least one metric",
             id="empty-rates",
         ),
+        pytest.param(
+            {"rates_minor_per_metric": ["input_tokens"]},
+            "must be a JSON object",
+            id="non-object-rates",
+        ),
+        pytest.param(
+            {"source_metadata": ["source_url"]},
+            "must be a JSON object",
+            id="non-object-metadata",
+        ),
     ],
 )
 async def test_upgrade_rejects_a_row_that_cannot_be_version_one(

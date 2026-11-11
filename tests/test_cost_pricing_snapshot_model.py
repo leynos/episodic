@@ -111,14 +111,31 @@ def test_invalid_metric_names_are_rejected(metric: str) -> None:
         _snapshot(rates={metric: _INPUT_RATE})
 
 
-def test_token_metric_requires_a_token_unit() -> None:
-    """A token metric denominated in another unit would price the wrong quantity."""
-    with pytest.raises(ValueError, match="denominated in tokens"):
-        _snapshot(
-            rates={
-                "input_tokens": MeteredRate.reduced(5, 1_000, UsageUnit.CHARACTER),
-            }
-        )
+@pytest.mark.parametrize(
+    ("metric", "required_unit"),
+    [
+        ("input_tokens", UsageUnit.TOKEN),
+        ("input_characters", UsageUnit.CHARACTER),
+        ("output_audio_milliseconds", UsageUnit.MILLISECOND),
+        ("requests", UsageUnit.REQUEST),
+    ],
+)
+def test_known_metric_requires_its_own_unit(
+    metric: str, required_unit: UsageUnit
+) -> None:
+    """A known metric in another unit would price a different quantity."""
+    wrong_unit = next(unit for unit in UsageUnit if unit is not required_unit)
+    with pytest.raises(ValueError, match=f"denominated in {required_unit.value!r}"):
+        _snapshot(rates={metric: MeteredRate.reduced(5, 1_000, wrong_unit)})
+
+
+def test_unknown_metric_accepts_any_unit() -> None:
+    """Metric names stay open, so an undocumented name keeps its stated unit."""
+    rate = MeteredRate.reduced(5, 1_000, UsageUnit.CHARACTER)
+    snapshot = _snapshot(rates={"glyphs_rendered": rate})
+    assert snapshot.rates["glyphs_rendered"] is rate, (
+        "an undocumented metric must keep the unit its card states"
+    )
 
 
 def test_invalid_source_metadata_key_is_rejected() -> None:
