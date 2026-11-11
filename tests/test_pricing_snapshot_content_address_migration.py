@@ -222,6 +222,7 @@ async def test_upgrade_rejects_a_non_identifier_metadata_key(
         pytest.param({"operation": ""}, "operation", id="blank-operation"),
         pytest.param({"currency": "US"}, "currency", id="short-currency"),
         pytest.param({"currency": "usd"}, "uppercase", id="lowercase-currency"),
+        pytest.param({"currency": "ÉÜÖ"}, "uppercase", id="non-ascii-currency"),
         pytest.param(
             {"rates_minor_per_metric": {"input_tokens": 2**53 + 1}},
             "canonical JSON integer limit",

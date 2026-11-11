@@ -44,7 +44,7 @@ _LEGACY_METRIC_UNITS: typ.Final = {
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _REQUIRED_TEXT_FIELDS = ("provider_name", "model", "operation")
 _SOURCE_KINDS = frozenset({"provider_rate_card", "sla4oai_plan"})
-_CURRENCY_LENGTH = 3
+_CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")
 _EMPTY_TABLE_GUARD = """
 DO $$
 BEGIN
@@ -165,9 +165,11 @@ def _content_hash(document: dict[str, object]) -> str:
 
 
 def _is_currency_code(value: object) -> bool:
-    """Return whether a value is a three-letter uppercase currency code."""
-    text = value if isinstance(value, str) else ""
-    return len(text) == _CURRENCY_LENGTH and text.isalpha() and text.isupper()
+    """Return whether a value is three uppercase ASCII letters."""
+    # The domain pattern is repeated rather than imported because a migration
+    # must keep converting rows the way it always did, even when the domain
+    # validator later changes.
+    return isinstance(value, str) and _CURRENCY_CODE.fullmatch(value) is not None
 
 
 def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
@@ -181,7 +183,10 @@ def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
         if not isinstance(value, str) or not value.strip():
             _reject(snapshot_id, f"{field} must be a non-blank string")
     if not _is_currency_code(row["currency"]):
-        _reject(snapshot_id, "currency must be a three-letter uppercase code")
+        _reject(
+            snapshot_id,
+            "currency must be a three-letter uppercase ASCII code",
+        )
     source_kind = row["source_kind"]
     if source_kind not in _SOURCE_KINDS:
         _reject(snapshot_id, f"unknown source kind {source_kind!r}")
