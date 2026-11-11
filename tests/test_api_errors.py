@@ -230,6 +230,7 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
     """Mappers emit detached diagnostics through their injected port."""
 
     def raise_case_exception() -> None:
+        """Raise the case error in the mapper's handled context."""
         _raise_with_credential_cause(case.exception)
 
     try:

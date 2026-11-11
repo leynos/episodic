@@ -682,9 +682,12 @@ uv run --group dev python scripts/check_vidaimock_isolated.py
 
 ## Falcon HTTP runtime
 
-The canonical HTTP adapter has two layers:
+The canonical HTTP adapter has three layers:
 
-- `episodic/api/app.py` is the pure Falcon route factory.
+- `episodic/api/app.py` is the Falcon application factory. It installs
+  middleware and the error serializer, then delegates route registration.
+- `episodic/api/routes.py` constructs canonical resources and binds them to
+  Falcon paths. It is an internal helper used only by the application factory.
 - `episodic/api/runtime.py` is the Granian composition root that reads
   `DATABASE_URL` and `SOURCE_INTAKE_OBJECT_STORE_ROOT`, creates the SQLAlchemy
   session factory and filesystem object-store adapter, and injects readiness
@@ -1434,8 +1437,8 @@ payloads automatically.
 ## Series profile and episode template APIs
 
 Series profile and episode template workflows are implemented as a driving
-adapter (`episodic/api/app.py`) over domain services in
-`episodic/canonical/profile_templates/`.
+adapter (`episodic/api/app.py` and `episodic/api/routes.py`) over domain
+services in `episodic/canonical/profile_templates/`.
 
 ### Endpoints
 
@@ -1493,7 +1496,7 @@ Reusable reference-document workflows are implemented as Falcon resources in:
 - `episodic/api/resources/reference_documents.py`
 - `episodic/api/resources/reference_bindings.py`
 
-Route wiring lives in `episodic/api/app.py`, and service orchestration is
+Route wiring lives in `episodic/api/routes.py`, and service orchestration is
 implemented in `episodic/canonical/reference_documents/services.py`.
 
 See also:

@@ -69,6 +69,7 @@ async def _run_handler(
         _uow: object,
         **_kwargs: object,
     ) -> typ.NoReturn:
+        """Raise the case-specific error instead of calling a service."""
         await asyncio.sleep(0)
         raise exc
 

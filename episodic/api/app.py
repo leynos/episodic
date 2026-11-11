@@ -21,43 +21,12 @@ from episodic.logging import get_logger, log_error
 
 from .authorization import AuthorizationMiddleware
 from .errors import serialize_http_error
-from .resources import (
-    EpisodeQaEvaluationsResource,
-    EpisodeTeiResource,
-    EpisodeTemplateHistoryResource,
-    EpisodeTemplateResource,
-    EpisodeTemplatesResource,
-    GenerationRunEventsResource,
-    GenerationRunResource,
-    GenerationRunsResource,
-    HealthLiveResource,
-    HealthReadyResource,
-    IngestionJobResource,
-    IngestionJobSourcesResource,
-    IngestionJobsResource,
-    QaEvaluationResource,
-    ReferenceBindingResource,
-    ReferenceBindingsResource,
-    ReferenceDocumentResource,
-    ReferenceDocumentRevisionResource,
-    ReferenceDocumentRevisionsResource,
-    ReferenceDocumentsResource,
-    ResolvedBindingsResource,
-    SeriesProfileBriefResource,
-    SeriesProfileHistoryResource,
-    SeriesProfileResource,
-    SeriesProfilesResource,
-    UploadResource,
-    UploadsResource,
-)
-from .resources.generation_runs import GenerationRunsResourceConfig
-from .source_intake_support import UploadResourceConfig
+from .routes import _register_api_routes
 
 if typ.TYPE_CHECKING:
     from episodic.observability import MetricsPort, MonotonicClockPort
 
-    from .dependencies import ApiDependencies, ShutdownHook, UnmappedErrorEmitter
-    from .types import UowFactory
+    from .dependencies import ApiDependencies, ShutdownHook
 
 
 logger = get_logger(__name__)
@@ -185,198 +154,6 @@ class _ShutdownHooksMiddleware:
             raise first_failure
 
 
-def _register_health_routes(app: asgi.App, dependencies: ApiDependencies) -> None:
-    """Register the liveness and readiness routes on *app*."""
-    app.add_route("/health/live", HealthLiveResource())
-    app.add_route(
-        "/health/ready",
-        HealthReadyResource(dependencies.readiness_observer()),
-    )
-
-
-def _register_series_profile_routes(
-    app: asgi.App,
-    uow_factory: UowFactory,
-    emit_error: UnmappedErrorEmitter,
-) -> None:
-    """Register the series-profile routes on *app*."""
-    app.add_route(
-        "/v1/series-profiles",
-        SeriesProfilesResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/series-profiles/{profile_id}",
-        SeriesProfileResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/series-profiles/{profile_id}/history",
-        SeriesProfileHistoryResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/series-profiles/{profile_id}/brief",
-        SeriesProfileBriefResource(uow_factory),
-    )
-    app.add_route(
-        "/v1/series-profiles/{profile_id}/resolved-bindings",
-        ResolvedBindingsResource(uow_factory),
-    )
-
-
-def _register_episode_template_routes(
-    app: asgi.App,
-    uow_factory: UowFactory,
-    emit_error: UnmappedErrorEmitter,
-) -> None:
-    """Register the episode-template routes on *app*."""
-    app.add_route(
-        "/v1/episode-templates",
-        EpisodeTemplatesResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/episode-templates/{template_id}",
-        EpisodeTemplateResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/episode-templates/{template_id}/history",
-        EpisodeTemplateHistoryResource(uow_factory, emit_error),
-    )
-
-
-def _register_reference_document_routes(
-    app: asgi.App,
-    uow_factory: UowFactory,
-    emit_error: UnmappedErrorEmitter,
-) -> None:
-    """Register the reference-document and revision routes on *app*."""
-    app.add_route(
-        "/v1/series-profiles/{profile_id}/reference-documents",
-        ReferenceDocumentsResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/series-profiles/{profile_id}/reference-documents/{document_id}",
-        ReferenceDocumentResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
-        ReferenceDocumentRevisionsResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/reference-document-revisions/{revision_id}",
-        ReferenceDocumentRevisionResource(uow_factory, emit_error),
-    )
-
-
-def _register_reference_binding_routes(
-    app: asgi.App,
-    uow_factory: UowFactory,
-    emit_error: UnmappedErrorEmitter,
-) -> None:
-    """Register the reference-binding routes on *app*."""
-    app.add_route(
-        "/v1/reference-bindings",
-        ReferenceBindingsResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/reference-bindings/{binding_id}",
-        ReferenceBindingResource(uow_factory, emit_error),
-    )
-
-
-def _register_intake_routes(
-    app: asgi.App,
-    uow_factory: UowFactory,
-    dependencies: ApiDependencies,
-    emit_error: UnmappedErrorEmitter,
-) -> None:
-    """Register the upload and ingestion-job routes on *app*."""
-    app.add_route(
-        "/v1/uploads",
-        UploadsResource(
-            uow_factory,
-            emit_error,
-            config=UploadResourceConfig(
-                object_store=dependencies.object_store,
-                max_bytes=dependencies.upload_max_bytes,
-                content_types=frozenset(dependencies.upload_content_types),
-            ),
-        ),
-    )
-    app.add_route("/v1/uploads/{upload_id}", UploadResource(uow_factory, emit_error))
-    app.add_route(
-        "/v1/ingestion-jobs",
-        IngestionJobsResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/ingestion-jobs/{ingestion_job_id}",
-        IngestionJobResource(uow_factory, emit_error),
-    )
-    app.add_route(
-        "/v1/ingestion-jobs/{ingestion_job_id}/sources",
-        IngestionJobSourcesResource(uow_factory, emit_error),
-    )
-
-
-def _register_generation_run_routes(
-    app: asgi.App,
-    uow_factory: UowFactory,
-    dependencies: ApiDependencies,
-    emit_error: UnmappedErrorEmitter,
-) -> None:
-    """Register the generation-run creation and polling routes on *app*."""
-    app.add_route(
-        "/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
-        GenerationRunsResource(
-            uow_factory,
-            GenerationRunsResourceConfig(
-                emit_error=emit_error,
-                launcher=dependencies.launcher,
-                max_source_count=(
-                    None
-                    if dependencies.generation_source_limits is None
-                    else dependencies.generation_source_limits.max_source_count
-                ),
-                tracer=dependencies.tracer,
-            ),
-        ),
-    )
-    app.add_route(
-        "/v1/generation-runs/{run_id}",
-        GenerationRunResource(uow_factory, tracer=dependencies.tracer),
-    )
-    app.add_route(
-        "/v1/generation-runs/{run_id}/events",
-        GenerationRunEventsResource(uow_factory, tracer=dependencies.tracer),
-    )
-
-
-def _register_episode_tei_routes(
-    app: asgi.App,
-    uow_factory: UowFactory,
-    dependencies: ApiDependencies,
-) -> None:
-    """Register the episode TEI route on *app*."""
-    app.add_route(
-        "/v1/episodes/{episode_id}/tei",
-        EpisodeTeiResource(uow_factory, tracer=dependencies.tracer),
-    )
-
-
-def _register_qa_artefact_routes(
-    app: asgi.App,
-    uow_factory: UowFactory,
-    dependencies: ApiDependencies,
-) -> None:
-    """Register the QA evaluation routes on *app*."""
-    app.add_route(
-        "/v1/episodes/{episode_id}/qa-evaluations",
-        EpisodeQaEvaluationsResource(uow_factory, tracer=dependencies.tracer),
-    )
-    app.add_route(
-        "/v1/qa-evaluations/{evaluation_id}",
-        QaEvaluationResource(uow_factory, tracer=dependencies.tracer),
-    )
-
-
 def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
@@ -398,16 +175,6 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
         emit_error = partial(log_error, logger)
     app.set_error_serializer(serialize_http_error)
 
-    uow_factory = dependencies.uow_factory
-
-    _register_health_routes(app, dependencies)
-    _register_series_profile_routes(app, uow_factory, emit_error)
-    _register_episode_template_routes(app, uow_factory, emit_error)
-    _register_reference_document_routes(app, uow_factory, emit_error)
-    _register_reference_binding_routes(app, uow_factory, emit_error)
-    _register_intake_routes(app, uow_factory, dependencies, emit_error)
-    _register_generation_run_routes(app, uow_factory, dependencies, emit_error)
-    _register_episode_tei_routes(app, uow_factory, dependencies)
-    _register_qa_artefact_routes(app, uow_factory, dependencies)
+    _register_api_routes(app, dependencies, emit_error)
 
     return app

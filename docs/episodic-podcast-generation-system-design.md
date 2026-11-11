@@ -91,7 +91,8 @@ checkpointing provide resumable workflows that survive service restarts and
 enable long-running editorial review periods.
 
 For the canonical-content API specifically, the Falcon adapter is assembled in
-two steps: `episodic/api/app.py` remains the pure route factory, whilst
+three steps: `episodic/api/app.py` creates the app and installs middleware,
+`episodic/api/routes.py` binds resources to paths, and
 `episodic/api/runtime.py` is the runtime composition root that reads
 environment configuration, constructs the SQLAlchemy-backed unit-of-work
 factory, and injects infrastructural readiness probes through a typed
@@ -2110,7 +2111,7 @@ rules.
 
 The profile/template API (Application Programming Interface) is exposed through
 Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
-`episodic/api/app.py`.
+`episodic/api/routes.py` and `episodic/api/resources/`.
 
 - `POST /series-profiles` creates a profile and revision `1`.
 - `GET /series-profiles` lists profiles with current revision values.
@@ -2142,7 +2143,7 @@ Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
 
 The reusable reference API (Application Programming Interface) is exposed
 through Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
-`episodic/api/app.py` and `episodic/api/resources/`.
+`episodic/api/routes.py` and `episodic/api/resources/`.
 
 - `POST /v1/series-profiles/{profile_id}/reference-documents` creates one
   reusable `ReferenceDocument` for the owning series profile.

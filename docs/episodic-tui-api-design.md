@@ -1475,4 +1475,4 @@ ______________________________________________________________________
 [^1]: Existing endpoints are documented in the developers' guide
     and the 2.2.7 execution plan.
 
-[^2]: Route definitions are in `episodic/api/app.py`.
+[^2]: Route definitions are in `episodic/api/routes.py`.

@@ -26,9 +26,10 @@ the following rules:
 
 1. `episodic/api/dependencies.py` defines `ApiDependencies` and
    `ReadinessProbe` as the typed inbound dependency contract.
-2. `episodic/api/app.py` remains a pure Falcon application factory. It wires
-   routes only and receives an `ApiDependencies` instance rather than parsing
-   environment variables or constructing database engines.
+2. `episodic/api/app.py` remains a pure Falcon application factory. It installs
+   middleware and the error serializer, and delegates route registration to
+   `episodic/api/routes.py`. It receives an `ApiDependencies` instance rather
+   than parsing environment variables or constructing database engines.
 3. `episodic/api/runtime.py` is the Granian runtime composition root. It reads
    `DATABASE_URL`, creates the SQLAlchemy session factory used by
    `SqlAlchemyUnitOfWork`, constructs infrastructural readiness probes, and

@@ -83,6 +83,7 @@ def test_unmapped_errors_return_generic_http_500_envelopes(
     """Profile, reference and source routes emit safe generic 500 responses."""
 
     async def fail_service(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        """Raise the route case's error from its registered service."""
         await asyncio.sleep(0)
         raise case.exception
 
@@ -134,6 +135,7 @@ def test_create_app_binds_default_unmapped_error_emitter(
     )
 
     async def fail_service(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        """Raise the test error from the replaced profile service."""
         await asyncio.sleep(0)
         raise exception
 

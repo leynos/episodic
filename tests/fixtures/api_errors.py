@@ -76,6 +76,7 @@ def empty_uow_factory() -> EmptyUnitOfWorkFactory:
     """Return a factory for the minimal unit of work used by error tests."""
 
     def create_empty_uow() -> CanonicalUnitOfWork:
+        """Create an empty unit of work for one service operation."""
         return typ.cast("CanonicalUnitOfWork", EmptyUnitOfWork())
 
     return create_empty_uow
