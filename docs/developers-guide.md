@@ -863,6 +863,9 @@ Authorization scaffold:
   `TypeError`, and `ValueError` map to their corresponding category names.
   Other caught exceptions, including `KeyError`, use `unknown_error`. Warnings
   omit exception metadata, which could contain the raw authorization header.
+  The system design records this metrics dependency and bounded diagnostic
+  policy in
+  [Authorization and adapter failure observability](episodic-podcast-generation-system-design.md#authorization-and-adapter-failure-observability).
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
 

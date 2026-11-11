@@ -53,6 +53,15 @@ episode, the evaluation, or its launcher run is missing or belongs to someone
 else. A row written by a newer release returns
 `422 qa_artefact_schema_unsupported` instead of being misread.
 
+## Authorization adapter failures
+
+If the authorization adapter fails while handling a `/v1` request, the API
+returns `503 service_unavailable` in the standard error envelope. The service
+records the failure in `authorization_adapter_failure_total` with a bounded
+`category` label. The warning log omits exception details because the adapter
+context can contain the raw authorization header. Metric-sink failures do not
+change the `503` response. No new server setting is required.
+
 ## QA retrieval from the CLI
 
 The `episodic` command is a REST client for the running API:

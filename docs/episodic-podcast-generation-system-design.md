@@ -2107,6 +2107,26 @@ Reusable reference repositories are implemented through dedicated adapters for
 including target-kind enforcement and `effective_from_episode_id` applicability
 rules.
 
+### Authorization and adapter failure observability
+
+The API composition root passes the `AuthorizationPort` and shared
+`MetricsPort` to `AuthorizationMiddleware`. The middleware owns HTTP
+authorization outcomes: denial decisions return `401` or `403`, while an
+adapter exception returns `503 service_unavailable` in the standard error
+envelope.
+
+The middleware records adapter failures in
+`authorization_adapter_failure_total` with one bounded `category` label. Known
+categories cover operating-system, runtime, type, and value errors; other
+exceptions use `unknown_error`. Recording is best-effort, so a metrics-sink
+failure does not mask the `503` response.
+
+The warning log includes the fixed category, an allow-listed method, and an
+allow-listed resource root. It omits exception text, traceback details, raw
+paths, and credentials because adapter context can contain the raw
+`Authorization` header. This keeps the available diagnostic signal bounded
+without exposing request secrets or high-cardinality exception data.
+
 ### Profile/template REST (Representational State Transfer) API (Application Programming Interface) specification
 
 The profile/template API (Application Programming Interface) is exposed through

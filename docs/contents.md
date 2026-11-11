@@ -21,8 +21,8 @@ or delivery planning.
 ## Migration guides
 
 - [Migrating to Episodic 0.2.0](migration-0.2.0.md) - upgrade steps for the
-  renamed `episodic` command, the QA database migration, and the new QA
-  retrieval interfaces.
+  renamed `episodic` command, the QA database migration and retrieval
+  interfaces, and authorization adapter-failure behaviour.
 
 ## Product and system design
 
