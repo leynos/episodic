@@ -772,6 +772,33 @@ Success is observable as follows:
   the rate range check rejected it, hanging startup. Fixed in `52e14676` by
   rejecting an exponent beyond 30 decimal places, with positive and negative
   exponent cases in the loader tests.
+- Round 5 on the candidate carrying round 4: all seven gates green (`make test`
+  2231 passed, 1 skipped, 71 snapshots). The CLI review covered 79 files and
+  raised nine findings, all actioned in `1e9c032e`:
+  - A token metric could be denominated in characters or milliseconds, so the
+    engine would price a token count with a rate for another quantity. The
+    snapshot now requires the seven known token metrics to use
+    `UsageUnit.TOKEN`.
+  - `ensure` returned a stored identifier as `REUSED` without verifying the
+    row, so a tampered row could be pinned and only fail on a later read. The
+    conflict path now rebuilds and verifies the row first.
+  - A run pin whose snapshot priced a different subject was used silently,
+    because the pin key omits the service kind. The recorder now refuses it
+    with `PricingSnapshotIntegrityError`.
+  - Unknown fields inside a rate were ignored; they are now rejected like
+    unknown top-level fields.
+  - The public value objects gained NumPy-style attribute sections, which
+    pushed `pricing_snapshot.py` past the 400-line limit, so the value objects
+    moved to `episodic.cost.pricing_snapshot_values` and are re-exported from
+    the original module. The Hecate `domain_ports` group and the production
+    cost-group regression test both list the new module.
+  - Four test-quality findings were fixed: latency labels are now checked for
+    leaked identifiers, the TTS pin test returns a subject-matched snapshot
+    and asserts the pinned identifier, the engine test pairs each unit with a
+    matching metric, and the concurrency test states that py-pglite serializes
+    writers. The reviewer's request for an opt-in PostgreSQL concurrency tier
+    is declined: no such tier exists in this repository, and adding one is a
+    separate infrastructure change rather than part of this plan.
 - Lesson: the currency validator's shape check and its uppercase check were
   two separate conditions, so a non-ASCII letter such as `É` passed the
   alphabetic test. One anchored pattern expresses the whole contract and cannot
