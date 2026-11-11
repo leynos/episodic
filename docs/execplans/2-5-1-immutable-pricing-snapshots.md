@@ -1199,7 +1199,7 @@ passes all scenarios; all gates pass.
 
 ## Concrete steps
 
-Run everything from the root of your checkout of branch
+Run everything from the root of a checkout of branch
 `2-5-1-immutable-pricing-snapshots`.
 
 Focused red and green runs, for example:

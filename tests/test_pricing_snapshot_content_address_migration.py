@@ -103,6 +103,36 @@ def _legacy_row(identifier: uuid.UUID, **overrides: object) -> dict[str, object]
     return {**_LEGACY_ROW, "id": identifier, **overrides}
 
 
+async def _recorded_revision(connection: AsyncConnection) -> str:
+    """Return the Alembic revision the database records."""
+    result = await connection.execute(
+        sa.text("SELECT version_num FROM alembic_version")
+    )
+    return str(result.scalar_one())
+
+
+async def _assert_legacy_schema(connection: AsyncConnection) -> None:
+    """Assert a rejected upgrade left the legacy schema untouched."""
+    columns = await _columns(connection)
+    assert "billing_period_key" in columns, (
+        "a rejected upgrade must leave the legacy columns"
+    )
+    assert "schema_version" not in columns, (
+        "a rejected upgrade must not add the v1 columns"
+    )
+    assert await _recorded_revision(connection) == _LEGACY_REVISION, (
+        "a rejected upgrade must leave the recorded revision unchanged"
+    )
+
+
+async def _upgrade_is_rejected(connection: AsyncConnection, match: str) -> None:
+    """Assert the upgrade fails inside a savepoint and changes nothing."""
+    with pytest.raises(CommandError, match=match):
+        async with connection.begin_nested():
+            await _upgrade(connection)
+    await _assert_legacy_schema(connection)
+
+
 @pytest.mark.asyncio
 async def test_upgrade_converts_legacy_rows(
     migrated_engine: AsyncEngine,
@@ -169,8 +199,7 @@ async def test_upgrade_rejects_a_recomputed_hash_collision(
                 _legacy_row(second, content_hash="legacy-second"),
             ],
         )
-        with pytest.raises(CommandError, match=str(first)):
-            await _upgrade(connection)
+        await _upgrade_is_rejected(connection, str(first))
 
 
 @pytest.mark.asyncio
@@ -184,8 +213,7 @@ async def test_upgrade_rejects_an_unknown_legacy_metric(
             connection,
             [_legacy_row(identifier, rates_minor_per_metric={"mystery": 5})],
         )
-        with pytest.raises(CommandError, match="mystery"):
-            await _upgrade(connection)
+        await _upgrade_is_rejected(connection, "mystery")
 
 
 @pytest.mark.asyncio
@@ -199,8 +227,7 @@ async def test_upgrade_rejects_a_non_identifier_metadata_key(
             connection,
             [_legacy_row(identifier, source_metadata={"Source URL": "x"})],
         )
-        with pytest.raises(CommandError, match=str(identifier)):
-            await _upgrade(connection)
+        await _upgrade_is_rejected(connection, str(identifier))
 
 
 @pytest.mark.asyncio

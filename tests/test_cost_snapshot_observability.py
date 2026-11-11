@@ -231,9 +231,23 @@ async def test_ensure_snapshot_emits_integrity_on_a_conflict_without_a_row() -> 
     )
 
 
+_TAMPERED_RATES = [
+    pytest.param(
+        {"input_tokens": {"amount_minor": 99, "per_units": 1}},
+        id="unreconstructable",
+    ),
+    pytest.param(
+        {"input_tokens": {"amount_minor": 99, "per_units": 1, "unit": "token"}},
+        id="reconstructable",
+    ),
+]
+
+
 @pytest.mark.asyncio
+@pytest.mark.parametrize("tampered_rates", _TAMPERED_RATES)
 async def test_get_emits_found_not_found_and_tampered(
     session_factory: SessionFactory,
+    tampered_rates: dict[str, dict[str, object]],
 ) -> None:
     """Reads report found, not_found, and a tampered row as integrity mismatch."""
     tracer = RecordingTracer()
@@ -258,7 +272,7 @@ async def test_get_emits_found_not_found_and_tampered(
             .where(
                 PricingSnapshotRecord.id == uuid.UUID(str(ensured.pricing_snapshot_id))
             )
-            .values(rates={"input_tokens": {"amount_minor": 99, "per_units": 1}})
+            .values(rates=tampered_rates)
         )
         with pytest.raises(PricingSnapshotIntegrityError, match="content hash"):
             await store.get(ensured.pricing_snapshot_id)
