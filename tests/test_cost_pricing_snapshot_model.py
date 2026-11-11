@@ -18,6 +18,16 @@ _RETRIEVED_AT = dt.datetime(2026, 5, 1, tzinfo=dt.UTC)
 _INPUT_RATE = MeteredRate.reduced(15, 1_000_000, UsageUnit.TOKEN)
 
 
+class _OffsetlessTz(dt.tzinfo):
+    """A zone that reports no UTC offset, leaving its instants naive."""
+
+    # pylint: disable-next=useless-return  # The override must report no offset.
+    def utcoffset(self, instant: dt.datetime | None) -> dt.timedelta | None:
+        """Report no offset so the datetime behaves as naive."""
+        del instant
+        return None
+
+
 def _snapshot(**overrides: object) -> PricingSnapshot:
     """Build a valid provider-rate-card snapshot with optional overrides."""
     values: dict[str, object] = {
@@ -127,6 +137,19 @@ def test_known_metric_requires_its_own_unit(
     wrong_unit = next(unit for unit in UsageUnit if unit is not required_unit)
     with pytest.raises(ValueError, match=f"denominated in {required_unit.value!r}"):
         _snapshot(rates={metric: MeteredRate.reduced(5, 1_000, wrong_unit)})
+
+
+def test_boolean_schema_version_is_rejected() -> None:
+    """``True`` equals 1, but the canonical form needs the integer version."""
+    with pytest.raises(ValueError, match="schema_version"):
+        _snapshot(schema_version=True)
+
+
+def test_instant_without_a_utc_offset_is_rejected() -> None:
+    """A zone that reports no offset would hash differently on each host."""
+    offsetless = dt.datetime(2026, 5, 1, tzinfo=_OffsetlessTz())
+    with pytest.raises(ValueError, match="timezone-aware"):
+        _snapshot(retrieved_at=offsetless)
 
 
 def test_unknown_metric_accepts_any_unit() -> None:

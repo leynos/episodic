@@ -105,7 +105,9 @@ def _require_aware(instant: dt.datetime, *, field: str) -> None:
     if not isinstance(instant, dt.datetime):
         msg = f"{field} must be a datetime."
         raise TypeError(msg)
-    if instant.tzinfo is None:
+    # A tzinfo that reports no offset leaves the instant naive, and formatting
+    # it would then use the host's local zone and change the content hash.
+    if instant.tzinfo is None or instant.utcoffset() is None:
         msg = f"{field} must be timezone-aware."
         raise ValueError(msg)
 
@@ -208,8 +210,12 @@ class PricingSnapshot:
 
     def __post_init__(self) -> None:
         """Validate invariants, freeze mappings, and derive the content hash."""
-        if self.schema_version != 1:
-            msg = f"unsupported pricing snapshot schema_version {self.schema_version}."
+        # ``True == 1``, so the version must also be a non-boolean integer or
+        # the canonical form would carry JSON ``true`` instead of ``1``.
+        version = self.schema_version
+        is_plain_int = isinstance(version, int) and not isinstance(version, bool)
+        if not is_plain_int or version != 1:
+            msg = f"unsupported pricing snapshot schema_version {version!r}."
             raise ValueError(msg)
         if not isinstance(self.service_kind, PricedService):
             msg = "service_kind must be a PricedService."

@@ -816,6 +816,20 @@ Success is observable as follows:
     row validator now rejects a non-object `rates_minor_per_metric` or
     `source_metadata` with the snapshot identifier, and two migration cases
     cover it.
+- Round 7 on `edaee47a`: all seven gates green (`make test` 2242 passed, 1
+  skipped, 71 snapshots). The CLI review covered 80 files and raised two
+  findings, both actioned:
+  - A `tzinfo` whose `utcoffset()` returns `None` leaves a datetime naive even
+    though `tzinfo` is set, so `astimezone` would read the host's local zone
+    and the same snapshot could hash differently on different hosts. Both the
+    snapshot validator and the canonical formatter now reject a null offset.
+  - `schema_version=True` passed the `!= 1` check because `True == 1`, and the
+    canonical encoder then wrote JSON `true`. The version must now be a
+    non-boolean integer equal to 1.
+- Lesson: equality is not a type check. `True == 1`, and a `tzinfo` that
+  reports no offset still satisfies a non-null `tzinfo` test, yet both change
+  the canonical bytes. A validator that guards a content hash must test the
+  type and the effective value, not only equality or presence.
 - Lesson: the currency validator's shape check and its uppercase check were
   two separate conditions, so a non-ASCII letter such as `É` passed the
   alphabetic test. One anchored pattern expresses the whole contract and cannot

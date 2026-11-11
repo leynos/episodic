@@ -57,7 +57,9 @@ _HASH_PREFIX = "sha256:"
 
 def _format_instant(instant: dt.datetime) -> str:
     """Format an aware instant as UTC with six fractional digits."""
-    if instant.tzinfo is None:
+    # A tzinfo that reports no offset leaves the instant naive, and
+    # ``astimezone`` would then read the host's local zone.
+    if instant.tzinfo is None or instant.utcoffset() is None:
         msg = "pricing snapshot instants must be timezone-aware."
         raise ValueError(msg)
     return instant.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
