@@ -741,6 +741,26 @@ Success is observable as follows:
   `markdownlint`, `spelling`, and `nixie` green; the full gate set is run on
   the final candidate before publication.
 
+### Post-milestone review rounds (2026-11-11)
+
+- Round 1 at `e74ce428`: all seven gates green (`make test` 2223 passed, 1
+  skipped, 71 snapshots). The CLI review raised three findings, all actioned in
+  `b6398651`.
+- Round 2 at `b6398651`: all seven gates green (`make test` 2225 passed, 1
+  skipped, 71 snapshots; lint 67s with 30 reasoned duplication exceptions;
+  `check-migrations` 5s; `markdownlint` 0 issues in 135 files; `nixie` all
+  diagrams validated). The CLI review raised seven findings: unhashable YAML
+  mapping keys escaping as a raw `TypeError`, migrated rates above the
+  canonical JSON integer limit, a currency check that accepted non-ASCII
+  letters, a stale pricing-snapshot doctest, duplicated test fakes, and two
+  documentation inaccuracies. All seven were actioned in `17449258`, which also
+  replaced the three-condition currency check with one anchored regular
+  expression to satisfy the boolean-expression lint rule.
+- Lesson: the currency validator's shape check and its uppercase check were
+  two separate conditions, so a non-ASCII letter such as `É` passed the
+  alphabetic test. One anchored pattern expresses the whole contract and cannot
+  drift between the two halves.
+
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
 
