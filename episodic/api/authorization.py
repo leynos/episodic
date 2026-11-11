@@ -129,7 +129,16 @@ class AuthorizationMiddleware:
         authorization: AuthorizationPort,
         metrics: MetricsPort | None = None,
     ) -> None:
-        """Store the authorization and optional metrics ports."""
+        """Initialize middleware with authorization and metrics ports.
+
+        Parameters
+        ----------
+        authorization : AuthorizationPort
+            Async port that decides the outcome for each protected request.
+        metrics : MetricsPort | None, optional
+            Port for bounded adapter-failure counters. When omitted, a no-op
+            metrics port is used.
+        """
         self._authorization = authorization
         self._metrics = NoopMetrics() if metrics is None else metrics
 
@@ -151,24 +160,8 @@ class AuthorizationMiddleware:
             result = _authorization_result(await self._authorization.decide(context))
         except Exception as error:  # ruff: ignore[blind-except]  # Adapter errors may contain credentials.
             # Adapter exception text may contain credentials from its context.
-            failure_category = next(
-                (
-                    category
-                    for error_type, category in _AUTHORIZATION_FAILURE_CATEGORIES
-                    if isinstance(error, error_type)
-                ),
-                "unknown_error",
-            )
-            try:
-                self._metrics.increment_counter(
-                    _AUTHORIZATION_ADAPTER_FAILURE_TOTAL,
-                    labels={"category": failure_category},
-                )
-            except Exception:  # ruff: ignore[blind-except]  # Metrics must not mask adapter failures.
-                log_warning(
-                    logger,
-                    "Authorization adapter failure metric could not be recorded.",
-                )
+            failure_category = _authorization_failure_category(error)
+            _record_authorization_adapter_failure(self._metrics, failure_category)
             log_warning(
                 logger,
                 "Authorization adapter failed with %s for %s %s.",
@@ -214,6 +207,35 @@ class AuthorizationMiddleware:
                 }
                 resp.status = falcon.HTTP_503
         resp.complete = True
+
+
+def _authorization_failure_category(error: Exception) -> str:
+    """Return a bounded category for a caught authorization adapter error."""
+    return next(
+        (
+            category
+            for error_type, category in _AUTHORIZATION_FAILURE_CATEGORIES
+            if isinstance(error, error_type)
+        ),
+        "unknown_error",
+    )
+
+
+def _record_authorization_adapter_failure(
+    metrics: MetricsPort,
+    failure_category: str,
+) -> None:
+    """Record an adapter failure without allowing metrics errors to mask it."""
+    try:
+        metrics.increment_counter(
+            _AUTHORIZATION_ADAPTER_FAILURE_TOTAL,
+            labels={"category": failure_category},
+        )
+    except Exception:  # ruff: ignore[blind-except]  # Metrics must not mask adapter failures.
+        log_warning(
+            logger,
+            "Authorization adapter failure metric could not be recorded.",
+        )
 
 
 def _authorization_result(
