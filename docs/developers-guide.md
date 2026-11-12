@@ -278,9 +278,10 @@ The target runs this repository-wide pipeline, in order:
 
 1. Interrogate docstring coverage (`make interrogate`), which runs Interrogate
    `1.7.0` on CPython 3.14 (it parses source with the interpreter that runs it)
-   over `alembic`, `episodic`, `openai_test_types.py`, `scripts`, and `tests`.
-   It fails when the tool exits non-zero and when the verbose report holds any
-   `MISSED` row, including a lone gap that a rounded percentage would hide;
+   over `alembic`, `benchmarks`, `episodic`, `openai_test_types.py`, `scripts`,
+   and `tests`. It fails when the tool exits non-zero and when the verbose
+   report holds any `MISSED` row, including a lone gap that a rounded
+   percentage would hide;
 2. Hecate architecture import-boundary checks;
 3. Ruff formatting-independent lint checks;
 4. the focused built-in Pylint 4 rules under CPython 3.14;
