@@ -11,6 +11,7 @@ from alembic.util import CommandError
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import types
 
 _MIGRATION = (
     pathlib.Path(__file__).resolve().parents[1]
@@ -21,8 +22,21 @@ _MIGRATION = (
 _MAX_SOURCE_DOCUMENT_BYTES = 262_144
 
 
+def _migration() -> types.ModuleType:
+    """Load the migration by path, the way Alembic would."""
+    spec = importlib.util.spec_from_file_location(
+        "content_address_migration",
+        _MIGRATION,
+    )
+    assert spec is not None, "the migration must be loadable by its path"
+    assert spec.loader is not None, "the loaded migration must have a loader"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _converter() -> cabc.Callable[[dict[str, object]], object]:
-    """Load the migration by path and return its row converter.
+    """Return the migration's row converter.
 
     The oversized-document guard cannot be exercised through py-pglite: the
     embedded server closes the connection for parameters above roughly 64 KiB,
@@ -34,17 +48,8 @@ def _converter() -> cabc.Callable[[dict[str, object]], object]:
     collections.abc.Callable[[dict[str, object]], object]
         The migration's conversion step for one legacy row.
     """
-    spec = importlib.util.spec_from_file_location(
-        "content_address_migration",
-        _MIGRATION,
-    )
-    assert spec is not None, "the migration must be loadable by its path"
-    assert spec.loader is not None, "the loaded migration must have a loader"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
     return typ.cast(
-        "cabc.Callable[[dict[str, object]], object]",
-        module._converted_row,
+        "cabc.Callable[[dict[str, object]], object]", _migration()._converted_row
     )
 
 
@@ -66,3 +71,58 @@ def test_conversion_rejects_an_oversized_plan_document() -> None:
 
     with pytest.raises(CommandError, match="262,144-byte cap"):
         _converter()(row)
+
+
+@pytest.mark.parametrize("year", [1, 99, 999])
+def test_frozen_instant_keeps_a_four_digit_year(year: int) -> None:
+    """The migration's instant must pad the year the way the domain does."""
+    instant = _migration()._instant(dt.datetime(year, 1, 1, tzinfo=dt.UTC))
+
+    assert instant == f"{year:04d}-01-01T00:00:00.000000Z", (
+        "a migrated row must hash identically to the application's encoding"
+    )
+
+
+class _RecordingConnection:
+    """Stand-in connection that records statements rather than running them."""
+
+    def __init__(self) -> None:
+        """Start with no recorded statements."""
+        self.statements: list[object] = []
+
+    def execute(self, statement: object, *_: object) -> None:
+        """Record one statement."""
+        self.statements.append(statement)
+
+
+def test_shared_hash_with_different_content_aborts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hash shared by different bytes must abort instead of merging rows."""
+    survivor = uuid.UUID(int=81)
+    duplicate = uuid.UUID(int=82)
+    module = _migration()
+    # A hash collision is the only way two different documents reach the same
+    # identity, so the converter is stubbed rather than a colliding input found.
+    texts = iter(("first document", "second document"))
+    monkeypatch.setattr(
+        module,
+        "_converted_row",
+        lambda row: ({}, {}, None, "sha256:shared", next(texts)),
+    )
+    connection = _RecordingConnection()
+
+    # The migration is loaded as a module, so its write step is reached through
+    # module attributes: these are the frozen internals under test.
+    with pytest.raises(CommandError, match="content differs") as rejection:
+        module._write_converted_rows(
+            connection,
+            [{"id": survivor}, {"id": duplicate}],
+        )
+
+    message = str(rejection.value)
+    assert str(survivor) in message, "the collision must name the survivor"
+    assert str(duplicate) in message, "the collision must name the duplicate"
+    assert len(connection.statements) == 1, (
+        "the conflicting row must not be written or merged"
+    )

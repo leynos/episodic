@@ -19,121 +19,23 @@ from episodic.cost.pricing_snapshot import (
     SourceDocument,
 )
 from episodic.cost.pricing_snapshot_hash import pricing_snapshot_content_hash
-from tests.fixtures.legacy_pricing_snapshots import LEGACY_REVISION, LEGACY_TABLE
+from tests.fixtures.legacy_pricing_snapshots import (
+    LEGACY_REVISION,
+    NEW_REVISION,
+    assert_upgrade_fails,
+    columns,
+    downgrade,
+    legacy_row,
+    rows,
+    seed_legacy_rows,
+    upgrade,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from sqlalchemy.engine import Connection
     from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
     from syrupy.assertion import SnapshotAssertion
-
-
-_NEW_REVISION = "20261110_000017"
-
-_LEGACY_ROW = {
-    "provider_name": "openai",
-    "model": "gpt-4o-mini",
-    "operation": "chat_completions",
-    "source_kind": "provider_rate_card",
-    "currency": "USD",
-    "billing_period_key": "2026-06",
-    "rates_minor_per_metric": {"input_tokens": 100, "output_tokens": 200},
-    "source_metadata": {"source": "migration-test"},
-    "content_hash": "legacy-raw-bytes-hash",
-    "retrieved_at": dt.datetime(2026, 6, 1, tzinfo=dt.UTC),
-    "effective_from": dt.datetime(2026, 6, 1, tzinfo=dt.UTC),
-}
-
-
-def _migrate(
-    connection: Connection,
-    direction: typ.Literal["upgrade", "downgrade"],
-    revision: str,
-) -> None:
-    """Run Alembic on the caller's existing transaction."""
-    config = alembic_config(str(connection.engine.url))
-    config.attributes["connection"] = connection
-    migration = command.upgrade if direction == "upgrade" else command.downgrade
-    migration(config, revision)
-
-
-async def _seed_legacy_rows(
-    connection: AsyncConnection,
-    rows: cabc.Sequence[dict[str, object]],
-) -> None:
-    """Return the schema to the legacy revision and insert rows."""
-    await connection.run_sync(_migrate, "downgrade", LEGACY_REVISION)
-    await connection.execute(sa.insert(LEGACY_TABLE), list(rows))
-
-
-async def _upgrade(connection: AsyncConnection) -> None:
-    """Upgrade to the content-address revision."""
-    await connection.run_sync(_migrate, "upgrade", _NEW_REVISION)
-
-
-async def _columns(connection: AsyncConnection) -> set[str]:
-    """Return the current columns of ``pricing_snapshots``."""
-    result = await connection.execute(
-        sa.text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'pricing_snapshots'"
-        )
-    )
-    return {str(row[0]) for row in result}
-
-
-async def _rows(connection: AsyncConnection) -> list[dict[str, object]]:
-    """Return every converted snapshot row keyed by column name."""
-    result = await connection.execute(sa.text("SELECT * FROM pricing_snapshots"))
-    return [dict(row._mapping) for row in result]
-
-
-def _legacy_row(identifier: uuid.UUID, **overrides: object) -> dict[str, object]:
-    """Build one legacy row with a fixed or overridden content shape."""
-    return {**_LEGACY_ROW, "id": identifier, **overrides}
-
-
-async def _recorded_revision(connection: AsyncConnection) -> str:
-    """Return the Alembic revision the database records."""
-    result = await connection.execute(
-        sa.text("SELECT version_num FROM alembic_version")
-    )
-    return str(result.scalar_one())
-
-
-async def _assert_legacy_schema(connection: AsyncConnection) -> None:
-    """Assert a rejected upgrade left the legacy schema untouched."""
-    columns = await _columns(connection)
-    assert "billing_period_key" in columns, (
-        "a rejected upgrade must leave the legacy columns"
-    )
-    assert "schema_version" not in columns, (
-        "a rejected upgrade must not add the v1 columns"
-    )
-    assert await _recorded_revision(connection) == LEGACY_REVISION, (
-        "a rejected upgrade must leave the recorded revision unchanged"
-    )
-
-
-async def _upgrade_is_rejected(connection: AsyncConnection, match: str) -> None:
-    """Assert the upgrade fails inside a savepoint and changes nothing."""
-    with pytest.raises(CommandError, match=match):
-        async with connection.begin_nested():
-            await _upgrade(connection)
-    await _assert_legacy_schema(connection)
-
-
-async def _assert_upgrade_fails(
-    migrated_engine: AsyncEngine,
-    identifier: uuid.UUID,
-    overrides: cabc.Mapping[str, object],
-    match: str,
-) -> None:
-    """Seed one overridden legacy row and assert the upgrade rejects it."""
-    async with migrated_engine.begin() as connection:
-        await _seed_legacy_rows(connection, [_legacy_row(identifier, **overrides)])
-        await _upgrade_is_rejected(connection, match)
 
 
 @pytest.mark.asyncio
@@ -143,25 +45,25 @@ async def test_upgrade_converts_legacy_rows(
 ) -> None:
     """Legacy rows become v1 rows with exact rates and a content hash."""
     async with migrated_engine.begin() as connection:
-        await _seed_legacy_rows(
+        await seed_legacy_rows(
             connection,
-            [_legacy_row(uuid.UUID(int=11))],
+            [legacy_row(uuid.UUID(int=11))],
         )
-        await _upgrade(connection)
-        columns = await _columns(connection)
-        rows = await _rows(connection)
+        await upgrade(connection)
+        current_columns = await columns(connection)
+        converted_rows = await rows(connection)
 
-    assert "billing_period_key" not in columns, (
+    assert "billing_period_key" not in current_columns, (
         "the legacy billing period column must be dropped"
     )
-    assert "rates_minor_per_metric" not in columns, (
+    assert "rates_minor_per_metric" not in current_columns, (
         "the legacy integer rate column must be dropped"
     )
-    assert {"schema_version", "service_kind", "rates", "recorded_at"} <= columns, (
-        "the v1 columns must all be added"
-    )
-    assert len(rows) == 1, "the legacy row must survive the conversion"
-    converted = rows[0]
+    assert {"schema_version", "service_kind", "rates", "recorded_at"} <= (
+        current_columns
+    ), "the v1 columns must all be added"
+    assert len(converted_rows) == 1, "the legacy row must survive the conversion"
+    converted = converted_rows[0]
     assert converted["schema_version"] == 1, "converted rows are schema version 1"
     assert converted["service_kind"] == "llm", "legacy rows convert as LLM pricing"
     assert converted["source_kind"] == "provider_rate_card", (
@@ -184,32 +86,48 @@ async def test_upgrade_converts_legacy_rows(
     )
 
 
+async def _seed_duplicate_rows(connection: AsyncConnection) -> None:
+    """Seed two legacy rows that differ only by billing period."""
+    await seed_legacy_rows(
+        connection,
+        [
+            legacy_row(
+                _SURVIVOR,
+                billing_period_key="2026-05",
+                content_hash="legacy-may",
+            ),
+            legacy_row(
+                _DUPLICATE,
+                billing_period_key="2026-06",
+                content_hash="legacy-june",
+            ),
+        ],
+    )
+
+
+_SURVIVOR = uuid.UUID(int=21)
+_DUPLICATE = uuid.UUID(int=22)
+_LEDGER_SQL = sa.text(
+    "INSERT INTO cost_ledger_entries (id, idempotency_key, scope, provider_type, "
+    "provider_name, operation, pricing_snapshot_id, usage, usage_source, "
+    "usage_complete, computed_cost_minor, currency, pricing_model, retry_attempt, "
+    "billing_period_key, workflow_run_id, recorded_at) VALUES "
+    "('00000000-0000-0000-0000-0000000000a1', 'ledger-1', 'run', 'llm', 'openai', "
+    "'chat_completions', :snapshot, '{}'::jsonb, 'provider_reported', true, 0, "
+    "'USD', 'pinned_snapshot', 0, '2026-06', 'run-1', now())"
+)
+
+
 @pytest.mark.asyncio
 async def test_upgrade_merges_rows_that_differ_only_by_billing_period(
     migrated_engine: AsyncEngine,
 ) -> None:
     """Equivalent legacy rows collapse into one version and keep their pins."""
-    survivor = uuid.UUID(int=21)
-    duplicate = uuid.UUID(int=22)
     # The legacy rows differ only in billing period and stored hash, which keeps
     # the seed within the pre-existing uniqueness constraint; the conversion
     # still produces one shared identity.
     async with migrated_engine.begin() as connection:
-        await _seed_legacy_rows(
-            connection,
-            [
-                _legacy_row(
-                    survivor,
-                    billing_period_key="2026-05",
-                    content_hash="legacy-may",
-                ),
-                _legacy_row(
-                    duplicate,
-                    billing_period_key="2026-06",
-                    content_hash="legacy-june",
-                ),
-            ],
-        )
+        await _seed_duplicate_rows(connection)
         await connection.execute(
             sa.text(
                 "INSERT INTO run_pricing_pins (workflow_run_id, provider_name, "
@@ -217,20 +135,27 @@ async def test_upgrade_merges_rows_that_differ_only_by_billing_period(
                 "VALUES ('run-1', 'openai', 'gpt-4o-mini', 'chat_completions', "
                 "'2026-06', :snapshot)"
             ),
-            {"snapshot": duplicate},
+            {"snapshot": _DUPLICATE},
         )
-        await _upgrade(connection)
-        rows = await _rows(connection)
+        await connection.execute(_LEDGER_SQL, {"snapshot": _DUPLICATE})
+        await upgrade(connection)
+        converted_rows = await rows(connection)
         pinned = (
             await connection.execute(
                 sa.text("SELECT pricing_snapshot_id FROM run_pricing_pins")
             )
         ).scalar_one()
+        ledgered = (
+            await connection.execute(
+                sa.text("SELECT pricing_snapshot_id FROM cost_ledger_entries")
+            )
+        ).scalar_one()
 
-    assert [row["id"] for row in rows] == [survivor], (
+    assert [row["id"] for row in converted_rows] == [_SURVIVOR], (
         "equivalent rows must merge into the earliest snapshot"
     )
-    assert pinned == survivor, "a pin on the duplicate must follow the survivor"
+    assert pinned == _SURVIVOR, "a pin on the duplicate must follow the survivor"
+    assert ledgered == _SURVIVOR, "a ledger entry on the duplicate must follow it"
 
 
 @pytest.mark.asyncio
@@ -240,21 +165,21 @@ async def test_upgrade_preserves_a_legacy_sla4oai_row(
     """A legacy plan row keeps its kind and gains a faithful JSON document."""
     identifier = uuid.UUID(int=51)
     async with migrated_engine.begin() as connection:
-        await _seed_legacy_rows(
+        await seed_legacy_rows(
             connection,
             [
-                _legacy_row(
+                legacy_row(
                     identifier,
                     source_kind="sla4oai_plan",
                     rates_minor_per_metric={},
                 )
             ],
         )
-        await _upgrade(connection)
-        rows = await _rows(connection)
+        await upgrade(connection)
+        converted_rows = await rows(connection)
 
-    assert len(rows) == 1, "a legacy plan row must survive the conversion"
-    converted = rows[0]
+    assert len(converted_rows) == 1, "a legacy plan row must survive the conversion"
+    converted = converted_rows[0]
     assert converted["source_kind"] == "sla4oai_plan", (
         "the plan kind must not be rewritten as a provider rate card"
     )
@@ -296,9 +221,7 @@ async def test_upgrade_rejects_an_unknown_legacy_metric(
 ) -> None:
     """A metric with no declared unit cannot be converted safely."""
     overrides = {"rates_minor_per_metric": {"mystery": 5}}
-    await _assert_upgrade_fails(
-        migrated_engine, uuid.UUID(int=31), overrides, "mystery"
-    )
+    await assert_upgrade_fails(migrated_engine, uuid.UUID(int=31), overrides, "mystery")
 
 
 @pytest.mark.asyncio
@@ -308,7 +231,7 @@ async def test_upgrade_rejects_a_non_identifier_metadata_key(
     """Canonical source metadata keys must be identifiers."""
     identifier = uuid.UUID(int=41)
     overrides = {"source_metadata": {"Source URL": "x"}}
-    await _assert_upgrade_fails(migrated_engine, identifier, overrides, str(identifier))
+    await assert_upgrade_fails(migrated_engine, identifier, overrides, str(identifier))
 
 
 @pytest.mark.asyncio
@@ -350,7 +273,7 @@ async def test_upgrade_rejects_a_row_that_cannot_be_version_one(
     match: str,
 ) -> None:
     """A row the application would reject must not migrate into a broken snapshot."""
-    await _assert_upgrade_fails(migrated_engine, uuid.UUID(int=61), overrides, match)
+    await assert_upgrade_fails(migrated_engine, uuid.UUID(int=61), overrides, match)
 
 
 @pytest.mark.asyncio
@@ -359,10 +282,10 @@ async def test_downgrade_refuses_when_rows_exist(
 ) -> None:
     """Converted rows cannot be mapped back to the legacy representation."""
     async with migrated_engine.begin() as connection:
-        await _seed_legacy_rows(connection, [_legacy_row(uuid.UUID(int=51))])
-        await _upgrade(connection)
+        await seed_legacy_rows(connection, [legacy_row(uuid.UUID(int=51))])
+        await upgrade(connection)
         with pytest.raises(CommandError, match="empty"):
-            await connection.run_sync(_migrate, "downgrade", LEGACY_REVISION)
+            await downgrade(connection, LEGACY_REVISION)
 
 
 def _offline_sql(
@@ -387,7 +310,7 @@ def _assert_empty_table_guard(emitted: str, direction: str) -> None:
 
 def test_offline_upgrade_guards_against_existing_rows() -> None:
     """Offline DDL cannot convert rows, so it refuses to run on a populated table."""
-    emitted = _offline_sql(command.upgrade, f"{LEGACY_REVISION}:{_NEW_REVISION}")
+    emitted = _offline_sql(command.upgrade, f"{LEGACY_REVISION}:{NEW_REVISION}")
 
     _assert_empty_table_guard(emitted, "upgrade")
     assert "pricing_snapshots" in emitted, "the guard must name the table it protects"
@@ -395,6 +318,6 @@ def test_offline_upgrade_guards_against_existing_rows() -> None:
 
 def test_offline_downgrade_guards_against_existing_rows() -> None:
     """Offline downgrade emits the same emptiness guard."""
-    emitted = _offline_sql(command.downgrade, f"{_NEW_REVISION}:{LEGACY_REVISION}")
+    emitted = _offline_sql(command.downgrade, f"{NEW_REVISION}:{LEGACY_REVISION}")
 
     _assert_empty_table_guard(emitted, "downgrade")

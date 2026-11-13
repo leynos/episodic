@@ -31,9 +31,8 @@ depends_on: str | None = None
 _Row = cabc.Mapping[str, object]
 _RATE_SCALE = 1_000_000
 _MAX_JSON_INT = 2**53 - 1
-# The legacy table never stored the plan text an SLA4OAI row came from, so the
-# upgraded row carries the legacy columns themselves as a JSON document. The
-# media type names that reconstruction rather than pretending to be the plan.
+# The legacy table never stored an SLA4OAI row's plan text, so the upgraded row
+# carries the legacy columns as JSON under a media type naming that reconstruction.
 _LEGACY_DOCUMENT_MEDIA_TYPE = "application/json"
 _MAX_SOURCE_DOCUMENT_BYTES = 262_144  # Mirrors SourceDocument's cap.
 _LEGACY_METRIC_UNITS: typ.Final = {
@@ -76,7 +75,10 @@ _EMPTY_TABLE_GUARD = (
 
 def _instant(value: dt.datetime) -> str:
     """Format an instant exactly as the application canonicalizer does."""
-    return value.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    # ``strftime("%Y")`` leaves years below 1000 unpadded, so the year is
+    # formatted separately and the remaining fields keep their fixed widths.
+    utc = value.astimezone(dt.UTC)
+    return f"{utc.year:04d}-{utc:%m-%dT%H:%M:%S.%f}Z"
 
 
 def _canonical_json(document: dict[str, object]) -> str:
@@ -206,10 +208,7 @@ def _validate_json_columns(row: _Row, snapshot_id: object) -> None:
 
 
 def _validate_row(row: _Row, snapshot_id: object) -> None:
-    """Reject a legacy row that cannot become a valid version 1 snapshot.
-
-    An unchecked row would migrate into a snapshot that ``get`` cannot rebuild.
-    """
+    """Reject a legacy row that cannot become a valid version 1 snapshot."""
     _validate_text_fields(row, snapshot_id)
     _validate_currency_and_source_kind(row, snapshot_id)
     _validate_json_columns(row, snapshot_id)
@@ -217,8 +216,10 @@ def _validate_row(row: _Row, snapshot_id: object) -> None:
 
 def _converted_row(
     row: _Row,
-) -> tuple[dict[str, dict[str, object]], dict[str, str], dict[str, str] | None, str]:
-    """Convert one legacy row and return its rates, metadata, document, hash."""
+) -> tuple[
+    dict[str, dict[str, object]], dict[str, str], dict[str, str] | None, str, str
+]:
+    """Convert one legacy row and return its rates, metadata, document, identity."""
     snapshot_id = row["id"]
     _validate_row(row, snapshot_id)
     raw_rates = typ.cast("cabc.Mapping[str, object]", row["rates_minor_per_metric"])
@@ -240,9 +241,9 @@ def _converted_row(
             "media_type": _LEGACY_DOCUMENT_MEDIA_TYPE,
             "sha256": f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}",
         }
-    payload = _canonical_json(document).encode("utf-8")
-    content_hash = f"sha256:{hashlib.sha256(payload).hexdigest()}"
-    return rates, metadata, source_document, content_hash
+    canonical_text = _canonical_json(document)
+    digest = hashlib.sha256(canonical_text.encode("utf-8")).hexdigest()
+    return rates, metadata, source_document, f"sha256:{digest}", canonical_text
 
 
 def _add_new_columns() -> None:
@@ -255,12 +256,10 @@ def _add_new_columns() -> None:
         ("source_document_content", sa.Text()),
     ):
         op.add_column("pricing_snapshots", sa.Column(column, type_))
-    op.add_column(
-        "pricing_snapshots",
-        sa.Column(
-            "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now()
-        ),
+    recorded_at = sa.Column(
+        "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now()
     )
+    op.add_column("pricing_snapshots", recorded_at)
 
 
 def _tighten_new_columns() -> None:
@@ -296,7 +295,6 @@ def _merge_equivalent_row(
 ) -> None:
     """Point every reference at the survivor, then delete the duplicate."""
     # Rows differing only by billing period collapse; references move, not abort.
-    params = {"duplicate": duplicate, "survivor": survivor}
     for statement in (
         sa.text(
             "UPDATE cost_ledger_entries SET pricing_snapshot_id = :survivor "
@@ -307,7 +305,7 @@ def _merge_equivalent_row(
             "WHERE pricing_snapshot_id = :duplicate"
         ),
     ):
-        connection.execute(statement, params)
+        connection.execute(statement, {"duplicate": duplicate, "survivor": survivor})
     connection.execute(
         sa.text("DELETE FROM pricing_snapshots WHERE id = :duplicate"),
         {"duplicate": duplicate},
@@ -315,15 +313,19 @@ def _merge_equivalent_row(
 
 
 def _write_converted_rows(connection: sa.Connection, rows: cabc.Sequence[_Row]) -> None:
-    """Convert and write every legacy row, merging equivalent content."""
-    survivors: dict[str, object] = {}
+    """Convert and write every legacy row, merging byte-identical content."""
+    # A shared hash alone is not proof of equal content, so the canonical text
+    # is compared before two rows collapse into one survivor.
+    survivors: dict[str, tuple[object, str]] = {}
     for row in rows:
-        rates, metadata, source_document, content_hash = _converted_row(row)
-        survivor = survivors.get(content_hash)
-        if survivor is not None:
-            _merge_equivalent_row(connection, duplicate=row["id"], survivor=survivor)
+        rates, metadata, source_document, content_hash, text = _converted_row(row)
+        first = survivors.get(content_hash)
+        if first is not None:
+            if first[1] != text:
+                _reject(row["id"], f"collides with {first[0]}: content differs")
+            _merge_equivalent_row(connection, duplicate=row["id"], survivor=first[0])
             continue
-        survivors[content_hash] = row["id"]
+        survivors[content_hash] = (row["id"], text)
         document = source_document or {}
         connection.execute(
             sa.text(

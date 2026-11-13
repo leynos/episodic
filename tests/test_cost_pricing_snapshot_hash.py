@@ -106,6 +106,29 @@ def test_instants_always_carry_six_fractional_digits() -> None:
     )
 
 
+@pytest.mark.parametrize("year", [1, 99, 999])
+def test_years_below_one_thousand_keep_four_digits(year: int) -> None:
+    """A low year must not shorten the canonical instant on any platform."""
+    snapshot = PricingSnapshot(
+        service_kind=PricedService.LLM,
+        provider_name="openai",
+        model="gpt-4o-mini",
+        operation="chat_completions",
+        source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
+        currency=CurrencyCode("USD"),
+        rates={"input_tokens": MeteredRate.reduced(15, 1_000_000, UsageUnit.TOKEN)},
+        retrieved_at=dt.datetime(year, 1, 1, tzinfo=dt.UTC),
+    )
+
+    document = canonical_pricing_document(snapshot)
+
+    # glibc's ``strftime("%Y")`` leaves these unpadded, which would hash the
+    # same instant differently on another platform.
+    assert document["retrieved_at"] == f"{year:04d}-01-01T00:00:00.000000Z", (
+        "the canonical instant must keep a four-digit year"
+    )
+
+
 def test_absent_optional_fields_encode_as_null() -> None:
     """An absent effective instant and source document are explicit nulls."""
     snapshot = PricingSnapshot(

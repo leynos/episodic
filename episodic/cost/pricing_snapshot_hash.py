@@ -62,7 +62,15 @@ def _format_instant(instant: dt.datetime) -> str:
     if instant.tzinfo is None or instant.utcoffset() is None:
         msg = "pricing snapshot instants must be timezone-aware."
         raise ValueError(msg)
-    return instant.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    # ``strftime("%Y")`` does not zero-pad years below 1000 on glibc, so the
+    # same instant would encode differently on another platform. Formatting
+    # each field keeps the year four digits wide everywhere.
+    utc = instant.astimezone(dt.UTC)
+    return (
+        f"{utc.year:04d}-{utc.month:02d}-{utc.day:02d}"
+        f"T{utc.hour:02d}:{utc.minute:02d}:{utc.second:02d}"
+        f".{utc.microsecond:06d}Z"
+    )
 
 
 def canonical_rates(
