@@ -1,10 +1,13 @@
 """Property tests for deterministic cost pricing."""
 
 import datetime as dt
+import math
+import typing as typ
+from fractions import Fraction
 
 import hypothesis.strategies as st
 import pytest
-from hypothesis import given, settings
+from hypothesis import event, example, given, settings
 
 from episodic.cost import CurrencyCode, PricingSourceKind
 from episodic.cost.engine import PricingEngine, PricingRequest
@@ -20,6 +23,9 @@ from episodic.cost.pricing_snapshot import (
     UsageUnit,
 )
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 _METRICS = (
     "input_tokens",
     "output_tokens",
@@ -27,6 +33,12 @@ _METRICS = (
     "reasoning_tokens",
 )
 _OPERATION = "chat_completions"
+_LEGACY_PER_UNITS = 1_000_000
+_MAX_LEGACY_RATE = 1_000_000
+_REDUCIBLE_LEGACY_RATES = (8, 40, 100, 500, 250_000)
+
+_REDUCTION_CLASSES_SEEN: set[bool] = set()
+_ROUNDING_FAULT_DISAGREEMENTS: set[tuple[int, int]] = set()
 
 
 def _snapshot(rates: dict[str, MeteredRate]) -> PricingSnapshot:
@@ -69,6 +81,59 @@ def _exact_rates(draw: st.DrawFn) -> dict[str, MeteredRate]:
         metric: MeteredRate.reduced(amount, 1, UsageUnit.TOKEN)
         for metric, amount in amounts.items()
     }
+
+
+@st.composite
+def _legacy_amounts(draw: st.DrawFn) -> dict[str, int]:
+    """Generate legacy integer rates per million, including reducible ones."""
+    return draw(
+        st.fixed_dictionaries(
+            {
+                metric: st.one_of(
+                    st.sampled_from(_REDUCIBLE_LEGACY_RATES),
+                    st.integers(min_value=0, max_value=_MAX_LEGACY_RATE),
+                )
+                for metric in _METRICS
+            },
+        ),
+    )
+
+
+def _legacy_rates(amounts: dict[str, int]) -> dict[str, MeteredRate]:
+    """Build canonical rates from legacy integer amounts per million."""
+    return {
+        metric: MeteredRate.reduced(amount, _LEGACY_PER_UNITS, UsageUnit.TOKEN)
+        for metric, amount in amounts.items()
+    }
+
+
+def _oracle_cost(amounts: dict[str, int], usage: dict[str, int]) -> int:
+    """Legacy oracle: floor each per-metric product, then sum."""
+    return sum(
+        usage[metric] * amounts[metric] // _LEGACY_PER_UNITS for metric in _METRICS
+    )
+
+
+def _rounded_true_division_cost(amounts: dict[str, int], usage: dict[str, int]) -> int:
+    """Seeded fault: sum exact true divisions, then round once at the end."""
+    return round(
+        sum(
+            Fraction(usage[metric] * amounts[metric], _LEGACY_PER_UNITS)
+            for metric in _METRICS
+        ),
+    )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _assert_inv_legacy_eq_non_vacuity() -> cabc.Iterator[None]:
+    """Assert the run exercised both reduction classes and rejected the fault."""
+    yield
+    assert {True, False} == _REDUCTION_CLASSES_SEEN, (
+        "Expected both reducible and already-reduced legacy rates"
+    )
+    assert _ROUNDING_FAULT_DISAGREEMENTS, (
+        "Expected the seeded true-division fault to disagree with the oracle"
+    )
 
 
 def _add_usage(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:
@@ -182,3 +247,126 @@ def test_invalid_currency_code_raises() -> None:
             source_metadata={"source": "test"},
             retrieved_at=dt.datetime(2026, 6, 4, tzinfo=dt.UTC),
         )
+
+
+@example(
+    amounts=dict.fromkeys(_METRICS, 8),
+    usage=dict.fromkeys(_METRICS, 0),
+)
+@example(
+    amounts=dict.fromkeys(_METRICS, 3),
+    usage=dict.fromkeys(_METRICS, _LEGACY_PER_UNITS),
+)
+@given(amounts=_legacy_amounts(), usage=_usage_maps())
+@settings(max_examples=100)
+def test_legacy_integer_rates_match_floor_division_oracle(
+    amounts: dict[str, int],
+    usage: dict[str, int],
+) -> None:
+    """Legacy per-million rates price each metric as ``usage * rate // million``."""
+    engine = PricingEngine()
+    snapshot = _snapshot(_legacy_rates(amounts))
+
+    for metric in _METRICS:
+        is_reducible = math.gcd(amounts[metric], _LEGACY_PER_UNITS) > 1
+        event(f"reducible={is_reducible}")
+        _REDUCTION_CLASSES_SEEN.add(is_reducible)
+        contribution = _price(engine, snapshot, {metric: usage[metric]})
+        assert contribution.computed_cost_minor == (
+            usage[metric] * amounts[metric] // _LEGACY_PER_UNITS
+        ), "Expected the engine to match the legacy per-metric oracle"
+
+    assert _price(engine, snapshot, usage).computed_cost_minor == _oracle_cost(
+        amounts, usage
+    ), "Expected the engine total to match the legacy oracle"
+
+
+@given(
+    amount=st.integers(min_value=0, max_value=1_000),
+    per_units=st.integers(min_value=1, max_value=_LEGACY_PER_UNITS),
+    multiplier=st.integers(min_value=1, max_value=8),
+    usage=_usage_maps(),
+)
+@settings(max_examples=100)
+def test_reduced_and_unreduced_rate_forms_price_identically(
+    amount: int,
+    per_units: int,
+    multiplier: int,
+    usage: dict[str, int],
+) -> None:
+    """An equal-but-unreduced rate must price exactly like its reduced form."""
+    reduced = MeteredRate.reduced(amount, per_units, UsageUnit.TOKEN)
+    unreduced = MeteredRate.reduced(
+        amount * multiplier,
+        per_units * multiplier,
+        UsageUnit.TOKEN,
+    )
+
+    assert reduced == unreduced, "Expected equal rates to share one canonical form"
+    engine = PricingEngine()
+    reduced_cost = _price(
+        engine,
+        _snapshot(dict.fromkeys(_METRICS, reduced)),
+        usage,
+    ).computed_cost_minor
+    unreduced_cost = _price(
+        engine,
+        _snapshot(dict.fromkeys(_METRICS, unreduced)),
+        usage,
+    ).computed_cost_minor
+    assert reduced_cost == unreduced_cost, "Expected both rate forms to price alike"
+
+
+def test_eight_per_million_rate_reduces_and_prices_identically() -> None:
+    """The fixed 8 -> 1/125000 example shows reducible rates are exercised."""
+    assert math.gcd(8, _LEGACY_PER_UNITS) > 1, "Expected a reducible legacy rate"
+    reduced = MeteredRate.reduced(8, _LEGACY_PER_UNITS, UsageUnit.TOKEN)
+    unreduced = MeteredRate.reduced(
+        8 * 125,
+        _LEGACY_PER_UNITS * 125,
+        UsageUnit.TOKEN,
+    )
+
+    assert (reduced.amount_minor, reduced.per_units) == (1, 125_000), (
+        "the 8/1_000_000 cent rate must reduce to the exact fraction 1/125_000"
+    )
+    assert unreduced == reduced, "Expected equal rates to share one canonical form"
+    engine = PricingEngine()
+    usage = {"input_tokens": 123_456}
+    assert (
+        _price(
+            engine,
+            _snapshot({"input_tokens": reduced}),
+            usage,
+        ).computed_cost_minor
+        == _price(
+            engine,
+            _snapshot({"input_tokens": unreduced}),
+            usage,
+        ).computed_cost_minor
+    ), "Expected both rate forms to price alike"
+
+
+@example(
+    amounts=dict.fromkeys(_METRICS, 1),
+    usage=dict.fromkeys(_METRICS, 500_000),
+)
+@given(amounts=_legacy_amounts(), usage=_usage_maps())
+@settings(max_examples=100)
+def test_rounded_true_division_fault_is_rejected_by_the_oracle(
+    amounts: dict[str, int],
+    usage: dict[str, int],
+) -> None:
+    """Rounding true divisions once at the end must not match the oracle."""
+    oracle = _oracle_cost(amounts, usage)
+    assert (
+        _price(
+            PricingEngine(), _snapshot(_legacy_rates(amounts)), usage
+        ).computed_cost_minor
+        == oracle
+    ), "Expected the engine to match the legacy oracle"
+
+    fault = _rounded_true_division_cost(amounts, usage)
+    if fault != oracle:
+        _ROUNDING_FAULT_DISAGREEMENTS.add((oracle, fault))
+        event("seeded fault disagrees with the oracle")

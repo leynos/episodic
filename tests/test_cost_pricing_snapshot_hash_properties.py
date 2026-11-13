@@ -1,124 +1,132 @@
-"""Property tests for pricing snapshot identity."""
+"""Property tests for pricing snapshot determinism.
 
-import datetime as dt
+Satisfies ExecPlan obligation `INV-HASH-DET`: equal snapshot content yields an
+equal content hash, independent of mapping insertion order, rate authoring
+scale, and instant offset. The classification fixture fails the test if any
+`hypothesis.event` class has zero examples, and the seeded negative control
+shows that ISO 8601 instant formatting would break the property.
+"""
+
+import hashlib
+import typing as typ
 
 import hypothesis.strategies as st
-from hypothesis import given, settings
+import pytest
+from hypothesis import assume, event, given, settings
 
-from episodic.cost.pricing_snapshot import (
-    MeteredRate,
-    PricedService,
-    PricingSnapshot,
-    UsageUnit,
-)
-from episodic.cost.pricing_snapshot_hash import (
-    canonical_pricing_document,
-    pricing_snapshot_content_hash,
-)
-from episodic.cost.primitives import CurrencyCode, PricingSourceKind
+from episodic.cost.pricing_snapshot import PricedService, PricingSnapshot
+from episodic.cost.pricing_snapshot_hash import canonical_pricing_document
+from episodic.cost.primitives import PricingSourceKind
 from episodic.json_canonicalization import canonical_json_bytes
+from tests.pricing_snapshot_hash_strategies import SnapshotTwin, snapshot_twin
 
-_METRICS = ("input_tokens", "output_tokens", "cached_input_tokens")
-_AMOUNT = st.integers(min_value=0, max_value=10_000_000)
-_RETRIEVED_AT = dt.datetime(2026, 5, 1, tzinfo=dt.UTC)
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+_EXPECTED_DETERMINISM_CLASSES = frozenset({
+    *(f"service_kind={kind}" for kind in PricedService),
+    *(f"source_kind={kind}" for kind in PricingSourceKind),
+    "scale=gt1",
+    "scale=eq1",
+    "offset=utc",
+    "offset=non_utc",
+})
 
 
 @st.composite
-def _rate_maps(draw: st.DrawFn) -> dict[str, MeteredRate]:
-    """Draw a non-empty rate map over a fixed metric set."""
-    metrics = draw(st.lists(st.sampled_from(_METRICS), min_size=1, unique=True))
-    return {
-        metric: MeteredRate.reduced(
-            draw(_AMOUNT),
-            draw(st.integers(min_value=1, max_value=1_000_000)),
-            UsageUnit.TOKEN,
-        )
-        for metric in metrics
+def _isoformat_case(draw: st.DrawFn) -> SnapshotTwin:
+    """Draw a case whose instants are non-UTC or microsecond-bearing."""
+    case = draw(snapshot_twin(st.just(value=False)))
+    assume(case.offset_minutes != 0 or case.base.retrieved_at.microsecond != 0)
+    return case
+
+
+@st.composite
+def _non_utc_case(draw: st.DrawFn) -> SnapshotTwin:
+    """Draw a twin whose equivalent instant sits in a non-UTC offset."""
+    case = draw(snapshot_twin(st.just(value=False)))
+    assume(case.offset_minutes != 0)
+    return case
+
+
+def _hash_document(document: cabc.Mapping[str, object]) -> str:
+    """Return the sha256 content hash of a canonical JSON document."""
+    return f"sha256:{hashlib.sha256(canonical_json_bytes(document)).hexdigest()}"
+
+
+def _isoformat_document(snapshot: PricingSnapshot) -> dict[str, object]:
+    """Re-encode the canonical document with ISO 8601 instant formatting."""
+    document = canonical_pricing_document(snapshot)
+    document["retrieved_at"] = snapshot.retrieved_at.isoformat()
+    if snapshot.effective_from is not None:
+        document["effective_from"] = snapshot.effective_from.isoformat()
+    return document
+
+
+@pytest.fixture(scope="module")
+def seen_determinism_classes() -> cabc.Iterator[set[str]]:
+    """Fail INV-HASH-DET if a classified class never appears."""
+    seen: set[str] = set()
+    yield seen
+    missing = _EXPECTED_DETERMINISM_CLASSES - seen
+    assert not missing, f"INV-HASH-DET never generated: {sorted(missing)}"
+
+
+@given(case=snapshot_twin(st.just(value=False)))
+@settings(max_examples=150, deadline=None)
+def test_equal_content_hashes_identically(
+    seen_determinism_classes: set[str],
+    case: SnapshotTwin,
+) -> None:
+    """INV-HASH-DET: incidental form never changes the content hash."""
+    base, equivalent = case.base, case.equivalent
+    scale_class = "gt1" if case.scale_factor > 1 else "eq1"
+    offset_class = "utc" if case.offset_minutes == 0 else "non_utc"
+    classes = {
+        f"service_kind={base.service_kind}",
+        f"source_kind={base.source_kind}",
+        f"scale={scale_class}",
+        f"offset={offset_class}",
     }
+    for label in classes:
+        event(label)
+    seen_determinism_classes.update(classes)
 
-
-def _snapshot(rates: dict[str, MeteredRate]) -> PricingSnapshot:
-    """Build a provider-rate-card snapshot over the drawn rates."""
-    return PricingSnapshot(
-        service_kind=PricedService.LLM,
-        provider_name="openai",
-        model="gpt-4o-mini",
-        operation="chat_completions",
-        source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
-        currency=CurrencyCode("USD"),
-        rates=rates,
-        retrieved_at=_RETRIEVED_AT,
+    assert base.content_hash == equivalent.content_hash, (
+        "equal content authored differently must hash identically"
+    )
+    assert canonical_json_bytes(
+        canonical_pricing_document(base)
+    ) == canonical_json_bytes(canonical_pricing_document(equivalent)), (
+        "equal content must also produce identical canonical bytes"
     )
 
 
-@given(rates=_rate_maps())
-@settings(max_examples=100)
-def test_hash_is_stable_across_reconstruction(
-    rates: dict[str, MeteredRate],
-) -> None:
-    """Equal content always produces the same identity."""
-    assert _snapshot(rates).content_hash == _snapshot(dict(rates)).content_hash, (
-        "equal content must hash identically"
+@given(case=_isoformat_case())
+@settings(max_examples=100, deadline=None)
+def test_isoformat_fault_breaks_canonicalization(case: SnapshotTwin) -> None:
+    """INV-HASH-DET negative control: ISO instants change the hash."""
+    document = canonical_pricing_document(case.base)
+    faulted = _isoformat_document(case.base)
+    assert faulted["retrieved_at"] != document["retrieved_at"], (
+        "the seeded fault must change the instant encoding"
+    )
+    if document["effective_from"] is not None:
+        assert faulted["effective_from"] != document["effective_from"], (
+            "the seeded fault must change the effective-instant encoding"
+        )
+    assert _hash_document(faulted) != case.base.content_hash, (
+        "the ISO-8601 fault must change the hash"
     )
 
 
-@given(rates=_rate_maps())
-@settings(max_examples=100)
-def test_canonical_bytes_ignore_mapping_order(
-    rates: dict[str, MeteredRate],
-) -> None:
-    """Insertion order of rates never leaks into the canonical bytes."""
-    reversed_rates = dict(reversed(tuple(rates.items())))
-    left = canonical_json_bytes(canonical_pricing_document(_snapshot(rates)))
-    right = canonical_json_bytes(canonical_pricing_document(_snapshot(reversed_rates)))
-
-    assert left == right, "canonical bytes must not depend on insertion order"
-
-
-@given(rates=_rate_maps(), amount=_AMOUNT)
-@settings(max_examples=100)
-def test_changing_one_rate_changes_the_hash(
-    rates: dict[str, MeteredRate],
-    amount: int,
-) -> None:
-    """Any rate change produces a different identity."""
-    metric = next(iter(rates))
-    current = rates[metric]
-    replacement = MeteredRate.reduced(
-        amount,
-        current.per_units,
-        current.unit,
+@given(case=_non_utc_case())
+@settings(max_examples=100, deadline=None)
+def test_isoformat_fault_breaks_offset_independence(case: SnapshotTwin) -> None:
+    """INV-HASH-DET negative control: ISO instants break offset independence."""
+    assert case.base.content_hash == case.equivalent.content_hash, (
+        "the offset pair must be equal content"
     )
-    if replacement == current:
-        return
-    changed = {**rates, metric: replacement}
-
-    assert _snapshot(changed).content_hash != _snapshot(rates).content_hash, (
-        "a changed rate must change the identity"
-    )
-
-
-@given(rates=_rate_maps(), offset_hours=st.integers(min_value=-12, max_value=14))
-@settings(max_examples=50)
-def test_instant_offset_does_not_change_the_hash(
-    rates: dict[str, MeteredRate],
-    offset_hours: int,
-) -> None:
-    """The same instant in another offset is the same identity."""
-    timezone = dt.timezone(dt.timedelta(hours=offset_hours))
-    shifted = _RETRIEVED_AT.astimezone(timezone)
-    base = _snapshot(rates)
-    shifted_snapshot = PricingSnapshot(
-        service_kind=base.service_kind,
-        provider_name=base.provider_name,
-        model=base.model,
-        operation=base.operation,
-        source_kind=base.source_kind,
-        currency=base.currency,
-        rates=rates,
-        retrieved_at=shifted,
-    )
-
-    assert pricing_snapshot_content_hash(shifted_snapshot) == base.content_hash, (
-        "an equal instant in another offset must hash identically"
-    )
+    assert _hash_document(_isoformat_document(case.base)) != _hash_document(
+        _isoformat_document(case.equivalent)
+    ), "the ISO-8601 fault must expose the offset"
