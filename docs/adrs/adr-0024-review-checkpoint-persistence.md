@@ -154,7 +154,7 @@ well as a mixin would.
   `review_checkpoint_action`, but the entity remains
   `episodic.canonical.domain.Checkpoint` and the port remains
   `GenerationCheckpointPort`. The table name is chosen to avoid a real
-  collision: `docs/adr/adr-007-durable-generation-checkpoints.md` is *titled*
+  collision: `docs/adrs/adr-0007-durable-generation-checkpoints.md` is *titled*
   "Durable generation checkpoints" and is entirely about `WorkflowCheckpoint`,
   so a developer grepping for "generation checkpoint" would land on the wrong
   ADR. Renaming the entity and port to `ReviewCheckpoint` and
@@ -231,8 +231,8 @@ versioning and history strategy ADR[^5].
 [^1]: Roadmap item `2.6.2` in `docs/roadmap.md`
 [^2]: TUI API design: `docs/episodic-tui-api-design.md`
 [^3]: Generation-run port split:
-  `docs/adr/adr-015-generation-run-port-split.md`
+  `docs/adrs/adr-0015-generation-run-port-split.md`
 [^4]: Durable orchestration checkpoint ADR:
-  `docs/adr/adr-007-durable-generation-checkpoints.md`
+  `docs/adrs/adr-0007-durable-generation-checkpoints.md`
 [^5]: Explicit versioning and history strategy:
-  `docs/adr/adr-018-explicit-versioning-and-history-strategy.md`
+  `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`

@@ -57,7 +57,7 @@ preserve an attempted `dur` attribute on `<item>`.
 ## Rationale
 
 This structure follows the show-notes pattern defined in
-[`ADR-004`](adr-004-show-notes-tei-representation.md). It keeps enrichment
+[`ADR-004`](adr-0004-show-notes-tei-representation.md). It keeps enrichment
 metadata in the canonical TEI document and uses TEI elements that
 `tei_rapporteur` already parses, validates, and emits.
 

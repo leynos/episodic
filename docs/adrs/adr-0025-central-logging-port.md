@@ -54,4 +54,4 @@ identifier must be attached where application logging enters the backend.
 
 - [Issue #286](https://github.com/leynos/episodic/issues/286)
 - [Request-correlation ExecPlan](../execplans/4-1-3-integrate-request-correlation.md)
-- [ADR-014: Hexagonal architecture enforcement](adr-014-hexagonal-architecture-enforcement.md)
+- [ADR-014: Hexagonal architecture enforcement](adr-0014-hexagonal-architecture-enforcement.md)

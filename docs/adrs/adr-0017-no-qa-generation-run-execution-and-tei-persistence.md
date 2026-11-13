@@ -126,7 +126,7 @@ Unsupported media types return `406 Not Acceptable`.
 
 ## References
 
-- [ADR 007: Durable generation checkpoints](adr-007-durable-generation-checkpoints.md)
-- [ADR 009: Source-to-script REST vertical slice](adr-009-source-to-script-rest-vertical-slice.md)
-- [ADR 015: Upload and idempotency ports](adr-015-upload-and-idempotency-ports.md)
+- [ADR 007: Durable generation checkpoints](adr-0007-durable-generation-checkpoints.md)
+- [ADR 009: Source-to-script REST vertical slice](adr-0009-source-to-script-rest-vertical-slice.md)
+- [ADR 015: Upload and idempotency ports](adr-0015-upload-and-idempotency-ports.md)
 - [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)

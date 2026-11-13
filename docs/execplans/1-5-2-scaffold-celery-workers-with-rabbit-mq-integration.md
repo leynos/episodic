@@ -82,7 +82,7 @@ Success is observable in the following ways:
   includes any representative inference task or `LLMPort`-backed path, that
   behavioural coverage must run through Vidai Mock instead of a live provider
   or a hand-rolled fake.
-- Record the architectural decisions in a new ADR under `docs/adr/` and update
+- Record the architectural decisions in a new ADR under `docs/adrs/` and update
   the primary design document so the implemented scaffold matches the stated
   architecture.
 - Update `docs/users-guide.md` for user-visible worker/runtime behaviour and
@@ -392,7 +392,7 @@ Once the worker scaffold exists, make the behavioural contract real.
 
 After code and tests are green, update the documentation set.
 
-1. Add a new ADR under `docs/adr/`, likely `adr-003-celery-worker-scaffold.md`
+1. Add a new ADR under `docs/adrs/`, likely `adr-0003-celery-worker-scaffold.md`
    unless repository numbering indicates otherwise. Capture:
    - the queue topology and routing-key taxonomy;
    - the choice of initial concurrency pools for I/O-bound and CPU-bound

@@ -100,25 +100,25 @@ Repository documentation:
   testing with py-pglite", "Canonical content persistence", "Generation-run
   domain ports", "Manual recovery of expired generation-run leases",
   "Code-duplication gate", and "Module size and façade modules".
-- `docs/adr/adr-015-generation-run-port-split.md` — why the port is split, and
+- `docs/adrs/adr-0015-generation-run-port-split.md` — why the port is split, and
   why the user-facing `Checkpoint` differs from `WorkflowCheckpoint`.
-- `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` — the
+- `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md` — the
   governing record for versioning, concurrency shapes, immutability, and
   deletion policy. Read it before writing the adapter; it decides D-10 and the
   foreign-key policy.
-- `docs/adr/adr-019-episode-tei-revision-history.md` — the template for an
+- `docs/adrs/adr-0019-episode-tei-revision-history.md` — the template for an
   append-only history table. Read it to see what D-11 deliberately does *not*
   build for review checkpoints.
-- `docs/adr/adr-021-adopt-nose-duplication-gate.md` — the blocking duplication
+- `docs/adrs/adr-0021-adopt-nose-duplication-gate.md` — the blocking duplication
   gate in `make lint`. It scans `episodic/`, so a SQL checkpoint store that
   mirrors the in-memory mixin is in scope; see the duplication constraint.
-- `docs/adr/adr-022-orchestration-architecture-enforcement.md` — note that its
+- `docs/adrs/adr-0022-orchestration-architecture-enforcement.md` — note that its
   `CheckpointPort` is the *orchestration* port for `WorkflowCheckpoint`, not
   `GenerationCheckpointPort`. Another instance of the Risk 1 confusion.
 - `docs/alpha-test-4-3-2-setup-notes.md` — the end-to-end alpha run of the
   4.3.2 slice, including where repository documentation was wrong. It says
   nothing about checkpoints or leases.
-- `docs/adr/adr-007-durable-generation-checkpoints.md` — the *orchestration*
+- `docs/adrs/adr-0007-durable-generation-checkpoints.md` — the *orchestration*
   checkpoint. Read it to avoid conflating the two. Note its title is "Durable
   generation checkpoints", which is why this plan does **not** use "generation
   checkpoint" for the new table (see D-7).
@@ -544,8 +544,8 @@ Stop and escalate rather than improvising when any of these is reached.
       lint substeps executed, no stale entry reported.
 - [x] (2026-10-21) EP-M5: documentation and reconciliation. `docs/contents.md`
       gains the ADR-024 entry after ADR-023, using the file's inline-link
-      convention; `docs/adr/adr-024-review-checkpoint-persistence.md` follows
-      `adr-015-generation-run-port-split.md`'s shape rather than the style
+      convention; `docs/adrs/adr-0024-review-checkpoint-persistence.md` follows
+      `adr-0015-generation-run-port-split.md`'s shape rather than the style
       guide's literal template, as every ADR from 010 onward does. The
       developers' guide gained the
       `GenerationRunLeaseReclamationPort` bullet, the corrected
@@ -1362,7 +1362,7 @@ Append further observations here as work proceeds.
 
 - **D-7. Name the table `review_checkpoints`, not `generation_checkpoints`.**
   Rationale: Risk 1's mitigation must be more than distinct identifiers.
-  `docs/adr/adr-007-durable-generation-checkpoints.md` is *titled* "Durable
+  `docs/adrs/adr-0007-durable-generation-checkpoints.md` is *titled* "Durable
   generation checkpoints" and is entirely about `WorkflowCheckpoint`. Naming
   the new table `generation_checkpoints` would make a developer grepping for
   "generation checkpoint" land squarely on the wrong ADR — the exact failure
@@ -1899,7 +1899,7 @@ documents serve that role. Upstream items traced by this plan:
   gap-sensitive text is the backpressure heuristic at lines 629–633.
 - `ADR-015` — the port split and the `Checkpoint` / `WorkflowCheckpoint`
   separation.
-- `ADR-018` — `docs/adr/adr-018-explicit-versioning-and-history-strategy.md`:
+- `ADR-018` — `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`:
   the governing record for versioning, concurrency shapes, immutability, and
   deletion policy. Three clauses bind this slice. "Applying the wrong
   [concurrency shape] produces either lost updates or spurious conflicts" — see
@@ -1921,7 +1921,7 @@ DESIGN-ORCH-CKPT -> EP-M1 -> alembic/versions/20261020_000014_add_review_checkpo
 DESIGN-ORCH-CKPT -> EP-M2 -> episodic/canonical/storage/review_checkpoints.py
 API-GENRUN-CKPT  -> EP-M2 -> uow.generation_runs satisfies GenerationRunPort
 API-GENRUN-CKPT  -> EP-M3 -> tests/features/generation_run_lifecycle.feature
-ADR-015          -> EP-M5 -> docs/adr/adr-024-review-checkpoint-persistence.md
+ADR-015          -> EP-M5 -> docs/adrs/adr-0024-review-checkpoint-persistence.md
 ADR-018          -> EP-M2 -> compare-and-set transitions; ON DELETE RESTRICT
 ADR-014          -> EP-M2 -> generation_run_ports in Hecate domain_ports (D-12)
 EP-4.3.2-DEFER   -> EP-M4 -> tests/canonical_storage/test_generation_run_lease_reclamation.py
@@ -1934,9 +1934,9 @@ table in the same commit; a stale trace table is worse than none.
 A new ADR is warranted. ADR-018 to ADR-023 now exist, so the next free number
 is **024**; re-check at EP-M5, because two numbers this plan reserved were
 taken while it was in review. Separately, three files already share 015
-(`adr-015-cost-accounting-ports-and-pricing-engine.md`,
-`adr-015-upload-and-idempotency-ports.md`,
-`adr-015-generation-run-port-split.md`), and **two of them are absent from
+(`adr-0015-cost-accounting-ports-and-pricing-engine.md`,
+`adr-0015-upload-and-idempotency-ports.md`,
+`adr-0015-generation-run-port-split.md`), and **two of them are absent from
 `docs/contents.md` entirely**. Renumbering to 015/018/019 and re-indexing is
 out of scope here; add it to the roadmap as a docs-only follow-up rather than
 leaving it as a remark in a plan that will be marked `COMPLETE`.
@@ -2327,7 +2327,7 @@ uv run alembic heads
 Expected: a single head, `20261010_000013 (head)`. More than one head means
 stop and escalate; a *different* single head means another revision landed, so
 renumber this plan's revisions and update the trace table before writing code.
-Likewise confirm the next free ADR number with `ls docs/adr/`.
+Likewise confirm the next free ADR number with `ls docs/adrs/`.
 
 Re-measure the runtime baseline the `Tolerances` entry depends on, alone on the
 host:
@@ -2616,9 +2616,9 @@ async def fail_expired_leases(
    would describe a capability with no entry point, and an operator who
    believes checkpoints are live will not look for the missing scheduler.
    Revisit in 2.6.3.
-3. Add `docs/adr/adr-024-review-checkpoint-persistence.md` — **024**, the next
-   free number at the last reconciliation; re-check with `ls docs/adr/` —
-   following the shape of `adr-015-generation-run-port-split.md` (Status,
+3. Add `docs/adrs/adr-0024-review-checkpoint-persistence.md` — **024**, the next
+   free number at the last reconciliation; re-check with `ls docs/adrs/` —
+   following the shape of `adr-0015-generation-run-port-split.md` (Status,
    Context, Decision, Consequences with Positive/Negative/Neutral, References)
    rather than the style guide's literal template. Every ADR from 010 onwards
    does the same, so this is house practice, not a deviation. Cover **D-2 and
@@ -2945,7 +2945,7 @@ carried forward from the plan:
 - `uv run alembic heads` reports the single head `20261010_000013`, as
   expected; the revision counter is authoritative and `000014`/`000015` remain
   free.
-- `ls docs/adr/` ends at `adr-023`, so **ADR-024 is free**.
+- `ls docs/adrs/` ends at `adr-023`, so **ADR-024 is free**.
 - The Hecate blind spot D-12 addresses is still present:
   `rg -n "generation_run_ports|generation_run_errors" pyproject.toml` matches
   neither module inside `[tool.hecate.groups]`.

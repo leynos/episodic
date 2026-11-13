@@ -1927,16 +1927,16 @@ Stop and escalate when any of these is reached.
 - Observation (execution, 2026-10-29): ADR 001 does not enumerate the blocking
   support-level set, so the earlier claim that `INV-BLOCKING-SET`'s literal is
   "transcribed from ADR 001" was unsupportable. Evidence: grep of
-  `docs/adr-001-pedante-evaluator-contract.md` finds only generic references to
-  "a support-level taxonomy value". Impact: the test still carries an
-  independently written literal, but its provenance is the taxonomy plus the
-  recorded compliance policy, and it also asserts exact equality with
+  `docs/adrs/adr-0001-pedante-evaluator-contract.md` finds only generic
+  references to "a support-level taxonomy value". Impact: the test still
+  carries an independently written literal, but its provenance is the taxonomy
+  plus the recorded compliance policy, and it also asserts exact equality with
   `_BLOCKING_SUPPORT_LEVELS` so a transcription slip is visible. The obligation
   is unchanged in strength; only its stated source changed.
 - Observation (execution, 2026-10-29): ADR numbers 018 and 019 were already
-  taken — `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` and
-  `docs/adr/adr-019-episode-tei-revision-history.md` — and the highest existing
-  ADR is 023. Impact: the two ADRs this plan creates are **025**
+  taken — `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md` and
+  `docs/adrs/adr-0019-episode-tei-revision-history.md` — and the highest
+  existing ADR is 023. Impact: the two ADRs this plan creates are **025**
   (`adr-025-qa-artefact-persistence-contract.md`) and **026**
   (`adr-026-cli-client-boundary.md`). This revision renumbers every reference;
   no design decision changed.
@@ -1953,8 +1953,8 @@ Stop and escalate when any of these is reached.
 - Observation (execution, 2026-11-06): the branch was rebased again, onto
   `origin/main` at `a2126362`, which had landed ADR 025 (central logging port).
   Impact: the two ADRs this plan creates moved from 025/026 to **026**
-  (`adr-026-qa-artefact-persistence-contract.md`) and **027**
-  (`adr-027-cli-client-boundary.md`). Every reference in the tracked
+  (`adr-0026-qa-artefact-persistence-contract.md`) and **027**
+  (`adr-0027-cli-client-boundary.md`). Every reference in the tracked
   documentation was renumbered in the same pass; no design decision changed.
   The migration kept `20261031_000016`, because `main`'s new commits added no
   Alembic revision. Progress entries written before this rebase describe the
@@ -2268,9 +2268,9 @@ Stop and escalate when any of these is reached.
   production modules (nine files). The 500-line and 50-file overruns above are
   unchanged in kind; the split keeps each module under the project ceiling
   rather than raising it.
-- Decision: place both ADRs in `docs/adr/`, not `docs/`.
+- Decision: place both ADRs in `docs/adrs/`, not `docs/`.
   Rationale: `docs/documentation-style-guide.md` says "Place ADRs in the
-  `docs/` directory", but every ADR since 001 lives in `docs/adr/` and
+  `docs/` directory", but every ADR since 001 lives in `docs/adrs/` and
   `docs/contents.md` indexes them there. Follow practice; note the discrepancy
   in the style guide's favour is a separate cleanup, not this item's work.
   Date/Author: 2026-08-23, planning agent.
@@ -3026,15 +3026,15 @@ Repository documents that are prerequisites, not optional reading:
   limit.
 - `docs/episodic-podcast-generation-system-design.md` — the Quality Assurance
   Stack and Data Model and Storage sections.
-- `docs/adr-001-pedante-evaluator-contract.md` — in particular its closing
+- `docs/adrs/adr-0001-pedante-evaluator-contract.md` — in particular its closing
   item: "If evaluator results are persisted or exposed through an external API,
   record any versioning or compatibility guarantees in a follow-on ADR." ADR
   024 discharges this.
-- `docs/adr/adr-006-chrono-spoken-text-semantics.md`,
-  `docs/adr/adr-009-source-to-script-rest-vertical-slice.md`,
-  `docs/adr/adr-014-hexagonal-architecture-enforcement.md`,
-  `docs/adr/adr-015-cost-accounting-ports-and-pricing-engine.md`,
-  `docs/adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md`.
+- `docs/adrs/adr-0006-chrono-spoken-text-semantics.md`,
+  `docs/adrs/adr-0009-source-to-script-rest-vertical-slice.md`,
+  `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`,
+  `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md`,
+  `docs/adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`.
 - `docs/async-sqlalchemy-with-pg-and-falcon.md`,
   `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`,
   `docs/testing-async-falcon-endpoints.md`,
@@ -3060,11 +3060,11 @@ writing (commit `5af0638`, "No-QA generation runs and TEI-P5 retrieval
   Assurance Stack* (`TDD-QA`), *Data Model and Storage* (`TDD-DATA`), *Client
   Experience Layer* (`TDD-CLIENT`), and *QA, Compliance, and Approvals*
   (`TDD-FLOW-QA`).
-- `docs/adr-001-pedante-evaluator-contract.md` (`ADR-001`), open item on
+- `docs/adrs/adr-0001-pedante-evaluator-contract.md` (`ADR-001`), open item on
   persistence and versioning guarantees.
-- `docs/adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md`
+- `docs/adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`
   (`ADR-017`), which fixes `QaStatus.SKIPPED` semantics for the no-QA slice.
-- `docs/adr/adr-014-hexagonal-architecture-enforcement.md` (`ADR-014`) and the
+- `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md` (`ADR-014`) and the
   `[tool.hecate]` configuration in `pyproject.toml`.
 - `docs/episodic-tui-api-design.md` (`TUI-API`), pagination and error
   contracts.
@@ -3082,7 +3082,7 @@ RM-2.2.7-a  -> TDD-DATA -> EP-M2 -> tests/canonical_storage/test_qa_artefacts.py
 RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_records_pedante_result
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)
 RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_cli_retrieval.feature (CLI scenarios)
-ADR-001(open item) -> EP-M6 -> docs/adr/adr-026-qa-artefact-persistence-contract.md
+ADR-001(open item) -> EP-M6 -> docs/adrs/adr-0026-qa-artefact-persistence-contract.md
 TDD-DATA(deviation, accepted 2026-08-23) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
 ```
 
@@ -3896,7 +3896,8 @@ fenced blocks.
   describe the new behaviour, and the roadmap entry is marked done.
 - Requirements and gaps: `ADR-001` open item; `TDD-DATA` deviation.
 - Files added or changed:
-  - `docs/adr/adr-026-qa-artefact-persistence-contract.md` — new, following the
+  - `docs/adrs/adr-0026-qa-artefact-persistence-contract.md` — new, following
+    the
     ADR template in `docs/documentation-style-guide.md`. Must cover: the
     unified `qa_evaluations` + `qa_findings` model; the compliance-status
     taxonomy and the exact meaning of `not_applicable`;
@@ -3909,7 +3910,7 @@ fenced blocks.
     `RunAlreadyTerminal` evidence), a JSONB findings array, a
     `lifecycle_status` plus `verdict` split, and derive-at-read compliance.
     Note that extending `qa_evaluator` later is a two-deploy operation.
-  - `docs/adr/adr-027-cli-client-boundary.md` — new. Covers the CLI as a REST
+  - `docs/adrs/adr-0027-cli-client-boundary.md` — new. Covers the CLI as a REST
     client, the `cyclopts` choice, the dedicated Hecate group that enforces the
     boundary, authentication via `--token`/environment, output-format policy,
     and an explicit statement that the top-level command noun structure is
@@ -4992,11 +4993,11 @@ a named still-open consumer, and a deletion condition. Nothing else changed.
 Revision 10, 2026-11-06. No design change. Rebased onto `main` at `a2126362`,
 which landed ADR 025 (central logging port) and took the number this plan's QA
 artefact ADR had used. The two ADRs this plan creates are now **026**
-(`adr-026-qa-artefact-persistence-contract.md`) and **027**
-(`adr-027-cli-client-boundary.md`), and every live reference — the ADR headings,
-`docs/contents.md`, the design document, the developers' guide, and the CLI
-ADR's cross-reference — was renumbered in the same pass. Older progress entries
-keep the numbers they were written with. The QA artefact migration keeps
+(`adr-0026-qa-artefact-persistence-contract.md`) and **027**
+(`adr-0027-cli-client-boundary.md`), and every live reference — the ADR
+headings, `docs/contents.md`, the design document, the developers' guide, and
+the CLI ADR's cross-reference — was renumbered in the same pass. Older progress
+entries keep the numbers they were written with. The QA artefact migration keeps
 `20261031_000016` chained off `20261020_000015`, because `main`'s new commits
 added no Alembic revision.
 

@@ -10,7 +10,7 @@ Status: COMPLETE
 
 This change delivers roadmap item `4.3.1`, the first half of the
 source-to-script vertical slice defined in
-[ADR 009](../adr/adr-009-source-to-script-rest-vertical-slice.md). After this
+[ADR 009](../adrs/adr-0009-source-to-script-rest-vertical-slice.md). After this
 change, an integration client can drive the narrow intake workflow that ADR 009
 calls out: upload one binary source document, create or reuse an ingestion job
 attached to a series profile, attach the upload or a remote source Uniform
@@ -83,7 +83,7 @@ Success is observable when:
    discriminator, canonical body-hash recipe, operator recovery recipe), and
    `docs/episodic-podcast-generation-system-design.md` is updated where the
    physical schema or port surface changes. A new
-   `docs/adr/adr-015-upload-and-idempotency-ports.md` records the
+   `docs/adrs/adr-0015-upload-and-idempotency-ports.md` records the
    object-store-port plus idempotency-store-port design choices.
 9. `docs/roadmap.md` marks item `4.3.1` done only after every gate above is
    green.
@@ -94,11 +94,11 @@ These invariants must hold throughout implementation. They are not suggestions;
 violation requires escalation, not workarounds.
 
 - The hexagonal boundary defined in
-  [ADR 014](../adr/adr-014-hexagonal-architecture-enforcement.md) and enforced
-  by Hecate in `pyproject.toml` `[tool.hecate]` is non-negotiable. All new port
-  protocols live under `episodic.canonical.*` modules that belong to the
-  `domain_ports` Hecate group. All new SQLAlchemy mappers, repositories, and
-  filesystem code live under `episodic.canonical.storage.*` (the
+  [ADR 014](../adrs/adr-0014-hexagonal-architecture-enforcement.md) and
+  enforced by Hecate in `pyproject.toml` `[tool.hecate]` is non-negotiable. All
+  new port protocols live under `episodic.canonical.*` modules that belong to
+  the `domain_ports` Hecate group. All new SQLAlchemy mappers, repositories,
+  and filesystem code live under `episodic.canonical.storage.*` (the
   `outbound_adapter` group). All new Falcon resources and helpers live under
   `episodic.api.*` (the `inbound_adapter` group). The only allowed
   cross-adapter wiring sits in `episodic.api.runtime` and
@@ -838,7 +838,7 @@ The plan is staged so each stage ends with a fully testable repository state.
 No production code changes in this stage. The aim is to publish the design
 contract that the rest of the milestones implement against.
 
-1. Author `docs/adr/adr-015-upload-and-idempotency-ports.md` following the
+1. Author `docs/adrs/adr-0015-upload-and-idempotency-ports.md` following the
    documentation style guide ADR template. The ADR records two driven-port
    design decisions:
    - `ObjectStorePort`: a minimal interface exposing `put`, `open`, and
@@ -1541,7 +1541,7 @@ consult `docs/langgraph-and-celery-in-hexagonal-architecture.md`.
 
 Significant artefacts produced by the slice:
 
-- `docs/adr/adr-015-upload-and-idempotency-ports.md` records the new
+- `docs/adrs/adr-0015-upload-and-idempotency-ports.md` records the new
   port designs and the deferred items.
 - `tests/features/source_intake.feature` records the user-visible
   behaviour of the slice.

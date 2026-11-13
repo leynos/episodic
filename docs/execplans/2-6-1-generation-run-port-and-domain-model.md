@@ -577,11 +577,11 @@ files before changing anything. All paths are repository-relative.
   `Content Generation Orchestrator` (line 271) and the persistent state
   inventory mentioning `generation_runs` and `workflow_checkpoints` (around
   line 1484).
-- `docs/adr/adr-007-durable-generation-checkpoints.md`. This describes the
+- `docs/adrs/adr-0007-durable-generation-checkpoints.md`. This describes the
   *orchestration-layer* `WorkflowCheckpoint` (LangGraph suspend/resume). The
   user-facing `Checkpoint` introduced here is unrelated; keep the two
   conceptually separate.
-- `docs/adr/adr-014-hexagonal-architecture-enforcement.md` and the
+- `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md` and the
   `[tool.hecate]` block in `pyproject.toml` (around line 437). These define the
   architecture groups (`domain_ports`, `application`, `inbound_adapter`,
   `outbound_adapter`, `composition_root`) that the architecture gate enforces.
@@ -1288,9 +1288,9 @@ Cross-references (signposted documentation and skills):
 - The `hexagonal-architecture` skill for port/adapter discipline; in
   particular the rule that the domain owns the port and the adapter implements
   it, and that domain code must not import infrastructure types.
-- ADR-014 (`docs/adr/adr-014-hexagonal-architecture-enforcement.md`) and
+- ADR-014 (`docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`) and
   Hecate configuration in `pyproject.toml` for the actual enforced groups.
-- ADR-007 (`docs/adr/adr-007-durable-generation-checkpoints.md`) for the
+- ADR-007 (`docs/adrs/adr-0007-durable-generation-checkpoints.md`) for the
   *orchestration-layer* `WorkflowCheckpoint` (distinct from the user-facing
   `Checkpoint` introduced here).
 - `docs/episodic-tui-api-design.md` for the REST contract that `2.6.3`

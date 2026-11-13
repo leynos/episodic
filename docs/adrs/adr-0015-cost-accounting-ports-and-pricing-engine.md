@@ -206,4 +206,4 @@ enforcement decision ADR-014.[^4]
   `docs/execplans/2-4-4-cost-accounting-and-usage-metering.md`
 [^3]: System design section "Cost accounting and budget enforcement" in
   `docs/episodic-podcast-generation-system-design.md`
-[^4]: ADR-014: `docs/adr/adr-014-hexagonal-architecture-enforcement.md`
+[^4]: ADR-014: `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`

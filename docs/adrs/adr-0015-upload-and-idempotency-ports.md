@@ -230,6 +230,6 @@ ADR 009 defines the source-to-script REST slice.[^1] ADR 014 defines the
 architecture boundary that these ports preserve.[^2] The system design records
 the current table relationships.[^3]
 
-[^1]: [ADR 009: Source-to-script REST vertical slice](adr-009-source-to-script-rest-vertical-slice.md)
-[^2]: [ADR 014: Hexagonal architecture enforcement](adr-014-hexagonal-architecture-enforcement.md)
+[^1]: [ADR 009: Source-to-script REST vertical slice](adr-0009-source-to-script-rest-vertical-slice.md)
+[^2]: [ADR 014: Hexagonal architecture enforcement](adr-0014-hexagonal-architecture-enforcement.md)
 [^3]: [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)

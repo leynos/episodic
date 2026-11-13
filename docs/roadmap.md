@@ -326,7 +326,7 @@ enables real-time visibility into generation progress.
   - Completed 2026-10-21. Run and event persistence landed earlier under item
     4.3.2; this slice adds durable review-checkpoint storage, the SQL adapter
     behind `GenerationRunPort`, and a gated lease-reclamation primitive. See
-    [ADR 024](adr/adr-024-review-checkpoint-persistence.md).
+    [ADR 024](adrs/adr-0024-review-checkpoint-persistence.md).
 - [ ] 2.6.3. Implement REST endpoints for generation runs. Requires 2.6.1.
   - Implement `/v1/episodes/{episode_id}/generation-runs` (POST, GET).
   - Implement `/v1/generation-runs/{run_id}` (GET).
@@ -337,9 +337,9 @@ enables real-time visibility into generation progress.
   - Validate hexagonal boundary tests passing.
   - See [Generation runs](episodic-tui-api-design.md#generation-runs).
 - [ ] 2.6.4. Renumber the three ADR 015 documents and index the ADR set.
-  - `adr-015-cost-accounting-ports-and-pricing-engine.md`,
-    `adr-015-generation-run-port-split.md`, and
-    `adr-015-upload-and-idempotency-ports.md` share one number; two of them are
+  - `adr-0015-cost-accounting-ports-and-pricing-engine.md`,
+    `adr-0015-generation-run-port-split.md`, and
+    `adr-0015-upload-and-idempotency-ports.md` share one number; two of them are
     absent from `docs/contents.md`.
   - Renumbering is docs-only and touches no runtime behaviour.
 - [ ] 2.6.5. Schedule generation-run lease reclamation and stuck-run detection.
@@ -403,8 +403,8 @@ Retain and expose every persisted episode TEI revision. The current
 document, so superseded drafts and pre-edit documents are unrecoverable.
 Completion answers whether refinement iterations, script edits, and editorial
 recovery can rely on retrievable prior revisions. See
-[ADR 018](adr/adr-018-explicit-versioning-and-history-strategy.md) and
-[ADR 019](adr/adr-019-episode-tei-revision-history.md).
+[ADR 018](adrs/adr-0018-explicit-versioning-and-history-strategy.md) and
+[ADR 019](adrs/adr-0019-episode-tei-revision-history.md).
 
 - [ ] 2.8.1. Persist an `episode_tei_history` row for every TEI write.
   - Requires 4.3.2.
@@ -480,7 +480,7 @@ leaking provider parameter names into the domain model.
   - See
     [Speech synthesis contracts](episodic-podcast-generation-system-design.md#speech-synthesis-contracts)
     and
-    [ADR 011](adr/adr-011-tts-capability-negotiation.md).
+    [ADR 011](adrs/adr-0011-tts-capability-negotiation.md).
 - [ ] 3.1.4. Implement configurable voice persona support. Requires 3.1.1.
   - Define voice persona configuration for provider voice IDs, managed voice
     profiles, and consented reference-audio clips.
@@ -506,7 +506,7 @@ multiple providers with different pronunciation surfaces.
   - See
     [Pronunciation repository](episodic-podcast-generation-system-design.md#pronunciation-repository)
     and
-    [ADR 012](adr/adr-012-pronunciation-repository.md).
+    [ADR 012](adrs/adr-0012-pronunciation-repository.md).
 - [ ] 3.2.2. Implement pronunciation-pack resolution. Requires 3.2.1.
   - Merge entries from broad scopes into segment-level packs with deterministic
     override rules.
@@ -542,7 +542,7 @@ TEI-backed traceability.
   - See
     [Initial speech adapters](episodic-podcast-generation-system-design.md#initial-speech-adapters)
     and
-    [ADR 013](adr/adr-013-speech-synthesis-adapters.md).
+    [ADR 013](adrs/adr-0013-speech-synthesis-adapters.md).
 - [ ] 3.3.2. Implement the Inworld realtime dialogue adapter. Requires 3.1.2
   and 3.3.1.
   - Open session-scoped render contexts for ordered host turns.
@@ -736,7 +736,7 @@ source-to-script workflow through JSON/REST: submit show source material,
 provide presenter context, trigger draft generation without QA, and retrieve
 the resulting TEI-P5 XML. It validates the `/v1` resource contract before the
 full approval, QA, audio, and export surfaces land. See
-[ADR 009](adr/adr-009-source-to-script-rest-vertical-slice.md), the [system
+[ADR 009](adrs/adr-0009-source-to-script-rest-vertical-slice.md), the [system
 design source-to-script vertical slice], and the [TUI API source-to-script
 vertical slice].
 
@@ -812,7 +812,7 @@ and iteration-cap invariants across generated run states.
     duration outcomes across generated TEI segment shapes.
   - See
     [Quality assurance stack](episodic-podcast-generation-system-design.md#quality-assurance-stack),
-    [ADR 006](adr/adr-006-chrono-spoken-text-semantics.md), and
+    [ADR 006](adrs/adr-0006-chrono-spoken-text-semantics.md), and
     [LangGraph Integration Principles](episodic-podcast-generation-system-design.md#langgraph-integration-principles).
 
 - [ ] 4.4.3. Trigger targeted redraft from duration outcomes.

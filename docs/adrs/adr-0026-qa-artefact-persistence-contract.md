@@ -221,18 +221,18 @@ Rejected, as described above.
 - Readers must handle `qa_artefact_schema_unsupported`; a newer writer is a
   deployment-ordering fact, not a parse error to swallow.
 - This record discharges the open item in [ADR 001: Pedante evaluator
-  contract](../adr-001-pedante-evaluator-contract.md), which asks for a
-  follow-on record of the versioning and compatibility guarantees that apply
-  once evaluator results are persisted or exposed through an API. The two
-  version columns, the reader-side schema check, and the single
-  errored-supersession exception are those guarantees.
+  contract](adr-0001-pedante-evaluator-contract.md), which asks for a follow-on
+  record of the versioning and compatibility guarantees that apply once
+  evaluator results are persisted or exposed through an API. The two version
+  columns, the reader-side schema check, and the single errored-supersession
+  exception are those guarantees.
 
 ## References
 
-- [ADR 001: Pedante evaluator contract](../adr-001-pedante-evaluator-contract.md)
+- [ADR 001: Pedante evaluator contract](adr-0001-pedante-evaluator-contract.md)
 - [Design document, *Data Model and Storage*](../episodic-podcast-generation-system-design.md#data-model-and-storage)
 - [Design document, *Quality Assurance Stack*](../episodic-podcast-generation-system-design.md#quality-assurance-stack)
-- [ADR 017: No-QA generation execution and TEI persistence](adr-017-no-qa-generation-run-execution-and-tei-persistence.md)
-- [ADR 018: Explicit repository-written versioning and history strategy](adr-018-explicit-versioning-and-history-strategy.md)
+- [ADR 017: No-QA generation execution and TEI persistence](adr-0017-no-qa-generation-run-execution-and-tei-persistence.md)
+- [ADR 018: Explicit repository-written versioning and history strategy](adr-0018-explicit-versioning-and-history-strategy.md)
 - ExecPlan:
   `docs/execplans/2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md`

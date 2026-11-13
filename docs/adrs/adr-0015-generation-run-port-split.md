@@ -61,4 +61,4 @@ checkpoint ADR.[^3]
 [^1]: Roadmap item `2.6.1` in `docs/roadmap.md`
 [^2]: TUI API design: `docs/episodic-tui-api-design.md`
 [^3]: Durable orchestration checkpoint ADR:
-  `docs/adr/adr-007-durable-generation-checkpoints.md`
+  `docs/adrs/adr-0007-durable-generation-checkpoints.md`

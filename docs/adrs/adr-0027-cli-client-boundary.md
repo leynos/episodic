@@ -181,7 +181,7 @@ pure and the entry point does the printing.
 
 - [Design document, _Client Experience Layer_](../episodic-podcast-generation-system-design.md)
 - [TUI and API design](../episodic-tui-api-design.md)
-- [ADR 026: QA artefact persistence contract](adr-026-qa-artefact-persistence-contract.md)
+- [ADR 026: QA artefact persistence contract](adr-0026-qa-artefact-persistence-contract.md)
 - [Developers' guide, _Command-line interface_](../developers-guide.md#command-line-interface)
 - ExecPlan:
   `docs/execplans/2-2-7-persist-qa-artefacts-linked-to-canonical-episodes.md`

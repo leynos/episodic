@@ -84,7 +84,7 @@ The source documents that govern this work are:
 - `docs/episodic-tui-api-design.md`, especially "Current canonical endpoint
   coverage" and "Proposed REST endpoints", which state that the target REST API
   uses `/v1`.
-- `docs/adr/adr-009-source-to-script-rest-vertical-slice.md`, which records
+- `docs/adrs/adr-0009-source-to-script-rest-vertical-slice.md`, which records
   the accepted decision that existing unversioned routes do not need
   preservation before v0.1.0.
 - `docs/episodic-podcast-generation-system-design.md`, which links

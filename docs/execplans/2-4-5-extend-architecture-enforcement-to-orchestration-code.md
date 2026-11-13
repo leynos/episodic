@@ -541,7 +541,7 @@ Read these documents (signposts):
 - `docs/execplans/adopt-hecate.md` — how the groups and fixtures were
   established, including the first-match ordering gotcha and the star-import
   barrel surprise.
-- `docs/adr/adr-014-hexagonal-architecture-enforcement.md` — the enforcement
+- `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md` — the enforcement
   ADR to extend or cross-reference.
 - `docs/async-sqlalchemy-with-pg-and-falcon.md`,
   `docs/testing-async-falcon-endpoints.md`, and
@@ -900,7 +900,7 @@ the Decision Log when chosen):
 - Architecture fixtures and tests as listed under "Fixtures to add", a
   structural reflection test, a Hypothesis property test, a `syrupy` snapshot, a
   `pytest-bdd` feature, and a `vidai-mock`-backed behavioural test.
-- `docs/adr/adr-022-orchestration-architecture-enforcement.md` recording the
+- `docs/adrs/adr-0022-orchestration-architecture-enforcement.md` recording the
   decisions, cross-referenced from ADR-014 and the system design.
 
 The orchestration and worker public barrels

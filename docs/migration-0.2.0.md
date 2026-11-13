@@ -100,5 +100,5 @@ configuration. This release adds no new required server setting.
 ## References
 
 - [Users' guide](users-guide.md)
-- [ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md)
-- [ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md)
+- [ADR 026: QA artefact persistence contract](adrs/adr-0026-qa-artefact-persistence-contract.md)
+- [ADR 027: CLI client boundary](adrs/adr-0027-cli-client-boundary.md)

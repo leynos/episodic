@@ -171,9 +171,9 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 - Observation: the show-notes TEI representation already proves that
   `tei_rapporteur` preserves `<div type="...">`, `<list>`, `<item>`, `<label>`,
   `@n`, and `@corresp`. Evidence: `episodic/generation/show_notes.py` and
-  `docs/adr/adr-004-show-notes-tei-representation.md`. Impact: chapter markers
-  can reuse the same canonical container pattern with `div_type="chapters"` and
-  avoid dependency or parser changes.
+  `docs/adrs/adr-0004-show-notes-tei-representation.md`. Impact: chapter
+  markers can reuse the same canonical container pattern with
+  `div_type="chapters"` and avoid dependency or parser changes.
 
 - Observation: `tei_rapporteur` does not preserve attempted `dur` payload
   metadata on `<item>`, and it rejects list items with empty inline content.
@@ -363,7 +363,7 @@ The terms used in this plan are:
 Stage A is discovery. Inspect `episodic/generation/show_notes.py`,
 `tests/test_show_notes.py`, `tests/features/show_notes.feature`,
 `tests/steps/test_show_notes_steps.py`,
-`docs/adr/adr-004-show-notes-tei-representation.md`, and representative TEI
+`docs/adrs/adr-0004-show-notes-tei-representation.md`, and representative TEI
 fixtures in tests. Confirm how script segments are represented today. If there
 is no segment convention, choose a narrow one for this feature and record it in
 a new ADR before implementing code. A likely canonical shape is a TEI
@@ -417,7 +417,7 @@ outbound request includes the TEI script plus segment information. Keep prompt
 assertions structural.
 
 Stage E is documentation. Add a new ADR, likely
-`docs/adr/adr-008-chapter-marker-tei-representation.md`, unless ADR 005 is
+`docs/adrs/adr-0008-chapter-marker-tei-representation.md`, unless ADR 005 is
 already taken by the current branch. Update
 `docs/episodic-podcast-generation-system-design.md` to mention the chapter
 marker service next to show notes. Update `docs/developers-guide.md` with the
@@ -556,7 +556,7 @@ The closest existing implementation artefacts are:
 - `tests/test_show_notes.py`
 - `tests/features/show_notes.feature`
 - `tests/steps/test_show_notes_steps.py`
-- `docs/adr/adr-004-show-notes-tei-representation.md`
+- `docs/adrs/adr-0004-show-notes-tei-representation.md`
 - `docs/execplans/2-3-1-generate-show-notes-from-template-expansions.md`
 
 The expected TEI shape must be finalized during Stage A. The starting proposal

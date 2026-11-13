@@ -258,6 +258,6 @@ enforce the same input preconditions at Chrono's runtime boundaries.
 - ExecPlan —
   `docs/execplans/2-2-6-chrono-runtime-estimator.md`
 - Show-notes TEI representation —
-  `docs/adr/adr-004-show-notes-tei-representation.md`
+  `docs/adrs/adr-0004-show-notes-tei-representation.md`
 - TEI parser guide — `docs/tei-rapporteur-users-guide.md`
 - Chrono implementation — `episodic/qa/chrono.py`

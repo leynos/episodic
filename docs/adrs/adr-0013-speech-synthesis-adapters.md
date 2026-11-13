@@ -117,9 +117,9 @@ more natural but can be less editable than individual stems.
 - Design:
   `docs/episodic-podcast-generation-system-design.md#initial-speech-adapters`
 - ADR 011:
-  `docs/adr/adr-011-tts-capability-negotiation.md`
+  `docs/adrs/adr-0011-tts-capability-negotiation.md`
 - ADR 012:
-  `docs/adr/adr-012-pronunciation-repository.md`
+  `docs/adrs/adr-0012-pronunciation-repository.md`
 - Inworld Realtime overview:
   <https://docs.inworld.ai/realtime/overview>
 - Inworld Realtime WebSocket reference:

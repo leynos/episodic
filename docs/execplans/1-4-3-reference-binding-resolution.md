@@ -170,7 +170,7 @@ Success is observable when:
   model have `created_at: datetime.datetime` fields, providing stable episode
   ordering semantics.
 - ADR-001 written at
-  `docs/adr/adr-001-reference-binding-resolution-algorithm.md` documenting
+  `docs/adrs/adr-0001-reference-binding-resolution-algorithm.md` documenting
   episode-anchored precedence algorithm with `created_at` ordering.
 
 ### Stage B
@@ -590,8 +590,8 @@ Update documentation to reflect binding resolution behaviour:
   - Document the provenance snapshot mechanism.
   - Document the `reference_document_revision_id` field on source documents.
 - Write an ADR documenting the resolution algorithm design decision:
-  - Create `docs/adr/` directory if it does not exist.
-  - Create `docs/adr/adr-001-reference-binding-resolution-algorithm.md`.
+  - Create `docs/adrs/` directory if it does not exist.
+  - Create `docs/adrs/adr-0001-reference-binding-resolution-algorithm.md`.
   - Record the context, options considered (simple latest-binding-wins versus
     episode-anchored precedence), and rationale for the chosen approach.
 - `docs/roadmap.md`: mark item `1.4.3` done after all acceptance criteria and

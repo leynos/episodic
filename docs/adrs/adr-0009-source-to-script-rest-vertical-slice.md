@@ -254,11 +254,11 @@ See also the system design[^7], TUI API design,[^8] and the no-QA execution
 decision.[^9]
 
 [^1]: [RFC 6129: The `application/tei+xml` media type](https://datatracker.ietf.org/doc/html/rfc6129)
-[^2]: [ADR 014: Hexagonal architecture enforcement](adr-014-hexagonal-architecture-enforcement.md)
-[^3]: [ADR 007: Durable generation checkpoints](adr-007-durable-generation-checkpoints.md)
+[^2]: [ADR 014: Hexagonal architecture enforcement](adr-0014-hexagonal-architecture-enforcement.md)
+[^3]: [ADR 007: Durable generation checkpoints](adr-0007-durable-generation-checkpoints.md)
 [^4]: [Microsoft REST API design best practices](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design)
 [^5]: [Microsoft Fabric long-running operation pattern](https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation)
 [^6]: [Stripe idempotent request guidance](https://docs.stripe.com/api/idempotent_requests)
 [^7]: [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
 [^8]: [Episodic TUI API design](../episodic-tui-api-design.md)
-[^9]: [ADR 017: No-QA generation execution and TEI persistence](adr-017-no-qa-generation-run-execution-and-tei-persistence.md)
+[^9]: [ADR 017: No-QA generation execution and TEI persistence](adr-0017-no-qa-generation-run-execution-and-tei-persistence.md)

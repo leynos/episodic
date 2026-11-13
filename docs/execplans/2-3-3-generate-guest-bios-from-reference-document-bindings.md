@@ -51,7 +51,7 @@ enrichment.
   `episodic/generation/show_notes.py`.
 - Preserve the existing show-notes contract in
   `episodic/generation/show_notes.py` and
-  `docs/adr/adr-004-show-notes-tei-representation.md`.
+  `docs/adrs/adr-0004-show-notes-tei-representation.md`.
 - Follow test-first development. Add failing unit and behavioural coverage
   before implementing each material behaviour.
 - Update user-facing and internal documentation when behaviour, interfaces, or
@@ -152,7 +152,7 @@ enrichment.
   prompt builder, and TEI enrichment helper. Focused test command
   `uv run pytest tests/test_guest_bios.py -q` now passes with 5 tests.
 - [x] 2026-05-14: Added
-  `docs/adr/adr-010-guest-bios-tei-representation.md` to record the
+  `docs/adrs/adr-0010-guest-bios-tei-representation.md` to record the
   `<div type="guest-bios"><list><item corresp="...">` representation.
 - [x] 2026-05-14: Ran `coderabbit review --agent` for milestone 1. It raised
   a missing expected-revision parser test and an ADR footnote wrapping concern;
@@ -293,10 +293,10 @@ parser/emitter dependency.
 
 ### Milestone 1: decide and test the TEI representation
 
-Read `docs/adr/adr-004-show-notes-tei-representation.md`,
+Read `docs/adrs/adr-0004-show-notes-tei-representation.md`,
 `docs/episodic-podcast-generation-system-design.md`, and the relevant
 `tei_rapporteur` body payload expectations. Add a new ADR at
-`docs/adr/adr-010-guest-bios-tei-representation.md`.
+`docs/adrs/adr-0010-guest-bios-tei-representation.md`.
 
 Write fail-first unit tests in a new `tests/test_guest_bios.py` covering the
 target body shape:
@@ -474,7 +474,7 @@ generation, Vidai Mock behavioural tests, and TEI body enrichment.
 Update any component architecture documentation that receives a new internal
 interface. If implementation changes binding-resolution semantics, update
 `docs/reference-binding-resolution.md` and
-`docs/adr/adr-001-reference-binding-resolution-algorithm.md`.
+`docs/adrs/adr-0001-reference-binding-resolution-algorithm.md`.
 
 Mark roadmap item 2.3.3 in `docs/roadmap.md` as done only after the feature is
 implemented, validated, reviewed, and committed.

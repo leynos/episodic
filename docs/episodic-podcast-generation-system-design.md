@@ -7,26 +7,26 @@ architecture
 
 Accepted decision records:
 
-- [ADR 001: Reference binding resolution algorithm](adr/adr-001-reference-binding-resolution-algorithm.md)
-- [ADR 002: HTTP service composition root](adr/adr-002-http-service-composition-root.md)
-- [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
-- [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
-- [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
-- [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
-- [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
-- [ADR 009: Source-to-script REST vertical slice](adr/adr-009-source-to-script-rest-vertical-slice.md)
-- [ADR 010: Guest-bios TEI representation](adr/adr-010-guest-bios-tei-representation.md)
-- [ADR 011: Text-to-Speech capability negotiation](adr/adr-011-tts-capability-negotiation.md)
-- [ADR 012: Pronunciation repository](adr/adr-012-pronunciation-repository.md)
-- [ADR 013: Speech synthesis adapters](adr/adr-013-speech-synthesis-adapters.md)
-- [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
-- [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
-- [ADR 022: Orchestration architecture enforcement](adr/adr-022-orchestration-architecture-enforcement.md)
-- [ADR 018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md)
-- [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
-- [ADR 025: Central logging port](adr/adr-025-central-logging-port.md)
-- [ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md)
-- [ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md)
+- [ADR 001: Reference binding resolution algorithm](adrs/adr-0001-reference-binding-resolution-algorithm.md)
+- [ADR 002: HTTP service composition root](adrs/adr-0002-http-service-composition-root.md)
+- [ADR 003: Celery worker scaffold](adrs/adr-0003-celery-worker-scaffold.md)
+- [ADR 004: Show-notes TEI representation](adrs/adr-0004-show-notes-tei-representation.md)
+- [ADR 005: Structured planning and tool execution for generation orchestration](adrs/adr-0005-structured-planning-and-tool-execution.md)
+- [ADR 007: Durable generation checkpoints](adrs/adr-0007-durable-generation-checkpoints.md)
+- [ADR 008: Chapter-marker TEI representation](adrs/adr-0008-chapter-marker-tei-representation.md)
+- [ADR 009: Source-to-script REST vertical slice](adrs/adr-0009-source-to-script-rest-vertical-slice.md)
+- [ADR 010: Guest-bios TEI representation](adrs/adr-0010-guest-bios-tei-representation.md)
+- [ADR 011: Text-to-Speech capability negotiation](adrs/adr-0011-tts-capability-negotiation.md)
+- [ADR 012: Pronunciation repository](adrs/adr-0012-pronunciation-repository.md)
+- [ADR 013: Speech synthesis adapters](adrs/adr-0013-speech-synthesis-adapters.md)
+- [ADR 014: Hexagonal architecture enforcement](adrs/adr-0014-hexagonal-architecture-enforcement.md)
+- [ADR 015: Upload and idempotency ports](adrs/adr-0015-upload-and-idempotency-ports.md)
+- [ADR 022: Orchestration architecture enforcement](adrs/adr-0022-orchestration-architecture-enforcement.md)
+- [ADR 018: Explicit repository-written versioning and history strategy](adrs/adr-0018-explicit-versioning-and-history-strategy.md)
+- [ADR 019: Retrievable episode TEI revision history](adrs/adr-0019-episode-tei-revision-history.md)
+- [ADR 025: Central logging port](adrs/adr-0025-central-logging-port.md)
+- [ADR 026: QA artefact persistence contract](adrs/adr-0026-qa-artefact-persistence-contract.md)
+- [ADR 027: CLI client boundary](adrs/adr-0027-cli-client-boundary.md)
 
 ## Overview
 
@@ -321,7 +321,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   configured provider for structured note entries, and enriches the canonical
   TEI body with `<div type="notes"><list><item>...</item></list></div>` output.
   This TEI representation is defined in
-  [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md).
+  [ADR 004: Show-notes TEI representation](adrs/adr-0004-show-notes-tei-representation.md).
 - Treats chapter-marker generation as the matching segment-aligned enrichment
   service: `episodic/generation/chapter_markers.py` accepts a TEI script plus
   segment-transition metadata, asks the configured provider for structured
@@ -329,7 +329,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   supplied segment transitions, and enriches the canonical TEI body with
   `<div type="chapters"><list><item n="...">...</item></list></div>` output.
   This TEI representation is defined in
-  [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md).
+  [ADR 008: Chapter-marker TEI representation](adrs/adr-0008-chapter-marker-tei-representation.md).
 - Treats guest-biography generation as the corresponding reference-document
   enrichment service. `episodic/generation/guest_bios.py` resolves pinned
   `guest_profile` reference-document bindings for the series, template, and
@@ -338,7 +338,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   `<div type="guest-bios"><list><item corresp="...">...</item></list></div>`.
   The `@corresp` value points back to the consumed reference-document revision.
   This TEI representation is defined in
-  [ADR 010: Guest-bios TEI representation](adr/adr-010-guest-bios-tei-representation.md).
+  [ADR 010: Guest-bios TEI representation](adrs/adr-0010-guest-bios-tei-representation.md).
 - Persists generation runs alongside prompts, responses, iteration counts,
   quality mode, QA status, skip rationale, and cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
@@ -359,7 +359,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Pedante consumes the canonical TEI P5 script plus cited source packets. If
   prompt construction uses JSON, that JSON is a projection of the same
   TEI-backed content model rather than a competing canonical schema; see
-  [ADR 001: Pedante evaluator contract](adr-001-pedante-evaluator-contract.md).
+  [ADR 001: Pedante evaluator contract](adrs/adr-0001-pedante-evaluator-contract.md).
 - Bromide detects overused tropes, cliches, and snowclones in draft scripts.
 - Chiltern flags frequently mispronounced words or terminology that do not yet
   have pronunciation guidance attached, including domain-specific and internal
@@ -408,7 +408,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   exception that lets a failed evaluation be retried. Retrieval is filtered by
   evaluator and compliance status through the REST API and the first-party CLI.
   The contract, its alternatives, and its retention posture are recorded in
-  [ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md).
+  [ADR 026: QA artefact persistence contract](adrs/adr-0026-qa-artefact-persistence-contract.md).
 - Automatic gating and review task escalation remain available for workflows
   that require human intervention after repeated failures.
 

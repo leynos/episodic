@@ -75,75 +75,75 @@ or delivery planning.
 
 ## Decision records
 
-- [ADR 001: Pedante evaluator contract](adr-001-pedante-evaluator-contract.md)
+- [ADR 001: Pedante evaluator contract](adrs/adr-0001-pedante-evaluator-contract.md)
   - evaluator contract decision retained at the historical top-level ADR path.
-- [ADR 001: Reference binding resolution algorithm](adr/adr-001-reference-binding-resolution-algorithm.md)
+- [ADR 001: Reference binding resolution algorithm](adrs/adr-0001-reference-binding-resolution-algorithm.md)
   - accepted reference binding resolution algorithm.
-- [ADR 002: HTTP service composition root](adr/adr-002-http-service-composition-root.md)
+- [ADR 002: HTTP service composition root](adrs/adr-0002-http-service-composition-root.md)
   - HTTP service composition boundary.
-- [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md) -
+- [ADR 003: Celery worker scaffold](adrs/adr-0003-celery-worker-scaffold.md) -
   worker process scaffold decision.
-- [ADR 004: Show notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
+- [ADR 004: Show notes TEI representation](adrs/adr-0004-show-notes-tei-representation.md)
   - show notes representation in TEI.
-- [ADR 005: Structured planning and tool execution](adr/adr-005-structured-planning-and-tool-execution.md)
+- [ADR 005: Structured planning and tool execution](adrs/adr-0005-structured-planning-and-tool-execution.md)
   - structured planning and tool execution model.
-- [ADR 006: Chrono spoken text semantics](adr/adr-006-chrono-spoken-text-semantics.md)
+- [ADR 006: Chrono spoken text semantics](adrs/adr-0006-chrono-spoken-text-semantics.md)
   - spoken-text runtime estimation semantics.
-- [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
+- [ADR 007: Durable generation checkpoints](adrs/adr-0007-durable-generation-checkpoints.md)
   - durable checkpointing model for generation workflows.
-- [ADR 008: Chapter marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
+- [ADR 008: Chapter marker TEI representation](adrs/adr-0008-chapter-marker-tei-representation.md)
   - chapter marker representation in TEI.
-- [ADR 009: Source-to-script REST vertical slice](adr/adr-009-source-to-script-rest-vertical-slice.md)
+- [ADR 009: Source-to-script REST vertical slice](adrs/adr-0009-source-to-script-rest-vertical-slice.md)
   - REST vertical slice scope for source-to-script work.
-- [ADR 010: Guest bios TEI representation](adr/adr-010-guest-bios-tei-representation.md)
+- [ADR 010: Guest bios TEI representation](adrs/adr-0010-guest-bios-tei-representation.md)
   - guest biography representation in TEI.
-- [ADR 011: TTS capability negotiation](adr/adr-011-tts-capability-negotiation.md)
+- [ADR 011: TTS capability negotiation](adrs/adr-0011-tts-capability-negotiation.md)
   - text-to-speech capability negotiation model.
-- [ADR 012: Pronunciation repository](adr/adr-012-pronunciation-repository.md)
+- [ADR 012: Pronunciation repository](adrs/adr-0012-pronunciation-repository.md)
   - pronunciation repository decision.
-- [ADR 013: Speech synthesis adapters](adr/adr-013-speech-synthesis-adapters.md)
+- [ADR 013: Speech synthesis adapters](adrs/adr-0013-speech-synthesis-adapters.md)
   - speech synthesis adapter boundaries.
-- [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
+- [ADR 014: Hexagonal architecture enforcement](adrs/adr-0014-hexagonal-architecture-enforcement.md)
   - import-boundary enforcement model.
-- [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
+- [ADR 015: Upload and idempotency ports](adrs/adr-0015-upload-and-idempotency-ports.md)
   - source-intake upload storage and idempotency port decisions.
-- [ADR 016: Adopt Skylos dead-code detection](adr/adr-016-adopt-skylos-dead-code-detection.md)
+- [ADR 016: Adopt Skylos dead-code detection](adrs/adr-0016-adopt-skylos-dead-code-detection.md)
   - blocking static dead-code detection and exception policy.
 - [ADR 017: No-QA generation execution and TEI persistence][adr-017]
   - generation launcher, draft persistence, recovery, and TEI retrieval
     decisions.
-- [ADR 018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md)
+- [ADR 018: Explicit repository-written versioning and history strategy](adrs/adr-0018-explicit-versioning-and-history-strategy.md)
   - explicit versioning, concurrency, immutability, deletion, and
     version-pinning strategy.
-- [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
+- [ADR 019: Retrievable episode TEI revision history](adrs/adr-0019-episode-tei-revision-history.md)
   - append-only episode TEI history, retrieval, restoration, and operational
     monitoring.
-- [ADR 020: Adopt PyChase duplication gate](adr/adr-020-adopt-pychase-duplication-gate.md)
+- [ADR 020: Adopt PyChase duplication gate](adrs/adr-0020-adopt-pychase-duplication-gate.md)
   - blocking code-duplication detection and exception policy, superseded by
     ADR-021.
-- [ADR 021: Adopt nose duplication gate](adr/adr-021-adopt-nose-duplication-gate.md)
+- [ADR 021: Adopt nose duplication gate](adrs/adr-0021-adopt-nose-duplication-gate.md)
   - current duplication detector, version pinning, and allowlist key policy.
-- [ADR 022: Orchestration architecture enforcement](adr/adr-022-orchestration-architecture-enforcement.md)
+- [ADR 022: Orchestration architecture enforcement](adrs/adr-0022-orchestration-architecture-enforcement.md)
   - LangGraph node, Celery task, and checkpoint payload enforcement decisions.
 - [ADR 023: Adopt the shared CV-005 contract
-  library](adr/adr-023-adopt-the-shared-cv005-contract-library.md)
+  library](adrs/adr-0023-adopt-the-shared-cv005-contract-library.md)
   - why the CV-005 contract runs from a pinned shared library, and what stays
     local.
 - [ADR 024: Review checkpoint persistence](
-  adr/adr-024-review-checkpoint-persistence.md)
+  adrs/adr-0024-review-checkpoint-persistence.md)
   - durable review checkpoints, compare-and-set transitions, and why the SQL
     stores compose rather than inherit.
-- [ADR 025: Central logging port](adr/adr-025-central-logging-port.md)
+- [ADR 025: Central logging port](adrs/adr-0025-central-logging-port.md)
   - logging ownership, backend boundary, and direct-call enforcement.
 - [ADR 026: QA artefact persistence
-  contract](adr/adr-026-qa-artefact-persistence-contract.md)
+  contract](adrs/adr-0026-qa-artefact-persistence-contract.md)
   - durable evaluation and finding records, versioning, immutability, and
     retention.
-- [ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md)
+- [ADR 027: CLI client boundary](adrs/adr-0027-cli-client-boundary.md)
   - the CLI as a REST client, its enforced import boundary, and its output and
     exit-code policy.
 
-[adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
+[adr-017]: adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md
 
 ## Execution plans
 

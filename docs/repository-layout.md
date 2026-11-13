@@ -87,7 +87,7 @@ The `episodic/` package is grouped by feature and boundary:
 Domain logic should remain behind ports and adapters rather than reaching
 directly across infrastructure boundaries. Architecture enforcement lives in
 the codebase and is described in
-[ADR 014](adr/adr-014-hexagonal-architecture-enforcement.md).
+[ADR 014](adrs/adr-0014-hexagonal-architecture-enforcement.md).
 
 ## Documentation layout
 
@@ -100,13 +100,13 @@ The `docs/` directory is the project knowledge base:
 - `docs/roadmap.md` tracks delivery phases, tasks, and acceptance criteria.
 - `docs/*-design.md` files explain system, subsystem, and infrastructure
   design.
-- `docs/adr/` contains accepted architectural decision records.
+- `docs/adrs/` contains accepted architectural decision records.
 - `docs/execplans/` contains execution plans for non-trivial implementation
   work.
 
-The historical `docs/adr-001-pedante-evaluator-contract.md` file remains at the
-top level of `docs/`; new ADRs should use the `docs/adr/` directory unless a
-migration explicitly changes the existing convention.
+The historical `docs/adrs/adr-0001-pedante-evaluator-contract.md` file remains
+at the top level of `docs/`; new ADRs should use the `docs/adrs/` directory
+unless a migration explicitly changes the existing convention.
 
 ## Test layout
 
