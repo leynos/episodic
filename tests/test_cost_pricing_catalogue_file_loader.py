@@ -188,3 +188,27 @@ def test_loader_reports_unreadable_cards_with_the_file_name(
 
     with pytest.raises(PricingCatalogueError, match=r"cannot read card.*broken\.yaml"):
         FilePricingCatalogue.from_directory(tmp_path)
+
+
+def test_loader_reports_a_reader_error_with_the_file_name(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A YAML reader failure must name the card rather than escape."""
+    path = _write_bytes(tmp_path, b"schema_version: 1\n\x00")
+
+    with pytest.raises(PricingCatalogueError, match=rf"{path.name}: invalid YAML"):
+        FilePricingCatalogue.from_directory(tmp_path)
+
+
+def test_loader_reports_an_impossible_yaml_timestamp(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An unquoted impossible date must name the card rather than escape."""
+    body = _card().replace(
+        'retrieved_at: "2026-06-01T00:00:00Z"',
+        "retrieved_at: 2026-02-30T00:00:00Z",
+    )
+    _write_card(tmp_path, body)
+
+    with pytest.raises(PricingCatalogueError, match=r"openai\.yaml: invalid YAML"):
+        FilePricingCatalogue.from_directory(tmp_path)

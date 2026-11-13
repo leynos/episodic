@@ -329,10 +329,16 @@ def load_snapshot(path: pathlib.Path) -> PricingSnapshot:
         # Both failures must name the card: a startup traceback otherwise
         # leaves the operator without the offending path.
         _fail(path, f"cannot read card: {exc}")
-    loader = _UniqueKeyLoader(raw_text)
+    try:
+        # The reader rejects some bytes, such as NUL, while the loader is being
+        # constructed, so construction belongs inside the card-naming boundary.
+        loader = _UniqueKeyLoader(raw_text)
+    except yaml.YAMLError as exc:
+        _fail(path, f"invalid YAML: {exc}")
     try:
         raw_data = loader.get_single_data() or {}
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, ValueError) as exc:
+        # An impossible timestamp such as 2026-02-30 raises ValueError here.
         _fail(path, f"invalid YAML: {exc}")
     finally:
         loader.dispose()

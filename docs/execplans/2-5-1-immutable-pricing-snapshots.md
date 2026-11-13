@@ -887,6 +887,31 @@ Success is observable as follows:
   - The per-metric truncation test used an example where per-metric and
     aggregate truncation agree. Its output usage now makes them differ (7
     versus 8).
+- Round 11 on `d21b33dd`: the CLI review covered 80 files and raised three
+  findings, all actioned:
+  - The migration reconstructed plan documents without enforcing the domain's
+    262,144-byte source-document cap, so an oversized legacy row would persist
+    and then fail every read. The conversion now rejects it through the
+    migration's normal error path.
+    - Evidence substitute: py-pglite closes the connection for parameters above
+      roughly 64 KiB, so an oversized legacy row cannot be seeded through the
+      database. `tests/test_pricing_snapshot_migration_conversion.py` loads the
+      migration by path and converts the oversized row directly, proving the
+      rejection without a round trip.
+  - The card loader constructed its YAML reader outside the error boundary, so
+    a reader failure (for example a NUL byte) escaped without the card path,
+    and an impossible unquoted timestamp surfaced as a bare `ValueError`. Both
+    are now translated through the card-naming error.
+  - The unpinned service-kind test exercised only `llm`. It is parametrized
+    over `llm`, `tts`, and `helper_service`.
+  - Observation: `tests/test_qa_cli_telemetry_delivery.py::
+    test_installed_command_delivers_a_bounded_failure_observation` failed in
+    two full-suite runs on this tree, reporting the span events without the
+    latency record. It then passed in a later full-suite run on this tree (with
+    a temporary diagnostic print), in all 15 isolated repeats, and on the
+    unmodified `d21b33dd` baseline. This plan does
+    not touch that test or the CLI telemetry path, so the loss is a
+    pre-existing stderr-delivery race, not a regression from this work.
 - Lesson: a uniqueness constraint added by a migration is a merge instruction.
   The legacy table allowed rows that the new identity cannot distinguish, so
   the upgrade must decide which row survives and move every reference before
@@ -910,6 +935,9 @@ Success is observable as follows:
   hash, the hash must cover the application's canonical shape (the document's
   digest), not the storage shape (the document's content). Otherwise the row
   persists successfully and fails verification on every later read.
+- Lesson: a migration that synthesizes data the domain validates must enforce
+  the same invariants. A row can satisfy every column constraint and still be
+  unreadable when a domain-level cap or parser rejects what the migration wrote.
 
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.

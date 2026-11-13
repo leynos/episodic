@@ -34,6 +34,7 @@ _MAX_JSON_INT = 2**53 - 1
 # upgraded row carries the legacy columns themselves as a JSON document. The
 # media type names that reconstruction rather than pretending to be the plan.
 _LEGACY_DOCUMENT_MEDIA_TYPE = "application/json"
+_MAX_SOURCE_DOCUMENT_BYTES = 262_144  # Mirrors SourceDocument's cap.
 _LEGACY_METRIC_UNITS: typ.Final = {
     "input_tokens": "token",
     "output_tokens": "token",
@@ -191,8 +192,7 @@ def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
     source_kind = row["source_kind"]
     if source_kind not in _SOURCE_KINDS:
         _reject(snapshot_id, f"unknown source kind {source_kind!r}")
-    # A JSONB column can hold an array or a scalar; converting one would fail
-    # on ``.items()``, so the shape is checked where the row id is in hand.
+    # A JSONB column may hold an array or scalar, which would fail on .items().
     for field in ("rates_minor_per_metric", "source_metadata"):
         if not isinstance(row[field], cabc.Mapping):
             _reject(snapshot_id, f"{field} must be a JSON object")
@@ -223,15 +223,17 @@ def _converted_row(
     source_document = None
     if row["source_kind"] == "sla4oai_plan":
         content = _canonical_json(document)
+        if len(content.encode("utf-8")) > _MAX_SOURCE_DOCUMENT_BYTES:
+            _reject(snapshot_id, "source document exceeds the 262,144-byte cap")
         source_document = {
             "media_type": _LEGACY_DOCUMENT_MEDIA_TYPE,
             "content": content,
         }
-        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
         # Identity hashes the digest, as the application encoder does.
+        digest = f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}"
         document["source_document"] = {
             "media_type": _LEGACY_DOCUMENT_MEDIA_TYPE,
-            "sha256": f"sha256:{digest}",
+            "sha256": digest,
         }
     payload = _canonical_json(document).encode("utf-8")
     content_hash = f"sha256:{hashlib.sha256(payload).hexdigest()}"
@@ -273,8 +275,7 @@ def _drop_legacy_columns() -> None:
 
 
 def _legacy_rows(connection: sa.Connection) -> list[dict[str, object]]:
-    """Read every legacy row before conversion, oldest first."""
-    # A stable order makes the first row for a content hash the survivor.
+    """Read every legacy row, oldest first so the earliest survives a merge."""
     result = connection.execute(
         sa.text(
             "SELECT id, provider_name, model, operation, source_kind, currency, "
@@ -293,8 +294,7 @@ def _merge_equivalent_row(
     survivor: object,
 ) -> None:
     """Point every reference at the survivor, then delete the duplicate."""
-    # Legacy rows that differed only by billing period collapse into one
-    # version; both may be pinned, so references move rather than the upgrade.
+    # Rows differing only by billing period collapse; references move, not abort.
     params = {"duplicate": duplicate, "survivor": survivor}
     for statement in (
         sa.text(

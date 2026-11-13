@@ -89,14 +89,27 @@ def _recorder(
 
 
 @pytest.mark.asyncio
-async def test_unpinned_call_derives_service_kind_from_provider_type() -> None:
+@pytest.mark.parametrize(
+    ("provider_type", "service_kind"),
+    [
+        ("llm", PricedService.LLM),
+        ("tts", PricedService.TTS),
+        ("helper_service", PricedService.HELPER_SERVICE),
+    ],
+)
+async def test_unpinned_call_derives_service_kind_from_provider_type(
+    provider_type: str,
+    service_kind: PricedService,
+) -> None:
     """A provider-call record's provider type selects the service kind."""
     catalogue = _RecordingCatalogue(snapshot=v1_pricing_snapshot())
 
-    await _recorder(catalogue, RecordingLedger()).record_provider_call(_record("llm"))
+    await _recorder(catalogue, RecordingLedger()).record_provider_call(
+        _record(provider_type)
+    )
 
-    assert catalogue.subjects[0].service_kind is PricedService.LLM, (
-        "an LLM provider type must resolve to the LLM service kind"
+    assert catalogue.subjects[0].service_kind is service_kind, (
+        f"provider type {provider_type!r} must resolve to {service_kind!r}"
     )
 
 
