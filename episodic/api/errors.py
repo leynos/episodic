@@ -70,6 +70,23 @@ __all__ = (
 logger = get_logger(__name__)
 
 
+class _UnmappedHTTPError(falcon.HTTPInternalServerError):
+    """Carry detached diagnostic metadata to the API error serializer."""
+
+    __slots__ = ("diagnostic",)
+
+    diagnostic: _UnmappedErrorDiagnostic
+
+    def __init__(
+        self,
+        description: str,
+        diagnostic: _UnmappedErrorDiagnostic,
+    ) -> None:
+        """Store the generic response description and safe diagnostic."""
+        super().__init__(description=description)
+        self.diagnostic = diagnostic
+
+
 def _emit_serializer_diagnostic(
     emit_error: UnmappedErrorEmitter | None,
     diagnostic: _UnmappedErrorDiagnostic,
@@ -83,14 +100,12 @@ def _unmapped_http_error(
     description: str,
     diagnostic: _UnmappedErrorDiagnostic,
 ) -> falcon.HTTPError:
-    """Attach a private diagnostic to the generic client-facing error."""
-    error = http_error(
-        falcon.HTTPInternalServerError(description=description),
+    """Build the generic client-facing error with its typed diagnostic."""
+    return http_error(
+        _UnmappedHTTPError(description, diagnostic),
         code="internal_error",
         details={},
     )
-    typ.cast("typ.Any", error).unmapped_error_diagnostic = diagnostic
-    return error
 
 
 def serialize_http_error(
@@ -114,9 +129,8 @@ def serialize_http_error(
         Logging port for unmapped-domain diagnostics. The module logging port
         is used when the application does not inject one.
     """
-    diagnostic = getattr(exc, "unmapped_error_diagnostic", None)
-    if isinstance(diagnostic, _UnmappedErrorDiagnostic):
-        _emit_serializer_diagnostic(emit_error, diagnostic)
+    if isinstance(exc, _UnmappedHTTPError):
+        _emit_serializer_diagnostic(emit_error, exc.diagnostic)
     _serialize_http_error(req, resp, exc)
 
 
