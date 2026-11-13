@@ -322,7 +322,9 @@ def load_snapshot(path: pathlib.Path) -> PricingSnapshot:
         If the file cannot be read or is not a valid schema-version-1 card.
     """
     try:
-        raw_text = path.read_text(encoding="utf-8")
+        # Keep CRLF bytes: an SLA4OAI card is stored verbatim, and its digest
+        # must cover the bytes that were read, not a translated copy.
+        raw_text = path.read_text(encoding="utf-8", newline="")
     except (OSError, UnicodeDecodeError) as exc:
         # Both failures must name the card: a startup traceback otherwise
         # leaves the operator without the offending path.

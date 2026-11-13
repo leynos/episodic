@@ -113,6 +113,24 @@ async def test_resolution_uses_the_captured_call_time(tmp_path: pathlib.Path) ->
 
 
 @pytest.mark.asyncio
+async def test_crlf_plan_document_is_stored_verbatim(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A CRLF plan keeps its line endings in the retained source document."""
+    body = textwrap.dedent(_card().replace("provider_rate_card", "sla4oai_plan"))
+    (tmp_path / "plan.yaml").write_bytes(
+        (body.strip() + "\n").replace("\n", "\r\n").encode("utf-8")
+    )
+    catalogue = _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+
+    snapshot = await catalogue.resolve(_SUBJECT)
+
+    document = snapshot.source_document
+    assert document is not None, "an SLA4OAI card must retain its document"
+    assert "\r\n" in document.content, "line endings must survive the read"
+
+
+@pytest.mark.asyncio
 async def test_a_card_keeps_applying_in_a_later_month(
     tmp_path: pathlib.Path,
 ) -> None:
