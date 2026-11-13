@@ -30,6 +30,10 @@ depends_on: str | None = None
 
 _RATE_SCALE = 1_000_000
 _MAX_JSON_INT = 2**53 - 1
+# The legacy table never stored the plan text an SLA4OAI row came from, so the
+# upgraded row carries the legacy columns themselves as a JSON document. The
+# media type names that reconstruction rather than pretending to be the plan.
+_LEGACY_DOCUMENT_MEDIA_TYPE = "application/json"
 _LEGACY_METRIC_UNITS: typ.Final = {
     "input_tokens": "token",
     "output_tokens": "token",
@@ -43,6 +47,25 @@ _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _REQUIRED_TEXT_FIELDS = ("provider_name", "model", "operation")
 _SOURCE_KINDS = frozenset({"provider_rate_card", "sla4oai_plan"})
 _CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")
+_CHECK_CONSTRAINTS: typ.Final = (
+    ("ck_pricing_snapshots_schema_version", "schema_version = 1"),
+    (
+        "ck_pricing_snapshots_service_kind",
+        "service_kind IN ('llm', 'tts', 'helper_service')",
+    ),
+    (
+        "ck_pricing_snapshots_source_kind",
+        "source_kind IN ('provider_rate_card', 'sla4oai_plan')",
+    ),
+    (
+        "ck_pricing_snapshots_source_document_pair",
+        "(source_document_media_type IS NULL) = (source_document_content IS NULL)",
+    ),
+    (
+        "ck_pricing_snapshots_source_document_required",
+        "source_kind <> 'sla4oai_plan' OR source_document_content IS NOT NULL",
+    ),
+)
 _EMPTY_TABLE_GUARD = (
     "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pricing_snapshots) THEN RAISE EXCEPTION "
     "'pricing_snapshots must be empty to run this migration'; END IF; END $$;"
@@ -52,6 +75,17 @@ _EMPTY_TABLE_GUARD = (
 def _instant(value: dt.datetime) -> str:
     """Format an instant exactly as the application canonicalizer does."""
     return value.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def _canonical_json(document: dict[str, object]) -> str:
+    """Serialize a document exactly as the application canonicalizer does."""
+    return json.dumps(
+        document,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
 
 
 def _reject(snapshot_id: object, detail: str) -> typ.NoReturn:
@@ -67,11 +101,6 @@ def _row_instant(value: object, snapshot_id: object) -> dt.datetime:
     return value
 
 
-def _is_legacy_amount(amount: object) -> typ.TypeGuard[int]:
-    """Return whether a legacy rate is a non-negative, non-boolean integer."""
-    return isinstance(amount, int) and not isinstance(amount, bool) and amount >= 0
-
-
 def _convert_rates(
     legacy_rates: cabc.Mapping[str, object],
     snapshot_id: object,
@@ -81,8 +110,10 @@ def _convert_rates(
     for metric, amount in legacy_rates.items():
         if metric not in _LEGACY_METRIC_UNITS:
             _reject(snapshot_id, f"legacy metric {metric!r} has no declared unit")
-        if not _is_legacy_amount(amount):
-            _reject(snapshot_id, f"rate for {metric!r} must be a non-negative integer")
+        if isinstance(amount, bool) or not isinstance(amount, int):
+            _reject(snapshot_id, f"rate for {metric!r} must be an integer")
+        if amount < 0:
+            _reject(snapshot_id, f"rate for {metric!r} must be non-negative")
         divisor = math.gcd(amount, _RATE_SCALE)
         amount_minor = amount // divisor
         if amount_minor > _MAX_JSON_INT:
@@ -141,39 +172,6 @@ def _canonical_document(
     }
 
 
-def _content_hash(document: dict[str, object]) -> str:
-    """Hash a canonical document exactly as the application does."""
-    payload = json.dumps(
-        document,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
-
-
-def _is_currency_code(value: object) -> bool:
-    """Return whether a value is three uppercase ASCII letters."""
-    # The domain pattern is repeated rather than imported because a migration
-    # must keep converting rows the way it always did, even when the domain
-    # validator later changes.
-    return isinstance(value, str) and _CURRENCY_CODE.fullmatch(value) is not None
-
-
-def _require_json_objects(
-    row: cabc.Mapping[str, object],
-    snapshot_id: object,
-) -> None:
-    """Reject legacy JSONB columns that do not hold objects."""
-    # The columns are JSONB, so a row can hold an array or a scalar. Converting
-    # one would fail on ``.items()`` without naming the row, so the shape is
-    # checked where the snapshot identifier is in hand.
-    for field in ("rates_minor_per_metric", "source_metadata"):
-        if not isinstance(row[field], cabc.Mapping):
-            _reject(snapshot_id, f"{field} must be a JSON object")
-
-
 def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
     """Reject a legacy row that cannot become a valid version 1 snapshot.
 
@@ -184,22 +182,33 @@ def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
         value = row[field]
         if not isinstance(value, str) or not value.strip():
             _reject(snapshot_id, f"{field} must be a non-blank string")
-    if not _is_currency_code(row["currency"]):
+    # The domain pattern is repeated rather than imported because a migration
+    # must keep converting rows the way it always did, even when the domain
+    # validator later changes.
+    currency = row["currency"]
+    if not isinstance(currency, str) or not _CURRENCY_CODE.fullmatch(currency):
         _reject(snapshot_id, "currency must be a three-letter uppercase ASCII code")
     source_kind = row["source_kind"]
     if source_kind not in _SOURCE_KINDS:
         _reject(snapshot_id, f"unknown source kind {source_kind!r}")
-    if source_kind == "sla4oai_plan":
-        _reject(snapshot_id, "a legacy sla4oai_plan row carries no source document")
-    _require_json_objects(row, snapshot_id)
-    if not row["rates_minor_per_metric"]:
-        _reject(snapshot_id, "a snapshot must price at least one metric")
+    # A JSONB column can hold an array or a scalar; converting one would fail
+    # on ``.items()``, so the shape is checked where the row id is in hand.
+    for field in ("rates_minor_per_metric", "source_metadata"):
+        if not isinstance(row[field], cabc.Mapping):
+            _reject(snapshot_id, f"{field} must be a JSON object")
+    if source_kind == "provider_rate_card" and not row["rates_minor_per_metric"]:
+        _reject(snapshot_id, "a rate card snapshot must price at least one metric")
 
 
 def _converted_row(
     row: cabc.Mapping[str, object],
-) -> tuple[dict[str, dict[str, object]], dict[str, str], str]:
-    """Convert one legacy row and return its rates, metadata, and hash."""
+) -> tuple[
+    dict[str, dict[str, object]],
+    dict[str, str],
+    dict[str, str] | None,
+    str,
+]:
+    """Convert one legacy row and return its rates, metadata, document, hash."""
     snapshot_id = row["id"]
     _validate_row(row, snapshot_id)
     rates = _convert_rates(
@@ -211,16 +220,31 @@ def _converted_row(
         snapshot_id,
     )
     document = _canonical_document(row, rates, metadata)
-    return rates, metadata, _content_hash(document)
+    # The legacy table never stored the plan text, so the canonical document is
+    # the only faithful record left for an SLA4OAI row. The media type names
+    # that reconstruction rather than pretending to be the original plan.
+    source_document = None
+    if row["source_kind"] == "sla4oai_plan":
+        source_document = {
+            "media_type": _LEGACY_DOCUMENT_MEDIA_TYPE,
+            "content": _canonical_json(document),
+        }
+    document["source_document"] = source_document
+    payload = _canonical_json(document).encode("utf-8")
+    content_hash = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+    return rates, metadata, source_document, content_hash
 
 
 def _add_new_columns() -> None:
     """Add the schema-version-1 columns as nullable."""
-    op.add_column("pricing_snapshots", sa.Column("schema_version", sa.Integer))
-    op.add_column("pricing_snapshots", sa.Column("service_kind", sa.Text))
-    op.add_column("pricing_snapshots", sa.Column("rates", postgresql.JSONB))
-    for column in ("source_document_media_type", "source_document_content"):
-        op.add_column("pricing_snapshots", sa.Column(column, sa.Text))
+    for column, type_ in (
+        ("schema_version", sa.Integer()),
+        ("service_kind", sa.Text()),
+        ("rates", postgresql.JSONB()),
+        ("source_document_media_type", sa.Text()),
+        ("source_document_content", sa.Text()),
+    ):
+        op.add_column("pricing_snapshots", sa.Column(column, type_))
     op.add_column(
         "pricing_snapshots",
         sa.Column(
@@ -235,22 +259,7 @@ def _tighten_new_columns() -> None:
     """Make the required new columns non-null and add their checks."""
     for column in ("schema_version", "service_kind", "rates", "recorded_at"):
         op.alter_column("pricing_snapshots", column, nullable=False)
-    checks = {
-        "ck_pricing_snapshots_schema_version": "schema_version = 1",
-        "ck_pricing_snapshots_service_kind": (
-            "service_kind IN ('llm', 'tts', 'helper_service')"
-        ),
-        "ck_pricing_snapshots_source_kind": (
-            "source_kind IN ('provider_rate_card', 'sla4oai_plan')"
-        ),
-        "ck_pricing_snapshots_source_document_pair": (
-            "(source_document_media_type IS NULL) = (source_document_content IS NULL)"
-        ),
-        "ck_pricing_snapshots_source_document_required": (
-            "source_kind <> 'sla4oai_plan' OR source_document_content IS NOT NULL"
-        ),
-    }
-    for name, condition in checks.items():
+    for name, condition in _CHECK_CONSTRAINTS:
         op.create_check_constraint(name, "pricing_snapshots", condition)
 
 
@@ -268,7 +277,7 @@ def _legacy_rows(connection: sa.Connection) -> list[dict[str, object]]:
         sa.text(
             "SELECT id, provider_name, model, operation, source_kind, currency, "
             "rates_minor_per_metric, source_metadata, retrieved_at, "
-            "effective_from FROM pricing_snapshots "
+            "effective_from, billing_period_key FROM pricing_snapshots "
             "ORDER BY retrieved_at, id"
         )
     )
@@ -310,22 +319,27 @@ def _write_converted_rows(
     """Convert and write every legacy row, merging equivalent content."""
     survivors: dict[str, object] = {}
     for row in rows:
-        rates, metadata, content_hash = _converted_row(row)
+        rates, metadata, source_document, content_hash = _converted_row(row)
         survivor = survivors.get(content_hash)
         if survivor is not None:
             _merge_equivalent_row(connection, duplicate=row["id"], survivor=survivor)
             continue
         survivors[content_hash] = row["id"]
+        document = source_document or {}
         connection.execute(
             sa.text(
                 "UPDATE pricing_snapshots SET schema_version = 1, "
                 "service_kind = 'llm', rates = CAST(:rates AS jsonb), "
                 "source_metadata = CAST(:metadata AS jsonb), "
+                "source_document_media_type = :media_type, "
+                "source_document_content = :content, "
                 "content_hash = :content_hash WHERE id = :id"
             ),
             {
                 "rates": json.dumps(rates, sort_keys=True),
                 "metadata": json.dumps(metadata, sort_keys=True),
+                "media_type": document.get("media_type"),
+                "content": document.get("content"),
                 "content_hash": content_hash,
                 "id": row["id"],
             },
@@ -366,24 +380,14 @@ def downgrade() -> None:
                 "20261110_000017; converted rows cannot be mapped back"
             )
             raise CommandError(msg)
-    for name in (
-        "ck_pricing_snapshots_source_document_required",
-        "ck_pricing_snapshots_source_document_pair",
-        "ck_pricing_snapshots_source_kind",
-        "ck_pricing_snapshots_service_kind",
-        "ck_pricing_snapshots_schema_version",
-    ):
+    for name, _ in _CHECK_CONSTRAINTS:
         op.drop_constraint(name, "pricing_snapshots", type_="check")
-    op.add_column(
-        "pricing_snapshots",
-        sa.Column("billing_period_key", sa.Text),
-    )
-    op.add_column(
-        "pricing_snapshots",
-        sa.Column("rates_minor_per_metric", postgresql.JSONB),
-    )
-    op.alter_column("pricing_snapshots", "billing_period_key", nullable=False)
-    op.alter_column("pricing_snapshots", "rates_minor_per_metric", nullable=False)
+    for column, type_ in (
+        ("billing_period_key", sa.Text()),
+        ("rates_minor_per_metric", postgresql.JSONB()),
+    ):
+        op.add_column("pricing_snapshots", sa.Column(column, type_))
+        op.alter_column("pricing_snapshots", column, nullable=False)
     for column in (
         "recorded_at",
         "source_document_content",

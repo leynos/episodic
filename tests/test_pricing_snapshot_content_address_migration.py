@@ -2,6 +2,7 @@
 
 import datetime as dt
 import io
+import json
 import typing as typ
 import uuid
 
@@ -214,6 +215,44 @@ async def test_upgrade_merges_rows_that_differ_only_by_billing_period(
 
 
 @pytest.mark.asyncio
+async def test_upgrade_preserves_a_legacy_sla4oai_row(
+    migrated_engine: AsyncEngine,
+) -> None:
+    """A legacy plan row keeps its kind and gains a faithful JSON document."""
+    identifier = uuid.UUID(int=51)
+    async with migrated_engine.begin() as connection:
+        await _seed_legacy_rows(
+            connection,
+            [
+                _legacy_row(
+                    identifier,
+                    source_kind="sla4oai_plan",
+                    rates_minor_per_metric={},
+                )
+            ],
+        )
+        await _upgrade(connection)
+        rows = await _rows(connection)
+
+    assert len(rows) == 1, "a legacy plan row must survive the conversion"
+    converted = rows[0]
+    assert converted["source_kind"] == "sla4oai_plan", (
+        "the plan kind must not be rewritten as a provider rate card"
+    )
+    assert converted["rates"] == {}, "a plan may carry no normalized rates"
+    assert converted["source_document_media_type"] == "application/json", (
+        "the reconstructed document must declare its media type"
+    )
+    document = json.loads(str(converted["source_document_content"]))
+    assert document["source_kind"] == "sla4oai_plan", (
+        "the document must preserve the row's source kind"
+    )
+    assert document["provider_name"] == "openai", (
+        "the document must preserve the row's subject"
+    )
+
+
+@pytest.mark.asyncio
 async def test_upgrade_rejects_an_unknown_legacy_metric(
     migrated_engine: AsyncEngine,
 ) -> None:
@@ -257,11 +296,6 @@ async def test_upgrade_rejects_a_non_identifier_metadata_key(
             id="rate-above-json-integer-limit",
         ),
         pytest.param({"source_kind": "mystery"}, "source kind", id="unknown-source"),
-        pytest.param(
-            {"source_kind": "sla4oai_plan"},
-            "no source document",
-            id="plan-without-document",
-        ),
         pytest.param(
             {"rates_minor_per_metric": {}},
             "at least one metric",
