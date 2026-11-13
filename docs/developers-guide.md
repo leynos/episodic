@@ -866,7 +866,11 @@ Authorization scaffold:
   a 12-character SHA-256 prefix of the exception type's module and qualified
   name, without logging either name or exception text. The metric still uses
   only the fixed category label. Warnings omit exception metadata, which could
-  contain the raw authorization header. The system design records this metrics
+  contain the raw authorization header. Metrics are best-effort on adapter
+  failures, and all authorization warning emission is best-effort so sink
+  failures cannot mask the canonical `401`, `403`, or `503` response. Keep this
+  suppression in the authorization boundary rather than changing shared logging
+  helpers' propagation behaviour. The system design records this metrics
   dependency and bounded diagnostic policy in
   [Authorization and adapter failure observability](episodic-podcast-generation-system-design.md#authorization-and-adapter-failure-observability).
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks

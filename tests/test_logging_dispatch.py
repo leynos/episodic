@@ -49,6 +49,25 @@ class _LegacyDebugBackend(_LogOnlyBackend):
         self.debug_calls += 1
 
 
+class _DeferredAnnotationDebugBackend(_LogOnlyBackend):
+    """Expose a legacy signature with an unresolved deferred annotation."""
+
+    def __init__(self) -> None:
+        """Initialize generic logging and the DEBUG attempt count."""
+        super().__init__()
+        self.debug_calls = 0
+
+    def debug(
+        self,
+        message: str,
+        /,
+        callback: cabc.Callable[..., object],
+    ) -> None:
+        """Count attempts that should be rejected before the method call."""
+        del message, callback
+        self.debug_calls += 1
+
+
 class _FailingDebugBackend(_LogOnlyBackend):
     """Record a compatible DEBUG call before raising an emission error."""
 
@@ -183,6 +202,19 @@ def test_debug_falls_back_when_signature_rejects_helper_keywords() -> None:
     assert backend.debug_calls == 0, "signature mismatch must fail before method entry"
     assert backend.calls == [(logging.DEBUG, "Loaded 3 documents", None, False)], (
         "a rejected DEBUG call should fall back through log()"
+    )
+
+
+def test_debug_falls_back_when_signature_annotation_is_unresolved() -> None:
+    """Inspect legacy signatures without evaluating deferred annotations."""
+    backend = _DeferredAnnotationDebugBackend()
+    logger = episodic_logging.LoggerHandle(backend)
+
+    episodic_logging.log_debug(logger, "Loaded %s documents", 3)
+
+    assert backend.debug_calls == 0, "signature mismatch must fail before method entry"
+    assert backend.calls == [(logging.DEBUG, "Loaded 3 documents", None, False)], (
+        "an unresolved annotation must not prevent generic log() fallback"
     )
 
 

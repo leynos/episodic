@@ -6,13 +6,13 @@ from unittest import mock
 import falcon
 import pytest
 
-from episodic import logging as episodic_logging
 from episodic.api import authorization as authorization_module
 from tests.fixtures.authorization import (
     DenyAllAuthorization,
     ForbidSeriesProfilesAuthorization,
     RaisingAuthorization,
     build_authorization_test_client,
+    patch_authorization_warning_backend,
 )
 
 if typ.TYPE_CHECKING:
@@ -27,13 +27,8 @@ if typ.TYPE_CHECKING:
 
 @pytest.fixture
 def authorization_warning_backend(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
-    """Capture authorization adapter warnings through a mocked logger."""
-    backend = mock.Mock()
-    logger = episodic_logging.LoggerHandle(
-        typ.cast("episodic_logging._CompatibleLogger", backend)
-    )
-    monkeypatch.setattr(authorization_module, "logger", logger)
-    return backend
+    """Capture authorization warnings through a mocked logger backend."""
+    return patch_authorization_warning_backend(monkeypatch)
 
 
 class _AuthorizationHeaderFailure:
