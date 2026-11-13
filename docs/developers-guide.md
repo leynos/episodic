@@ -862,9 +862,12 @@ Authorization scaffold:
   includes `OSError`, `ConnectionError`, and `TimeoutError`; `AssertionError`,
   `AttributeError`, `IndexError`, `KeyError`, `RuntimeError`, `TypeError`, and
   `ValueError` map to their corresponding category names. Other caught
-  exceptions, including `LookupError`, use `unknown_error`. Warnings omit
-  exception metadata, which could contain the raw authorization header. The
-  system design records this metrics dependency and bounded diagnostic policy in
+  exceptions, including `LookupError`, use `unknown_error`. Those warnings add
+  a 12-character SHA-256 prefix of the exception type's module and qualified
+  name, without logging either name or exception text. The metric still uses
+  only the fixed category label. Warnings omit exception metadata, which could
+  contain the raw authorization header. The system design records this metrics
+  dependency and bounded diagnostic policy in
   [Authorization and adapter failure observability](episodic-podcast-generation-system-design.md#authorization-and-adapter-failure-observability).
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.

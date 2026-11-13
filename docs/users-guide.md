@@ -477,7 +477,10 @@ counter has only a bounded `category` label: `assertion_error`,
 `type_error`, `value_error`, or `unknown_error`. `ConnectionError` and
 `TimeoutError` use `os_error`. Metric recording is best-effort and does not
 change the `503` response. Adapter-failure warnings use the fixed category and
-omit exception details.
+omit exception details. A warning with `unknown_error` also includes a
+12-character diagnostic identifier derived from the exception type; it does not
+log the type name or exception message. Metrics continue to use only the
+bounded category label.
 
 ### Migration note for the next minor release
 
