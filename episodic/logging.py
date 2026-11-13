@@ -190,6 +190,8 @@ def _emit(
     try:
         method(message, exc_info=exc_info, stack_info=False)
     except TypeError:
+        # Limit the DEBUG compatibility retry to signature mismatches so an
+        # internal TypeError after emission cannot duplicate a record.
         if level != logging.DEBUG or not _method_rejects_logging_call(
             method,
             message,
