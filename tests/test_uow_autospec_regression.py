@@ -83,6 +83,11 @@ async def test_unit_of_work_runtime_reaches_storage_adapters(
         ) as pricing_snapshot_store,
         mock.patch.object(
             uow_module,
+            "InstrumentedPricingSnapshotRepository",
+            autospec=True,
+        ) as pricing_snapshot_repository,
+        mock.patch.object(
+            uow_module,
             "SqlAlchemyWorkflowCheckpointStore",
             autospec=True,
         ) as workflow_checkpoint_store,
@@ -100,16 +105,22 @@ async def test_unit_of_work_runtime_reaches_storage_adapters(
                 generation_run_store.call_args.kwargs["runtime"]
                 is runtime.generation_run_runtime
             ), "generation-run storage must receive the supplied runtime"
-            pricing_snapshot_kwargs = pricing_snapshot_store.call_args.kwargs
+            assert pricing_snapshot_store.call_args.kwargs == {}, (
+                "the store itself must stay free of telemetry sinks"
+            )
+            pricing_snapshot_kwargs = pricing_snapshot_repository.call_args.kwargs
             assert pricing_snapshot_kwargs["metrics"] is runtime.metrics, (
-                "pricing-snapshot storage must receive the supplied metrics sink"
+                "pricing-snapshot telemetry must receive the supplied metrics sink"
             )
             assert pricing_snapshot_kwargs["tracer"] is runtime.tracer, (
-                "pricing-snapshot storage must receive the supplied tracer"
+                "pricing-snapshot telemetry must receive the supplied tracer"
             )
             assert pricing_snapshot_kwargs["clock"] is runtime.monotonic_clock, (
-                "pricing-snapshot storage must receive the supplied monotonic clock"
+                "pricing-snapshot telemetry must receive the supplied monotonic clock"
             )
+            assert pricing_snapshot_repository.call_args.args == (
+                pricing_snapshot_store.return_value,
+            ), "the instrumented repository must wrap the session-bound store"
 
             workflow_checkpoint_kwargs = workflow_checkpoint_store.call_args.kwargs
             assert workflow_checkpoint_kwargs["metrics"] is runtime.metrics, (

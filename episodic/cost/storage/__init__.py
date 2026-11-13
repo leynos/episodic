@@ -23,9 +23,11 @@ from .models import (
     RunPricingPinRecord,
 )
 from .pricing_snapshot_store import SqlAlchemyPricingSnapshotStore
+from .pricing_snapshot_telemetry import InstrumentedPricingSnapshotRepository
 
 __all__ = [
     "CostLedgerEntryRecord",
+    "InstrumentedPricingSnapshotRepository",
     "MeteringCounterEventRecord",
     "MeteringCounterRecord",
     "PricingSnapshotRecord",

@@ -23,6 +23,7 @@ EXPECTED_PRODUCTION_COST_GROUPS = {
     "episodic.cost.storage.metering": "outbound_adapter",
     "episodic.cost.storage.models": "outbound_adapter",
     "episodic.cost.storage.pricing_snapshot_store": "outbound_adapter",
+    "episodic.cost.storage.pricing_snapshot_telemetry": "outbound_adapter",
 }
 
 #: The package facade re-exports ports alongside the application recorder, so
@@ -94,6 +95,12 @@ def test_production_cost_v1_modules_keep_their_boundaries() -> None:
         )
         == "outbound_adapter"
     ), "pricing snapshot persistence belongs to the outbound adapter"
+    assert (
+        _production_hecate_group_for_module(
+            "episodic.cost.storage.pricing_snapshot_telemetry", groups
+        )
+        == "outbound_adapter"
+    ), "pricing snapshot telemetry is an adapter concern, not a domain one"
 
     group_by_name = {typ.cast("str", group["name"]): group for group in groups}
     directory_suffixes = {

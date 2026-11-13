@@ -14,8 +14,12 @@ from episodic.cost import (
     PricingSnapshotIntegrityError,
     PricingSnapshotNotFoundError,
 )
-from episodic.cost.storage import PricingSnapshotRecord, SqlAlchemyPricingSnapshotStore
-from episodic.observability import RecordingTracer
+from episodic.cost.storage import (
+    InstrumentedPricingSnapshotRepository,
+    PricingSnapshotRecord,
+    SqlAlchemyPricingSnapshotStore,
+)
+from episodic.observability import MonotonicClockPort, RecordingTracer
 from tests.fixtures.cost import v1_pricing_snapshot
 
 if typ.TYPE_CHECKING:
@@ -96,41 +100,62 @@ def _assert_bounded(metrics: _RecordingMetrics, snapshot_id: str) -> None:
         )
 
 
+def _instrumented(
+    session: AsyncSession,
+    *,
+    metrics: _RecordingMetrics,
+    tracer: RecordingTracer | None = None,
+    clock: MonotonicClockPort | None = None,
+) -> InstrumentedPricingSnapshotRepository:
+    """Wrap a bare store in the telemetry decorator the unit of work installs."""
+    return InstrumentedPricingSnapshotRepository(
+        SqlAlchemyPricingSnapshotStore(session),
+        metrics=metrics,
+        tracer=tracer,
+        clock=clock,
+    )
+
+
 @pytest.mark.asyncio
-async def test_ensure_snapshot_constructs_statement_before_persistence_timing(
+async def test_ensure_snapshot_times_the_whole_repository_call(
     session_factory: SessionFactory,
 ) -> None:
-    """Persistence timing excludes statement construction and stays at 500 ms."""
+    """One ensure reads the clock twice, enclosing statement construction."""
     from episodic.cost.storage import pricing_snapshot_store as store_module
 
     metrics = _RecordingMetrics()
     clock = mock.Mock(wraps=_SteppingClock())
     snapshot = v1_pricing_snapshot()
     original_builder = store_module._snapshot_insert_statement
+    readings_at_build: list[int] = []
 
-    def build_before_timing(
+    def build_inside_the_window(
         value: object,
         pricing_snapshot_id: object,
     ) -> Insert:
-        """Assert the measurement boundary before constructing the insert."""
-        clock.monotonic_seconds.assert_not_called()
+        """Record how much of the timing window elapsed before the build."""
+        readings_at_build.append(clock.monotonic_seconds.call_count)
         return original_builder(
             typ.cast("PricingSnapshot", value),
             typ.cast("PricingSnapshotId", pricing_snapshot_id),
         )
 
     async with session_factory() as session:
-        store = SqlAlchemyPricingSnapshotStore(session, metrics=metrics, clock=clock)
+        store = _instrumented(session, metrics=metrics, clock=clock)
         with mock.patch.object(
             store_module,
             "_snapshot_insert_statement",
-            side_effect=build_before_timing,
+            side_effect=build_inside_the_window,
         ) as builder:
             await store.ensure(snapshot)
 
     assert builder.call_count == 1, "the insert statement must be built once"
+    assert readings_at_build == [1], (
+        "timing must start before the statement is built, so the whole call is "
+        f"measured; saw {readings_at_build!r} prior readings"
+    )
     assert clock.monotonic_seconds.call_count == 2, (
-        "only persistence start and completion may read the clock"
+        "only the start and completion of the call may read the clock"
     )
     assert metrics.latencies == [
         (
@@ -151,7 +176,7 @@ async def test_ensure_snapshot_emits_persisted_and_reused(
     snapshot = v1_pricing_snapshot()
 
     async with session_factory() as session:
-        store = SqlAlchemyPricingSnapshotStore(
+        store = _instrumented(
             session,
             metrics=metrics,
             tracer=tracer,
@@ -204,8 +229,8 @@ async def test_ensure_snapshot_emits_integrity_on_a_conflict_without_a_row() -> 
     session.scalar.return_value = None
     tracer = RecordingTracer()
     metrics = _RecordingMetrics()
-    store = SqlAlchemyPricingSnapshotStore(
-        session,
+    store = InstrumentedPricingSnapshotRepository(
+        SqlAlchemyPricingSnapshotStore(session),
         metrics=metrics,
         tracer=tracer,
         clock=_SteppingClock(),
@@ -259,7 +284,7 @@ async def _exercise_read_outcomes(
     tracer = RecordingTracer()
     metrics = _RecordingMetrics()
     async with session_factory() as session:
-        store = SqlAlchemyPricingSnapshotStore(
+        store = _instrumented(
             session,
             metrics=metrics,
             tracer=tracer,
@@ -325,6 +350,9 @@ def _assert_read_spans(snapshot_id: PricingSnapshotId, tracer: RecordingTracer) 
     ], f"expected one span per read, got {tracer.spans!r}"
     assert spans[2].attributes["pricing_snapshot_id"] == str(snapshot_id), (
         "the tampered identifier belongs on the span"
+    )
+    assert spans[2].attributes["failure_category"] == "pricing_snapshot.tampered", (
+        "the tamper span must record its category"
     )
     for span in spans:
         assert set(span.attributes) <= _ALLOWED_LABEL_KEYS, (

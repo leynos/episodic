@@ -133,7 +133,19 @@ class FilePricingCatalogue:
         ------
         LookupError
             If no card matches the subject and is effective at the instant.
-        """
+        PricingCatalogueError
+            If a card on disk is malformed, has an unknown field, or duplicates
+            another card's subject and effective instant.
+        OSError
+            If the card directory or one of its cards cannot be read.
+
+        Notes
+        -----
+        The catalogue is loaded lazily on the first resolution, so a directory
+        that was healthy when the catalogue was constructed can still fail
+        here. Callers that start serving at boot should resolve once during
+        start-up to surface a broken card before the first request.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Documents exceptions propagated by the lazy loader.
         now = parse_instant(
             self._now() if at is None else at,
             error_message=_timestamp_timezone_error,
