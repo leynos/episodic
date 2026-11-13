@@ -364,7 +364,7 @@ Success is observable as follows:
   final milestone review covered 72 of 72 changed files with zero findings
   (`outcome: completed`). EP-M4 is complete.
 - [x] EP-M5: documentation, roadmap, and final gates. The pricing ADR is
-  `docs/adr/adr-028-content-addressed-pricing-snapshots.md`, status
+  `docs/adrs/adr-0028-content-addressed-pricing-snapshots.md`, status
   `Accepted on 2026-11-11`; it was renumbered from 024 because
   `adr-024-review-checkpoint-persistence.md` already held that number (see
   `Surprises & discoveries` and the decision log). ADR-015 gained an amendment
@@ -448,7 +448,7 @@ Success is observable as follows:
   branch was in flight; the original reconnoitre saw the directory ending at
   023. Impact: the pricing ADR is renumbered to 028 and every reference was
   updated. Lesson: an ADR number claimed in a plan is only a reservation that
-  upstream can invalidate, so recheck `docs/adr/` before the final index pass.
+  upstream can invalidate, so recheck `docs/adrs/` before the final index pass.
 - Observation: the migration-head revision `20261010_000013` is hard-coded in
   `tests/test_pricing_snapshot_constraint_migration.py:207`, and that file's
   offline test migrates to `head`. Impact: EP-M3 pins those tests to
@@ -931,6 +931,10 @@ Success is observable as follows:
 - Round 13 on `3b8bc866`: the CLI review completed with no findings, so no
   repair followed. The seven commit gates passed on the round-12 tree before
   that commit (`2252 passed, 3 skipped`).
+- Rebase onto `7e4704cf`: upstream renamed `docs/adr/` to `docs/adrs/` with
+  four-digit ADR numbers. The new ADR-028, this plan's references, and the
+  design document's accepted-record list now use the new directory and naming,
+  and the list keeps upstream's updated paths alongside ADR-028.
 - Lesson: a uniqueness constraint added by a migration is a merge instruction.
   The legacy table allowed rows that the new identity cannot distinguish, so
   the upgrade must decide which row survives and move every reference before
@@ -1042,13 +1046,13 @@ Read these before implementing; each entry says why.
 - `docs/episodic-podcast-generation-system-design.md` §"Cost accounting and
   budget enforcement" (from line 1476) and §"Data Model and Storage" (from line
   1626): the design this plan amends.
-- `docs/adr/adr-015-cost-accounting-ports-and-pricing-engine.md` (including
+- `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md` (including
   the 2026-10-10 addendum): current port and persistence decisions.
-- `docs/adr/adr-018-explicit-versioning-and-history-strategy.md`: the
+- `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`: the
   versioning rules this plan must follow.
-- `docs/adr/adr-014-hexagonal-architecture-enforcement.md` and
-  `docs/adr/adr-022-orchestration-architecture-enforcement.md`: Hecate groups;
-  ADR-022 is also the layout model for ADR-028.
+- `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md` and
+  `docs/adrs/adr-0022-orchestration-architecture-enforcement.md`: Hecate
+  groups; ADR-022 is also the layout model for ADR-028.
 - `docs/execplans/2-4-4-cost-accounting-and-usage-metering.md`: how the
   current cost code was built and tested.
 - `docs/cost-management-in-langgraph-agentic-systems.md`: cost-accounting
@@ -1312,12 +1316,12 @@ Purely structural, no behaviour change.
    `episodic.cost.ports._validate_currency_code` (`pyproject.toml`, near line
    641) to its new path; `_validate_usage_metrics` stays in `ports.py`. Add
    `episodic.cost.primitives` to `domain_ports`.
-3. Write `docs/adr/adr-028-content-addressed-pricing-snapshots.md` with status
+3. Write `docs/adrs/adr-0028-content-addressed-pricing-snapshots.md` with status
    `Proposed`, following the ADR template in
    `docs/documentation-style-guide.md` (Status, Date, Context and problem
    statement, Decision drivers, Requirements, Options considered, Decision
    outcome or proposed direction, Goals and non-goals, Consequences,
-   References; ADR-022 shows the heading style used in `docs/adr/`), recording
+   References; ADR-022 shows the heading style used in `docs/adrs/`), recording
    the decisions in this plan's `Decision log` and the v1 canonical form with
    placeholder vectors (filled in EP-M3).
 
