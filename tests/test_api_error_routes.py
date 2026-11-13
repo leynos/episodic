@@ -45,6 +45,95 @@ class _RouteCase:
     is_idempotent: bool = False
 
 
+def _failing_service(
+    exception: Exception,
+) -> cabc.Callable[..., cabc.Awaitable[typ.NoReturn]]:
+    """Build an async service replacement that raises one domain error."""
+
+    async def fail_service(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        """Raise the selected error from a resource service boundary."""
+        await asyncio.sleep(0)
+        raise exception
+
+    return fail_service
+
+
+async def _bypass_idempotency(
+    _uow_factory: object,
+    *,
+    context: object,
+    work: cabc.Callable[[], cabc.Awaitable[object]],
+) -> object:
+    """Run route work directly for error-boundary tests."""
+    del context
+    return await work()
+
+
+async def _parsed_upload_form(
+    *_args: object,
+    **_kwargs: object,
+) -> ParsedUpload:
+    """Return valid upload metadata so the service boundary is reached."""
+    await asyncio.sleep(0)
+    return ParsedUpload(
+        payload=b"content",
+        payload_sha256="sha256:unused-test-hash",
+        content_type="text/plain",
+        declared_size=7,
+        declared_sha256=None,
+        metadata={},
+    )
+
+
+def _patch_source_intake_route(
+    case: _RouteCase,
+    default_logger: mock.Mock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replace the route's service and unrelated I/O boundaries for one test."""
+    monkeypatch.setattr(
+        case.resource_module,
+        case.service_name,
+        _failing_service(case.exception),
+    )
+    monkeypatch.setattr(api_app, "log_error", default_logger)
+    monkeypatch.setattr(api_errors, "log_error", default_logger)
+    if case.is_idempotent:
+        monkeypatch.setattr(source_intake, "run_idempotent", _bypass_idempotency)
+    if case.method == "POST" and case.path == "/v1/uploads":
+        monkeypatch.setattr(source_intake, "parse_upload_form", _parsed_upload_form)
+
+
+def _source_intake_dependencies(
+    case: _RouteCase,
+    empty_uow_factory: EmptyUnitOfWorkFactory,
+    spy_logger: SpyLogger,
+) -> ApiDependencies:
+    """Build app dependencies with the test logger and required route ports."""
+    authorization = (
+        StaticBearerTokenAuthorization(
+            token=_AUTHORIZATION["Authorization"].removeprefix("Bearer "),
+            principal_id="route-test-principal",
+        )
+        if case.authenticated
+        else PermitAll()
+    )
+    return ApiDependencies(
+        uow_factory=empty_uow_factory,
+        authorization=authorization,
+        object_store=mock.Mock() if case.has_object_store else None,
+        unmapped_error_emitter=spy_logger,
+    )
+
+
+def _source_intake_headers(case: _RouteCase) -> dict[str, str]:
+    """Build the authenticated and idempotency headers required by a case."""
+    headers = dict(_AUTHORIZATION) if case.authenticated else {}
+    if case.is_idempotent:
+        headers["Idempotency-Key"] = "route-error-key"
+    return headers
+
+
 @pytest.mark.parametrize(
     "case",
     [
@@ -271,63 +360,12 @@ def test_source_intake_routes_use_the_configured_error_emitter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Each source-intake resource reaches the app's configured error port."""
-
-    async def fail_service(*_args: object, **_kwargs: object) -> typ.NoReturn:
-        """Raise the route case's error from its registered service."""
-        await asyncio.sleep(0)
-        raise case.exception
-
-    async def bypass_idempotency(
-        _uow_factory: object,
-        *,
-        context: object,
-        work: cabc.Callable[[], cabc.Awaitable[object]],
-    ) -> object:
-        """Run the route work while leaving idempotency outside this boundary test."""
-        del context
-        return await work()
-
     default_logger = mock.Mock()
-    monkeypatch.setattr(case.resource_module, case.service_name, fail_service)
-    monkeypatch.setattr(api_app, "log_error", default_logger)
-    monkeypatch.setattr(api_errors, "log_error", default_logger)
-    if case.is_idempotent:
-        monkeypatch.setattr(source_intake, "run_idempotent", bypass_idempotency)
-    if case.method == "POST" and case.path == "/v1/uploads":
-
-        async def parse_upload_form(*_args: object, **_kwargs: object) -> ParsedUpload:
-            """Provide valid upload metadata so the service boundary is reached."""
-            await asyncio.sleep(0)
-            return ParsedUpload(
-                payload=b"content",
-                payload_sha256="sha256:unused-test-hash",
-                content_type="text/plain",
-                declared_size=7,
-                declared_sha256=None,
-                metadata={},
-            )
-
-        monkeypatch.setattr(source_intake, "parse_upload_form", parse_upload_form)
-
-    authorization = (
-        StaticBearerTokenAuthorization(
-            token=_AUTHORIZATION["Authorization"].removeprefix("Bearer "),
-            principal_id="route-test-principal",
-        )
-        if case.authenticated
-        else PermitAll()
+    _patch_source_intake_route(case, default_logger, monkeypatch)
+    client = testing.TestClient(
+        create_app(_source_intake_dependencies(case, empty_uow_factory, spy_logger))
     )
-    dependencies = ApiDependencies(
-        uow_factory=empty_uow_factory,
-        authorization=authorization,
-        object_store=mock.Mock() if case.has_object_store else None,
-        unmapped_error_emitter=spy_logger,
-    )
-    client = testing.TestClient(create_app(dependencies))
-    request_headers = dict(_AUTHORIZATION) if case.authenticated else {}
-    if case.is_idempotent:
-        request_headers["Idempotency-Key"] = "route-error-key"
-
+    request_headers = _source_intake_headers(case)
     if case.method == "POST":
         response = client.simulate_post(
             case.path,
