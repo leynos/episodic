@@ -31,7 +31,7 @@ type ShutdownHook = cabc.Callable[[], cabc.Coroutine[None, None, None]]
 
 
 class UnmappedErrorEmitter(typ.Protocol):
-    """Narrow logging port used by unmapped API error mappers."""
+    """Narrow logging port used by the unmapped-error HTTP boundary."""
 
     def __call__(
         self,
@@ -91,9 +91,9 @@ class ApiDependencies:
     uow_factory : UowFactory
         Factory used to create canonical units of work.
     unmapped_error_emitter : UnmappedErrorEmitter | None
-        Optional logger callback injected into API error mappers. When omitted,
-        :func:`create_app` binds the production logging port at application
-        construction time.
+        Optional logger callback injected into the Falcon error serializer.
+        When omitted, :func:`create_app` binds the production logging port at
+        application construction time.
     """
 
     uow_factory: UowFactory

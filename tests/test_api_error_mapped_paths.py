@@ -49,7 +49,6 @@ def _map_profile_error(exc: Exception) -> falcon.HTTPError:
     """Map one profile/template error case."""
     return api_errors.map_profile_template_error(
         typ.cast("ProfileTemplateError", exc),
-        emit_error=_fail_if_logged,
     )
 
 
@@ -58,7 +57,6 @@ def _map_reference_error(exc: Exception) -> falcon.HTTPError:
     return api_errors.map_reference_error(
         typ.cast("ReferenceDocumentError", exc),
         context="reference-document",
-        emit_error=_fail_if_logged,
     )
 
 
@@ -66,7 +64,6 @@ def _map_source_intake_error(exc: Exception) -> falcon.HTTPError:
     """Map one source-intake error case."""
     return api_errors.map_source_intake_error(
         typ.cast("SourceIntakeError", exc),
-        emit_error=_fail_if_logged,
     )
 
 
@@ -211,6 +208,7 @@ def test_mapped_domain_errors_do_not_log(
         falcon_testing.create_req(),
         response,
         result,
+        emit_error=_fail_if_logged,
     )
 
 
@@ -233,7 +231,6 @@ def test_mapped_profile_errors_omit_untrusted_entity_ids(
     """Mapped profile errors do not return non-UUID identifiers to clients."""
     result = api_errors.map_profile_template_error(
         exception,
-        emit_error=_fail_if_logged,
     )
 
     assert typ.cast("typ.Any", result).envelope_details == {}, (
@@ -248,7 +245,6 @@ def test_mapped_profile_error_uses_safe_caller_entity_id() -> None:
 
     result = api_errors.map_profile_template_error(
         exception,
-        emit_error=_fail_if_logged,
         entity_id=caller_entity_id,
     )
 

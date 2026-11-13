@@ -9,7 +9,7 @@ Examples
 >>> from episodic.api.resources.series_profiles import SeriesProfilesResource
 >>> app.add_route(
 ...     "/v1/series-profiles",
-...     SeriesProfilesResource(uow_factory, emit_error),
+...     SeriesProfilesResource(uow_factory),
 ... )
 """
 

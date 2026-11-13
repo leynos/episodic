@@ -6,7 +6,9 @@ import uuid
 
 import falcon
 import pytest
+from falcon import testing as falcon_testing
 
+from episodic.api.errors import serialize_http_error
 from episodic.api.handlers import (
     CreateEntityRequest,
     GetEntityRequest,
@@ -23,7 +25,6 @@ from episodic.canonical.pagination import Pagination
 from episodic.canonical.profile_templates.types import ProfileTemplateError
 
 if typ.TYPE_CHECKING:
-    from episodic.api.dependencies import UnmappedErrorEmitter
     from tests.fixtures.api_errors import EmptyUnitOfWorkFactory, SpyLogger
 
 _ENTITY_ID = uuid.UUID("00000000-0000-0000-0000-000000000007")
@@ -60,7 +61,6 @@ def _serialize_history_entry(_entry: object) -> dict[str, object]:
 async def _run_handler(
     case: _HandlerCase,
     empty_uow_factory: EmptyUnitOfWorkFactory,
-    emit_error: UnmappedErrorEmitter,
 ) -> None:
     """Invoke one shared handler with a service that raises ``exc``."""
     exc = case.source_exception
@@ -73,7 +73,7 @@ async def _run_handler(
         await asyncio.sleep(0)
         raise exc
 
-    context = HandlerContext(empty_uow_factory, emit_error)
+    context = HandlerContext(empty_uow_factory)
 
     match case.name:
         case "get-entity":
@@ -129,12 +129,12 @@ async def _run_handler(
     "handler_name",
     ["get-entity", "get-history", "update-entity", "create-entity"],
 )
-def test_shared_handlers_emit_unmapped_errors_through_injected_port(
+def test_shared_handlers_defer_unmapped_error_logging_to_serializer(
     handler_name: str,
     spy_logger: SpyLogger,
     empty_uow_factory: EmptyUnitOfWorkFactory,
 ) -> None:
-    """Shared handlers pass the logging port to profile-error mappers."""
+    """Shared handlers map failures without owning the logging side-effect."""
     source_exception = _UnexpectedProfileTemplateError(
         "Service failure.",
         entity_id=str(_ENTITY_ID),
@@ -144,7 +144,6 @@ def test_shared_handlers_emit_unmapped_errors_through_injected_port(
             _run_handler(
                 _HandlerCase(handler_name, source_exception),
                 empty_uow_factory,
-                spy_logger,
             )
         )
 
@@ -155,5 +154,18 @@ def test_shared_handlers_emit_unmapped_errors_through_injected_port(
     assert envelope.envelope_details == {}, (
         "unmapped profile errors must not expose exception-derived details"
     )
-    assert len(spy_logger.calls) == 1, "unmapped mapper paths must log exactly once"
+    assert not spy_logger.calls, "handlers must not emit unmapped-error logs"
+    response = falcon.Response()
+    serialize_http_error(
+        falcon_testing.create_req(),
+        response,
+        raised_error.value,
+        emit_error=spy_logger,
+    )
+    assert response.media == {
+        "code": "internal_error",
+        "message": "Unexpected profile/template error.",
+        "details": {},
+    }, "the serializer must preserve the generic internal-error envelope"
+    assert len(spy_logger.calls) == 1, "the HTTP boundary must log exactly once"
     assert spy_logger.calls[0][0] == "ERROR", "unmapped paths must log at ERROR"

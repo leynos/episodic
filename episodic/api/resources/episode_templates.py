@@ -10,7 +10,7 @@ Examples
 >>> from episodic.api.resources.episode_templates import EpisodeTemplatesResource
 >>> app.add_route(
 ...     "/v1/episode-templates",
-...     EpisodeTemplatesResource(uow_factory, emit_error),
+...     EpisodeTemplatesResource(uow_factory),
 ... )
 """
 

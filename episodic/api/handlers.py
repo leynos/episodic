@@ -7,8 +7,7 @@ service dispatch, and Falcon HTTP error translation.
 
 Examples
 --------
->>> emit_error = ...  # injected by the API composition root
->>> context = HandlerContext(uow_factory=uow_factory, emit_error=emit_error)
+>>> context = HandlerContext(uow_factory=uow_factory)
 >>> request = GetEntityRequest(
 ...     context=context,
 ...     entity_id=profile_id,
@@ -51,24 +50,20 @@ if typ.TYPE_CHECKING:
         UpdateSeriesProfileRequest,
     )
 
-    from .dependencies import UnmappedErrorEmitter
     from .types import JsonPayload, UowFactory
 
 
 @dc.dataclass(frozen=True, slots=True)
 class HandlerContext:
-    """Shared runtime ports for the canonical API handler boundary.
+    """Shared runtime port for the canonical API handler boundary.
 
     Parameters
     ----------
     uow_factory : UowFactory
         Factory that creates unit-of-work instances.
-    emit_error : UnmappedErrorEmitter
-        Logging port passed to domain-error mappers.
     """
 
     uow_factory: UowFactory
-    emit_error: UnmappedErrorEmitter
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -78,7 +73,7 @@ class GetEntityRequest[EntityT]:
     Parameters
     ----------
     context : HandlerContext
-        Shared unit-of-work and logging ports.
+        Shared unit-of-work port.
     entity_id : str
         Raw entity identifier from the request path.
     id_field_name : str
@@ -104,7 +99,7 @@ async def handle_get_entity[EntityT](
     Parameters
     ----------
     request : GetEntityRequest[EntityT]
-        Handler inputs, service functions, and the injected logging port.
+        Handler inputs, service functions and the unit-of-work factory.
 
     Returns
     -------
@@ -130,7 +125,6 @@ async def handle_get_entity[EntityT](
     except ProfileTemplateError as exc:
         mapped_error = map_profile_template_error(
             exc,
-            emit_error=request.context.emit_error,
             entity_id=parsed_entity_id,
         )
         raise mapped_error from exc
@@ -188,7 +182,6 @@ async def handle_get_history[EntityT](
     except ProfileTemplateError as exc:
         mapped_error = map_profile_template_error(
             exc,
-            emit_error=request.context.emit_error,
             entity_id=parsed_entity_id,
         )
         raise mapped_error from exc
@@ -218,7 +211,6 @@ def _raise_mapped_update_error(
     *,
     entity_id: uuid.UUID,
     expected_revision: int | None,
-    emit_error: UnmappedErrorEmitter,
 ) -> typ.NoReturn:
     """Re-raise a domain update error as a typed envelope-aware Falcon error.
 
@@ -238,7 +230,6 @@ def _raise_mapped_update_error(
     """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # The mapper returns these concrete Falcon exceptions.
     raise map_profile_template_error(
         exc,
-        emit_error=emit_error,
         entity_id=entity_id,
         expected_revision=(
             expected_revision if isinstance(exc, RevisionConflictError) else None
@@ -253,7 +244,7 @@ class UpdateEntityRequest[EntityT]:
     Parameters
     ----------
     context : HandlerContext
-        Shared unit-of-work and logging ports.
+        Shared unit-of-work port.
     entity_id : str
         Raw entity identifier from the request path.
     id_field_name : str
@@ -291,7 +282,7 @@ async def handle_update_entity[EntityT](
     Parameters
     ----------
     request : UpdateEntityRequest[EntityT]
-        Parsed inputs, service collaborators, and the injected logging port.
+        Parsed inputs and service collaborators.
 
     Returns
     -------
@@ -323,7 +314,6 @@ async def handle_update_entity[EntityT](
             exc,
             entity_id=parsed_entity_id,
             expected_revision=update_request.expected_revision,
-            emit_error=request.context.emit_error,
         )
     return request.serializer_fn(entity, revision), falcon.HTTP_200
 
@@ -335,7 +325,7 @@ class CreateEntityRequest[EntityT]:
     Parameters
     ----------
     context : HandlerContext
-        Shared unit-of-work and logging ports.
+        Shared unit-of-work port.
     payload : JsonPayload
         Parsed request payload.
     required_fields : tuple[str, ...]
@@ -364,7 +354,7 @@ async def handle_create_entity[EntityT](
     Parameters
     ----------
     request : CreateEntityRequest[EntityT]
-        Parsed payload, service collaborators, and the injected logging port.
+        Parsed payload and service collaborators.
 
     Returns
     -------
@@ -389,7 +379,6 @@ async def handle_create_entity[EntityT](
     except ProfileTemplateError as exc:
         raise map_profile_template_error(
             exc,
-            emit_error=request.context.emit_error,
         ) from exc
     except LookupError as exc:
         raise falcon.HTTPNotFound(description=str(exc)) from exc

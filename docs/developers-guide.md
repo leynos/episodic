@@ -773,8 +773,8 @@ REST error contract:
   use `conflict`.
 - `ApiDependencies.unmapped_error_emitter` optionally supplies the synchronous
   logging port for unmapped API failures. When omitted, `create_app` binds the
-  production logger and injects it into the mappers. Direct mapper callers may
-  omit `emit_error` and use the mapper module's logging port.
+  production logger to the shared Falcon error serializer. Mappers return a
+  generic HTTP 500 carrying detached diagnostic metadata; they do not emit it.
 - Shared GET and history resource bases build typed handler requests and use a
   private response helper to apply each handler's `(media, status)` result.
   Keep that helper local to `resources/base.py`; concrete resources retain
@@ -783,20 +783,18 @@ REST error contract:
 The handler boundary in `episodic/api/handlers.py` uses frozen, slotted request
 objects: `GetEntityRequest`, `HistoryRequest`, `UpdateEntityRequest`, and
 `CreateEntityRequest`. Each request carries the endpoint inputs and its service
-and serializer callbacks alongside a `HandlerContext`. The context groups the
-unit-of-work factory with the `UnmappedErrorEmitter` logging port, which lets
-the handler pass the same mapper boundary through without importing a concrete
-logger. Handlers return a `(JsonPayload, Falcon status)` pair; resource methods
-assign those values to `resp.media` and `resp.status`. Shared GET and history
-resources use `_apply_handler_result` for that assignment, while create and
-update resources assign the pair directly.
+and serializer callbacks alongside a `HandlerContext`, which contains only the
+unit-of-work factory. Handlers return a `(JsonPayload, Falcon status)` pair;
+resource methods assign those values to `resp.media` and `resp.status`. Shared
+GET and history resources use `_apply_handler_result` for that assignment,
+while create and update resources assign the pair directly.
 
-`GenerationRunsResource` receives its optional launcher, error emitter, clock,
-UUID factory, source-count limit, and tracer through
-`GenerationRunsResourceConfig`. The API composition root creates that config
-from `ApiDependencies` when registering the generation-run routes. Keep the
-construction seam in the config so tests can provide deterministic clocks and
-identifiers without changing resource behaviour.
+`GenerationRunsResource` receives its optional launcher, clock, UUID factory,
+source-count limit, and tracer through `GenerationRunsResourceConfig`. The API
+composition root creates that config from `ApiDependencies` when registering
+the generation-run routes. Keep the construction seam in the config so tests
+can provide deterministic clocks and identifiers without changing resource
+behaviour.
 
 REST pagination and filter contract:
 
@@ -1547,14 +1545,14 @@ Shared Falcon envelope construction and serialization live in
 `episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
 exceptions onto that contract.
 
-For an unmapped domain exception, each API error mapper emits one safe
-diagnostic through its injected logging port before returning the generic HTTP
-500 error. `create_app` passes `ApiDependencies.unmapped_error_emitter` to the
-mapper call paths and binds the production `episodic.logging` port when no
-callback is injected. Direct mapper calls may omit the optional `emit_error`
-argument and use the same logging port. Query handlers and REST resource
-methods do not emit logs themselves; the mapper owns the diagnostic at the
-error-mapping boundary.
+For an unmapped domain exception, each API error mapper returns the generic
+HTTP 500 error with detached diagnostic metadata attached privately to the
+Falcon error. The shared Falcon error serializer emits that diagnostic through
+`ApiDependencies.unmapped_error_emitter`; `create_app` binds the production
+`episodic.logging` port there when no callback is injected. Query handlers and
+REST resource methods do not receive the logging port or emit logs. Keeping
+emission in the serializer gives every route the same explicit HTTP error
+boundary and leaves expected mapped outcomes side-effect free.
 
 The diagnostic contains detached `exc_info` with a synthetic redacted exception
 and no live traceback. Sanitized source-frame metadata records the filename,
@@ -1571,8 +1569,8 @@ planned in roadmap item 4.1.3 and are not yet guaranteed. See the
 of the system design for the request-correlation boundary.
 
 The reference-document resource module keeps its fixed diagnostic context in a
-private mapper helper shared by its routes. The application composition root
-injects the same logging port into each mapper path.
+private mapper helper shared by its routes. The mapper attaches the diagnostic
+to the generic error; the shared serializer owns emission for every resource.
 
 ### Internal service-module decomposition
 
@@ -2006,9 +2004,11 @@ database client. See
   a second command group.
 - `main` accepts a `CliSinks` keyword and forwards it through `build_app` into
   `CliRuntime`. `CliSinks` groups the tracer, metrics sink, and monotonic clock
-  so the entry point's parameter list stays bounded as sinks are added;
-  production leaves it unset, so the no-op adapters apply and instrumentation
-  changes no output or exit code. `QaApiClient.list_evaluations` opens one
+  so the entry point's parameter list stays bounded as sinks are added. When
+  `sinks` is unset, `main` builds production sinks from `EPISODIC_LOG_LEVEL`.
+  At the default `WARNING` level, the no-op adapters apply, so instrumentation
+  changes no output or exit code. At `INFO`, `DEBUG`, or `TRACE`, records go to
+  standard error. `QaApiClient.list_evaluations` opens one
   `cli.qa_evaluations.list` span with a bounded outcome (`success`, `api_error`,
   `rate_limited`, `transport_failure`, `invalid_url`) and emits its latency;
   tests inject `CliSinks` built from `RecordingTracer`, `RecordingMetrics`, and

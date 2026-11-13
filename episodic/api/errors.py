@@ -1,9 +1,9 @@
 """Map domain exceptions to stable Falcon error envelopes.
 
-Unmapped failures are logged through an injected port before their generic
-HTTP ``500`` is returned. Records use synthetic redacted exceptions and
-sanitized source metadata; profile/template records include only known codes
-and UUID identifiers.
+Unmapped failures carry detached diagnostic metadata to the configured Falcon
+error serializer, which emits it at the HTTP error boundary. Records use
+synthetic redacted exceptions and sanitized source metadata; profile/template
+records include only known codes and UUID identifiers.
 """
 
 import collections.abc as cabc
@@ -44,8 +44,10 @@ from ._error_logging import (
 from .error_envelopes import (
     ErrorEnvelope,
     http_error,
-    serialize_http_error,
     validation_error,
+)
+from .error_envelopes import (
+    serialize_http_error as _serialize_http_error,
 )
 
 if typ.TYPE_CHECKING:
@@ -68,19 +70,59 @@ __all__ = (
 logger = get_logger(__name__)
 
 
-def _emit_mapper_diagnostic(
+def _emit_serializer_diagnostic(
     emit_error: UnmappedErrorEmitter | None,
     diagnostic: _UnmappedErrorDiagnostic,
 ) -> None:
-    """Emit a mapper diagnostic through its injected or default logging port."""
+    """Emit a detached diagnostic through the configured logging port."""
     emitter = partial(log_error, logger) if emit_error is None else emit_error
     _emit_unmapped_error_diagnostic(emitter, diagnostic)
+
+
+def _unmapped_http_error(
+    description: str,
+    diagnostic: _UnmappedErrorDiagnostic,
+) -> falcon.HTTPError:
+    """Attach a private diagnostic to the generic client-facing error."""
+    error = http_error(
+        falcon.HTTPInternalServerError(description=description),
+        code="internal_error",
+        details={},
+    )
+    typ.cast("typ.Any", error).unmapped_error_diagnostic = diagnostic
+    return error
+
+
+def serialize_http_error(
+    req: falcon.Request,
+    resp: falcon.Response,
+    exc: falcon.HTTPError,
+    *,
+    emit_error: UnmappedErrorEmitter | None = None,
+) -> None:
+    """Emit attached diagnostics, then serialize the stable HTTP envelope.
+
+    Parameters
+    ----------
+    req : falcon.Request
+        Incoming request required by Falcon's serializer callback contract.
+    resp : falcon.Response
+        Response to populate with the stable error envelope.
+    exc : falcon.HTTPError
+        Error raised by a resource, hook, or middleware component.
+    emit_error : UnmappedErrorEmitter | None, optional
+        Logging port for unmapped-domain diagnostics. The module logging port
+        is used when the application does not inject one.
+    """
+    diagnostic = getattr(exc, "unmapped_error_diagnostic", None)
+    if isinstance(diagnostic, _UnmappedErrorDiagnostic):
+        _emit_serializer_diagnostic(emit_error, diagnostic)
+    _serialize_http_error(req, resp, exc)
 
 
 def map_profile_template_error(
     exc: ProfileTemplateError,
     *,
-    emit_error: UnmappedErrorEmitter | None = None,
     entity_id: object | None = None,
     expected_revision: int | None = None,
 ) -> falcon.HTTPError:
@@ -90,9 +132,6 @@ def map_profile_template_error(
     ----------
     exc : ProfileTemplateError
         Domain error raised by profile/template services.
-    emit_error : UnmappedErrorEmitter | None, optional
-        Logging-port callback for credential-safe unmapped-error diagnostics.
-        The module logging port is used when no callback is supplied.
     entity_id : object | None
         Optional entity identifier to use when the exception does not carry a
         safe identifier.
@@ -106,12 +145,8 @@ def map_profile_template_error(
 
     Examples
     --------
-    >>> from functools import partial
-    >>> from episodic.logging import get_logger, log_error
-    >>> emit_error = partial(log_error, get_logger("api-errors.example"))
     >>> map_profile_template_error(
     ...     EntityNotFoundError("Profile not found."),
-    ...     emit_error=emit_error,
     ... )
     """
     safe_entity_id = _safe_profile_template_entity_id(exc.entity_id)
@@ -141,13 +176,9 @@ def map_profile_template_error(
                 exc,
                 log_entity_id,
             )
-            _emit_mapper_diagnostic(emit_error, diagnostic)
-            return http_error(
-                falcon.HTTPInternalServerError(
-                    description="Unexpected profile/template error."
-                ),
-                code="internal_error",
-                details={},
+            return _unmapped_http_error(
+                "Unexpected profile/template error.",
+                diagnostic,
             )
 
 
@@ -155,7 +186,6 @@ def map_reference_error(
     exc: ReferenceDocumentError,
     *,
     context: str,
-    emit_error: UnmappedErrorEmitter | None = None,
 ) -> falcon.HTTPError:
     """Map reusable reference-document domain errors to Falcon HTTP errors.
 
@@ -165,9 +195,6 @@ def map_reference_error(
         Domain error raised by reusable-reference services.
     context : str
         Short context label used for unexpected internal-error messages.
-    emit_error : UnmappedErrorEmitter | None, optional
-        Logging-port callback for credential-safe unmapped-error diagnostics.
-        The module logging port is used when no callback is supplied.
 
     Returns
     -------
@@ -177,16 +204,12 @@ def map_reference_error(
 
     Examples
     --------
-    >>> from functools import partial
-    >>> from episodic.logging import get_logger, log_error
-    >>> emit_error = partial(log_error, get_logger("api-errors.example"))
     >>> try:
     ...     raise ReferenceValidationError("Invalid reference document.")
     ... except ReferenceDocumentError as exc:
     ...     raise map_reference_error(
     ...         exc,
     ...         context="reference-document",
-    ...         emit_error=emit_error,
     ...     ) from exc
     """
     match exc:
@@ -217,17 +240,11 @@ def map_reference_error(
         context,
         type(exc).__name__,
     )
-    _emit_mapper_diagnostic(emit_error, diagnostic)
-    return http_error(
-        falcon.HTTPInternalServerError(description=msg),
-        code="internal_error",
-    )
+    return _unmapped_http_error(msg, diagnostic)
 
 
 def map_source_intake_error(
     exc: SourceIntakeError,
-    *,
-    emit_error: UnmappedErrorEmitter | None = None,
 ) -> falcon.HTTPError:
     """Map source-intake errors to Falcon errors with safe diagnostics.
 
@@ -235,9 +252,6 @@ def map_source_intake_error(
     ----------
     exc : SourceIntakeError
         Error raised by a source-intake service.
-    emit_error : UnmappedErrorEmitter | None, optional
-        Logging-port callback for credential-safe unmapped-error diagnostics.
-        The module logging port is used when no callback is supplied.
 
     Returns
     -------
@@ -246,15 +260,11 @@ def map_source_intake_error(
 
     Examples
     --------
-    >>> from functools import partial
-    >>> from episodic.logging import get_logger, log_error
-    >>> emit_error = partial(log_error, get_logger("api-errors.example"))
     >>> try:
     ...     raise UploadNotReadyError("Upload is not ready.")
     ... except SourceIntakeError as exc:
     ...     raise map_source_intake_error(
     ...         exc,
-    ...         emit_error=emit_error,
     ...     ) from exc
     """
     mapping = _source_intake_error_mapping()
@@ -266,10 +276,9 @@ def map_source_intake_error(
         "Unmapped source-intake error: type=%s",
         type(exc).__name__,
     )
-    _emit_mapper_diagnostic(emit_error, diagnostic)
-    return http_error(
-        falcon.HTTPInternalServerError(description="Unexpected source-intake error."),
-        code="internal_error",
+    return _unmapped_http_error(
+        "Unexpected source-intake error.",
+        diagnostic,
     )
 
 

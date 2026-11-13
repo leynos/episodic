@@ -25,16 +25,6 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
-def _discard_error_log(
-    _template: str,
-    /,
-    *_args: object,
-    exc_info: object | None = None,
-) -> None:
-    """Ignore diagnostics in a test that exercises only ID and clock seams."""
-    del _args, exc_info
-
-
 @pytest.mark.asyncio
 async def test_generation_run_resource_uses_injected_factories(
     session_factory: async_sessionmaker[AsyncSession],
@@ -61,7 +51,6 @@ async def test_generation_run_resource_uses_injected_factories(
     resource = GenerationRunsResource(
         dependencies.uow_factory,
         GenerationRunsResourceConfig(
-            emit_error=_discard_error_log,
             launcher=RecordingLauncher(),
             clock=lambda: now,
             uuid_factory=iter(ids).__next__,

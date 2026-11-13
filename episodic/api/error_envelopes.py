@@ -128,10 +128,11 @@ def serialize_http_error(
     Wired through :meth:`falcon.asgi.App.set_error_serializer`. Falcon's
     default error handler sets ``resp.status`` from ``exc.status`` before
     invoking the serializer, so this function only needs to populate
-    ``resp.media`` with the ``{code, message, details}`` envelope. Unmapped
-    domain errors are logged by their mappers before the HTTP error reaches
-    serialization. Falcon accepts both sync and async serializers; a sync
-    function keeps the body free of unnecessary coroutine machinery.
+    ``resp.media`` with the ``{code, message, details}`` envelope. The API
+    serializer wrapper emits any detached unmapped-domain diagnostic before
+    calling this envelope serializer. Falcon accepts both sync and async
+    serializers; a sync function keeps the body free of unnecessary coroutine
+    machinery.
 
     Parameters
     ----------

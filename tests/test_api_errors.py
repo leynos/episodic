@@ -18,7 +18,6 @@ if typ.TYPE_CHECKING:
 
     from syrupy.assertion import SnapshotAssertion
 
-    from episodic.api.dependencies import UnmappedErrorEmitter
     from tests.fixtures.api_errors import SpyLogger
 
 _TEST_CREDENTIAL = "test-only-secret-marker"
@@ -125,7 +124,7 @@ class _UnmappedMapperCase:
     """Describe one error mapper's unmapped fallback contract."""
 
     exception: Exception
-    mapper: cabc.Callable[[Exception, UnmappedErrorEmitter], falcon.HTTPError]
+    mapper: cabc.Callable[[Exception], falcon.HTTPError]
     expected_message: str
 
 
@@ -177,9 +176,8 @@ def _stable_mapper_snapshot(
                     "Unexpected profile/template failure: " + _TEST_CREDENTIAL,
                     entity_id=_TEST_ENTITY_ID,
                 ),
-                lambda exc, emit_error: api_errors.map_profile_template_error(
+                lambda exc: api_errors.map_profile_template_error(
                     typ.cast("ProfileTemplateError", exc),
-                    emit_error=emit_error,
                 ),
                 (
                     "Unmapped profile/template error: "
@@ -195,10 +193,9 @@ def _stable_mapper_snapshot(
                 _UnexpectedReferenceDocumentError(
                     "Unexpected reference failure: " + _TEST_CREDENTIAL
                 ),
-                lambda exc, emit_error: api_errors.map_reference_error(
+                lambda exc: api_errors.map_reference_error(
                     typ.cast("ReferenceDocumentError", exc),
                     context="reference-document",
-                    emit_error=emit_error,
                 ),
                 (
                     "Unmapped reference error: "
@@ -212,9 +209,8 @@ def _stable_mapper_snapshot(
                 _UnexpectedSourceIntakeError(
                     "Unexpected source-intake failure: " + _TEST_CREDENTIAL
                 ),
-                lambda exc, emit_error: api_errors.map_source_intake_error(
+                lambda exc: api_errors.map_source_intake_error(
                     typ.cast("SourceIntakeError", exc),
-                    emit_error=emit_error,
                 ),
                 "Unmapped source-intake error: type=_UnexpectedSourceIntakeError",
             ),
@@ -222,12 +218,12 @@ def _stable_mapper_snapshot(
         ),
     ],
 )
-def test_unmapped_error_mappers_log_and_return_internal_error(
+def test_unmapped_error_mappers_defer_logging_to_serializer(
     case: _UnmappedMapperCase,
     spy_logger: SpyLogger,
     snapshot: SnapshotAssertion,
 ) -> None:
-    """Mappers emit detached diagnostics through their injected port."""
+    """Mappers attach diagnostics for the HTTP serializer to emit."""
 
     def raise_case_exception() -> None:
         """Raise the case error in the mapper's handled context."""
@@ -240,16 +236,20 @@ def test_unmapped_error_mappers_log_and_return_internal_error(
         ReferenceDocumentError,
         SourceIntakeError,
     ) as raised:
-        result = case.mapper(
-            raised,
-            spy_logger,
-        )
+        result = case.mapper(raised)
 
     assert isinstance(result, falcon.HTTPInternalServerError), (
         "unmapped domain errors must return HTTP 500"
     )
     assert _envelope_code(result) == "internal_error", (
         "unmapped domain errors must use the internal-error envelope"
+    )
+    assert not spy_logger.calls, "mappers must not emit logging side-effects"
+    api_errors.serialize_http_error(
+        falcon_testing.create_req(),
+        falcon.Response(),
+        result,
+        emit_error=spy_logger,
     )
     _assert_spy_logger_call(spy_logger, case.exception, case.expected_message)
     _assert_detached_exception_info_logged(spy_logger, case.exception)
@@ -278,7 +278,6 @@ def test_unmapped_profile_error_response_redacts_exception_text(
     except ProfileTemplateError as raised:
         mapped_error = api_errors.map_profile_template_error(
             raised,
-            emit_error=spy_logger,
         )
 
     response = falcon.Response()
@@ -286,6 +285,7 @@ def test_unmapped_profile_error_response_redacts_exception_text(
         falcon_testing.create_req(),
         response,
         mapped_error,
+        emit_error=spy_logger,
     )
 
     assert response.media == {
@@ -307,10 +307,10 @@ def test_unmapped_profile_error_response_redacts_exception_text(
     )
 
 
-def test_unmapped_mapper_emits_before_returning_error(
+def test_unmapped_mapper_defers_error_log_until_serialization(
     spy_logger: SpyLogger,
 ) -> None:
-    """An unmapped mapper call emits through its injected logging port."""
+    """An unmapped mapper leaves the emission to the HTTP error boundary."""
     exc = _UnexpectedSourceIntakeError(
         "Unexpected source-intake failure: " + _TEST_CREDENTIAL
     )
@@ -320,11 +320,17 @@ def test_unmapped_mapper_emits_before_returning_error(
     except SourceIntakeError as raised:
         mapped_error = api_errors.map_source_intake_error(
             raised,
-            emit_error=spy_logger,
         )
 
     assert isinstance(mapped_error, falcon.HTTPInternalServerError), (
         "unmapped mapper calls must produce a generic HTTP 500"
+    )
+    assert not spy_logger.calls, "mapping an error must not emit a log record"
+    api_errors.serialize_http_error(
+        falcon_testing.create_req(),
+        falcon.Response(),
+        mapped_error,
+        emit_error=spy_logger,
     )
     _assert_spy_logger_call(
         spy_logger,

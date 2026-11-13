@@ -3,8 +3,10 @@
 This package exposes route adapter classes that translate Falcon request/
 response handling into calls to canonical profile/template services.
 
-Resource modules deliberately add no per-handler logs. Request-level logging
-and correlation belong to the roadmap item 4.1.3 correlation middleware.
+Resource modules deliberately add no per-handler logs. Unmapped domain errors
+carry detached diagnostics to the shared Falcon error serializer, where the
+configured logging port emits one ERROR record. Request-level correlation
+belongs to the roadmap item 4.1.3 middleware.
 
 Utilities provided
 ------------------
@@ -31,8 +33,8 @@ Utilities provided
 Examples
 --------
 >>> from episodic.api.resources import SeriesProfilesResource, EpisodeTemplatesResource
->>> api.add_route("/profiles", SeriesProfilesResource(uow_factory, emit_error))
->>> api.add_route("/templates", EpisodeTemplatesResource(uow_factory, emit_error))
+>>> api.add_route("/profiles", SeriesProfilesResource(uow_factory))
+>>> api.add_route("/templates", EpisodeTemplatesResource(uow_factory))
 """
 
 from .base import _GetHistoryResourceBase, _GetResourceBase

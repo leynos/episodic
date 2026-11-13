@@ -173,8 +173,8 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     emit_error = dependencies.unmapped_error_emitter
     if emit_error is None:
         emit_error = partial(log_error, logger)
-    app.set_error_serializer(serialize_http_error)
+    app.set_error_serializer(partial(serialize_http_error, emit_error=emit_error))
 
-    _register_api_routes(app, dependencies, emit_error)
+    _register_api_routes(app, dependencies)
 
     return app

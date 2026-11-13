@@ -49,7 +49,6 @@ from episodic.observability import NoopTracer
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from episodic.api.dependencies import UnmappedErrorEmitter
     from episodic.api.types import UowFactory
     from episodic.generation.launcher import GenerationRunLauncher
     from episodic.observability import SpanHandle, TracerPort
@@ -83,8 +82,6 @@ class GenerationRunsResourceConfig:
 
     Parameters
     ----------
-    emit_error : UnmappedErrorEmitter
-        Logging port used by the source-intake error mapper.
     launcher : GenerationRunLauncher | None
         Optional launcher that schedules detached generation work.
     clock : Clock
@@ -97,7 +94,6 @@ class GenerationRunsResourceConfig:
         Optional tracing port used by the resource.
     """
 
-    emit_error: UnmappedErrorEmitter
     launcher: GenerationRunLauncher | None
     clock: Clock = _utc_now
     uuid_factory: UuidFactory = _uuid7
@@ -124,7 +120,6 @@ class GenerationRunsResource:
     ) -> None:
         """Store the unit-of-work factory, launcher, injected seams and tracer."""
         self._uow_factory = uow_factory
-        self._emit_error = config.emit_error
         self._launcher = config.launcher
         self._clock = config.clock
         self._uuid_factory = config.uuid_factory
@@ -292,7 +287,6 @@ class GenerationRunsResource:
             except SourceIntakeError as exc:
                 raise map_source_intake_error(
                     exc,
-                    emit_error=self._emit_error,
                 ) from exc
             except DraftScriptPersistenceError as exc:
                 raise _generation_input_error(str(exc)) from exc

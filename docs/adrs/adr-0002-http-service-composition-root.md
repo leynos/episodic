@@ -81,6 +81,17 @@ from environment and database construction; it installs middleware and the
 error serializer before delegating route registration. This records a later
 module decomposition without changing the accepted composition-root decision.
 
+## Implementation addendum (2026-11-13)
+
+Unmapped API error mappers now attach detached diagnostic metadata to their
+generic Falcon 500 errors instead of emitting logs during mapping. The shared
+Falcon error serializer emits the diagnostic through the optional
+`ApiDependencies.unmapped_error_emitter`, which the composition root binds to
+the production logging port by default. Handler contexts and resource state no
+longer carry that port. This keeps query handlers and resource methods free of
+logging side-effects while preserving one operator-visible record per unmapped
+API error.
+
 ## References
 
 - `docs/execplans/1-5-1-scaffold-falcon-http-services-on-granian.md`

@@ -8,8 +8,8 @@ while the base classes handle payload validation and shared handler dispatch.
 Examples
 --------
 >>> class MyEntityResource(_GetResourceBase): ...
->>> resource = MyEntityResource(uow_factory, emit_error)
->>> # The shared handler receives the mapper logging port from its resource.
+>>> resource = MyEntityResource(uow_factory)
+>>> # The shared handler receives only the unit-of-work factory.
 """
 
 import collections.abc as cabc
@@ -41,7 +41,6 @@ from episodic.canonical.profile_templates import (
 if typ.TYPE_CHECKING:
     import falcon
 
-    from episodic.api.dependencies import UnmappedErrorEmitter
     from episodic.api.types import UowFactory
 
 
@@ -90,11 +89,10 @@ class _ResourceBase(ABC):
     def __init__(
         self,
         uow_factory: UowFactory,
-        emit_error: UnmappedErrorEmitter,
     ) -> None:
         """Store the unit-of-work factory for the resource's handlers."""
         self._uow_factory = uow_factory
-        self._handler_context = HandlerContext(uow_factory, emit_error)
+        self._handler_context = HandlerContext(uow_factory)
 
     @staticmethod
     @abstractmethod
