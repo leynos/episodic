@@ -224,13 +224,22 @@ class CostLedgerPort(typ.Protocol):
 class PricingCataloguePort(typ.Protocol):
     """Port for resolving immutable pricing snapshots."""
 
-    async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
+    async def resolve(
+        self,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
+    ) -> PricingSnapshot:
         """Resolve the pricing snapshot for a priced subject.
 
         Parameters
         ----------
         subject : PricingSubject
             Service kind, provider, model, and operation to price.
+        at : str or None, optional
+            ISO-8601 instant to resolve at. Defaults to the current time; a
+            recorded call passes the instant it was captured so a later rate
+            change cannot reprice it.
 
         Returns
         -------
@@ -246,9 +255,10 @@ class PricingCataloguePort(typ.Protocol):
 
         Notes
         -----
-        Implementations must return the snapshot applicable to the subject.
-        A snapshot is effective-dated, not billing-period-scoped, so the same
-        card keeps pricing later periods until a newer one takes effect.
+        Implementations must return the snapshot applicable to the subject at
+        ``at``. A snapshot is effective-dated, not billing-period-scoped, so
+        the same card keeps pricing later periods until a newer one takes
+        effect.
         """
         raise NotImplementedError
 

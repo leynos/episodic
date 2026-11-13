@@ -36,8 +36,14 @@ class _RecordingCatalogue:
     snapshot: PricingSnapshot
     subjects: list[PricingSubject] = dc.field(default_factory=list)
 
-    async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
+    async def resolve(
+        self,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
+    ) -> PricingSnapshot:
         """Capture the subject and return a snapshot that prices it."""
+        del at
         self.subjects.append(subject)
         return dc.replace(
             self.snapshot,

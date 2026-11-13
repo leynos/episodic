@@ -73,9 +73,14 @@ class _SingleSnapshotCatalogue:
 
     snapshot: PricingSnapshot
 
-    async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
+    async def resolve(
+        self,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
+    ) -> PricingSnapshot:
         """Return the fixture snapshot for any lookup."""
-        _ = subject
+        del subject, at
         return self.snapshot
 
 

@@ -126,6 +126,8 @@ class CostRecorder:
     async def _resolve_pricing_snapshot(
         self,
         subject: PricingSubject,
+        *,
+        at: str | None = None,
     ) -> PricingSnapshot:
         """Resolve the snapshot that a run should use for this subject.
 
@@ -133,13 +135,16 @@ class CostRecorder:
         ----------
         subject : PricingSubject
             Service kind, provider, model, and operation to price.
+        at : str or None, optional
+            ISO-8601 instant the call was captured at. Defaults to now, which
+            is correct when pinning a run before its calls are made.
 
         Returns
         -------
         PricingSnapshot
             Immutable snapshot that should be pinned for the run.
         """
-        return await self.pricing_catalogue.resolve(subject)
+        return await self.pricing_catalogue.resolve(subject, at=at)
 
     async def pin_run_pricing(
         self,
@@ -247,7 +252,12 @@ class CostRecorder:
                 )
                 raise PricingSnapshotIntegrityError(msg)
             return pinned, pinned_snapshot_id
-        snapshot = await self._resolve_pricing_snapshot(self._record_subject(record))
+        # Resolve at the instant the call was captured, not at wall-clock now:
+        # a card that became effective in between must not reprice this call.
+        snapshot = await self._resolve_pricing_snapshot(
+            self._record_subject(record),
+            at=record.recorded_at,
+        )
         # Unpinned calls must persist the snapshot before the ledger row
         # references it; pinned calls skip this because the pin's foreign key
         # already guarantees the stored row exists.

@@ -74,10 +74,17 @@ class _DriftingCatalogue:
     """Catalogue fake that always resolves the latest authored snapshot."""
 
     latest_snapshot: PricingSnapshot
+    resolved_at: list[str | None] = dc.field(default_factory=list)
 
-    async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
-        """Return the latest resolvable snapshot."""
-        _ = subject
+    async def resolve(
+        self,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
+    ) -> PricingSnapshot:
+        """Return the latest resolvable snapshot, recording the cutoff."""
+        del subject
+        self.resolved_at.append(at)
         return self.latest_snapshot
 
 
@@ -171,6 +178,25 @@ async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> N
     assert ledger.recorded_call.pricing_snapshot_id == surrogate_snapshot_id(
         latest_snapshot
     ), "the ledger row must reference the persisted snapshot"
+
+
+@pytest.mark.asyncio
+async def test_unpinned_call_resolves_at_its_recorded_instant() -> None:
+    """A later rate change must not reprice a call captured earlier."""
+    latest_snapshot = _snapshot(input_token_rate=1_000_000)
+    catalogue = _DriftingCatalogue(latest_snapshot=latest_snapshot)
+    recorder = CostRecorder(
+        ledger=RecordingLedger(pinned_snapshot_id=None),
+        snapshots=RecordingSnapshots(snapshot=latest_snapshot),
+        pricing_catalogue=catalogue,
+        pricing_engine=PricingEngine(),
+    )
+
+    await recorder.record_provider_call(_provider_call_record())
+
+    assert catalogue.resolved_at == ["2026-06-04T00:00:00Z"], (
+        "an unpinned call must resolve at the instant it was captured"
+    )
 
 
 @pytest.mark.asyncio

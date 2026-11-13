@@ -108,13 +108,21 @@ class FilePricingCatalogue:
         catalogue._load_snapshots()
         return catalogue
 
-    async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
+    async def resolve(
+        self,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
+    ) -> PricingSnapshot:
         """Return the latest effective snapshot for a priced subject.
 
         Parameters
         ----------
         subject : PricingSubject
             Service kind, provider, model, and operation to price.
+        at : str or None, optional
+            ISO-8601 instant to resolve at. Defaults to the catalogue clock; a
+            recorded call passes the instant it was captured.
 
         Returns
         -------
@@ -124,10 +132,10 @@ class FilePricingCatalogue:
         Raises
         ------
         LookupError
-            If no card matches the subject and is effective at ``now``.
+            If no card matches the subject and is effective at the instant.
         """
         now = parse_instant(
-            self._now(),
+            self._now() if at is None else at,
             error_message=_timestamp_timezone_error,
         )
         candidates = [

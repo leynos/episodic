@@ -94,6 +94,25 @@ async def test_resolves_the_latest_effective_card(tmp_path: pathlib.Path) -> Non
 
 
 @pytest.mark.asyncio
+async def test_resolution_uses_the_captured_call_time(tmp_path: pathlib.Path) -> None:
+    """A call captured before a rate change keeps the earlier card."""
+    _write(tmp_path, "old.yaml", _card(input_amount="10"))
+    _write(
+        tmp_path,
+        "new.yaml",
+        _card(effective_from="2026-05-15T00:00:00Z", input_amount="20"),
+    )
+    catalogue = _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+
+    snapshot = await catalogue.resolve(_SUBJECT, at="2026-05-10T00:00:00Z")
+
+    rate = snapshot.rates["input_tokens"]
+    assert (rate.amount_minor, rate.per_units) == (1, 100_000), (
+        "a call captured before the new card must keep the earlier rate"
+    )
+
+
+@pytest.mark.asyncio
 async def test_a_card_keeps_applying_in_a_later_month(
     tmp_path: pathlib.Path,
 ) -> None:

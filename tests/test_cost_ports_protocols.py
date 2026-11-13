@@ -138,8 +138,14 @@ class _InMemoryPricingSnapshots:
 class _StaticPricingCatalogue:
     """Fake pricing catalogue that returns a deterministic snapshot."""
 
-    async def resolve(self, subject: PricingSubject) -> PricingSnapshot:
+    async def resolve(
+        self,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
+    ) -> PricingSnapshot:
         """Return a deterministic snapshot for protocol conformance tests."""
+        del at
         return _make_snapshot(subject)
 
 
