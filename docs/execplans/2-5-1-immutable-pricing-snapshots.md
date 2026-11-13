@@ -867,6 +867,26 @@ Success is observable as follows:
   - The added conversion pushed the migration module past 400 lines, so the
     JSONB shape check, currency check, and rate checks were folded into
     `_validate_row`; the module is 399 lines.
+- Round 10 on `b219a788`: the seven commit gates passed on the round-9 tree
+  before the round's commits; the CLI review covered 80 files and raised four
+  findings, all actioned:
+  - The migration hashed `{"media_type", "content"}` while the application
+    encoder hashes `{"media_type", "sha256"}`, so every migrated
+    `sla4oai_plan` row would fail identity verification on read and its pins
+    would be unreadable. The persisted document stays verbatim; identity now
+    carries the document's SHA-256 digest. The plan conversion test rebuilds
+    the snapshot with the domain type and asserts the stored hash equals the
+    recomputed one.
+  - The plan's migration obligations still required aborting on any
+    recomputed-hash collision, contradicting the merge policy. Both passages
+    now require merging identical canonical content and reserve the abort for
+    different canonical content sharing a hash.
+  - The catalogue read cards with universal newlines, so a CRLF SLA4OAI card
+    was stored and digested as LF text. The read now passes `newline=""`, and
+    a test asserts a CRLF document keeps its line endings.
+  - The per-metric truncation test used an example where per-metric and
+    aggregate truncation agree. Its output usage now makes them differ (7
+    versus 8).
 - Lesson: a uniqueness constraint added by a migration is a merge instruction.
   The legacy table allowed rows that the new identity cannot distinguish, so
   the upgrade must decide which row survives and move every reference before
@@ -886,6 +906,10 @@ Success is observable as follows:
   is driven by the exponent, so an amplification attack passed every earlier
   check. Cheap bounds belong ahead of any conversion whose cost the input
   controls.
+- Lesson: when a migration writes both a verbatim document and an identity
+  hash, the hash must cover the application's canonical shape (the document's
+  digest), not the storage shape (the document's content). Otherwise the row
+  persists successfully and fails verification on every later read.
 
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
@@ -1181,11 +1205,14 @@ non-vacuity evidence.
   `20261010_000013`) converts each legacy row so that the domain store reads it
   without an integrity error, and its hash equals the hash of the corresponding
   rewritten shipped card (except the corrected cached-input row described in
-  `Success` item 4); a recomputed-hash collision aborts with `CommandError`
-  naming both identifiers and leaves the schema at `20261031_000016`; offline
-  upgrade SQL contains the non-empty-table guard; downgrade refuses on a
-  non-empty table and succeeds on an empty one. Method: py-pglite migration
-  tests plus syrupy snapshots of offline SQL. Artefact:
+  `Success` item 4); rows with identical canonical content (for example,
+  differing only by billing period) merge, with `cost_ledger_entries` and
+  `run_pricing_pins` repointed to the survivor and the duplicate deleted; a
+  recomputed hash shared by different canonical content aborts with
+  `CommandError` naming both identifiers and leaves the schema at
+  `20261031_000016`; offline upgrade SQL contains the non-empty-table guard;
+  downgrade refuses on a non-empty table and succeeds on an empty one. Method:
+  py-pglite migration tests plus syrupy snapshots of offline SQL. Artefact:
   `tests/test_pricing_snapshot_content_address_migration.py` and its `.ambr`.
   Non-vacuity: legacy fixtures are byte copies of the three shipped `2.4.4`
   YAML files inserted through `sa.table` at the old schema.
@@ -1371,14 +1398,15 @@ expected-failure markers, then the implementation.
    (`input_tokens`, `output_tokens`, `cached_input_tokens`,
    `cache_write_tokens`, `reasoning_tokens`, `audio_input_tokens`,
    `audio_output_tokens`; `cache_write_tokens` appears in
-   `anthropic-2026-05.yaml`). Abort with `CommandError` naming identifiers on
-   any recomputed-hash collision, unknown legacy metric, or non-identifier
-   `source_metadata` key; write the converted values and hashes; set
-   `NOT NULL`; add check constraints; drop `billing_period_key` and
-   `rates_minor_per_metric`. Offline upgrade emits the DDL preceded by a
-   `DO $$ … $$` block that raises when `pricing_snapshots` has rows. Downgrade
-   (online and offline) refuses unless the table is empty, then reverses the
-   DDL.
+   `anthropic-2026-05.yaml`). Abort with `CommandError` naming identifiers on a
+   recomputed hash shared by different canonical content, an unknown legacy
+   metric, or a non-identifier `source_metadata` key. Rows with identical
+   canonical content merge: references move to the survivor and the duplicate
+   is deleted. Write the converted values and hashes; set `NOT NULL`; add check
+   constraints; drop `billing_period_key` and `rates_minor_per_metric`. Offline
+   upgrade emits the DDL preceded by a `DO $$ … $$` block that raises when
+   `pricing_snapshots` has rows. Downgrade (online and offline) refuses unless
+   the table is empty, then reverses the DDL.
 8. Configuration: rewrite the three shipped cards in
    `config/pricing-snapshots/` to schema version 1 with identical values (so
    alpha rows convert to the same hash), removing `pricing_snapshot_id` and
