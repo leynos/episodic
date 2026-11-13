@@ -12,6 +12,13 @@ from alembic.util import CommandError
 
 from alembic import command
 from episodic.canonical.storage.alembic_helpers import alembic_config
+from episodic.cost import CurrencyCode, PricingSourceKind
+from episodic.cost.pricing_snapshot import (
+    PricedService,
+    PricingSnapshot,
+    SourceDocument,
+)
+from episodic.cost.pricing_snapshot_hash import pricing_snapshot_content_hash
 from tests.fixtures.legacy_pricing_snapshots import LEGACY_REVISION, LEGACY_TABLE
 
 if typ.TYPE_CHECKING:
@@ -249,6 +256,25 @@ async def test_upgrade_preserves_a_legacy_sla4oai_row(
     )
     assert document["provider_name"] == "openai", (
         "the document must preserve the row's subject"
+    )
+    expected = PricingSnapshot(
+        service_kind=PricedService.LLM,
+        provider_name="openai",
+        model="gpt-4o-mini",
+        operation="chat_completions",
+        source_kind=PricingSourceKind.SLA4OAI_PLAN,
+        currency=CurrencyCode("USD"),
+        rates={},
+        source_metadata={"source": "migration-test"},
+        retrieved_at=dt.datetime(2026, 6, 1, tzinfo=dt.UTC),
+        effective_from=dt.datetime(2026, 6, 1, tzinfo=dt.UTC),
+        source_document=SourceDocument(
+            media_type="application/json",
+            content=str(converted["source_document_content"]),
+        ),
+    )
+    assert converted["content_hash"] == pricing_snapshot_content_hash(expected), (
+        "the store must recompute the migrated identity without an integrity error"
     )
 
 

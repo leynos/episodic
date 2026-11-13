@@ -220,16 +220,19 @@ def _converted_row(
         snapshot_id,
     )
     document = _canonical_document(row, rates, metadata)
-    # The legacy table never stored the plan text, so the canonical document is
-    # the only faithful record left for an SLA4OAI row. The media type names
-    # that reconstruction rather than pretending to be the original plan.
     source_document = None
     if row["source_kind"] == "sla4oai_plan":
+        content = _canonical_json(document)
         source_document = {
             "media_type": _LEGACY_DOCUMENT_MEDIA_TYPE,
-            "content": _canonical_json(document),
+            "content": content,
         }
-    document["source_document"] = source_document
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        # Identity hashes the digest, as the application encoder does.
+        document["source_document"] = {
+            "media_type": _LEGACY_DOCUMENT_MEDIA_TYPE,
+            "sha256": f"sha256:{digest}",
+        }
     payload = _canonical_json(document).encode("utf-8")
     content_hash = f"sha256:{hashlib.sha256(payload).hexdigest()}"
     return rates, metadata, source_document, content_hash
@@ -271,8 +274,7 @@ def _drop_legacy_columns() -> None:
 
 def _legacy_rows(connection: sa.Connection) -> list[dict[str, object]]:
     """Read every legacy row before conversion, oldest first."""
-    # A stable order makes the first row for a content hash the survivor when
-    # equivalent rows are merged, so the choice does not depend on heap order.
+    # A stable order makes the first row for a content hash the survivor.
     result = connection.execute(
         sa.text(
             "SELECT id, provider_name, model, operation, source_kind, currency, "
@@ -292,8 +294,7 @@ def _merge_equivalent_row(
 ) -> None:
     """Point every reference at the survivor, then delete the duplicate."""
     # Legacy rows that differed only by billing period collapse into one
-    # version once the period leaves the snapshot. Both rows are valid and may
-    # be pinned, so the references move rather than the upgrade aborting.
+    # version; both may be pinned, so references move rather than the upgrade.
     params = {"duplicate": duplicate, "survivor": survivor}
     for statement in (
         sa.text(
