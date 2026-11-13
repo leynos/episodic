@@ -2907,7 +2907,10 @@ absent.
 cards strictly, rejecting unknown keys, legacy fields, and malformed rates with
 `PricingCatalogueError` that names the file. `PricingSnapshotRepository`
 persists and reads snapshots, and `SqlAlchemyPricingSnapshotStore` implements
-it inside the canonical unit of work. `CostRecorder` composes the ledger,
+it inside the canonical unit of work. The store performs no reporting; the unit
+of work wraps it in `InstrumentedPricingSnapshotRepository`
+(`episodic/cost/storage/pricing_snapshot_telemetry.py`), which emits the
+counters, latency observations, and spans. `CostRecorder` composes the ledger,
 snapshot repository, catalogue, and `PricingEngine`, and prices a pinned call
 from the stored row rather than from the card file.
 
@@ -2924,11 +2927,13 @@ snapshot from the stored columns, recomputes the hash, and raises
 `PricingSnapshotNotFoundError`; both derive from `PricingSnapshotError`, which
 the launcher maps to `cost.pricing_snapshot`.
 
-`ensure` and `get` emit the `pricing_snapshot.ensure` and
+The instrumented repository emits the `pricing_snapshot.ensure` and
 `pricing_snapshot.get` counters with `operation` and `outcome` labels, plus
-matching `*.duration_ms` latency observations. Statement construction happens
-before the timer starts, so CPU-only work does not inflate the persistence
-latency operators use to spot database trouble.
+matching `*.duration_ms` latency observations. Each observation times the whole
+delegate call, so the duration operators use to spot database trouble includes
+statement construction, which a persistence-only timer would hide. The store
+itself reads no clock and writes no metric, so a test or a script can call it
+with no sink at all.
 
 ### Schema version 1 canonical form
 

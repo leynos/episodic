@@ -435,6 +435,14 @@ Success is observable as follows:
   `ruff: ignore[docstring-extraneous-exception]` on `load_snapshot`'s
   docstring, because the documented exception is now raised in its private
   helpers; the public `Raises` contract is unchanged.
+- [ ] (2026-11-13) Round-14 Unit Architecture remediation. Snapshot telemetry
+  moved out of the store into `InstrumentedPricingSnapshotRepository`; the
+  store took an injectable `uuid_factory`; read and reuse purity tests were
+  added; `FilePricingCatalogue.resolve` documents the exceptions its lazy load
+  can raise. Focused suites green (52 passed across the store, purity,
+  observability, Hecate-config, and file-loader tests) and scoped `ty` checks
+  pass. Outstanding: the seven commit gates for the round-14 tree, then the
+  commit, push, and the CodeRabbit assessment reply.
 
 ## Surprises & discoveries
 
@@ -520,6 +528,26 @@ Success is observable as follows:
 
 ## Decision log
 
+- Decision (2026-11-13, supersedes the EP-M2 telemetry placement): snapshot
+  telemetry lives in a decorator, not in the store. Rationale: the pre-merge
+  Unit Architecture check rejected `SqlAlchemyPricingSnapshotStore` for mixing
+  persistence with reporting, and the objection is correct on its own terms — a
+  change to the metric vocabulary would otherwise be able to alter how a row is
+  written, and the store could not be used without a sink. The EP-M2 entry
+  below recorded the opposite placement because it moved the telemetry out of
+  the ledger store; that remains true, and only the destination changed.
+  `InstrumentedPricingSnapshotRepository`, in
+  `episodic/cost/storage/pricing_snapshot_telemetry.py`, keeps the metric
+  names, spans, and failure categories unchanged and is what the unit of work
+  exposes as `CanonicalUnitOfWork.pricing_snapshots`. The store gained one
+  further seam, an injectable `uuid_factory`, so a caller that needs a
+  deterministic identifier no longer has to monkeypatch the global. One
+  measured boundary moves with the split: the decorator times the whole
+  delegate call, so building the insert statement is now inside the persistence
+  duration instead of before it. That is the honest reading of "how long did
+  persistence take", the build is one statement against a single row, and
+  keeping it outside would require the store to talk to a clock again. The
+  round-14 test asserts the new boundary rather than the old one.
 - Decision (2026-11-13): the hosted CodeScene findings are paid down by
   refactoring, not by a repository rule file or `@codescene` directives.
   Rationale: the repository has no `.codescene/` configuration, and the
@@ -719,7 +747,9 @@ Success is observable as follows:
   `pricing_snapshot.get` counters, matching duration metrics, spans
   `pricing_snapshot.ensure_snapshot` and `pricing_snapshot.get_snapshot`, and
   the `input_invalid`, `collision`, `integrity`, and `not_found` failure
-  categories.
+  categories. Update (2026-11-13): round 14 moved that telemetry, unchanged,
+  into `InstrumentedPricingSnapshotRepository`; the store now performs no
+  reporting.
 - `CostRecorder` takes `snapshots` and prices pinned calls with
   `await self.snapshots.get(pinned_snapshot_id)`. Integration tests edit and
   delete the rate-card file after pinning and still record the pinned cost.
@@ -980,6 +1010,18 @@ Success is observable as follows:
   four-digit ADR numbers. The new ADR-028, this plan's references, and the
   design document's accepted-record list now use the new directory and naming,
   and the list keeps upstream's updated paths alongside ADR-028.
+- Round 14 on `98f73ddc`: the pre-merge Unit Architecture check failed because
+  the snapshot store carried both persistence and reporting. Telemetry moved to
+  `episodic/cost/storage/pricing_snapshot_telemetry.py` as
+  `InstrumentedPricingSnapshotRepository`; the unit of work wraps the store in
+  it, so metric names, spans, and failure categories are unchanged. The store
+  gained an injectable `uuid_factory`, and
+  `tests/test_cost_pricing_snapshot_store_purity.py` now covers the command and
+  query boundaries: a read leaves a staged write pending, a reuse rewrites
+  neither the row nor its identity, and a new row takes the injected identifier.
+  `FilePricingCatalogue.resolve` documents the `PricingCatalogueError` and
+  `OSError` its lazy load can raise, which were previously discoverable only by
+  reading `_load_snapshots`.
 - Lesson: a uniqueness constraint added by a migration is a merge instruction.
   The legacy table allowed rows that the new identity cannot distinguish, so
   the upgrade must decide which row survives and move every reference before
@@ -1993,10 +2035,13 @@ class PricingSnapshotRepository(typ.Protocol):
   YAML parsing; `episodic/cost/pricing_catalogue/file_loader.py`:
   `FilePricingCatalogue.from_directory(...)`, `PricingCatalogueError`.
 - `episodic/cost/storage/pricing_snapshot_store.py` (`outbound_adapter`):
-  `SqlAlchemyPricingSnapshotStore(session, *, metrics=None, tracer=None,
-  clock=None)`.
+  `SqlAlchemyPricingSnapshotStore(session, *, uuid_factory=uuid.uuid7)`.
+- `episodic/cost/storage/pricing_snapshot_telemetry.py` (`outbound_adapter`):
+  `InstrumentedPricingSnapshotRepository(repository, *, metrics=None,
+  tracer=None, clock=None)`.
 - Unit of work:
-  `CanonicalUnitOfWork.pricing_snapshots: PricingSnapshotRepository`.
+  `CanonicalUnitOfWork.pricing_snapshots: PricingSnapshotRepository` (the
+  instrumented decorator around the store).
 
 Table `pricing_snapshots` after migration `000017`:
 

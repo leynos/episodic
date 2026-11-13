@@ -2,8 +2,8 @@
 
 This guide describes what a deployment must change when it moves from Episodic
 0.1.0 to 0.2.0. It covers the renamed command-line entry point, the database
-migration that must run before the service starts, and the new quality
-assurance (QA) retrieval interfaces.
+migration that must run before the service starts, the pricing snapshot
+conversion, and the new quality assurance (QA) retrieval interfaces.
 
 ## Renamed command-line entry point
 
@@ -35,6 +35,46 @@ uv run alembic upgrade head
 `make check-migrations` reports drift between the object-relational mapping
 (ORM) models and the migration history. A deployment that skips this step fails
 when the QA recording or retrieval paths first touch the missing tables.
+
+## Pricing snapshots
+
+Rate cards in the `2.4.4` format are rejected at startup with a
+`PricingCatalogueError` naming the file, so every card must be converted before
+the service starts. The legacy fields are `pricing_snapshot_id`,
+`billing_period_key`, and `rates_minor_per_metric`.
+
+A schema-version-1 card has these fields:
+
+- `schema_version`: must be `1`.
+- `service_kind`: `llm`, `tts`, or `helper_service`.
+- `provider_name`, `model`, and `operation`: the priced subject.
+- `source_kind`: `provider_rate_card` or `sla4oai_plan`.
+- `currency`: a three-letter ISO 4217 code.
+- `rates`: a mapping from metric name to a rate, where each rate gives an exact
+  `amount_minor`, `per_units`, and `unit`.
+- `source_metadata`: an optional string mapping, such as `source_url`.
+- `retrieved_at`: a timezone-aware instant.
+- `effective_from`: an optional timezone-aware instant.
+
+The billing period now lives on run pins and ledger rows, not on the snapshot.
+The shipped cards under `config/pricing-snapshots/` are already in this shape
+and form a working reference. See
+[Pricing snapshots](users-guide.md#pricing-snapshots) in the users' guide for
+the rate rules and the full conversion.
+
+Migration `20261110_000017` converts stored `2.4.4` rows. It reads and rewrites
+every row under an `ACCESS EXCLUSIVE` lock, so the upgrade is stop-the-world:
+stop launchers, workers, and API pods before applying it. The migration
+converts per-million integer rates to exact fractions, and merges rows that
+differ only by billing period, repointing cost ledger entries and run pricing
+pins at the survivor. It aborts with an error naming the snapshot when two rows
+share a content hash but encode different content.
+
+The offline (`--sql`) form refuses to run unless `pricing_snapshots` is empty,
+because hash recomputation needs Python. Downgrade is refused while
+`pricing_snapshots` is non-empty, because converted rows cannot be mapped back.
+The reasoning behind the format is recorded in
+[ADR 028: Content-addressed pricing snapshots](adrs/adr-0028-content-addressed-pricing-snapshots.md).
 
 ## QA retrieval over REST
 

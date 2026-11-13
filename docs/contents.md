@@ -21,8 +21,8 @@ or delivery planning.
 ## Migration guides
 
 - [Migrating to Episodic 0.2.0](migration-0.2.0.md) - upgrade steps for the
-  renamed `episodic` command, the QA database migration, and the new QA
-  retrieval interfaces.
+  renamed `episodic` command, the database and pricing snapshot migrations, and
+  the new QA retrieval interfaces.
 
 ## Product and system design
 
@@ -146,7 +146,7 @@ or delivery planning.
   - the CLI as a REST client, its enforced import boundary, and its output and
     exit-code policy.
 - [ADR 028: Content-addressed pricing
-  snapshots](adr/adr-028-content-addressed-pricing-snapshots.md)
+  snapshots](adrs/adr-0028-content-addressed-pricing-snapshots.md)
   - content-addressed snapshot identity, the schema-version-1 canonical form,
     exact rates, and helper-document storage.
 
