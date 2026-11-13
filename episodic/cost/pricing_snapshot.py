@@ -112,6 +112,23 @@ def _require_aware(instant: dt.datetime, *, field: str) -> None:
         raise ValueError(msg)
 
 
+def _require_schema_version(version: object) -> None:
+    """Reject any canonical-form version other than a plain integer 1."""
+    # ``True == 1``, so the version must also be a non-boolean integer or
+    # the canonical form would carry JSON ``true`` instead of ``1``.
+    is_plain_int = isinstance(version, int) and not isinstance(version, bool)
+    if not is_plain_int or version != 1:
+        msg = f"unsupported pricing snapshot schema_version {version!r}."
+        raise ValueError(msg)
+
+
+def _require_member(value: object, expected: type[object], field: str) -> None:
+    """Reject a field that is not an instance of its value-object type."""
+    if not isinstance(value, expected):
+        msg = f"{field} must be a {expected.__name__}."
+        raise TypeError(msg)
+
+
 def _freeze_mapping(
     mapping: cabc.Mapping[str, typ.Any],
 ) -> cabc.Mapping[str, typ.Any]:
@@ -210,19 +227,9 @@ class PricingSnapshot:
 
     def __post_init__(self) -> None:
         """Validate invariants, freeze mappings, and derive the content hash."""
-        # ``True == 1``, so the version must also be a non-boolean integer or
-        # the canonical form would carry JSON ``true`` instead of ``1``.
-        version = self.schema_version
-        is_plain_int = isinstance(version, int) and not isinstance(version, bool)
-        if not is_plain_int or version != 1:
-            msg = f"unsupported pricing snapshot schema_version {version!r}."
-            raise ValueError(msg)
-        if not isinstance(self.service_kind, PricedService):
-            msg = "service_kind must be a PricedService."
-            raise TypeError(msg)
-        if not isinstance(self.source_kind, PricingSourceKind):
-            msg = "source_kind must be a PricingSourceKind."
-            raise TypeError(msg)
+        _require_schema_version(self.schema_version)
+        _require_member(self.service_kind, PricedService, "service_kind")
+        _require_member(self.source_kind, PricingSourceKind, "source_kind")
         _require_non_blank(self.provider_name, field="provider_name")
         _require_non_blank(self.model, field="model")
         _require_non_blank(self.operation, field="operation")

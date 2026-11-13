@@ -11,13 +11,10 @@ Examples
 1
 """
 
-import collections.abc as cabc
 import decimal
 import typing as typ
 
 import yaml
-import yaml.constructor
-import yaml.resolver
 
 from episodic.cost._time import parse_instant
 from episodic.cost.pricing_snapshot import (
@@ -30,8 +27,10 @@ from episodic.cost.pricing_snapshot import (
 from episodic.cost.primitives import CurrencyCode, PricingSourceKind
 
 from ._errors import PricingCatalogueError
+from ._yaml_loader import _UniqueKeyLoader
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import datetime as dt
     import pathlib
 
@@ -62,55 +61,6 @@ _TIMESTAMP_ERROR = "pricing snapshot timestamps must include timezone informatio
 _MAX_DECIMAL_EXPONENT = 30
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
-    """SafeLoader that rejects a mapping with a duplicated key.
-
-    ``safe_load`` keeps the last value for a repeated key, so a card with two
-    ``rates`` blocks would silently drop one. A pricing error is worse than a
-    startup failure, so the duplicate is rejected instead.
-    """
-
-
-def _construct_unique_mapping(
-    loader: _UniqueKeyLoader,
-    node: yaml.MappingNode,
-    *,
-    deep: bool = False,
-) -> dict[object, object]:
-    """Build a mapping, failing on the first duplicated key."""
-    loader.flatten_mapping(node)
-    mapping: dict[object, object] = {}
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=deep)
-        if not isinstance(key, cabc.Hashable):
-            # A sequence key such as ``? [a, b]`` constructs to a list, which
-            # cannot be a mapping key; report it as a YAML error so the caller
-            # still gets a catalogue error naming the file.
-            msg = f"found unhashable key {key!r}"
-            raise yaml.constructor.ConstructorError(  # ruff: ignore[raise-vanilla-args]  # PyYAML needs the context and problem marks.
-                "while constructing a mapping",
-                node.start_mark,
-                msg,
-                key_node.start_mark,
-            )
-        if key in mapping:
-            msg = f"found duplicate key {key!r}"
-            raise yaml.constructor.ConstructorError(  # ruff: ignore[raise-vanilla-args]  # PyYAML needs the context and problem marks.
-                "while constructing a mapping",
-                node.start_mark,
-                msg,
-                key_node.start_mark,
-            )
-        mapping[key] = loader.construct_object(value_node, deep=deep)
-    return mapping
-
-
-_UniqueKeyLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-    _construct_unique_mapping,
-)
-
-
 def _fail(path: pathlib.Path, message: str) -> typ.NoReturn:
     """Raise a catalogue error naming the offending file."""
     msg = f"Pricing snapshot {path}: {message}"
@@ -129,14 +79,32 @@ def _require_mapping(
     return typ.cast("dict[str, object]", value)
 
 
+def _string_field(
+    data: cabc.Mapping[str, object],
+    key: str,
+    path: pathlib.Path,
+    *,
+    required: bool,
+) -> str | None:
+    """Return a non-blank string field, honouring required/optional presence."""
+    value = data.get(key)
+    # A missing field is only an error when the caller requires it, and a
+    # present field must always hold a non-blank string.
+    if value is None and required:
+        _fail(path, f"field {key!r} must be a non-empty string.")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        qualifier = "" if required else " when present"
+        _fail(path, f"field {key!r} must be a non-empty string{qualifier}.")
+    return value.strip()
+
+
 def _require_string(
     data: cabc.Mapping[str, object], key: str, path: pathlib.Path
 ) -> str:
     """Return a required non-blank string field."""
-    value = data.get(key)
-    if not isinstance(value, str) or not value.strip():
-        _fail(path, f"field {key!r} must be a non-empty string.")
-    return value.strip()
+    return typ.cast("str", _string_field(data, key, path, required=True))
 
 
 def _optional_string(
@@ -145,12 +113,7 @@ def _optional_string(
     path: pathlib.Path,
 ) -> str | None:
     """Return an optional non-blank string field."""
-    value = data.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value.strip():
-        _fail(path, f"field {key!r} must be a non-empty string when present.")
-    return value.strip()
+    return _string_field(data, key, path, required=False)
 
 
 def _require_int(data: cabc.Mapping[str, object], key: str, path: pathlib.Path) -> int:
@@ -161,6 +124,14 @@ def _require_int(data: cabc.Mapping[str, object], key: str, path: pathlib.Path) 
     return value
 
 
+def _is_string_mapping(value: object) -> bool:
+    """Return whether a value is a mapping of strings to strings."""
+    return isinstance(value, dict) and all(
+        isinstance(item_key, str) and isinstance(item_value, str)
+        for item_key, item_value in value.items()
+    )
+
+
 def _string_mapping(
     data: cabc.Mapping[str, object],
     key: str,
@@ -168,12 +139,23 @@ def _string_mapping(
 ) -> dict[str, str]:
     """Return an optional string-to-string mapping."""
     value = data.get(key, {})
-    if not isinstance(value, dict) or not all(
-        isinstance(item_key, str) and isinstance(item_value, str)
-        for item_key, item_value in value.items()
-    ):
+    if not _is_string_mapping(value):
         _fail(path, f"field {key!r} must be a string mapping.")
     return typ.cast("dict[str, str]", value)
+
+
+def _decimal_amount(amount: str, path: pathlib.Path, metric: str) -> decimal.Decimal:
+    """Parse a decimal-string amount and reject a value a rate cannot hold."""
+    try:
+        value = decimal.Decimal(amount)
+    except decimal.InvalidOperation:
+        _fail(path, f"rate {metric!r} amount_minor {amount!r} is not a decimal.")
+    if not value.is_finite() or value < 0:
+        _fail(path, f"rate {metric!r} amount_minor must be finite and non-negative.")
+    exponent = value.as_tuple().exponent
+    if isinstance(exponent, int) and abs(exponent) > _MAX_DECIMAL_EXPONENT:
+        _fail(path, f"rate {metric!r} amount_minor exponent is out of range.")
+    return value
 
 
 def _amount_fraction(
@@ -186,17 +168,7 @@ def _amount_fraction(
         return amount, 1
     if not isinstance(amount, str):
         _fail(path, f"rate {metric!r} amount_minor must be an integer or string.")
-    try:
-        value = decimal.Decimal(amount)
-    except decimal.InvalidOperation:
-        _fail(path, f"rate {metric!r} amount_minor {amount!r} is not a decimal.")
-    if not value.is_finite() or value < 0:
-        _fail(path, f"rate {metric!r} amount_minor must be finite and non-negative.")
-    exponent = value.as_tuple().exponent
-    if isinstance(exponent, int) and abs(exponent) > _MAX_DECIMAL_EXPONENT:
-        _fail(path, f"rate {metric!r} amount_minor exponent is out of range.")
-    numerator, denominator = value.as_integer_ratio()
-    return numerator, denominator
+    return _decimal_amount(amount, path, metric).as_integer_ratio()
 
 
 def _parse_rate(
@@ -303,32 +275,20 @@ def _source_document(
     return SourceDocument(media_type="application/yaml", content=raw_text)
 
 
-def load_snapshot(path: pathlib.Path) -> PricingSnapshot:
-    """Load one schema-version-1 pricing card.
-
-    Parameters
-    ----------
-    path : pathlib.Path
-        YAML file to parse.
-
-    Returns
-    -------
-    PricingSnapshot
-        Immutable snapshot described by the file.
-
-    Raises
-    ------
-    PricingCatalogueError
-        If the file cannot be read or is not a valid schema-version-1 card.
-    """
+def _read_card(path: pathlib.Path) -> str:
+    """Read the card text, keeping CRLF bytes for verbatim storage."""
     try:
         # Keep CRLF bytes: an SLA4OAI card is stored verbatim, and its digest
         # must cover the bytes that were read, not a translated copy.
-        raw_text = path.read_text(encoding="utf-8", newline="")
+        return path.read_text(encoding="utf-8", newline="")
     except (OSError, UnicodeDecodeError) as exc:
         # Both failures must name the card: a startup traceback otherwise
         # leaves the operator without the offending path.
         _fail(path, f"cannot read card: {exc}")
+
+
+def _load_yaml(raw_text: str, path: pathlib.Path) -> object:
+    """Parse the card text, naming the file for any YAML failure."""
     try:
         # The reader rejects some bytes, such as NUL, while the loader is being
         # constructed, so construction belongs inside the card-naming boundary.
@@ -336,19 +296,28 @@ def load_snapshot(path: pathlib.Path) -> PricingSnapshot:
     except yaml.YAMLError as exc:
         _fail(path, f"invalid YAML: {exc}")
     try:
-        raw_data = loader.get_single_data() or {}
+        return loader.get_single_data() or {}
     except (yaml.YAMLError, ValueError) as exc:
         # An impossible timestamp such as 2026-02-30 raises ValueError here.
         _fail(path, f"invalid YAML: {exc}")
     finally:
         loader.dispose()
-    data = _require_mapping(raw_data, path=path, field="document")
-    _reject_legacy_document(data, path)
-    _reject_unknown_keys(data, path)
+
+
+def _reject_missing_keys(data: cabc.Mapping[str, object], path: pathlib.Path) -> None:
+    """Reject a document that omits a required field."""
     missing = _REQUIRED_KEYS - set(data)
     if missing:
         joined = ", ".join(sorted(missing))
         _fail(path, f"missing required fields: {joined}.")
+
+
+def _build_snapshot(
+    data: cabc.Mapping[str, object],
+    raw_text: str,
+    path: pathlib.Path,
+) -> PricingSnapshot:
+    """Construct the snapshot, naming the file when a value is rejected."""
     try:
         return PricingSnapshot(
             service_kind=PricedService(_require_string(data, "service_kind", path)),
@@ -368,3 +337,29 @@ def load_snapshot(path: pathlib.Path) -> PricingSnapshot:
         raise
     except (TypeError, ValueError) as exc:
         _fail(path, str(exc))
+
+
+def load_snapshot(path: pathlib.Path) -> PricingSnapshot:
+    """Load one schema-version-1 pricing card.
+
+    Parameters
+    ----------
+    path : pathlib.Path
+        YAML file to parse.
+
+    Returns
+    -------
+    PricingSnapshot
+        Immutable snapshot described by the file.
+
+    Raises
+    ------
+    PricingCatalogueError
+        If the file cannot be read or is not a valid schema-version-1 card.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Raised in private helpers.
+    raw_text = _read_card(path)
+    data = _require_mapping(_load_yaml(raw_text, path), path=path, field="document")
+    _reject_legacy_document(data, path)
+    _reject_unknown_keys(data, path)
+    _reject_missing_keys(data, path)
+    return _build_snapshot(data, raw_text, path)

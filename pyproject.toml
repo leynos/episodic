@@ -586,6 +586,11 @@ reason = "The mixin's no-op must match GenerationRunLeaseReclamationPort.fail_ex
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
+full_name = ["episodic.cost.pricing_snapshot._require_schema_version"]
+reason = "PricingSnapshot.__post_init__ validates the version through this helper, which has a single call site; with --no-grep-verify Skylos resolves single-call private helpers as unused."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
 full_name = [
     "episodic.cli.entrypoint.main",
     "episodic.cli.app.build_app.launcher",

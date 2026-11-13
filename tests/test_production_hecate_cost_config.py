@@ -10,6 +10,7 @@ EXPECTED_PRODUCTION_COST_GROUPS = {
     "episodic.cost.pricing_catalogue": "outbound_adapter",
     "episodic.cost.pricing_catalogue._document": "outbound_adapter",
     "episodic.cost.pricing_catalogue._errors": "outbound_adapter",
+    "episodic.cost.pricing_catalogue._yaml_loader": "outbound_adapter",
     "episodic.cost.pricing_catalogue.file_loader": "outbound_adapter",
     "episodic.cost.pricing_snapshot": "domain_ports",
     "episodic.cost.pricing_snapshot_hash": "domain_ports",
@@ -81,6 +82,12 @@ def test_production_cost_v1_modules_keep_their_boundaries() -> None:
         )
         == "outbound_adapter"
     ), "the v1 catalogue document parser is an outbound adapter concern"
+    assert (
+        _production_hecate_group_for_module(
+            "episodic.cost.pricing_catalogue._yaml_loader", groups
+        )
+        == "outbound_adapter"
+    ), "YAML parsing stays in the catalogue adapter, never in the domain"
     assert (
         _production_hecate_group_for_module(
             "episodic.cost.storage.pricing_snapshot_store", groups

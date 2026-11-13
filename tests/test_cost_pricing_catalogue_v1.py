@@ -74,16 +74,21 @@ def _catalogue(directory: pathlib.Path, now: str) -> FilePricingCatalogue:
     )
 
 
-@pytest.mark.asyncio
-async def test_resolves_the_latest_effective_card(tmp_path: pathlib.Path) -> None:
-    """The greatest effective instant not after now wins."""
-    _write(tmp_path, "old.yaml", _card(input_amount="10"))
+def _revised_catalogue(directory: pathlib.Path) -> FilePricingCatalogue:
+    """Load a card revised mid-May, so an earlier call sees the old rate."""
+    _write(directory, "old.yaml", _card(input_amount="10"))
     _write(
-        tmp_path,
+        directory,
         "new.yaml",
         _card(effective_from="2026-05-15T00:00:00Z", input_amount="20"),
     )
-    catalogue = _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+    return _catalogue(directory, "2026-06-04T00:00:00Z")
+
+
+@pytest.mark.asyncio
+async def test_resolves_the_latest_effective_card(tmp_path: pathlib.Path) -> None:
+    """The greatest effective instant not after now wins."""
+    catalogue = _revised_catalogue(tmp_path)
 
     snapshot = await catalogue.resolve(_SUBJECT)
 
@@ -96,13 +101,7 @@ async def test_resolves_the_latest_effective_card(tmp_path: pathlib.Path) -> Non
 @pytest.mark.asyncio
 async def test_resolution_uses_the_captured_call_time(tmp_path: pathlib.Path) -> None:
     """A call captured before a rate change keeps the earlier card."""
-    _write(tmp_path, "old.yaml", _card(input_amount="10"))
-    _write(
-        tmp_path,
-        "new.yaml",
-        _card(effective_from="2026-05-15T00:00:00Z", input_amount="20"),
-    )
-    catalogue = _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+    catalogue = _revised_catalogue(tmp_path)
 
     snapshot = await catalogue.resolve(_SUBJECT, at="2026-05-10T00:00:00Z")
 

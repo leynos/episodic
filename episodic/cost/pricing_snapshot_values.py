@@ -42,6 +42,15 @@ def _is_json_int(value: object) -> bool:
     )
 
 
+def _rate_range_error(amount_minor: object, per_units: object) -> str | None:
+    """Return why a rate is out of range, or None when both values are valid."""
+    if not _is_json_int(amount_minor):
+        return f"amount_minor must be an integer in [0, {_MAX_JSON_INT}]."
+    if not _is_json_int(per_units) or per_units == 0:
+        return f"per_units must be an integer in [1, {_MAX_JSON_INT}]."
+    return None
+
+
 @dc.dataclass(frozen=True, slots=True)
 class MeteredRate:
     """Exact price of ``amount_minor`` minor units per ``per_units`` units.
@@ -68,12 +77,9 @@ class MeteredRate:
 
     def __post_init__(self) -> None:
         """Reject out-of-range fractions and rates not in lowest terms."""
-        if not _is_json_int(self.amount_minor):
-            msg = f"amount_minor must be an integer in [0, {_MAX_JSON_INT}]."
-            raise ValueError(msg)
-        if not _is_json_int(self.per_units) or self.per_units == 0:
-            msg = f"per_units must be an integer in [1, {_MAX_JSON_INT}]."
-            raise ValueError(msg)
+        error = _rate_range_error(self.amount_minor, self.per_units)
+        if error is not None:
+            raise ValueError(error)
         if not isinstance(self.unit, UsageUnit):
             msg = f"unit must be a UsageUnit, not {type(self.unit).__name__}."
             raise TypeError(msg)
@@ -113,12 +119,9 @@ class MeteredRate:
         ValueError
             If either integer is out of range or ``per_units`` is zero.
         """
-        if not _is_json_int(amount_minor):
-            msg = f"amount_minor must be an integer in [0, {_MAX_JSON_INT}]."
-            raise ValueError(msg)
-        if not _is_json_int(per_units) or per_units == 0:
-            msg = f"per_units must be an integer in [1, {_MAX_JSON_INT}]."
-            raise ValueError(msg)
+        error = _rate_range_error(amount_minor, per_units)
+        if error is not None:
+            raise ValueError(error)
         if amount_minor == 0:
             return cls(0, 1, unit)
         divisor = math.gcd(amount_minor, per_units)

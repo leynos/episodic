@@ -23,6 +23,7 @@ from episodic.cost.storage import (
 from tests.fixtures.cost import v1_pricing_snapshot
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -223,20 +224,34 @@ async def _record_pinned_provider_call(
         ).scalar_one()
 
 
+async def _check_pinned_cost_after_card_change(
+    session_factory: async_sessionmaker[AsyncSession],
+    directory: pathlib.Path,
+    *,
+    after_pin: cabc.Callable[[pathlib.Path], None],
+    expected_message: str,
+) -> None:
+    """Pin a run, change its card, and assert the call keeps the pinned rate."""
+    _write_rate_card(directory, input_rate=1_000_000)
+    await _pin_rate_card_run(session_factory, directory)
+    after_pin(directory)
+    cost = await _record_pinned_provider_call(session_factory, directory)
+    assert cost == 3, expected_message
+
+
 @pytest.mark.asyncio
 async def test_pinned_call_prices_from_persisted_snapshot_after_file_removal(
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: pathlib.Path,
 ) -> None:
     """A pinned run keeps its rates after its rate card file is deleted."""
-    _write_rate_card(tmp_path, input_rate=1_000_000)
-    await _pin_rate_card_run(session_factory, tmp_path)
-    (tmp_path / _RATE_CARD_FILE).unlink()
-
-    cost = await _record_pinned_provider_call(session_factory, tmp_path)
-
-    assert cost == 3, (
-        "a pinned call must price from the persisted snapshot, not the deleted file"
+    await _check_pinned_cost_after_card_change(
+        session_factory,
+        tmp_path,
+        after_pin=lambda directory: (directory / _RATE_CARD_FILE).unlink(),
+        expected_message=(
+            "a pinned call must price from the persisted snapshot, not the deleted file"
+        ),
     )
 
 

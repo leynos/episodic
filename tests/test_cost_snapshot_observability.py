@@ -247,18 +247,17 @@ _TAMPERED_RATES = [
 ]
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("tampered_rates", _TAMPERED_RATES)
-async def test_get_emits_found_not_found_and_tampered(
+_MISSING_SNAPSHOT_ID = "018f15f8-8c12-7c3a-9e9f-9f8f8fa200"
+
+
+async def _exercise_read_outcomes(
     session_factory: SessionFactory,
+    snapshot: PricingSnapshot,
     tampered_rates: dict[str, dict[str, object]],
-) -> None:
-    """Reads report found, not_found, and a tampered row as integrity mismatch."""
+) -> tuple[PricingSnapshot, PricingSnapshotId, RecordingTracer, _RecordingMetrics]:
+    """Persist, read, miss, then tamper with and re-read one snapshot."""
     tracer = RecordingTracer()
     metrics = _RecordingMetrics()
-    snapshot = v1_pricing_snapshot()
-    missing_id = "018f15f8-8c12-7c3a-9e9f-9f8f8f8fa200"
-
     async with session_factory() as session:
         store = SqlAlchemyPricingSnapshotStore(
             session,
@@ -267,20 +266,27 @@ async def test_get_emits_found_not_found_and_tampered(
             clock=_SteppingClock(),
         )
         ensured = await store.ensure(snapshot)
-        stored = await store.get(ensured.pricing_snapshot_id)
+        snapshot_id = ensured.pricing_snapshot_id
+        stored = await store.get(snapshot_id)
         with pytest.raises(PricingSnapshotNotFoundError):
-            await store.get(PricingSnapshotId(missing_id))
+            await store.get(PricingSnapshotId(_MISSING_SNAPSHOT_ID))
         await session.execute(
             sa
             .update(PricingSnapshotRecord)
-            .where(
-                PricingSnapshotRecord.id == uuid.UUID(str(ensured.pricing_snapshot_id))
-            )
+            .where(PricingSnapshotRecord.id == uuid.UUID(str(snapshot_id)))
             .values(rates=tampered_rates)
         )
         with pytest.raises(PricingSnapshotIntegrityError, match="content hash"):
-            await store.get(ensured.pricing_snapshot_id)
+            await store.get(snapshot_id)
+    return stored, snapshot_id, tracer, metrics
 
+
+def _assert_read_counters(
+    stored: PricingSnapshot,
+    snapshot: PricingSnapshot,
+    metrics: _RecordingMetrics,
+) -> None:
+    """Assert the found, missing, and tampered reads were counted."""
     assert stored.content_hash == snapshot.content_hash, (
         "the found outcome must return the stored snapshot"
     )
@@ -305,6 +311,10 @@ async def test_get_emits_found_not_found_and_tampered(
     ] == ["pricing_snapshot.get.duration_ms"] * 3, (
         f"expected one latency observation per read, got {metrics.latencies!r}"
     )
+
+
+def _assert_read_spans(snapshot_id: PricingSnapshotId, tracer: RecordingTracer) -> None:
+    """Assert every read emitted one bounded span with its own outcome."""
     spans = [
         span for span in tracer.spans if span.name == "pricing_snapshot.get_snapshot"
     ]
@@ -313,11 +323,27 @@ async def test_get_emits_found_not_found_and_tampered(
         "not_found",
         "integrity_mismatch",
     ], f"expected one span per read, got {tracer.spans!r}"
-    assert spans[2].attributes["pricing_snapshot_id"] == str(
-        ensured.pricing_snapshot_id
-    ), "the tampered identifier belongs on the span"
+    assert spans[2].attributes["pricing_snapshot_id"] == str(snapshot_id), (
+        "the tampered identifier belongs on the span"
+    )
     for span in spans:
         assert set(span.attributes) <= _ALLOWED_LABEL_KEYS, (
             f"span attributes must stay bounded; got {span.attributes!r}"
         )
-    _assert_bounded(metrics, str(ensured.pricing_snapshot_id))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tampered_rates", _TAMPERED_RATES)
+async def test_get_emits_found_not_found_and_tampered(
+    session_factory: SessionFactory,
+    tampered_rates: dict[str, dict[str, object]],
+) -> None:
+    """Reads report found, not_found, and a tampered row as integrity mismatch."""
+    snapshot = v1_pricing_snapshot()
+    stored, snapshot_id, tracer, metrics = await _exercise_read_outcomes(
+        session_factory, snapshot, tampered_rates
+    )
+
+    _assert_read_counters(stored, snapshot, metrics)
+    _assert_read_spans(snapshot_id, tracer)
+    _assert_bounded(metrics, str(snapshot_id))

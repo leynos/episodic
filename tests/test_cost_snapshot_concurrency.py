@@ -66,19 +66,24 @@ def _pin_key(run_id: str) -> RunPricingKey:
     )
 
 
+async def _scalar[ScalarT](
+    session_factory: SessionFactory,
+    statement: sa.Select[tuple[ScalarT]],
+) -> ScalarT:
+    """Run one scalar select through a fresh session."""
+    async with session_factory() as session:
+        return (await session.execute(statement)).scalar_one()
+
+
 async def _snapshot_row_count(
     session_factory: SessionFactory,
     content_hash: str,
 ) -> int:
     """Count persisted snapshot rows through a fresh session."""
-    async with session_factory() as session:
-        return (
-            await session.execute(
-                sa.select(sa.func.count(PricingSnapshotRecord.id)).where(
-                    PricingSnapshotRecord.content_hash == content_hash
-                )
-            )
-        ).scalar_one()
+    statement = sa.select(sa.func.count(PricingSnapshotRecord.id)).where(
+        PricingSnapshotRecord.content_hash == content_hash
+    )
+    return await _scalar(session_factory, statement)
 
 
 async def _stored_snapshot_id(
@@ -86,14 +91,10 @@ async def _stored_snapshot_id(
     content_hash: str,
 ) -> uuid.UUID:
     """Return the identifier stored for one content hash."""
-    async with session_factory() as session:
-        return (
-            await session.execute(
-                sa.select(PricingSnapshotRecord.id).where(
-                    PricingSnapshotRecord.content_hash == content_hash
-                )
-            )
-        ).scalar_one()
+    statement = sa.select(PricingSnapshotRecord.id).where(
+        PricingSnapshotRecord.content_hash == content_hash
+    )
+    return await _scalar(session_factory, statement)
 
 
 @pytest.mark.asyncio

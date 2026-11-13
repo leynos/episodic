@@ -124,6 +124,18 @@ async def _upgrade_is_rejected(connection: AsyncConnection, match: str) -> None:
     await _assert_legacy_schema(connection)
 
 
+async def _assert_upgrade_fails(
+    migrated_engine: AsyncEngine,
+    identifier: uuid.UUID,
+    overrides: cabc.Mapping[str, object],
+    match: str,
+) -> None:
+    """Seed one overridden legacy row and assert the upgrade rejects it."""
+    async with migrated_engine.begin() as connection:
+        await _seed_legacy_rows(connection, [_legacy_row(identifier, **overrides)])
+        await _upgrade_is_rejected(connection, match)
+
+
 @pytest.mark.asyncio
 async def test_upgrade_converts_legacy_rows(
     migrated_engine: AsyncEngine,
@@ -283,13 +295,10 @@ async def test_upgrade_rejects_an_unknown_legacy_metric(
     migrated_engine: AsyncEngine,
 ) -> None:
     """A metric with no declared unit cannot be converted safely."""
-    identifier = uuid.UUID(int=31)
-    async with migrated_engine.begin() as connection:
-        await _seed_legacy_rows(
-            connection,
-            [_legacy_row(identifier, rates_minor_per_metric={"mystery": 5})],
-        )
-        await _upgrade_is_rejected(connection, "mystery")
+    overrides = {"rates_minor_per_metric": {"mystery": 5}}
+    await _assert_upgrade_fails(
+        migrated_engine, uuid.UUID(int=31), overrides, "mystery"
+    )
 
 
 @pytest.mark.asyncio
@@ -298,12 +307,8 @@ async def test_upgrade_rejects_a_non_identifier_metadata_key(
 ) -> None:
     """Canonical source metadata keys must be identifiers."""
     identifier = uuid.UUID(int=41)
-    async with migrated_engine.begin() as connection:
-        await _seed_legacy_rows(
-            connection,
-            [_legacy_row(identifier, source_metadata={"Source URL": "x"})],
-        )
-        await _upgrade_is_rejected(connection, str(identifier))
+    overrides = {"source_metadata": {"Source URL": "x"}}
+    await _assert_upgrade_fails(migrated_engine, identifier, overrides, str(identifier))
 
 
 @pytest.mark.asyncio
@@ -345,10 +350,7 @@ async def test_upgrade_rejects_a_row_that_cannot_be_version_one(
     match: str,
 ) -> None:
     """A row the application would reject must not migrate into a broken snapshot."""
-    identifier = uuid.UUID(int=61)
-    async with migrated_engine.begin() as connection:
-        await _seed_legacy_rows(connection, [_legacy_row(identifier, **overrides)])
-        await _upgrade_is_rejected(connection, match)
+    await _assert_upgrade_fails(migrated_engine, uuid.UUID(int=61), overrides, match)
 
 
 @pytest.mark.asyncio
@@ -363,30 +365,36 @@ async def test_downgrade_refuses_when_rows_exist(
             await connection.run_sync(_migrate, "downgrade", LEGACY_REVISION)
 
 
-def test_offline_upgrade_guards_against_existing_rows() -> None:
-    """Offline DDL cannot convert rows, so it refuses to run on a populated table."""
+def _offline_sql(
+    migrate: cabc.Callable[..., None],
+    revision_range: str,
+) -> str:
+    """Render one offline migration command and return the emitted SQL."""
     config = alembic_config("postgresql://offline.example/episodic")
     output = io.StringIO()
     config.output_buffer = output
-    command.upgrade(config, f"{LEGACY_REVISION}:{_NEW_REVISION}", sql=True)
+    migrate(config, revision_range, sql=True)
+    return output.getvalue()
 
-    emitted = output.getvalue()
-    assert "DO $$" in emitted, "offline upgrade must emit a guard block"
-    assert "pricing_snapshots" in emitted, "the guard must name the table it protects"
+
+def _assert_empty_table_guard(emitted: str, direction: str) -> None:
+    """Assert offline SQL carries the guard that refuses a populated table."""
+    assert "DO $$" in emitted, f"offline {direction} must emit a guard block"
     assert "RAISE EXCEPTION" in emitted.upper(), (
         "the guard must raise on a populated table"
     )
+
+
+def test_offline_upgrade_guards_against_existing_rows() -> None:
+    """Offline DDL cannot convert rows, so it refuses to run on a populated table."""
+    emitted = _offline_sql(command.upgrade, f"{LEGACY_REVISION}:{_NEW_REVISION}")
+
+    _assert_empty_table_guard(emitted, "upgrade")
+    assert "pricing_snapshots" in emitted, "the guard must name the table it protects"
 
 
 def test_offline_downgrade_guards_against_existing_rows() -> None:
     """Offline downgrade emits the same emptiness guard."""
-    config = alembic_config("postgresql://offline.example/episodic")
-    output = io.StringIO()
-    config.output_buffer = output
-    command.downgrade(config, f"{_NEW_REVISION}:{LEGACY_REVISION}", sql=True)
+    emitted = _offline_sql(command.downgrade, f"{_NEW_REVISION}:{LEGACY_REVISION}")
 
-    emitted = output.getvalue()
-    assert "DO $$" in emitted, "offline downgrade must emit a guard block"
-    assert "RAISE EXCEPTION" in emitted.upper(), (
-        "the guard must raise on a populated table"
-    )
+    _assert_empty_table_guard(emitted, "downgrade")

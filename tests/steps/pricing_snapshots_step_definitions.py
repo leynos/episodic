@@ -12,7 +12,7 @@ import asyncio  # ruff: ignore[typing-only-standard-library-import]  # pytest-bd
 import pytest
 from pytest_bdd import given, parsers, then, when
 
-from episodic.cost import PricingSnapshotIntegrityError
+from episodic.cost import PricingSnapshotId, PricingSnapshotIntegrityError
 from episodic.cost.engine import PricingEngine, PricingRequest
 from tests.fixtures.cost import v1_pricing_snapshot
 from tests.steps.pricing_snapshots_support import (
@@ -53,13 +53,7 @@ def pinned_run(
     _function_scoped_runner: asyncio.Runner,
 ) -> None:
     """Pin the run before its card is revised or deleted."""
-    _function_scoped_runner.run(
-        pin_llm_run(
-            pricing_context.session_factory,
-            pricing_context.directory,
-            pricing_context.run_id,
-        )
-    )
+    _pin_run(pricing_context, _function_scoped_runner, pricing_context.run_id)
 
 
 @given("a TTS rate card charging 1500 minor units per 1000000 input characters")
@@ -123,13 +117,7 @@ def pinned_llm_card(
 ) -> None:
     """Write the pre-correction card and pin the run to it."""
     write_llm_card(pricing_context.directory, cached_minor="8")
-    _function_scoped_runner.run(
-        pin_llm_run(
-            pricing_context.session_factory,
-            pricing_context.directory,
-            pricing_context.run_id,
-        )
-    )
+    _pin_run(pricing_context, _function_scoped_runner, pricing_context.run_id)
 
 
 @when(
@@ -208,14 +196,11 @@ def tamper_rates(
     _function_scoped_runner: asyncio.Runner,
 ) -> None:
     """Alter the stored rates without updating the content hash."""
-    assert pricing_context.stored_snapshot_id is not None, (
-        "the snapshot must be persisted before it can be tampered with"
+    snapshot_id = _require_stored_snapshot_id(
+        pricing_context, purpose="it can be tampered with"
     )
     _function_scoped_runner.run(
-        tamper_stored_rates(
-            pricing_context.session_factory,
-            pricing_context.stored_snapshot_id,
-        )
+        tamper_stored_rates(pricing_context.session_factory, snapshot_id)
     )
 
 
@@ -338,16 +323,36 @@ def tampered_read_fails(
     _function_scoped_runner: asyncio.Runner,
 ) -> None:
     """Assert the tampered row is refused rather than priced."""
-    assert pricing_context.stored_snapshot_id is not None, (
-        "the snapshot must be persisted before reading it"
-    )
+    snapshot_id = _require_stored_snapshot_id(pricing_context, purpose="reading it")
     with pytest.raises(PricingSnapshotIntegrityError):
         _function_scoped_runner.run(
-            read_stored_snapshot(
-                pricing_context.session_factory,
-                pricing_context.stored_snapshot_id,
-            )
+            read_stored_snapshot(pricing_context.session_factory, snapshot_id)
         )
+
+
+def _pin_run(
+    pricing_context: PricingSnapshotContext,
+    runner: asyncio.Runner,
+    run_id: str,
+) -> None:
+    """Pin one run to the card currently on disk."""
+    runner.run(
+        pin_llm_run(
+            pricing_context.session_factory,
+            pricing_context.directory,
+            run_id,
+        )
+    )
+
+
+def _require_stored_snapshot_id(
+    pricing_context: PricingSnapshotContext, *, purpose: str
+) -> PricingSnapshotId:
+    """Return the persisted id, asserting it exists before the described use."""
+    assert pricing_context.stored_snapshot_id is not None, (
+        f"the snapshot must be persisted before {purpose}"
+    )
+    return pricing_context.stored_snapshot_id
 
 
 def _assert_revised_run_cost(
@@ -356,13 +361,7 @@ def _assert_revised_run_cost(
     expected: int,
 ) -> None:
     """Pin and record a fresh run, then assert its revised-card cost."""
-    runner.run(
-        pin_llm_run(
-            pricing_context.session_factory,
-            pricing_context.directory,
-            REVISED_RUN_ID,
-        )
-    )
+    _pin_run(pricing_context, runner, REVISED_RUN_ID)
     recorded = runner.run(
         record_llm_call(
             pricing_context,

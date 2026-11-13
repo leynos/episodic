@@ -28,6 +28,7 @@ down_revision: str | None = "20261031_000016"
 branch_labels: str | None = None
 depends_on: str | None = None
 
+_Row = cabc.Mapping[str, object]
 _RATE_SCALE = 1_000_000
 _MAX_JSON_INT = 2**53 - 1
 # The legacy table never stored the plan text an SLA4OAI row came from, so the
@@ -173,16 +174,16 @@ def _canonical_document(
     }
 
 
-def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
-    """Reject a legacy row that cannot become a valid version 1 snapshot.
-
-    A row that escaped these checks would migrate into a snapshot that ``get``
-    can never rebuild, so the migration fails loudly instead.
-    """
+def _validate_text_fields(row: _Row, snapshot_id: object) -> None:
+    """Reject a blank provider, model, or operation."""
     for field in _REQUIRED_TEXT_FIELDS:
         value = row[field]
         if not isinstance(value, str) or not value.strip():
             _reject(snapshot_id, f"{field} must be a non-blank string")
+
+
+def _validate_currency_and_source_kind(row: _Row, snapshot_id: object) -> None:
+    """Reject a currency or source kind the version 1 schema does not define."""
     # The domain pattern is repeated rather than imported because a migration
     # must keep converting rows the way it always did, even when the domain
     # validator later changes.
@@ -192,33 +193,38 @@ def _validate_row(row: cabc.Mapping[str, object], snapshot_id: object) -> None:
     source_kind = row["source_kind"]
     if source_kind not in _SOURCE_KINDS:
         _reject(snapshot_id, f"unknown source kind {source_kind!r}")
+
+
+def _validate_json_columns(row: _Row, snapshot_id: object) -> None:
+    """Reject JSON columns that cannot hold the version 1 shapes."""
     # A JSONB column may hold an array or scalar, which would fail on .items().
     for field in ("rates_minor_per_metric", "source_metadata"):
         if not isinstance(row[field], cabc.Mapping):
             _reject(snapshot_id, f"{field} must be a JSON object")
-    if source_kind == "provider_rate_card" and not row["rates_minor_per_metric"]:
+    if row["source_kind"] == "provider_rate_card" and not row["rates_minor_per_metric"]:
         _reject(snapshot_id, "a rate card snapshot must price at least one metric")
 
 
+def _validate_row(row: _Row, snapshot_id: object) -> None:
+    """Reject a legacy row that cannot become a valid version 1 snapshot.
+
+    An unchecked row would migrate into a snapshot that ``get`` cannot rebuild.
+    """
+    _validate_text_fields(row, snapshot_id)
+    _validate_currency_and_source_kind(row, snapshot_id)
+    _validate_json_columns(row, snapshot_id)
+
+
 def _converted_row(
-    row: cabc.Mapping[str, object],
-) -> tuple[
-    dict[str, dict[str, object]],
-    dict[str, str],
-    dict[str, str] | None,
-    str,
-]:
+    row: _Row,
+) -> tuple[dict[str, dict[str, object]], dict[str, str], dict[str, str] | None, str]:
     """Convert one legacy row and return its rates, metadata, document, hash."""
     snapshot_id = row["id"]
     _validate_row(row, snapshot_id)
-    rates = _convert_rates(
-        typ.cast("cabc.Mapping[str, object]", row["rates_minor_per_metric"]),
-        snapshot_id,
-    )
-    metadata = _convert_metadata(
-        typ.cast("cabc.Mapping[str, object]", row["source_metadata"]),
-        snapshot_id,
-    )
+    raw_rates = typ.cast("cabc.Mapping[str, object]", row["rates_minor_per_metric"])
+    raw_metadata = typ.cast("cabc.Mapping[str, object]", row["source_metadata"])
+    rates = _convert_rates(raw_rates, snapshot_id)
+    metadata = _convert_metadata(raw_metadata, snapshot_id)
     document = _canonical_document(row, rates, metadata)
     source_document = None
     if row["source_kind"] == "sla4oai_plan":
@@ -230,10 +236,9 @@ def _converted_row(
             "content": content,
         }
         # Identity hashes the digest, as the application encoder does.
-        digest = f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}"
         document["source_document"] = {
             "media_type": _LEGACY_DOCUMENT_MEDIA_TYPE,
-            "sha256": digest,
+            "sha256": f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}",
         }
     payload = _canonical_json(document).encode("utf-8")
     content_hash = f"sha256:{hashlib.sha256(payload).hexdigest()}"
@@ -253,9 +258,7 @@ def _add_new_columns() -> None:
     op.add_column(
         "pricing_snapshots",
         sa.Column(
-            "recorded_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
+            "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now()
         ),
     )
 
@@ -276,15 +279,13 @@ def _drop_legacy_columns() -> None:
 
 def _legacy_rows(connection: sa.Connection) -> list[dict[str, object]]:
     """Read every legacy row, oldest first so the earliest survives a merge."""
-    result = connection.execute(
-        sa.text(
-            "SELECT id, provider_name, model, operation, source_kind, currency, "
-            "rates_minor_per_metric, source_metadata, retrieved_at, "
-            "effective_from, billing_period_key FROM pricing_snapshots "
-            "ORDER BY retrieved_at, id"
-        )
+    query = sa.text(
+        "SELECT id, provider_name, model, operation, source_kind, currency, "
+        "rates_minor_per_metric, source_metadata, retrieved_at, "
+        "effective_from, billing_period_key FROM pricing_snapshots "
+        "ORDER BY retrieved_at, id"
     )
-    return [dict(row._mapping) for row in result]
+    return [dict(row._mapping) for row in connection.execute(query)]
 
 
 def _merge_equivalent_row(
@@ -313,10 +314,7 @@ def _merge_equivalent_row(
     )
 
 
-def _write_converted_rows(
-    connection: sa.Connection,
-    rows: cabc.Sequence[dict[str, object]],
-) -> None:
+def _write_converted_rows(connection: sa.Connection, rows: cabc.Sequence[_Row]) -> None:
     """Convert and write every legacy row, merging equivalent content."""
     survivors: dict[str, object] = {}
     for row in rows:
