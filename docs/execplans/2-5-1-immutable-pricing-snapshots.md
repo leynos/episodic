@@ -567,6 +567,12 @@ Success is observable as follows:
   parsing produces dates and floats that canonical JSON cannot represent
   faithfully, and parsing is `2.5.2` work. Date/Author: 2026-10-16, planning
   agent.
+- Decision: a legacy `sla4oai_plan` row converts with a reconstructed JSON
+  source document built from its own canonical fields. Rationale: the `2.4.4`
+  schema stored a plan's rates and metadata but never the plan text, so the
+  row's own fields are the only faithful record; keeping the source kind avoids
+  substituting a provider rate card. Date/Author: 2026-11-11, implementation
+  agent.
 - Decision: one `PricingSnapshot` type with explicit invariants rather than a
   tagged union of document kinds. Rationale: LLM and TTS differ only by service
   kind and metrics; the SLA4OAI case differs by having a required source
@@ -846,6 +852,21 @@ Success is observable as follows:
   - The merge helpers pushed the migration module past the 400-line limit, so
     the empty-table guard, the source-document columns, and the check
     constraints are now built from loops. The module is 395 lines.
+- Round 9 on `180a71f9`: no repository gates were run for the review round
+  itself; the candidate carried the round-8 green gate set. The CLI review
+  covered 80 files and raised two findings, both actioned:
+  - A legacy `sla4oai_plan` row aborted the upgrade, contradicting the users'
+    guide's promise to convert every row. The row now keeps its kind and
+    carries a reconstructed JSON source document built from its own canonical
+    fields. A migration case seeds a plan with no rates and asserts the kind,
+    the document, and the preserved subject.
+  - Unpinned calls resolved their card at wall-clock now, so a card that became
+    effective between the call and its recording could reprice it. `resolve`
+    now takes an optional `at` instant and the recorder passes the call's
+    `recorded_at`; run pins stay authoritative.
+  - The added conversion pushed the migration module past 400 lines, so the
+    JSONB shape check, currency check, and rate checks were folded into
+    `_validate_row`; the module is 399 lines.
 - Lesson: a uniqueness constraint added by a migration is a merge instruction.
   The legacy table allowed rows that the new identity cannot distinguish, so
   the upgrade must decide which row survives and move every reference before

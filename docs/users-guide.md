@@ -925,6 +925,9 @@ a new content hash, so it becomes a new snapshot version; runs that already
 pinned the earlier version keep pricing from the stored row. A new run uses the
 corrected rate only when the corrected card is the applicable card for its
 subject, meaning it has the latest `effective_from` that is not in the future.
+An unpinned call resolves its card at the instant the call was recorded, not at
+the moment its cost is written, so a card that becomes effective while the call
+runs cannot reprice it.
 
 Cards written for the earlier `2.4.4` format are rejected at startup with an
 error naming the file and the legacy fields it found (`pricing_snapshot_id`,
@@ -952,9 +955,12 @@ writer that resumes early either blocks or races the conversion. In the local
 Podman/kind preview, replacing the application pod also deletes the `emptyDir`
 source-blob store, so re-upload source documents after the upgrade as described
 in the preview notes above. The migration converts every existing row to schema
-version 1; its offline (`--sql`) form refuses to run unless `pricing_snapshots`
-is empty, because hash recomputation needs Python. Downgrade refuses unless the
-table is empty.
+version 1. A legacy `sla4oai_plan` row keeps its kind and gains a source
+document holding the row's own fields as JSON (`application/json`), because the
+earlier release stored a plan's rates and metadata but not the plan text. Its
+offline (`--sql`) form refuses to run unless `pricing_snapshots` is empty,
+because hash recomputation needs Python. Downgrade refuses unless the table is
+empty.
 
 ### Advanced Topics
 
