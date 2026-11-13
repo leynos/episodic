@@ -6,26 +6,26 @@ this file.
 
 Accepted design decisions relevant to current implementation work:
 
-- [`adr-001-reference-binding-resolution-algorithm.md`](adr/adr-001-reference-binding-resolution-algorithm.md)
-- [`adr-002-http-service-composition-root.md`](adr/adr-002-http-service-composition-root.md)
-- [`adr-003-celery-worker-scaffold.md`](adr/adr-003-celery-worker-scaffold.md)
-- [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md)
-- [`adr-005-structured-planning-and-tool-execution.md`](adr/adr-005-structured-planning-and-tool-execution.md)
-- [`adr-006-chrono-spoken-text-semantics.md`](adr/adr-006-chrono-spoken-text-semantics.md)
-- [`adr-007-durable-generation-checkpoints.md`](adr/adr-007-durable-generation-checkpoints.md)
-- [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md)
-- [`adr-009-source-to-script-rest-vertical-slice.md`](adr/adr-009-source-to-script-rest-vertical-slice.md)
-- [`adr-010-guest-bios-tei-representation.md`](adr/adr-010-guest-bios-tei-representation.md)
-- [`adr-011-tts-capability-negotiation.md`](adr/adr-011-tts-capability-negotiation.md)
-- [`adr-012-pronunciation-repository.md`](adr/adr-012-pronunciation-repository.md)
-- [`adr-013-speech-synthesis-adapters.md`](adr/adr-013-speech-synthesis-adapters.md)
-- [`adr-014-hexagonal-architecture-enforcement.md`](adr/adr-014-hexagonal-architecture-enforcement.md)
-- [`adr-015-generation-run-port-split.md`](adr/adr-015-generation-run-port-split.md)
-- [`adr-015-upload-and-idempotency-ports.md`](adr/adr-015-upload-and-idempotency-ports.md)
-- [`adr-017-no-qa-generation-run-execution-and-tei-persistence.md`][adr-017]
+- [`adr-0001-reference-binding-resolution-algorithm.md`](adrs/adr-0001-reference-binding-resolution-algorithm.md)
+- [`adr-0002-http-service-composition-root.md`](adrs/adr-0002-http-service-composition-root.md)
+- [`adr-0003-celery-worker-scaffold.md`](adrs/adr-0003-celery-worker-scaffold.md)
+- [`adr-0004-show-notes-tei-representation.md`](adrs/adr-0004-show-notes-tei-representation.md)
+- [`adr-0005-structured-planning-and-tool-execution.md`](adrs/adr-0005-structured-planning-and-tool-execution.md)
+- [`adr-0006-chrono-spoken-text-semantics.md`](adrs/adr-0006-chrono-spoken-text-semantics.md)
+- [`adr-0007-durable-generation-checkpoints.md`](adrs/adr-0007-durable-generation-checkpoints.md)
+- [`adr-0008-chapter-marker-tei-representation.md`](adrs/adr-0008-chapter-marker-tei-representation.md)
+- [`adr-0009-source-to-script-rest-vertical-slice.md`](adrs/adr-0009-source-to-script-rest-vertical-slice.md)
+- [`adr-0010-guest-bios-tei-representation.md`](adrs/adr-0010-guest-bios-tei-representation.md)
+- [`adr-0011-tts-capability-negotiation.md`](adrs/adr-0011-tts-capability-negotiation.md)
+- [`adr-0012-pronunciation-repository.md`](adrs/adr-0012-pronunciation-repository.md)
+- [`adr-0013-speech-synthesis-adapters.md`](adrs/adr-0013-speech-synthesis-adapters.md)
+- [`adr-0014-hexagonal-architecture-enforcement.md`](adrs/adr-0014-hexagonal-architecture-enforcement.md)
+- [`adr-0015-generation-run-port-split.md`](adrs/adr-0015-generation-run-port-split.md)
+- [`adr-0015-upload-and-idempotency-ports.md`](adrs/adr-0015-upload-and-idempotency-ports.md)
+- [`adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`][adr-017]
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
-[adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
+[adr-017]: adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md
 
 ## Local development
 
@@ -137,7 +137,7 @@ refuses the shape it exists to refuse, so this repository keeps no copy of the
 readers.
 
 The decision is recorded in
-[ADR 023](adr/adr-023-adopt-the-shared-cv005-contract-library.md). What stays
+[ADR 023](adrs/adr-0023-adopt-the-shared-cv005-contract-library.md). What stays
 local is what the library does not know:
 `tests/test_action_revisions_contract.py` records each approved shared-action
 revision with the actions nested in it and refuses any unrecorded revision or
@@ -744,7 +744,7 @@ Versioned API routing:
 - New terminal user interface (TUI)-facing and vertical-slice REST endpoints
   must be registered under `/v1`.
 - The routing decision follows
-  [`adr-009-source-to-script-rest-vertical-slice.md`](adr/adr-009-source-to-script-rest-vertical-slice.md)
+  [`adr-0009-source-to-script-rest-vertical-slice.md`](adrs/adr-0009-source-to-script-rest-vertical-slice.md)
   and [`episodic-tui-api-design.md`](episodic-tui-api-design.md).
 
 REST error contract:
@@ -1587,7 +1587,7 @@ The following error codes are reserved for the source-intake implementation:
 _Table 4: Reserved source-intake API error codes._
 
 Source-intake observability follows
-[ADR 015](adr/adr-015-upload-and-idempotency-ports.md). Implement the metrics
+[ADR 015](adrs/adr-0015-upload-and-idempotency-ports.md). Implement the metrics
 through the shared `MetricsPort` boundary and keep labels bounded: route,
 outcome, content-type family, operation, error code, error class, upload state,
 intake state, and target kind are allowed. Never use upload ids, idempotency
@@ -1756,7 +1756,7 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 Durable QA records live in the canonical package, not in `episodic/qa/`,
 because the recording module knows both the evaluator result and the canonical
 episode. See
-[ADR 026: QA artefact persistence contract](adr/adr-026-qa-artefact-persistence-contract.md).
+[ADR 026: QA artefact persistence contract](adrs/adr-0026-qa-artefact-persistence-contract.md).
 
 - `episodic/canonical/qa_artefacts.py` defines `QaEvaluationSummary`,
   `QaEvaluation`, `QaFinding`, the `QaEvaluator`, `QaComplianceStatus`, and
@@ -1888,7 +1888,7 @@ Maintainer rules:
 
 The `episodic` console script is a REST client of the HTTP API, not a second
 database client. See
-[ADR 027: CLI client boundary](adr/adr-027-cli-client-boundary.md).
+[ADR 027: CLI client boundary](adrs/adr-0027-cli-client-boundary.md).
 
 ### Package layout
 
@@ -2058,7 +2058,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   through `LLMPort` and strictly parses JSON output into typed entries.
 - `enrich_tei_with_show_notes(...)` inserts a `<div type="notes">` element
   into the TEI body using the representation defined by
-  [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md):
+  [`adr-0004-show-notes-tei-representation.md`](adrs/adr-0004-show-notes-tei-representation.md):
   `<list>` contains one `<item>` per note, `<label>` carries the topic, the
   summary is inline text, `@n` stores an optional timestamp, and `@corresp`
   stores an optional source locator.
@@ -2085,7 +2085,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
 - `enrich_tei_with_chapter_markers(...)` inserts a
   `<div type="chapters">` element into the TEI body using the representation
   defined by
-  [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md).
+  [`adr-0008-chapter-marker-tei-representation.md`](adrs/adr-0008-chapter-marker-tei-representation.md).
   The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
   `@n` stores the required start time, and `@corresp` stores an optional source
   locator. Optional DTO `end` and `duration` values are validated but not
@@ -2150,7 +2150,7 @@ async def enrich_with_chapters(llm_port, script_tei_xml: str) -> str:
   `<label>` with the guest display name, inline biography text, and `@corresp`
   pointing at the pinned reference-document revision. The representation is
   defined by
-  [`adr-010-guest-bios-tei-representation.md`](adr/adr-010-guest-bios-tei-representation.md).
+  [`adr-0010-guest-bios-tei-representation.md`](adrs/adr-0010-guest-bios-tei-representation.md).
 - `GuestBiosResponseFormatError` is raised when the provider response is not a
   JSON object with a `guests` list, when required fields are missing or blank,
   when a revision identifier is unknown, or when the response duplicates a
@@ -3048,7 +3048,7 @@ does not allow the broad `external_libraries` group, keeping its dependencies
 limited to its backend and private type support.
 
 The architectural decision and its consequences are recorded in
-[ADR-025](adr/adr-025-central-logging-port.md).
+[ADR-025](adrs/adr-0025-central-logging-port.md).
 
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:

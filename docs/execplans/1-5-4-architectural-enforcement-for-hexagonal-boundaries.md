@@ -95,7 +95,7 @@ Implementation approval rule:
   -backed inference directly, that behaviour test must use Vidai Mock.
 - Keep existing public API and runtime behaviour stable. This work adds
   enforcement, not new user-facing endpoints or protocol changes.
-- Record the enforcement design in a new ADR under `docs/adr/`.
+- Record the enforcement design in a new ADR under `docs/adrs/`.
 - Update `docs/episodic-podcast-generation-system-design.md`,
   `docs/developers-guide.md`, and `docs/users-guide.md` so the documented
   enforcement scope matches the implementation exactly.
@@ -390,8 +390,8 @@ The implementation should stay anchored to the following documents:
 - `docs/agentic-systems-with-langgraph-and-celery.md`
 - `docs/execplans/1-5-1-scaffold-falcon-http-services-on-granian.md`
 - `docs/execplans/1-5-2-scaffold-celery-workers-with-rabbit-mq-integration.md`
-- `docs/adr/adr-002-http-service-composition-root.md`
-- `docs/adr/adr-003-celery-worker-scaffold.md`
+- `docs/adrs/adr-0002-http-service-composition-root.md`
+- `docs/adrs/adr-0003-celery-worker-scaffold.md`
 
 ### Relevant skills
 
@@ -607,7 +607,7 @@ model.
    - leave `make test` to collect the architecture tests along with the rest of
      the suite.
 2. Add a new ADR, expected path
-   `docs/adr/adr-014-hexagonal-architecture-enforcement.md`, describing:
+   `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`, describing:
    - why Ruff alone is insufficient for Episodic's dependency graph;
    - the chosen checker shape and scope;
    - the explicit composition-root exception model; and

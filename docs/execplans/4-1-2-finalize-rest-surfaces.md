@@ -80,7 +80,7 @@ Success is observable when:
 ## Constraints
 
 - Preserve hexagonal architecture invariants per ADR 014
-  (`docs/adr/adr-014-hexagonal-architecture-enforcement.md`) and the Hecate
+  (`docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`) and the Hecate
   configuration in `[tool.hecate]` at `pyproject.toml:437-496`. The
   inbound-adapter group is allowed to import only `domain_ports`,
   `application`, and itself (`pyproject.toml:480-486`). The architecture check (
@@ -237,9 +237,9 @@ Success is observable when:
   `execplans`, and `firecrawl` skills; added the worktree as a leta workspace.
 - [x] (2026-05-23T17:30Z) Reviewed `docs/roadmap.md` §4.1.2,
   `docs/episodic-tui-api-design.md` §"Error contract" and §"Pagination
-  contract", `docs/adr/adr-009-source-to-script-rest-vertical-slice.md`,
-  `docs/adr/adr-014-hexagonal-architecture-enforcement.md`,
-  `docs/adr/adr-002-http-service-composition-root.md`, and the prior ExecPlan
+  contract", `docs/adrs/adr-0009-source-to-script-rest-vertical-slice.md`,
+  `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`,
+  `docs/adrs/adr-0002-http-service-composition-root.md`, and the prior ExecPlan
   `docs/execplans/4-1-1-introduce-v1-target-api-prefix.md`.
 - [x] (2026-05-23T17:30Z) Created context pack `pk_gsp3r7fg` for the Wyvern
   planning team and ran three subagents in parallel (API surface inventory,
@@ -624,9 +624,9 @@ Source documents that govern this work:
   contract".
 - `docs/episodic-podcast-generation-system-design.md` §"Reusable reference
   REST API specification" (lines 1829-1875) and §"Client Experience Layer".
-- ADR 002 (`docs/adr/adr-002-http-service-composition-root.md`),
-  ADR 009 (`docs/adr/adr-009-source-to-script-rest-vertical-slice.md`), ADR 014
-  (`docs/adr/adr-014-hexagonal-architecture-enforcement.md`).
+- ADR 002 (`docs/adrs/adr-0002-http-service-composition-root.md`),
+  ADR 009 (`docs/adrs/adr-0009-source-to-script-rest-vertical-slice.md`), ADR
+  014 (`docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`).
 - `docs/async-sqlalchemy-with-pg-and-falcon.md`,
   `docs/testing-async-falcon-endpoints.md`,
   `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`,

@@ -105,4 +105,4 @@ compiled artefacts and can be regenerated when adapter rules change.
 - Design:
   `docs/episodic-podcast-generation-system-design.md#pronunciation-repository`
 - ADR 011:
-  `docs/adr/adr-011-tts-capability-negotiation.md`
+  `docs/adrs/adr-0011-tts-capability-negotiation.md`

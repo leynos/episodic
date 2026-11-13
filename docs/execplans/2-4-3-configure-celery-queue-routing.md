@@ -191,9 +191,9 @@ Use these repository documents while implementing the plan:
 - `docs/users-guide.md` for operator-visible worker configuration.
 - `docs/developers-guide.md` for maintainer-facing task registration and
   routing conventions.
-- `docs/adr/adr-003-celery-worker-scaffold.md` for the accepted worker
+- `docs/adrs/adr-0003-celery-worker-scaffold.md` for the accepted worker
   topology and brokerless test scope.
-- `docs/adr/adr-007-durable-generation-checkpoints.md` because it currently
+- `docs/adrs/adr-0007-durable-generation-checkpoints.md` because it currently
   treats Celery routing as later work.
 
 Apply these Codex skills while implementing the plan:
@@ -392,10 +392,10 @@ Update documentation after code behaviour is stable:
 - `docs/developers-guide.md` should explain how maintainers add a new routed
   task: define a typed payload, classify the task, add tests, and avoid adapter
   leakage.
-- `docs/adr/adr-003-celery-worker-scaffold.md` should be updated if the
+- `docs/adrs/adr-0003-celery-worker-scaffold.md` should be updated if the
   scaffold route contract becomes stricter or if representative tasks are
   joined by production workflow tasks.
-- `docs/adr/adr-007-durable-generation-checkpoints.md` should stop describing
+- `docs/adrs/adr-0007-durable-generation-checkpoints.md` should stop describing
   Celery routing as entirely future work once this item lands.
 - Add a new ADR only if implementation makes a substantive new decision beyond
   ADR-003, such as strict unknown-task rejection, a new route-intent DTO, or a

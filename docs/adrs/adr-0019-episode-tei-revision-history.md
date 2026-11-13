@@ -14,7 +14,7 @@ revision-aware reads, and restore-as-forward-write semantics.
 
 Canonical episodes version their TEI P5 document with an optimistic
 `tei_revision` counter and a `tei_content_hash`
-([ADR-017](adr-017-no-qa-generation-run-execution-and-tei-persistence.md)).
+([ADR-017](adr-0017-no-qa-generation-run-execution-and-tei-persistence.md)).
 This detects concurrent writers but retains only the latest document: each
 successful write overwrites `episodes.tei_xml` and its `episodes.tei_xml_zstd`
 companion, and the superseded revision is unrecoverable.
@@ -37,7 +37,7 @@ The repository already has an established shape for retained history:
 `series_profile_history` and `episode_template_history` are append-only rows
 written by the repository in the same unit of work as the parent update, with
 `(parent_id, revision)` uniqueness and typed conflict translation
-([ADR-018](adr-018-explicit-versioning-and-history-strategy.md)).
+([ADR-018](adr-0018-explicit-versioning-and-history-strategy.md)).
 
 ## Decision
 
@@ -137,8 +137,8 @@ by this decision.
 
 ## References
 
-- [ADR-017: No-QA generation execution and TEI persistence](adr-017-no-qa-generation-run-execution-and-tei-persistence.md)
-- [ADR-018: Explicit repository-written versioning and history strategy](adr-018-explicit-versioning-and-history-strategy.md)
+- [ADR-017: No-QA generation execution and TEI persistence](adr-0017-no-qa-generation-run-execution-and-tei-persistence.md)
+- [ADR-018: Explicit repository-written versioning and history strategy](adr-0018-explicit-versioning-and-history-strategy.md)
 - Migration `20260220_000002_add_profile_template_history_schema.py` (the
   pattern being extended)
 - [TUI/API design: security considerations](../episodic-tui-api-design.md)

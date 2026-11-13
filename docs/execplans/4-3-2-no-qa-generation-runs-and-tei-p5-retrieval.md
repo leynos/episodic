@@ -32,7 +32,7 @@ pipelines:
    JSON metadata envelope or an `application/tei+xml` file.
 
 This validates the `/v1` resource contract defined in
-[ADR 009](../adr/adr-009-source-to-script-rest-vertical-slice.md) before the
+[ADR 009](../adrs/adr-0009-source-to-script-rest-vertical-slice.md) before the
 full approval, QA, audio, and export surfaces land.
 
 Success is observable by running the end-to-end behavioural scenario
@@ -88,7 +88,7 @@ Hard invariants that must hold throughout implementation. Violation requires
 escalation, not a workaround.
 
 - Respect the hexagonal architecture boundary rules enforced by
-  [ADR 014](../adr/adr-014-hexagonal-architecture-enforcement.md) and
+  [ADR 014](../adrs/adr-0014-hexagonal-architecture-enforcement.md) and
   `make lint` (`make check-architecture`). Domain code in `episodic/canonical/`
   and `episodic/generation/` must not import Falcon, SQLAlchemy, httpx, Celery,
   or LangGraph. The architecture groups are defined by exact module-prefix
@@ -103,7 +103,7 @@ escalation, not a workaround.
   [TEI Rapporteur users' guide](../tei-rapporteur-users-guide.md)). Do not add
   a second TEI parser or hand-roll XML traversal (the spoken-text semantic
   contract is owned by
-  [ADR 006](../adr/adr-006-chrono-spoken-text-semantics.md)).
+  [ADR 006](../adrs/adr-0006-chrono-spoken-text-semantics.md)).
 - Honour the ADR 009 API contract exactly: `quality_mode=draft_without_qa` runs
   record `qa_status=skipped`, the requesting actor, and a client-supplied
   rationale; side-effecting `POST` requests accept `Idempotency-Key` with
@@ -940,19 +940,19 @@ logic is kept behind ports and adapters (hexagonal architecture).
 Read these documents before starting; they are the source of truth for this
 slice:
 
-- [ADR 009: Source-to-script REST vertical slice](../adr/adr-009-source-to-script-rest-vertical-slice.md)
+- [ADR 009: Source-to-script REST vertical slice](../adrs/adr-0009-source-to-script-rest-vertical-slice.md)
   — the API contract, idempotency rules, observability, partial-failure
   recovery, and testing strategy.
-- [ADR 007: Durable generation checkpoints](../adr/adr-007-durable-generation-checkpoints.md)
+- [ADR 007: Durable generation checkpoints](../adrs/adr-0007-durable-generation-checkpoints.md)
   — orchestration boundary and why Celery dispatch is deferred.
-- [ADR 006: Chrono spoken-text semantics](../adr/adr-006-chrono-spoken-text-semantics.md)
+- [ADR 006: Chrono spoken-text semantics](../adrs/adr-0006-chrono-spoken-text-semantics.md)
   — which TEI elements count as spoken script (`<sp>`, `<u>`, `<p>`, `<l>`,
   `<ab>`, `<seg>`; `<speaker>`/`<stage>`/`<note>` excluded). This fixes the
   shape the generator must emit and Chrono will later consume.
-- [ADR 015: Generation-run port split](../adr/adr-015-generation-run-port-split.md)
+- [ADR 015: Generation-run port split](../adrs/adr-0015-generation-run-port-split.md)
   and
-  [ADR 015: Upload and idempotency ports](../adr/adr-015-upload-and-idempotency-ports.md).
-- [ADR 014: Hexagonal architecture enforcement](../adr/adr-014-hexagonal-architecture-enforcement.md).
+  [ADR 015: Upload and idempotency ports](../adrs/adr-0015-upload-and-idempotency-ports.md).
+- [ADR 014: Hexagonal architecture enforcement](../adrs/adr-0014-hexagonal-architecture-enforcement.md).
 - [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md),
   section "Source-to-script vertical slice".
 - [Episodic TUI API design](../episodic-tui-api-design.md), sections
@@ -1553,7 +1553,8 @@ Gate: full Python gates including the now-active scenarios. Commit.
 
 ### Milestone 8 — Documentation, roadmap update, final gates
 
-1. Add `docs/adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md`
+1. Add
+   `docs/adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`
    recording: the in-process launcher port (a degenerate `TaskResumePort`) and
    the Celery deferral, the single-worker assumption and stuck-run hooks (lease
    columns, conditional transitions, manual-fail runbook), episode

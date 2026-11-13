@@ -66,8 +66,9 @@ Success is observable in these behaviours:
   idempotency-key and state-transition invariants.
 - Update `docs/episodic-podcast-generation-system-design.md`,
   `docs/users-guide.md`, and `docs/developers-guide.md` for the implemented
-  behaviour. Add or update an Architecture Decision Record (ADR) in `docs/adr/`
-  for the durable design decision if the existing ADR does not already cover it.
+  behaviour. Add or update an Architecture Decision Record (ADR) in
+  `docs/adrs/` for the durable design decision if the existing ADR does not
+  already cover it.
 - Do not mark `docs/roadmap.md` item `2.4.2` done until the implementation,
   documentation, and validation gates all pass.
 - Run validation commands sequentially, not in parallel:
@@ -184,7 +185,7 @@ Success is observable in these behaviours:
 - [x] (2026-05-08 01:16Z) Stage F: updated
   `docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`,
   `docs/developers-guide.md`, and added
-  `docs/adr/adr-007-durable-generation-checkpoints.md`.
+  `docs/adrs/adr-0007-durable-generation-checkpoints.md`.
 - [x] Stage F: update design, user, developer, and ADR documentation.
 - [x] (2026-05-08 01:27Z) Stage G: final validation passed after marking
   roadmap item `2.4.2` done: `make check-fmt`, `make typecheck`, `make lint`,

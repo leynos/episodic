@@ -407,8 +407,9 @@ sponsor reads without changing the planner DTOs.
 ## Accepted ADR
 
 ADR-005, "Structured planning and tool execution for generation orchestration",
-is accepted under `docs/adr/adr-005-structured-planning-and-tool-execution.md`
-and is listed in the system design document's accepted decision records.
+is accepted under
+`docs/adrs/adr-0005-structured-planning-and-tool-execution.md` and is listed in
+the system design document's accepted decision records.
 
 ADR-005 records the shipped decision to model planning as strict structured
 output rather than prose, execute enrichment through tool ports rather than
@@ -553,7 +554,7 @@ Update documentation after the code is stable.
 
 Required documentation work:
 
-- Refer to ADR-005 and subsequent ADR amendments in `docs/adr/`.
+- Refer to ADR-005 and subsequent ADR amendments in `docs/adrs/`.
 - Update `docs/episodic-podcast-generation-system-design.md` to describe the
   first shipped structured-planning seam, its model-tiering contract, and the
   first enrichment-tool path, documenting required decision changes as ADR

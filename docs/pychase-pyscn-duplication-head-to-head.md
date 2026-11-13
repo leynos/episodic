@@ -19,9 +19,9 @@ A follow-up evaluation of nose 0.20.0 on 2026-08-27 (see
 [the nose follow-up](#follow-up-nose-0200)) tied PyChase's perfect syntactic
 score and detected no Type-4 clone in any configuration. On 2026-08-28 the
 maintainers nevertheless moved the gate to nose on speed and determinism
-grounds; see [ADR-021](adr/adr-021-adopt-nose-duplication-gate.md). The tables
-and history below record the comparison as measured, not the current tool
-choice.
+grounds; see [ADR-021](adrs/adr-0021-adopt-nose-duplication-gate.md). The
+tables and history below record the comparison as measured, not the current
+tool choice.
 
 ## What each project means by duplication
 
@@ -221,7 +221,7 @@ The evaluation therefore left nose tied on Types 1-3 — equalling but not
 bettering PyChase, at the cost of the qualified-name output and `uvx` pinning
 the gate then relied on — and empty-handed on Type 4. On 2026-08-28 the
 maintainers adopted nose regardless, in
-[ADR-021](adr/adr-021-adopt-nose-duplication-gate.md): with detection quality
+[ADR-021](adrs/adr-0021-adopt-nose-duplication-gate.md): with detection quality
 tied, its determinism (byte-identical runs needing neither a `PYTHONHASHSEED`
 nor a Python 3.13 pin) and its roughly fiftyfold speed advantage decided the
 choice, and location-keyed allow entries replace the qualified names it does

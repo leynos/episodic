@@ -89,6 +89,6 @@ requirement for roadmap item `2.3.3`.
 ADR 004 show-notes TEI representation.[^1] ExecPlan for roadmap item
 `2.3.3`.[^2] Implementation: `episodic/generation/guest_bios.py`.[^3]
 
-[^1]: `docs/adr/adr-004-show-notes-tei-representation.md`
+[^1]: `docs/adrs/adr-0004-show-notes-tei-representation.md`
 [^2]: `docs/execplans/2-3-3-generate-guest-bios-from-reference-document-bindings.md`
 [^3]: `episodic/generation/guest_bios.py`

@@ -69,7 +69,7 @@ The plan signposts these skills for the implementing agent:
   repo-local checker until the approved implementation changes it.
 - On implementation, record the decision to adopt Hecate in an Architecture
   Decision Record (ADR) or by superseding
-  `docs/adr/adr-014-hexagonal-architecture-enforcement.md`, then update
+  `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`, then update
   `docs/episodic-podcast-generation-system-design.md` to reference the accepted
   decision.
 - On implementation, update `docs/users-guide.md` only for user-visible command
@@ -588,9 +588,9 @@ Update documentation in the same implementation sequence that changes the
 behaviour:
 
 - Update or supersede
-  `docs/adr/adr-014-hexagonal-architecture-enforcement.md`. If the change is
+  `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`. If the change is
   substantive enough to be a new accepted decision, create a new ADR under
-  `docs/adr/` and reference the old ADR as superseded or amended.
+  `docs/adrs/` and reference the old ADR as superseded or amended.
 - Update the accepted decision records list and hexagonal architecture
   enforcement section in `docs/episodic-podcast-generation-system-design.md`.
 - Update `docs/developers-guide.md` so maintainers edit `[tool.hecate]` when

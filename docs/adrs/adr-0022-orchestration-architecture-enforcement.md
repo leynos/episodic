@@ -109,6 +109,6 @@ enforcement ExecPlan for the implementation milestones and validation
 history.[^2]
 
 [^1]: Hexagonal architecture enforcement:
-  `docs/adr/adr-014-hexagonal-architecture-enforcement.md`
+  `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`
 [^2]: Orchestration enforcement ExecPlan:
   `docs/execplans/2-4-5-extend-architecture-enforcement-to-orchestration-code.md`

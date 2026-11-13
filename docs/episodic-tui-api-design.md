@@ -11,12 +11,12 @@ on the server-side API that the TUI consumes, including abstract TUI
 requirements as motivation and context for the design decisions.
 
 Episode TEI revision history follows
-[ADR-019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
+[ADR-019: Retrievable episode TEI revision history](adrs/adr-0019-episode-tei-revision-history.md)
 and the shared versioning strategy in
-[ADR-018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md).
+[ADR-018: Explicit repository-written versioning and history strategy](adrs/adr-0018-explicit-versioning-and-history-strategy.md).
 
 Durable review-checkpoint persistence follows
-[ADR-024: Review checkpoint persistence](adr/adr-024-review-checkpoint-persistence.md).
+[ADR-024: Review checkpoint persistence](adrs/adr-0024-review-checkpoint-persistence.md).
 
 ## Motivation
 

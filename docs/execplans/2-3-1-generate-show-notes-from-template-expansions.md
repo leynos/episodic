@@ -218,7 +218,7 @@ implementation details. If future upstream regressions appear, start with PR
 - `qdrant-find`/`qdrant-store` tooling is not exposed in this session, so the
   required project-memory lookup/store protocol could not be executed here.
 - Stage G documentation work now exists in-tree:
-  - `docs/adr/adr-004-show-notes-tei-representation.md`
+  - `docs/adrs/adr-0004-show-notes-tei-representation.md`
   - `docs/episodic-podcast-generation-system-design.md`
   - `docs/users-guide.md`
   - `docs/developers-guide.md`
@@ -367,7 +367,7 @@ relative to the repository root.
 - `docs/developers-guide.md` — developer-facing practices. Covers QA
   evaluators, LLM adapter boundary, and testing patterns.
 - `docs/roadmap.md` — the roadmap. Item 2.3.1 is unchecked.
-- `docs/adr-001-pedante-evaluator-contract.md` — reference for ADR format.
+- `docs/adrs/adr-0001-pedante-evaluator-contract.md` — reference for ADR format.
 
 ### Terms used in this plan
 
@@ -664,7 +664,7 @@ Acceptance for Stage F:
 
 #### ADR
 
-Write `docs/adr/adr-004-show-notes-tei-representation.md` documenting the
+Write `docs/adrs/adr-0004-show-notes-tei-representation.md` documenting the
 chosen TEI representation for show notes:
 
 - Context: roadmap 2.3.1 requires show notes as structured metadata within TEI
@@ -807,7 +807,7 @@ Create `tests/features/show_notes.feature` and
 
 ### Step 6: write ADR
 
-Create `docs/adr/adr-004-show-notes-tei-representation.md`.
+Create `docs/adrs/adr-0004-show-notes-tei-representation.md`.
 
 ### Step 7: update documentation
 
@@ -878,7 +878,7 @@ Expected long-lived project artefacts:
 - `tests/test_show_notes.py`
 - `tests/features/show_notes.feature`
 - `tests/steps/test_show_notes_steps.py`
-- `docs/adr/adr-004-show-notes-tei-representation.md`
+- `docs/adrs/adr-0004-show-notes-tei-representation.md`
 - updated `docs/episodic-podcast-generation-system-design.md`
 - updated `docs/users-guide.md`
 - updated `docs/developers-guide.md`

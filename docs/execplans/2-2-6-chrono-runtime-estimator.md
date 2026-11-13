@@ -163,7 +163,7 @@ XML and unsupported TEI body markup.
   `tei-rapporteur` rather than local XML semantics.
 - [x] Stage I: draft the Episodic ADR that proposes spoken-text TEI semantics
   for runtime estimation.
-- [x] (2026-05-10 00:00Z) Drafted proposed ADR-006 under `docs/adr/` with the
+- [x] (2026-05-10 00:00Z) Drafted proposed ADR-006 under `docs/adrs/` with the
   spoken-container mapping, exclusion rules, normalization policy, tokenization
   scope, validation failure policy, and required `tei-rapporteur` extraction
   contract.
@@ -616,7 +616,7 @@ TEI P5 validation. They are not completion gates for roadmap item `2.2.6`.
 
 ### Follow-on Stage I: ratify spoken-text semantics in an ADR
 
-Add a new ADR under `docs/adr/` before changing Chrono parsing behaviour. The
+Add a new ADR under `docs/adrs/` before changing Chrono parsing behaviour. The
 ADR must define, in Episodic domain language, what counts as spoken script text
 for runtime estimation. It must be explicit about:
 

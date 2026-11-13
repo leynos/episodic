@@ -12,7 +12,7 @@ Pedante already exists in `episodic/qa/`, but the shipped implementation still
 reflects the original single-pass design: it sends one prompt containing raw
 Text Encoding Initiative (TEI) XML and source packets, then parses one
 structured response. The revised Architecture Decision Record (ADR) at
-`docs/adr-001-pedante-evaluator-contract.md` now requires a more specific
+`docs/adrs/adr-0001-pedante-evaluator-contract.md` now requires a more specific
 internal design. Pedante must remain TEI-first, use the richer `tei-rapporteur`
 citation model, and be free to execute internally as two passes:
 
@@ -255,8 +255,8 @@ The codebase already contains a working first version of Pedante:
 - `tests/test_pedante_langgraph.py` covers the minimal graph routing seam.
 - `tests/features/pedante.feature` and `tests/steps/test_pedante_steps.py`
   cover the Vidai Mock-backed behaviour path.
-- `docs/adr-001-pedante-evaluator-contract.md` now requires TEI citation-spine
-  awareness and permits a two-pass internal evaluator.
+- `docs/adrs/adr-0001-pedante-evaluator-contract.md` now requires TEI
+  citation-spine awareness and permits a two-pass internal evaluator.
 - `docs/tei-rapporteur-users-guide.md` is the authoritative guide to the
   current TEI projection model.
 - `docs/langgraph-and-celery-in-hexagonal-architecture.md` is the governing
@@ -444,8 +444,8 @@ Acceptance for Stage E:
 
 Once the code is stable, update:
 
-- `docs/adr-001-pedante-evaluator-contract.md` only if implementation exposed
-  ambiguity or required clarification;
+- `docs/adrs/adr-0001-pedante-evaluator-contract.md` only if implementation
+  exposed ambiguity or required clarification;
 - `docs/episodic-podcast-generation-system-design.md` so the QA stack section
   describes the two-pass internal Pedante design accurately;
 - `docs/users-guide.md` if the user-facing explanation of Pedante checks needs

@@ -75,7 +75,7 @@ Success is observable in eight ways:
   implementation unexpectedly adds an HTTP path that calls `LLMPort`, that
   path's behavioural coverage must use Vidai Mock.
 - Record the composition-root and health-contract decisions in a new ADR under
-  `docs/adr/`.
+  `docs/adrs/`.
 - Update `docs/users-guide.md` for user-visible service behaviour,
   `docs/developers-guide.md` for runtime and testing practice, and
   `docs/episodic-podcast-generation-system-design.md` for design alignment.
@@ -429,7 +429,7 @@ task complete.
 
 After the code and tests are green, update the documentation set.
 
-1. Add a new ADR at `docs/adr/adr-002-http-service-composition-root.md`
+1. Add a new ADR at `docs/adrs/adr-0002-http-service-composition-root.md`
    describing:
    - the typed dependency object;
    - the choice of health endpoint contract; and

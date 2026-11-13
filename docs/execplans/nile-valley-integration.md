@@ -304,7 +304,7 @@ repository quality gates pass.
 - Observation: Episodic already exposes `GET /health/live` and
   `GET /health/ready` through `episodic/api/resources/health.py`, and Granian
   can already boot `episodic.api.runtime:create_app_from_env`. Evidence:
-  `docs/adr/adr-002-http-service-composition-root.md`,
+  `docs/adrs/adr-0002-http-service-composition-root.md`,
   `tests/test_health_endpoints.py`, and
   `tests/steps/test_http_service_scaffold_steps.py`. Impact: the HTTP work is
   not a new endpoint scaffold. It is a refactor and hardening step that moves
@@ -1335,8 +1335,8 @@ Primary project files to inspect before implementation:
 - `tests/steps/test_http_service_scaffold_steps.py`
 - `Makefile`
 - `pyproject.toml`
-- `docs/adr/adr-002-http-service-composition-root.md`
-- `docs/adr/adr-014-hexagonal-architecture-enforcement.md`
+- `docs/adrs/adr-0002-http-service-composition-root.md`
+- `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`
 
 Prior-art files reviewed during planning:
 
