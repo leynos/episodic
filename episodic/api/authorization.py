@@ -5,6 +5,7 @@ import dataclasses as dc
 import enum
 import hashlib
 import hmac
+import sys
 import typing as typ
 
 import falcon
@@ -15,6 +16,9 @@ from episodic.observability import MetricsPort, NoopMetrics
 logger = get_logger(__name__)
 
 _AUTHORIZATION_ADAPTER_FAILURE_TOTAL = "authorization_adapter_failure_total"
+_AUTHORIZATION_WARNING_FALLBACK_MESSAGE = (
+    "Authorization warning sink failed; request details omitted.\n"
+)
 # Exceptions outside this table intentionally use the fixed `unknown_error` label.
 _AUTHORIZATION_FAILURE_CATEGORIES = (
     (AssertionError, "assertion_error"),
@@ -234,8 +238,21 @@ def _log_authorization_warning(
     *args: object,
 ) -> None:
     """Keep logger failures from masking canonical authorization responses."""
-    with contextlib.suppress(Exception):
+    try:
         log_warning(logger, template, *args)
+    except Exception:  # ruff: ignore[blind-except]  # Preserve canonical authorization responses.
+        _write_authorization_warning_fallback()
+
+
+def _write_authorization_warning_fallback() -> None:
+    """Write a fixed stderr marker when the central warning sink fails."""
+    stream = sys.stderr
+    if stream is None:
+        return
+    # A failed secondary sink must not replace the canonical response.
+    with contextlib.suppress(Exception):
+        stream.write(_AUTHORIZATION_WARNING_FALLBACK_MESSAGE)
+        stream.flush()
 
 
 def _record_authorization_adapter_failure(
