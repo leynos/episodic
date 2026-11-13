@@ -928,6 +928,9 @@ Success is observable as follows:
     migration. The runbook now exports a plain `postgresql://`
     `BACKUP_DATABASE_URL`, runs under `set -e`, and asserts the dump is
     non-empty before upgrading.
+- Round 13 on `3b8bc866`: the CLI review completed with no findings, so no
+  repair followed. The seven commit gates passed on the round-12 tree before
+  that commit (`2252 passed, 3 skipped`).
 - Lesson: a uniqueness constraint added by a migration is a merge instruction.
   The legacy table allowed rows that the new identity cannot distinguish, so
   the upgrade must decide which row survives and move every reference before
