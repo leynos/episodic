@@ -62,7 +62,7 @@ def _snapshot(
     )
 
 
-@given(scope=st.uuids(version=4), operations=_OPERATIONS)
+@given(operations=_OPERATIONS)
 @settings(
     max_examples=6,
     deadline=None,
@@ -71,13 +71,12 @@ def _snapshot(
 @pytest.mark.asyncio
 async def test_ensure_snapshot_keeps_persisted_identifiers_immutable(
     session_factory: SessionFactory,
-    scope: uuid.UUID,
     operations: list[tuple[int, int, int]],
 ) -> None:
     """No operation ordering can mutate a persisted snapshot identifier."""
-    # Identifier and hash domains are finite within one example but scoped
-    # uniquely per example, because persisted rows outlive Hypothesis
-    # examples in the shared database fixture.
+    # This function-scoped database persists rows across Hypothesis examples,
+    # which may reuse generated UUIDs. Give each example a fresh storage scope.
+    scope = uuid.uuid4()
     identifiers = (str(uuid.uuid5(scope, "id-0")), str(uuid.uuid5(scope, "id-1")))
     hashes = (f"hash-{scope}-0", f"hash-{scope}-1")
     recorded: dict[str, tuple[str, dict[str, int]]] = {}

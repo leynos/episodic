@@ -9,19 +9,24 @@ import pytest
 from falcon import testing
 
 import episodic.api.app as api_app
+import episodic.api.errors as api_errors
 from episodic.api import ApiDependencies, create_app
+from episodic.api.authorization import PermitAll, StaticBearerTokenAuthorization
 from episodic.api.resources import reference_documents, series_profiles, source_intake
+from episodic.api.source_intake_support import ParsedUpload
 from episodic.canonical.profile_templates.types import ProfileTemplateError
 from episodic.canonical.reference_documents.types import ReferenceDocumentError
 from episodic.canonical.source_intake_errors import SourceIntakeError
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import types
 
     from tests.fixtures.api_errors import EmptyUnitOfWorkFactory, SpyLogger
 
 _ENTITY_ID = "00000000-0000-0000-0000-000000000007"
 _CREDENTIAL = "route-test-secret-marker"
+_AUTHORIZATION = {"Authorization": "Bearer route-test-token"}
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -33,6 +38,11 @@ class _RouteCase:
     exception: Exception
     path: str
     expected_message: str
+    method: str = "GET"
+    payload: dict[str, object] | None = None
+    authenticated: bool = False
+    has_object_store: bool = False
+    is_idempotent: bool = False
 
 
 @pytest.mark.parametrize(
@@ -163,4 +173,177 @@ def test_create_app_binds_default_unmapped_error_emitter(
     assert logged_exception.__context__ is None, "default logs must omit context"
     assert _CREDENTIAL not in str(logged_exception), (
         "default logs must omit credential-like exception text"
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(
+            _RouteCase(
+                source_intake,
+                "register_upload",
+                SourceIntakeError("Upload failure: " + _CREDENTIAL),
+                "/v1/uploads",
+                "Unexpected source-intake error.",
+                method="POST",
+                authenticated=True,
+                has_object_store=True,
+                is_idempotent=True,
+            ),
+            id="uploads-resource",
+        ),
+        pytest.param(
+            _RouteCase(
+                source_intake,
+                "create_ingestion_job",
+                SourceIntakeError("Ingestion-job failure: " + _CREDENTIAL),
+                "/v1/ingestion-jobs",
+                "Unexpected source-intake error.",
+                method="POST",
+                payload={"series_profile_id": _ENTITY_ID},
+                authenticated=True,
+                is_idempotent=True,
+            ),
+            id="ingestion-jobs-resource",
+        ),
+        pytest.param(
+            _RouteCase(
+                source_intake,
+                "get_upload",
+                SourceIntakeError("Upload lookup failure: " + _CREDENTIAL),
+                f"/v1/uploads/{_ENTITY_ID}",
+                "Unexpected source-intake error.",
+                authenticated=True,
+            ),
+            id="upload-resource",
+        ),
+        pytest.param(
+            _RouteCase(
+                source_intake,
+                "get_ingestion_job_status",
+                SourceIntakeError("Ingestion-job lookup failure: " + _CREDENTIAL),
+                f"/v1/ingestion-jobs/{_ENTITY_ID}",
+                "Unexpected source-intake error.",
+                authenticated=True,
+            ),
+            id="ingestion-job-resource",
+        ),
+        pytest.param(
+            _RouteCase(
+                source_intake,
+                "get_ingestion_job_status",
+                SourceIntakeError("Ingestion-job sources failure: " + _CREDENTIAL),
+                f"/v1/ingestion-jobs/{_ENTITY_ID}/sources",
+                "Unexpected source-intake error.",
+                authenticated=True,
+            ),
+            id="ingestion-job-sources-resource",
+        ),
+        pytest.param(
+            _RouteCase(
+                source_intake,
+                "get_ingestion_job_status",
+                SourceIntakeError(
+                    "Ingestion-job source attach failure: " + _CREDENTIAL
+                ),
+                f"/v1/ingestion-jobs/{_ENTITY_ID}/sources",
+                "Unexpected source-intake error.",
+                method="POST",
+                payload={
+                    "type": "source_uri",
+                    "source_uri": "https://example.test/source.txt",
+                    "source_type": "research_note",
+                    "weight": 1.0,
+                    "metadata": {},
+                },
+                authenticated=True,
+                is_idempotent=True,
+            ),
+            id="ingestion-job-sources-create-resource",
+        ),
+    ],
+)
+def test_source_intake_routes_use_the_configured_error_emitter(
+    case: _RouteCase,
+    spy_logger: SpyLogger,
+    empty_uow_factory: EmptyUnitOfWorkFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each source-intake resource reaches the app's configured error port."""
+
+    async def fail_service(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        """Raise the route case's error from its registered service."""
+        await asyncio.sleep(0)
+        raise case.exception
+
+    async def bypass_idempotency(
+        _uow_factory: object,
+        *,
+        context: object,
+        work: cabc.Callable[[], cabc.Awaitable[object]],
+    ) -> object:
+        """Run the route work while leaving idempotency outside this boundary test."""
+        del context
+        return await work()
+
+    default_logger = mock.Mock()
+    monkeypatch.setattr(case.resource_module, case.service_name, fail_service)
+    monkeypatch.setattr(api_app, "log_error", default_logger)
+    monkeypatch.setattr(api_errors, "log_error", default_logger)
+    if case.is_idempotent:
+        monkeypatch.setattr(source_intake, "run_idempotent", bypass_idempotency)
+    if case.method == "POST" and case.path == "/v1/uploads":
+
+        async def parse_upload_form(*_args: object, **_kwargs: object) -> ParsedUpload:
+            """Provide valid upload metadata so the service boundary is reached."""
+            await asyncio.sleep(0)
+            return ParsedUpload(
+                payload=b"content",
+                payload_sha256="sha256:unused-test-hash",
+                content_type="text/plain",
+                declared_size=7,
+                declared_sha256=None,
+                metadata={},
+            )
+
+        monkeypatch.setattr(source_intake, "parse_upload_form", parse_upload_form)
+
+    authorization = (
+        StaticBearerTokenAuthorization(
+            token=_AUTHORIZATION["Authorization"].removeprefix("Bearer "),
+            principal_id="route-test-principal",
+        )
+        if case.authenticated
+        else PermitAll()
+    )
+    dependencies = ApiDependencies(
+        uow_factory=empty_uow_factory,
+        authorization=authorization,
+        object_store=mock.Mock() if case.has_object_store else None,
+        unmapped_error_emitter=spy_logger,
+    )
+    client = testing.TestClient(create_app(dependencies))
+    request_headers = dict(_AUTHORIZATION) if case.authenticated else {}
+    if case.is_idempotent:
+        request_headers["Idempotency-Key"] = "route-error-key"
+
+    if case.method == "POST":
+        response = client.simulate_post(
+            case.path,
+            headers=request_headers,
+            json=case.payload,
+        )
+    else:
+        response = client.simulate_get(case.path, headers=request_headers)
+
+    assert response.status_code == 500, "unmapped resource errors must return HTTP 500"
+    assert response.json == {
+        "code": "internal_error",
+        "message": case.expected_message,
+        "details": {},
+    }, "source-intake routes must expose the generic internal-error envelope"
+    assert len(spy_logger.calls) == 1, "the configured emitter must receive one record"
+    assert default_logger.call_count == 0, (
+        "resource diagnostics must use the injected emitter"
     )
