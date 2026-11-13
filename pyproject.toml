@@ -620,8 +620,12 @@ reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI r
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
-full_name = ["episodic.api.authorization._authorization_failure_category"]
-reason = "Falcon invokes AuthorizationMiddleware.process_request, which maps caught adapter errors through this helper."
+full_name = [
+    "episodic.api.authorization._authorization_failure_category",
+    "episodic.api.authorization._authorization_failure_diagnostic_id",
+    "episodic.api.authorization._handle_authorization_adapter_failure",
+]
+reason = "Falcon invokes AuthorizationMiddleware.process_request, which delegates category mapping, diagnostic fingerprints, and 503 response handling through these helpers."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"

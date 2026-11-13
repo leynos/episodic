@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import enum
+import hashlib
 import hmac
 import typing as typ
 
@@ -163,23 +164,12 @@ class AuthorizationMiddleware:
         try:
             result = _authorization_result(await self._authorization.decide(context))
         except Exception as error:  # ruff: ignore[blind-except]  # Adapter errors may contain credentials.
-            # Adapter exception text may contain credentials from its context.
-            failure_category = _authorization_failure_category(error)
-            _record_authorization_adapter_failure(self._metrics, failure_category)
-            log_warning(
-                logger,
-                "Authorization adapter failed with %s for %s %s.",
-                failure_category,
-                _authorization_method_label(context.method),
-                _authorization_route_label(context.path),
+            _handle_authorization_adapter_failure(
+                error,
+                context,
+                self._metrics,
+                resp,
             )
-            resp.media = {
-                "code": "service_unavailable",
-                "message": "Authorization service is unavailable.",
-                "details": {},
-            }
-            resp.status = falcon.HTTP_503
-            resp.complete = True
             return
 
         match result.decision:
@@ -225,6 +215,19 @@ def _authorization_failure_category(error: Exception) -> str:
     )
 
 
+def _authorization_failure_diagnostic_id(error: Exception) -> str:
+    """Fingerprint an unclassified exception type without logging its name."""
+    error_type = type(error)
+    module = type.__getattribute__(error_type, "__module__")
+    qualified_name = type.__getattribute__(error_type, "__qualname__")
+    if not isinstance(module, str) or not isinstance(qualified_name, str):
+        module, qualified_name = "unknown", "exception"
+    type_identity = f"{module}.{qualified_name}"
+    return hashlib.sha256(
+        type_identity.encode("utf-8", errors="backslashreplace"),
+    ).hexdigest()[:12]
+
+
 def _record_authorization_adapter_failure(
     metrics: MetricsPort,
     failure_category: str,
@@ -240,6 +243,39 @@ def _record_authorization_adapter_failure(
             logger,
             "Authorization adapter failure metric could not be recorded.",
         )
+
+
+def _handle_authorization_adapter_failure(
+    error: Exception,
+    context: AuthorizationContext,
+    metrics: MetricsPort,
+    response: falcon.Response,
+) -> None:
+    """Record safe diagnostics and set the canonical adapter-failure response."""
+    # Adapter exception text may contain credentials from its context.
+    failure_category = _authorization_failure_category(error)
+    _record_authorization_adapter_failure(metrics, failure_category)
+    diagnostic_id = (
+        _authorization_failure_diagnostic_id(error)
+        if failure_category == "unknown_error"
+        else ""
+    )
+    diagnostic_suffix = f" (diagnostic_id={diagnostic_id})" if diagnostic_id else ""
+    log_warning(
+        logger,
+        "Authorization adapter failed with %s%s for %s %s.",
+        failure_category,
+        diagnostic_suffix,
+        _authorization_method_label(context.method),
+        _authorization_route_label(context.path),
+    )
+    response.media = {
+        "code": "service_unavailable",
+        "message": "Authorization service is unavailable.",
+        "details": {},
+    }
+    response.status = falcon.HTTP_503
+    response.complete = True
 
 
 def _authorization_result(

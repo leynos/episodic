@@ -66,6 +66,11 @@ records the failure in `authorization_adapter_failure_total` with a bounded
 context can contain the raw authorization header. Metric-sink failures do not
 change the `503` response. No new server setting is required.
 
+Custom logging integrations should emit through the `episodic.logging` helpers.
+The new `log_debug` helper falls back to a logger's generic `log` method when a
+legacy adapter lacks a compatible `debug` method. See
+[Logging in the users' guide](users-guide.md#logging).
+
 ## QA retrieval from the CLI
 
 The `episodic` command is a REST client for the running API:

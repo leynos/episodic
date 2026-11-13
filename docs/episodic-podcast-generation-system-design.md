@@ -2122,10 +2122,12 @@ type, and value errors; other exceptions use `unknown_error`. Recording is
 best-effort, so a metrics-sink failure does not mask the `503` response.
 
 The warning log includes the fixed category, an allow-listed method, and an
-allow-listed resource root. It omits exception text, traceback details, raw
-paths, and credentials because adapter context can contain the raw
-`Authorization` header. This keeps the available diagnostic signal bounded
-without exposing request secrets or high-cardinality exception data.
+allow-listed resource root. For `unknown_error`, it also includes a
+12-character SHA-256 prefix of the exception type's module and qualified name;
+the raw type name is not logged. The log omits exception text, traceback
+details, raw paths, and credentials because adapter context can contain the raw
+`Authorization` header. The metric label remains the fixed category, so the
+diagnostic identifier does not increase metric cardinality.
 
 ### Profile/template REST (Representational State Transfer) API (Application Programming Interface) specification
 

@@ -3,6 +3,7 @@
 import typing as typ
 from unittest import mock
 
+import falcon
 import pytest
 
 from episodic import logging as episodic_logging
@@ -54,6 +55,7 @@ class _AuthorizationFailureLogCase(typ.NamedTuple):
     authorization: AuthorizationPort
     expected_category: str
     forbidden_values: tuple[str, ...]
+    expected_diagnostic_id: str | None = None
 
 
 @pytest.mark.parametrize(
@@ -128,8 +130,18 @@ class _AuthorizationFailureLogCase(typ.NamedTuple):
                 RaisingAuthorization(error_type=LookupError),
                 "unknown_error",
                 ("authorization backend unavailable", "Bearer sensitive-token"),
+                "063d85c714a4",
             ),
             id="unknown-error",
+        ),
+        pytest.param(
+            _AuthorizationFailureLogCase(
+                RaisingAuthorization(error_type=ZeroDivisionError),
+                "unknown_error",
+                ("authorization backend unavailable", "Bearer sensitive-token"),
+                "050fc615ac6b",
+            ),
+            id="unknown-arithmetic-error",
         ),
         pytest.param(
             _AuthorizationFailureLogCase(
@@ -193,9 +205,14 @@ def test_authorization_adapter_failures_log_fixed_categories_without_details(
     )
 
     assert response.status_code == 503, response.status_code
+    diagnostic_id = (
+        f" (diagnostic_id={case.expected_diagnostic_id})"
+        if case.expected_diagnostic_id is not None
+        else ""
+    )
     authorization_warning_backend.warning.assert_called_once_with(
-        f"Authorization adapter failed with {case.expected_category} for GET "
-        "/v1/series-profiles.",
+        f"Authorization adapter failed with {case.expected_category}"
+        f"{diagnostic_id} for GET /v1/series-profiles.",
         exc_info=None,
         stack_info=False,
     )
@@ -252,6 +269,39 @@ def test_metrics_failure_does_not_interrupt_authorization_adapter_response(
     assert "Bearer sensitive-token" not in repr(
         warning_calls,
     ), "authorization credentials must not reach either warning"
+
+
+@pytest.mark.asyncio
+async def test_missing_metrics_does_not_add_a_failure_warning(
+    authorization_warning_backend: mock.Mock,
+) -> None:
+    """Adapter failures remain safe when the middleware uses no metrics port."""
+    middleware = authorization_module.AuthorizationMiddleware(
+        _AuthorizationHeaderFailure(),
+    )
+    request = mock.Mock()
+    request.path = "/v1/series-profiles"
+    request.method = "GET"
+    request.get_header.return_value = "Bearer sensitive-token"
+    response = mock.Mock()
+
+    await middleware.process_request(request, response)
+
+    assert response.status == falcon.HTTP_503, "adapter failures must retain HTTP 503"
+    assert response.media == {
+        "code": "service_unavailable",
+        "message": "Authorization service is unavailable.",
+        "details": {},
+    }, "adapter failures must use the canonical service-unavailable envelope"
+    assert response.complete is True, "adapter failures must stop request dispatch"
+    authorization_warning_backend.warning.assert_called_once_with(
+        "Authorization adapter failed with runtime_error for GET /v1/series-profiles.",
+        exc_info=None,
+        stack_info=False,
+    )
+    assert "Bearer sensitive-token" not in repr(
+        authorization_warning_backend.warning.call_args,
+    ), "the warning must not include the Authorization header value"
 
 
 @pytest.mark.parametrize(
