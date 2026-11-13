@@ -16,7 +16,7 @@ The following tree is an orientation sketch, not a complete file listing.
 ├── alembic/
 ├── benchmarks/
 ├── docs/
-│   ├── adr/
+│   ├── adrs/
 │   └── execplans/
 ├── episodic/
 │   ├── api/
@@ -104,9 +104,9 @@ The `docs/` directory is the project knowledge base:
 - `docs/execplans/` contains execution plans for non-trivial implementation
   work.
 
-The historical `docs/adrs/adr-0001-pedante-evaluator-contract.md` file remains
-at the top level of `docs/`; new ADRs should use the `docs/adrs/` directory
-unless a migration explicitly changes the existing convention.
+All ADRs, including `docs/adrs/adr-0001-pedante-evaluator-contract.md`, live in
+the `docs/adrs/` directory and follow the `adr-nnnn-title-slug.md` naming
+scheme.
 
 ## Test layout
 
