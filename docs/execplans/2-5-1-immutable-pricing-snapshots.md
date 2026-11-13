@@ -403,6 +403,38 @@ Success is observable as follows:
   shutdown order, the complete-backup requirement, the legacy rate denominator,
   effective-date selection, the `ports.py` inventory, and `set -e`/`pipefail`
   around the `tee` gate commands.
+- [x] (2026-11-13) Hosted CodeScene remediation. After the rebase, the
+  `CodeScene Code Health Review (main)` check reported seven new files below
+  10.00, one critical `Bumpy Road Ahead`, and ten advisory findings. Every
+  finding was refactored rather than suppressed: no `.codescene` rule file and
+  no `@codescene` directive was added. The duplicate-key YAML loader moved to
+  `episodic/cost/pricing_catalogue/_yaml_loader.py`; the card parser's string,
+  amount, and loader paths were decomposed; `PricingSnapshot.__post_init__` and
+  `MeteredRate.__post_init__` delegate to focused validators; the legacy-row
+  validator in `20261110_000017` was split into text, currency/source-kind, and
+  JSON-shape checks with unchanged order, messages, and emitted SQL; and the
+  duplicated test arrangements were extracted into shared helpers. `cs check`
+  reports 10.00 for all eleven files, and `cs delta 7e4704cf` reports no new
+  issues.
+
+  Three follow-on gate findings were fixed with the refactor. `ty` rejected the
+  narrower override dicts passed to the migration test's
+  `_assert_upgrade_fails`, so its parameter is now
+  `collections.abc.Mapping[str, object]`, which is covariant in the value type.
+  The new `_yaml_loader` module is classified `outbound_adapter` in the
+  production Hecate regression test, with a boundary assertion that YAML
+  parsing never enters the domain. Skylos reported `_require_schema_version` as
+  unused: with `--no-grep-verify` it resolves a private helper with exactly one
+  call site as unused (reproduced in a minimal probe; the same helper with two
+  call sites is not flagged). The verified caller is
+  `PricingSnapshot.__post_init__`, and the helper exists to keep that hook at
+  10.00, so a typed function entry-point rule was added rather than inlining
+  it; the rule's reason records both the caller and the tool limitation.
+
+  The one suppression is a narrow inline
+  `ruff: ignore[docstring-extraneous-exception]` on `load_snapshot`'s
+  docstring, because the documented exception is now raised in its private
+  helpers; the public `Raises` contract is unchanged.
 
 ## Surprises & discoveries
 
@@ -488,6 +520,19 @@ Success is observable as follows:
 
 ## Decision log
 
+- Decision (2026-11-13): the hosted CodeScene findings are paid down by
+  refactoring, not by a repository rule file or `@codescene` directives.
+  Rationale: the repository has no `.codescene/` configuration, and the
+  findings named real duplication, complexity, and a bumpy `_validate_row`; a
+  global weight override would hide the same shapes everywhere and a directive
+  would silence one function while leaving its neighbours intact. The single
+  remaining suppression is a narrow inline
+  `ruff: ignore[docstring-extraneous-exception]`, which records that the public
+  exception is now raised in private helpers rather than in the body. The one
+  tool-level exception is the Skylos function entry point for
+  `_require_schema_version`: the finding is a verified resolution false
+  positive, and the reason names the caller and the tool limitation so a later
+  maintainer can reassess it.
 - Decision (2026-11-11, EP-M5): the pricing ADR is renumbered from 024 to 028.
   Rationale: `adr-024-review-checkpoint-persistence.md` landed from upstream
   before this branch reached EP-M5, so keeping 024 would leave two different
