@@ -867,11 +867,15 @@ Authorization scaffold:
   name, without logging either name or exception text. The metric still uses
   only the fixed category label. Warnings omit exception metadata, which could
   contain the raw authorization header. Metrics are best-effort on adapter
-  failures, and all authorization warning emission is best-effort so sink
-  failures cannot mask the canonical `401`, `403`, or `503` response. Keep this
-  suppression in the authorization boundary rather than changing shared logging
-  helpers' propagation behaviour. The system design records this metrics
-  dependency and bounded diagnostic policy in
+  failures. If warning emission fails, the authorization boundary writes the
+  fixed marker `Authorization warning sink failed; request details omitted.`
+  directly to standard error; it never includes request data or exception
+  details. This fallback is also best-effort: if standard error is unavailable
+  or cannot be written, the marker may be lost, while the canonical `401`,
+  `403`, or `503` response is preserved. Keep this handling in the
+  authorization boundary rather than changing shared logging helpers'
+  propagation behaviour. The system design records this metrics dependency and
+  bounded diagnostic policy in
   [Authorization and adapter failure observability](episodic-podcast-generation-system-design.md#authorization-and-adapter-failure-observability).
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
