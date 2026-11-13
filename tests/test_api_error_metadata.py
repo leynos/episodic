@@ -11,7 +11,10 @@ from hypothesis import strategies as st
 
 from episodic.api import _error_logging
 from episodic.api import errors as api_errors
-from episodic.canonical.profile_templates.types import ProfileTemplateError
+from episodic.canonical.profile_templates.types import (
+    EntityNotFoundError,
+    ProfileTemplateError,
+)
 
 _TEST_CREDENTIAL = "test-only-secret-marker"
 _TEST_CAUSE_CREDENTIAL = "test-only-cause-secret-marker"
@@ -32,6 +35,21 @@ class _HasEnvelopeCode(typ.Protocol):
     """Describe the error metadata attached by the API mapper."""
 
     envelope_code: str
+    envelope_details: dict[str, object]
+
+
+def _entity_identifier_cases() -> st.SearchStrategy[tuple[object | None, str | None]]:
+    """Generate UUID objects, canonical strings, and rejected representations."""
+    values = st.uuids()
+    return st.one_of(
+        values.map(lambda value: (value, str(value))),
+        values.map(lambda value: (str(value), str(value))),
+        values.map(lambda value: (str(value).upper(), str(value))),
+        values.map(lambda value: (f"{{{value}}}", None)),
+        values.map(lambda value: (value.hex, None)),
+        st.text().map(lambda value: (f"credential:{value}", None)),
+        st.none().map(lambda _: (None, None)),
+    )
 
 
 def test_unmapped_error_without_traceback_records_unavailable_source_frames() -> None:
@@ -121,6 +139,88 @@ def test_profile_template_error_redacts_credential_metadata(
     )
     assert _TEST_CAUSE_CREDENTIAL not in str(response.media), (
         "responses must omit credential-like entity IDs"
+    )
+
+
+@settings(max_examples=40)
+@given(
+    exception_identifier=_entity_identifier_cases(),
+    caller_identifier=_entity_identifier_cases(),
+)
+def test_profile_mapper_prefers_first_safe_identifier(
+    exception_identifier: tuple[object | None, str | None],
+    caller_identifier: tuple[object | None, str | None],
+) -> None:
+    """Mapped envelopes and fallback logs prefer the first canonical UUID."""
+    exception_id, expected_exception_id = exception_identifier
+    caller_id, expected_caller_id = caller_identifier
+    expected_id = expected_exception_id or expected_caller_id
+
+    _assert_mapped_profile_identifier(
+        exception_id,
+        caller_id,
+        expected_id,
+    )
+    _assert_unmapped_profile_identifier(
+        exception_id,
+        caller_id,
+        expected_id,
+    )
+
+
+def _assert_mapped_profile_identifier(
+    exception_id: object | None,
+    caller_id: object | None,
+    expected_id: str | None,
+) -> None:
+    """Check the mapped response's identifier precedence and log boundary."""
+    mapped_emitter = mock.Mock()
+    mapped_error = api_errors.map_profile_template_error(
+        EntityNotFoundError(
+            "Profile not found.",
+            entity_id=typ.cast("str | None", exception_id),
+        ),
+        emit_error=mapped_emitter,
+        entity_id=typ.cast("str | None", caller_id),
+    )
+    mapped = typ.cast("_HasEnvelopeCode", mapped_error)
+    assert mapped.envelope_code == "not_found", "mapped outcomes keep their code"
+    if expected_id is None:
+        assert mapped.envelope_details == {}, "invalid IDs stay out of mapped details"
+    else:
+        assert mapped.envelope_details == {"entity_id": expected_id}, (
+            "the response uses the exception ID before the caller fallback"
+        )
+    mapped_emitter.assert_not_called()
+
+
+def _assert_unmapped_profile_identifier(
+    exception_id: object | None,
+    caller_id: object | None,
+    expected_id: str | None,
+) -> None:
+    """Check the unmapped diagnostic's canonical identifier precedence."""
+    diagnostic_emitter = mock.Mock()
+    unmapped_error = api_errors.map_profile_template_error(
+        ProfileTemplateError(
+            "Unmapped profile error.",
+            entity_id=typ.cast("str | None", exception_id),
+        ),
+        emit_error=diagnostic_emitter,
+        entity_id=typ.cast("str | None", caller_id),
+    )
+    assert isinstance(unmapped_error, falcon.HTTPInternalServerError), (
+        "unmapped outcomes keep the generic internal-error response"
+    )
+    diagnostic_emitter.assert_called_once()
+    template, *args = diagnostic_emitter.call_args.args
+    logged_message = typ.cast("str", template) % tuple(args)
+    if expected_id is None:
+        expected_log_id = "None" if exception_id is None else "<redacted>"
+    else:
+        expected_log_id = expected_id
+    assert f"entity_id={expected_log_id}" in logged_message, (
+        "the diagnostic uses only the first safe canonical identifier"
     )
 
 

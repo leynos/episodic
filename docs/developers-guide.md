@@ -44,12 +44,15 @@ argument-shape checks that adapters may call at their boundaries;
 domain-specific validation remains with the domain type it guards.
 `validate_callable(callback, attribute_name, allow_none=False)` checks a
 runtime callback and can explicitly allow an absent optional callback.
-`validate_async_callable(callback, attribute_name)` builds on that check and
-requires a coroutine function or an object with an async `__call__`. The health
-port uses async validation in `ProbeHealthObserver.from_checks`; the API
-dependency boundary uses it for readiness probes, authorization decisions, and
-shutdown hooks. Keep this module free of adapter imports so the dependency
-direction remains inward.
+`validate_sync_callable(callback, attribute_name, allow_none=False)` rejects
+coroutine functions and objects with an async `__call__` when an adapter
+invokes the callback synchronously.
+`validate_async_callable(callback, attribute_name)` builds on the general check
+and requires an async callback. The health port uses async validation in
+`ProbeHealthObserver.from_checks`; the API dependency boundary uses it for
+readiness probes, authorization decisions, and shutdown hooks, and uses sync
+validation for unmapped-error emitters. Keep this module free of adapter
+imports so the dependency direction remains inward.
 
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
@@ -768,9 +771,10 @@ REST error contract:
   Validation failures use `validation_error`, missing entities use `not_found`,
   stale revisions use `revision_conflict`, and remaining persistence conflicts
   use `conflict`.
-- `ApiDependencies.unmapped_error_emitter` optionally supplies the logging port
-  for unmapped API failures. When omitted, `create_app` binds the production
-  logger and injects it into the mappers.
+- `ApiDependencies.unmapped_error_emitter` optionally supplies the synchronous
+  logging port for unmapped API failures. When omitted, `create_app` binds the
+  production logger and injects it into the mappers. Direct mapper callers may
+  omit `emit_error` and use the mapper module's logging port.
 - Shared GET and history resource bases build typed handler requests and use a
   private response helper to apply each handler's `(media, status)` result.
   Keep that helper local to `resources/base.py`; concrete resources retain
@@ -1071,6 +1075,12 @@ whose name is in a fixed allow-list (`operation`, `outcome`, `failure_category`,
 spans cannot leak request payloads, identifiers, or other sensitive operation
 metadata into logs. `NoopTracer` is the default no-op adapter used when no
 tracing backend is wired.
+
+Composition roots that choose production tracing and metrics by
+`EPISODIC_LOG_LEVEL` should use `configure_structured_observability(level)`. It
+configures the femtologging backend and returns structured sinks when the level
+admits INFO events, or no-op sinks at higher levels. Keep this selection in the
+shared observability package rather than duplicating it in an adapter.
 
 `episodic/operation_observation.py` supplies `OperationObservation`, the shared
 helper for operation-level instrumentation: one span named from a fixed
@@ -1541,8 +1551,10 @@ For an unmapped domain exception, each API error mapper emits one safe
 diagnostic through its injected logging port before returning the generic HTTP
 500 error. `create_app` passes `ApiDependencies.unmapped_error_emitter` to the
 mapper call paths and binds the production `episodic.logging` port when no
-callback is injected. Query handlers and REST resource methods do not emit logs
-themselves; the mapper owns the diagnostic at the error-mapping boundary.
+callback is injected. Direct mapper calls may omit the optional `emit_error`
+argument and use the same logging port. Query handlers and REST resource
+methods do not emit logs themselves; the mapper owns the diagnostic at the
+error-mapping boundary.
 
 The diagnostic contains detached `exc_info` with a synthetic redacted exception
 and no live traceback. Sanitized source-frame metadata records the filename,
@@ -1975,9 +1987,8 @@ database client. See
 
 - The CLI may import its own modules, `domain_ports`, and the
   `external_libraries` group that holds its `httpx` transport and `cyclopts`
-  parser. It may use `logging_port` to drain queued records at the process
-  boundary. The Hecate group `cli` enforces these dependencies, so an import of
-  `episodic.api` or a canonical service fails `make check-architecture`.
+  parser. The Hecate group `cli` enforces this, so an import of `episodic.api`
+  or a canonical service fails `make check-architecture`.
 - Keep renderers pure functions from a parsed payload to a string. They must
   not print, exit, or read the environment; that is what makes them
   snapshottable.
@@ -1995,16 +2006,13 @@ database client. See
   a second command group.
 - `main` accepts a `CliSinks` keyword and forwards it through `build_app` into
   `CliRuntime`. `CliSinks` groups the tracer, metrics sink, and monotonic clock
-  so the entry point's parameter list stays bounded as sinks are added. The
-  production entry point selects structured-log adapters when
-  `EPISODIC_LOG_LEVEL` enables INFO telemetry and flushes the root handler
-  queue before returning, including on non-zero exit codes. Calls with injected
-  `CliSinks` do not flush process-global handlers.
-  `QaApiClient.list_evaluations` opens one `cli.qa_evaluations.list` span with
-  a bounded outcome (`success`, `api_error`, `rate_limited`,
-  `transport_failure`, `invalid_url`) and emits its latency; tests inject
-  `CliSinks` built from `RecordingTracer`, `RecordingMetrics`, and `StepClock`
-  through `main`.
+  so the entry point's parameter list stays bounded as sinks are added;
+  production leaves it unset, so the no-op adapters apply and instrumentation
+  changes no output or exit code. `QaApiClient.list_evaluations` opens one
+  `cli.qa_evaluations.list` span with a bounded outcome (`success`, `api_error`,
+  `rate_limited`, `transport_failure`, `invalid_url`) and emits its latency;
+  tests inject `CliSinks` built from `RecordingTracer`, `RecordingMetrics`, and
+  `StepClock` through `main`.
 
 ### Adding a command
 

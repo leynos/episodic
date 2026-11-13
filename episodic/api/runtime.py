@@ -1,6 +1,7 @@
 """Granian runtime composition root for the Falcon ASGI service."""
 
 import dataclasses as dc
+import os
 import typing as typ
 
 import psycopg
@@ -29,8 +30,7 @@ from episodic.llm.openai_adapter import (
 from episodic.observability import (
     NoopMetrics,
     NoopTracer,
-    StructuredLogMetrics,
-    StructuredLogTracer,
+    configure_structured_observability,
 )
 
 from . import create_app
@@ -268,9 +268,10 @@ def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
 
 def create_app_from_env() -> asgi.App:
     """Build the Falcon ASGI service from environment configuration."""
+    metrics, tracer = configure_structured_observability(
+        os.environ.get("EPISODIC_LOG_LEVEL")
+    )
     config = _load_runtime_config()
-    metrics: ValueMetricsPort = StructuredLogMetrics()
-    tracer = StructuredLogTracer()
     database_probe, uow_factory, shutdown_hook = _build_database_probe(
         config.database_url,
         metrics=metrics,

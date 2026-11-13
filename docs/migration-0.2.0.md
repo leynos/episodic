@@ -70,6 +70,29 @@ refused over plain HTTP unless the host is loopback, so a remote endpoint needs
 `0` for success, `1` for an API error envelope, `2` for a usage error, `3` when
 the API is unreachable or times out, and `4` for `429 Too Many Requests`.
 
+## API error handling and logging
+
+Unmapped server-side domain failures now return HTTP 500 with the stable
+`internal_error` code, a generic message, and empty `details`. The API emits
+one redacted ERROR diagnostic before returning that response. Clients must not
+depend on exception-derived codes, messages, or details.
+
+The Granian factory configures the logging backend at startup. Set
+`EPISODIC_LOG_LEVEL` to select a level; the default is `INFO`. Python hosts
+that call `create_app` directly should configure logging first. They do not
+need to provide an error emitter, because
+`ApiDependencies.unmapped_error_emitter` is optional and the composition root
+supplies the default logging port. Levels above `INFO` disable structured
+metrics and trace events while keeping redacted API error diagnostics enabled.
+
+```python
+from episodic.api import ApiDependencies, create_app
+from episodic.logging import configure_logging
+
+configure_logging("INFO")
+app = create_app(ApiDependencies(uow_factory=uow_factory))
+```
+
 ## Evaluator graph builders moved out of the package barrel
 
 `episodic.qa` no longer re-exports the LangGraph adapters. Import each symbol

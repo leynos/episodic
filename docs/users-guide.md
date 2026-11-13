@@ -419,6 +419,22 @@ Start the service with:
 granian episodic.api.runtime:create_app_from_env --interface asgi --factory
 ```
 
+The Granian runtime configures structured logging before it serves requests.
+`EPISODIC_LOG_LEVEL` selects the level and defaults to `INFO`. A Python host
+that builds the Falcon app directly must configure logging before serving it;
+the error-emitter dependency remains optional:
+
+```python
+from episodic.api import ApiDependencies, create_app
+from episodic.logging import configure_logging
+
+configure_logging("INFO")
+app = create_app(ApiDependencies(uow_factory=uow_factory))
+```
+
+At levels above `INFO`, the runtime disables INFO-level metrics and trace
+events. Redacted API error diagnostics remain enabled.
+
 Required environment:
 
 - `DATABASE_URL` must point at the canonical Postgres database before the
@@ -578,9 +594,7 @@ percent-style message template and its arguments. `log_exception` sets
 `get_logger(__name__).info(...)` are no longer supported. Use
 `format_log_event(event, **fields)` when a structured JSON message must use a
 particular handle; `log_event(level, message, **fields)` continues to emit
-through the port's configured logger. At a short-lived process boundary,
-`LoggerHandle.flush()` drains queued records and reports whether the handlers
-completed their flush.
+through the port's configured logger.
 
 Use `episodic.logging.log_event(level, message, **fields)` to emit an event.
 Its signature is
@@ -614,8 +628,7 @@ log_info(logger, "Started workflow %s", "workflow-42")
 
 The `episodic` command reports one structured span and one latency observation
 per API call. Those records go to standard error, so standard output stays a
-single JSON or table document. The command drains queued telemetry before it
-returns, including when an API call fails.
+single JSON or table document.
 
 Telemetry is off by default: with nothing configured, a successful run writes
 nothing to standard error. Set `EPISODIC_LOG_LEVEL` to `INFO`, `DEBUG`, or

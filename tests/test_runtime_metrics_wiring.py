@@ -62,6 +62,8 @@ class _SteppingMonotonicClock:
 def _configure_runtime_environment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    *,
+    log_level: str,
 ) -> None:
     """Set the environment required by the production runtime factory."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.test/episodic")
@@ -70,17 +72,26 @@ def _configure_runtime_environment(
     monkeypatch.setenv("API_AUTHORIZATION_PRINCIPAL_ID", "runtime-test-principal")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.test/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("EPISODIC_LOG_LEVEL", log_level)
 
 
 def _compose_runtime_observability_dependencies(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    *,
+    log_level: str = "INFO",
 ) -> tuple[ApiDependencies, dict[str, object], dict[str, object]]:
     """Capture runtime adapter arguments while composing the production app."""
-    _configure_runtime_environment(monkeypatch, tmp_path)
+    _configure_runtime_environment(monkeypatch, tmp_path, log_level=log_level)
 
     from episodic.api import runtime as runtime_module
     from episodic.llm.openai_adapter import OpenAICompatibleLLMAdapter
+    from episodic.observability import (
+        NoopTracer,
+        NoopValueMetrics,
+        StructuredLogMetrics,
+        StructuredLogTracer,
+    )
 
     captured_dependencies: ApiDependencies | None = None
 
@@ -99,6 +110,15 @@ def _compose_runtime_observability_dependencies(
     with (
         mock.patch.object(
             runtime_module,
+            "configure_structured_observability",
+            return_value=(
+                (NoopValueMetrics(), NoopTracer())
+                if log_level == "WARNING"
+                else (StructuredLogMetrics(), StructuredLogTracer())
+            ),
+        ) as observability_configurer,
+        mock.patch.object(
+            runtime_module,
             "create_app",
             side_effect=capture_dependencies,
         ),
@@ -114,6 +134,7 @@ def _compose_runtime_observability_dependencies(
         ) as unit_of_work_constructor,
     ):
         runtime_module.create_app_from_env()
+        observability_configurer.assert_called_once_with(log_level)
         assert captured_dependencies is not None, (
             "expected captured dependencies, got None"
         )
@@ -173,6 +194,29 @@ async def test_create_app_from_env_shares_production_observability(
         "the unit of work must receive the composition root's tracer"
     )
 
+    await dependencies.shutdown_hooks[0]()
+
+
+@pytest.mark.asyncio
+async def test_runtime_disables_info_telemetry_above_info_level(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Warning-level runtime logging keeps API errors without INFO telemetry."""
+    from episodic.observability import NoopMetrics, NoopTracer
+
+    dependencies, _, _ = _compose_runtime_observability_dependencies(
+        monkeypatch,
+        tmp_path,
+        log_level="WARNING",
+    )
+
+    assert isinstance(dependencies.metrics, NoopMetrics), (
+        "INFO structured metrics must be disabled above INFO"
+    )
+    assert isinstance(dependencies.tracer, NoopTracer), (
+        "INFO structured spans must be disabled above INFO"
+    )
     await dependencies.shutdown_hooks[0]()
 
 

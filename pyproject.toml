@@ -1211,7 +1211,7 @@ allowed = [
 [[tool.hecate.groups]]
 name = "cli"
 prefixes = ["episodic.cli"]
-allowed = ["cli", "domain_ports", "external_libraries", "logging_port"]
+allowed = ["cli", "domain_ports", "external_libraries"]
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]

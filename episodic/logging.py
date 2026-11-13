@@ -114,25 +114,17 @@ type _CompatibleLogger = _SupportsConvenienceLog | _SupportsLogMethod
 
 
 class LoggerHandle:
-    """Opaque handle returned by :func:`get_logger`.
+    """Opaque handle accepted by the Episodic logging port.
 
-    The backend stays private; emit through the ``log_*`` helpers.
+    Callers obtain a handle from :func:`get_logger` and emit records through
+    ``log_debug``, ``log_info``, ``log_warning``, ``log_error``, or
+    ``log_exception``. The private backend remains inaccessible so future
+    cross-cutting context is attached consistently at this port.
     """
 
     def __init__(self, logger: _CompatibleLogger) -> None:
         """Wrap a compatible backend logger for use by port helpers."""
         self._logger = logger
-
-    def flush(self) -> bool:
-        """Drain pending records through this logger's configured handlers.
-
-        Returns
-        -------
-        bool
-            Whether the backend flushed its pending records.
-        """
-        flush = getattr(self._logger, "flush_handlers", None)
-        return typ.cast("bool", flush()) if callable(flush) else True
 
 
 class _LogWrapper(typ.Protocol):

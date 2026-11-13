@@ -15,13 +15,9 @@ import cyclopts
 from episodic.cli.app import build_app
 from episodic.cli.client import CliSinks
 from episodic.cli.errors import CliError
-from episodic.logging import get_logger
 from episodic.observability import (
     PerfCounterClock,
-    StructuredLogMetrics,
-    StructuredLogTracer,
-    admits_telemetry,
-    configure_structured_logging,
+    configure_structured_observability,
 )
 
 if typ.TYPE_CHECKING:
@@ -62,14 +58,12 @@ def _production_sinks() -> CliSinks:
         Structured-log tracer and metrics sink with a performance-counter
         clock, or the no-op sinks when the level excludes ``INFO``.
     """
-    level = configure_structured_logging(
+    metrics, tracer = configure_structured_observability(
         os.environ.get(LOG_LEVEL_ENV, DEFAULT_LOG_LEVEL)
     )
-    if not admits_telemetry(level):
-        return CliSinks()
     return CliSinks(
-        tracer=StructuredLogTracer(),
-        metrics=StructuredLogMetrics(),
+        tracer=tracer,
+        metrics=metrics,
         clock=PerfCounterClock(),
     )
 
@@ -108,10 +102,9 @@ def main(
     2
     """
     tokens = list(sys.argv[1:] if argv is None else argv)
-    is_production_invocation = sinks is None
     application = build_app(
         transport,
-        sinks=_production_sinks() if is_production_invocation else sinks,
+        sinks=_production_sinks() if sinks is None else sinks,
     )
     try:
         rendered = application.run(tokens)
@@ -123,14 +116,11 @@ def main(
         return USAGE_EXIT_CODE
     except SystemExit as error:
         return typ.cast("int", error.code or 0)
-    else:
-        if rendered is not None:
-            text = str(rendered)
-            print(text, end="" if text.endswith("\n") else "\n")
-        return 0
-    finally:
-        if is_production_invocation:
-            get_logger("root").flush()
+
+    if rendered is not None:
+        text = str(rendered)
+        print(text, end="" if text.endswith("\n") else "\n")
+    return 0
 
 
 def _report(error: CliError) -> None:

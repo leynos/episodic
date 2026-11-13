@@ -45,6 +45,7 @@ from episodic.observability._structured import (
     StructuredLogTracer,
     admits_telemetry,
     configure_structured_logging,
+    configure_structured_observability,
 )
 
 __all__ = [
@@ -63,4 +64,5 @@ __all__ = [
     "ValueMetricsPort",
     "admits_telemetry",
     "configure_structured_logging",
+    "configure_structured_observability",
 ]

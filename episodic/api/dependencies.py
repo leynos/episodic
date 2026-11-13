@@ -9,7 +9,10 @@ import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
-from episodic.canonical.validation import validate_async_callable, validate_callable
+from episodic.canonical.validation import (
+    validate_async_callable,
+    validate_sync_callable,
+)
 from episodic.observability import NoopMetrics, NoopTracer, PerfCounterClock
 
 from .authorization import AuthorizationPort, PermitAll
@@ -120,7 +123,7 @@ class ApiDependencies:
         if not callable(self.uow_factory):
             msg = "ApiDependencies.uow_factory must be callable."
             raise TypeError(msg)
-        validate_callable(
+        validate_sync_callable(
             self.unmapped_error_emitter,
             "ApiDependencies.unmapped_error_emitter",
             allow_none=True,
