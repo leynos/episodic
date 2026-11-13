@@ -68,10 +68,10 @@ def test_engine_truncates_each_metric_independently() -> None:
     assert (
         _price(
             snapshot,
-            {"input_tokens": 1_000_000, "output_tokens": 500_000},
+            {"input_tokens": 1_000_000, "output_tokens": 10_000},
         )
-        == 37
-    ), "each metric must truncate on its own denominator"
+        == 7
+    ), "each metric must truncate separately; the total would give 8"
 
 
 @pytest.mark.parametrize(
