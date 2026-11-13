@@ -267,11 +267,15 @@ class SqlAlchemyPricingSnapshotStore:
                 pricing_snapshot_id=PricingSnapshotId(str(inserted_id)),
                 outcome=SnapshotEnsureOutcome.PERSISTED,
             )
+        # The integrity check must judge the stored row, not a copy the
+        # session already holds: `populate_existing` refreshes loaded
+        # attributes from this statement's rows.
         stored = (
             await self._session.execute(
-                sa.select(PricingSnapshotRecord).where(
-                    PricingSnapshotRecord.content_hash == snapshot.content_hash
-                )
+                sa
+                .select(PricingSnapshotRecord)
+                .where(PricingSnapshotRecord.content_hash == snapshot.content_hash)
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
         if stored is None:
@@ -345,13 +349,16 @@ class SqlAlchemyPricingSnapshotStore:
             msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
             raise PricingSnapshotNotFoundError(msg) from None
         # A read must not flush pending writes: the caller may be mid-transaction
-        # and an implicit flush here would persist unrelated work.
+        # and an implicit flush here would persist unrelated work. Refreshing
+        # loaded attributes keeps the verification on the stored row rather
+        # than a possibly stale copy the session already holds.
         with self._session.no_autoflush:
             record = (
                 await self._session.execute(
-                    sa.select(PricingSnapshotRecord).where(
-                        PricingSnapshotRecord.id == row_id
-                    )
+                    sa
+                    .select(PricingSnapshotRecord)
+                    .where(PricingSnapshotRecord.id == row_id)
+                    .execution_options(populate_existing=True)
                 )
             ).scalar_one_or_none()
         if record is None:

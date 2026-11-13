@@ -912,6 +912,22 @@ Success is observable as follows:
     unmodified `d21b33dd` baseline. This plan does
     not touch that test or the CLI telemetry path, so the loss is a
     pre-existing stderr-delivery race, not a regression from this work.
+- Round 12 on `2055db1b`: the CLI review covered 81 files and raised two
+  `minor` findings, both actioned:
+  - The store's integrity check and its conflict-reuse query selected
+    `PricingSnapshotRecord` entities, which SQLAlchemy answers from the
+    session's identity map when the caller already holds the row, so a copy
+    loaded before someone tampered with the row could satisfy the check. Both
+    queries now refresh loaded attributes with `populate_existing=True`,
+    keeping the existing `no_autoflush` behaviour. Two red-first tests retain
+    the row across a committed transaction, tamper through another connection,
+    and assert both read paths still refuse the row.
+  - The pre-migration runbook passed `DATABASE_URL` straight to `pg_dump`,
+    which libpq rejects when the variable holds a driver-qualified URL, and the
+    block had no failure check, so a failed dump could be followed by the
+    migration. The runbook now exports a plain `postgresql://`
+    `BACKUP_DATABASE_URL`, runs under `set -e`, and asserts the dump is
+    non-empty before upgrading.
 - Lesson: a uniqueness constraint added by a migration is a merge instruction.
   The legacy table allowed rows that the new identity cannot distinguish, so
   the upgrade must decide which row survives and move every reference before
@@ -938,6 +954,10 @@ Success is observable as follows:
 - Lesson: a migration that synthesizes data the domain validates must enforce
   the same invariants. A row can satisfy every column constraint and still be
   unreadable when a domain-level cap or parser rejects what the migration wrote.
+- Lesson: an ORM read that exists to verify stored content is only
+  authoritative with `populate_existing`. Without it, SQLAlchemy answers a
+  `select()` of an entity the session already holds from its identity map, so a
+  check can pass on attributes that no longer match the row.
 
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
@@ -1604,13 +1624,21 @@ module alone before treating them as failures.
 Before applying migration `000017` to any alpha database, scale launchers and
 workers to zero so no write lands between the dump and the upgrade, then take a
 complete database backup. A table-only dump omits `alembic_version`, so a
-restore would leave the schema and the recorded revision disagreeing:
+restore would leave the schema and the recorded revision disagreeing. `pg_dump`
+connects through libpq, which rejects the driver-qualified forms `DATABASE_URL`
+may hold (`postgresql+asyncpg://`, `postgresql+psycopg://`), so export a plain
+`postgresql://` backup URL with the same credentials, host, and database.
+Stopping on failure keeps a failed dump from being followed by the migration:
 
 ```bash
-pg_dump "$DATABASE_URL" > /tmp/episodic-backup.sql
+set -e
+export BACKUP_DATABASE_URL="postgresql://user:password@host:5432/episodic"
+pg_dump "$BACKUP_DATABASE_URL" > /tmp/episodic-backup.sql
+test -s /tmp/episodic-backup.sql
+uv run alembic upgrade head
 ```
 
-Then run `uv run alembic upgrade head` and roll out the new image.
+Then roll out the new image.
 
 ## Validation and acceptance
 

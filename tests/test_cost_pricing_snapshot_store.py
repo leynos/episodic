@@ -31,6 +31,29 @@ else:  # pragma: no cover - runtime alias for evaluated test annotations.
     type SessionFactory = object
 
 
+async def _tamper_stored_rates(
+    session_factory: SessionFactory,
+    identifier: PricingSnapshotId,
+) -> None:
+    """Corrupt one stored row's rates without changing its content hash."""
+    async with session_factory() as session:
+        await session.execute(
+            sa
+            .update(PricingSnapshotRecord)
+            .where(PricingSnapshotRecord.id == uuid.UUID(str(identifier)))
+            .values(
+                rates={
+                    "input_tokens": {
+                        "amount_minor": 99,
+                        "per_units": 1,
+                        "unit": "token",
+                    }
+                }
+            )
+        )
+        await session.commit()
+
+
 @pytest.mark.asyncio
 async def test_ensure_is_content_addressed(session_factory: SessionFactory) -> None:
     """Equal content reuses one row even when built by separate calls."""
@@ -93,24 +116,13 @@ async def test_get_round_trips_the_snapshot(session_factory: SessionFactory) -> 
 @pytest.mark.asyncio
 async def test_get_rejects_a_tampered_row(session_factory: SessionFactory) -> None:
     """A row whose content no longer matches its hash is refused."""
-    metric = "input_tokens"
-    tampered_rate = {"amount_minor": 99, "per_units": 1, "unit": "token"}
     async with session_factory() as session:
         ensured = await SqlAlchemyPricingSnapshotStore(session).ensure(
             v1_pricing_snapshot()
         )
         await session.commit()
 
-    async with session_factory() as session:
-        await session.execute(
-            sa
-            .update(PricingSnapshotRecord)
-            .where(
-                PricingSnapshotRecord.id == uuid.UUID(str(ensured.pricing_snapshot_id))
-            )
-            .values(rates={metric: tampered_rate})
-        )
-        await session.commit()
+    await _tamper_stored_rates(session_factory, ensured.pricing_snapshot_id)
 
     tracer = RecordingTracer()
     async with session_factory() as session:
@@ -137,30 +149,60 @@ async def test_ensure_verifies_a_row_before_reusing_it(
         ensured = await SqlAlchemyPricingSnapshotStore(session).ensure(original)
         await session.commit()
 
-    async with session_factory() as session:
-        await session.execute(
-            sa
-            .update(PricingSnapshotRecord)
-            .where(
-                PricingSnapshotRecord.id == uuid.UUID(str(ensured.pricing_snapshot_id))
-            )
-            .values(
-                rates={
-                    "input_tokens": {
-                        "amount_minor": 99,
-                        "per_units": 1,
-                        "unit": "token",
-                    }
-                }
-            )
-        )
-        await session.commit()
+    await _tamper_stored_rates(session_factory, ensured.pricing_snapshot_id)
 
     async with session_factory() as session:
         snapshots = SqlAlchemyPricingSnapshotStore(session)
 
         with pytest.raises(PricingSnapshotIntegrityError, match="content hash"):
             await snapshots.ensure(original)
+
+
+@pytest.mark.asyncio
+async def test_get_ignores_a_row_cached_before_tampering(
+    session_factory: SessionFactory,
+) -> None:
+    """A row already loaded in the session must not mask later corruption."""
+    async with session_factory() as session:
+        snapshots = SqlAlchemyPricingSnapshotStore(session)
+        ensured = await snapshots.ensure(v1_pricing_snapshot())
+        await session.commit()
+        # Each transaction below ends without expiring. Retaining the row keeps
+        # it in the identity map, which holds rows weakly, so a later read
+        # would otherwise be answered from these attributes.
+        retained = await session.get(
+            PricingSnapshotRecord,
+            uuid.UUID(str(ensured.pricing_snapshot_id)),
+        )
+        assert retained is not None, "the stored row must load"
+        await session.commit()
+
+        await _tamper_stored_rates(session_factory, ensured.pricing_snapshot_id)
+
+        with pytest.raises(PricingSnapshotIntegrityError, match="content hash"):
+            await snapshots.get(ensured.pricing_snapshot_id)
+
+
+@pytest.mark.asyncio
+async def test_ensure_ignores_a_row_cached_before_tampering(
+    session_factory: SessionFactory,
+) -> None:
+    """Conflict reuse must verify the stored row, not a cached copy of it."""
+    async with session_factory() as session:
+        snapshots = SqlAlchemyPricingSnapshotStore(session)
+        ensured = await snapshots.ensure(v1_pricing_snapshot())
+        await session.commit()
+        retained = await session.get(
+            PricingSnapshotRecord,
+            uuid.UUID(str(ensured.pricing_snapshot_id)),
+        )
+        assert retained is not None, "the stored row must load"
+        await session.commit()
+
+        await _tamper_stored_rates(session_factory, ensured.pricing_snapshot_id)
+
+        with pytest.raises(PricingSnapshotIntegrityError, match="content hash"):
+            await snapshots.ensure(v1_pricing_snapshot())
 
 
 @pytest.mark.asyncio
