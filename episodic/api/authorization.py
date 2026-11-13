@@ -1,5 +1,6 @@
 """Authorization port and Falcon middleware for canonical REST APIs."""
 
+import contextlib
 import dataclasses as dc
 import enum
 import hashlib
@@ -228,6 +229,15 @@ def _authorization_failure_diagnostic_id(error: Exception) -> str:
     ).hexdigest()[:12]
 
 
+def _log_authorization_warning(
+    template: str,
+    *args: object,
+) -> None:
+    """Keep logger failures from masking canonical authorization responses."""
+    with contextlib.suppress(Exception):
+        log_warning(logger, template, *args)
+
+
 def _record_authorization_adapter_failure(
     metrics: MetricsPort,
     failure_category: str,
@@ -239,8 +249,7 @@ def _record_authorization_adapter_failure(
             labels={"category": failure_category},
         )
     except Exception:  # ruff: ignore[blind-except]  # Metrics must not mask adapter failures.
-        log_warning(
-            logger,
+        _log_authorization_warning(
             "Authorization adapter failure metric could not be recorded.",
         )
 
@@ -261,8 +270,7 @@ def _handle_authorization_adapter_failure(
         else ""
     )
     diagnostic_suffix = f" (diagnostic_id={diagnostic_id})" if diagnostic_id else ""
-    log_warning(
-        logger,
+    _log_authorization_warning(
         "Authorization adapter failed with %s%s for %s %s.",
         failure_category,
         diagnostic_suffix,
@@ -321,8 +329,7 @@ def _log_authorization_denial(
     context: AuthorizationContext,
 ) -> None:
     """Log non-permit decisions without recording credential material."""
-    log_warning(
-        logger,
+    _log_authorization_warning(
         "Authorization denied with %s for %s %s.",
         _authorization_decision_label(decision),
         _authorization_method_label(context.method),

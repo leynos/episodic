@@ -2,9 +2,12 @@
 
 import dataclasses as dc
 import typing as typ
+from unittest import mock
 
 from falcon import testing
 
+from episodic import logging as episodic_logging
+from episodic.api import authorization as authorization_module
 from episodic.api import create_app
 from episodic.api.authorization import (
     AuthorizationContext,
@@ -14,6 +17,7 @@ from episodic.api.authorization import (
 from tests.fixtures.api import build_api_dependencies
 
 if typ.TYPE_CHECKING:
+    import pytest
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.observability import MetricsPort
@@ -50,6 +54,18 @@ class RaisingAuthorization:
         del context
         msg = "authorization backend unavailable"
         raise self._error_type(msg)
+
+
+def patch_authorization_warning_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> mock.Mock:
+    """Capture authorization warnings through a mocked logger backend."""
+    backend = mock.Mock()
+    logger = episodic_logging.LoggerHandle(
+        typ.cast("episodic_logging._CompatibleLogger", backend)
+    )
+    monkeypatch.setattr(authorization_module, "logger", logger)
+    return backend
 
 
 def build_authorization_test_client(

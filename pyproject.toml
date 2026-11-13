@@ -786,6 +786,13 @@ full_name = [
 reason = "Authorization middleware dispatches to this production AuthorizationPort implementation."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.authorization._log_authorization_warning",
+]
+reason = "AuthorizationMiddleware.process_request calls this for denials and adapter failures, including when metric recording fails."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "method"
 full_name = [
     "episodic.canonical.health.HealthReport.from_checks",

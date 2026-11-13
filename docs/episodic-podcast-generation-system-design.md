@@ -2120,6 +2120,10 @@ The middleware records adapter failures in
 categories cover assertion, attribute, index, key, operating-system, runtime,
 type, and value errors; other exceptions use `unknown_error`. Recording is
 best-effort, so a metrics-sink failure does not mask the `503` response.
+Authorization warning emission is best-effort so a logging-sink failure cannot
+replace the canonical `401`, `403`, or `503` response. Keep this suppression in
+the authorization boundary; shared logging helpers retain their normal
+exception-propagation behaviour for other callers.
 
 The warning log includes the fixed category, an allow-listed method, and an
 allow-listed resource root. For `unknown_error`, it also includes a

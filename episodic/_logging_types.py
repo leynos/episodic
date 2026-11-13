@@ -1,5 +1,6 @@
 """Private protocols and dispatch support used by the logging port."""
 
+import annotationlib
 import inspect
 import typing as typ
 
@@ -96,7 +97,11 @@ def _method_rejects_logging_call(
     if not callable(method):
         return False
     try:
-        signature = inspect.signature(method, follow_wrapped=False)
+        signature = inspect.signature(
+            method,
+            follow_wrapped=False,
+            annotation_format=annotationlib.Format.STRING,
+        )
     except (TypeError, ValueError):  # fmt: skip
         return False
     try:
