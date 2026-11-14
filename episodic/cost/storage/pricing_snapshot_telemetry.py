@@ -49,6 +49,14 @@ _GET_TELEMETRY = _OperationTelemetry(
 )
 
 
+@dc.dataclass(slots=True)
+class _CallReport:
+    """Outcome of one repository call, carried from the call to its span."""
+
+    value: str = "error"
+    failure_category: str | None = None
+
+
 class InstrumentedPricingSnapshotRepository:
     """Add counters, latency, and spans to a snapshot repository."""
 
@@ -84,22 +92,34 @@ class InstrumentedPricingSnapshotRepository:
             clock if clock is not None else observability.PerfCounterClock()
         )
 
+    def _finish_span(
+        self,
+        span: observability.SpanHandle,
+        telemetry: _OperationTelemetry,
+        started: float,
+        report: _CallReport,
+    ) -> None:
+        """Close one span and emit its metrics, whatever the outcome."""
+        span.set_attribute("outcome", report.value)
+        if report.failure_category is not None:
+            span.set_attribute("failure_category", report.failure_category)
+        self._record_outcome(telemetry, started, report)
+
     def _record_outcome(
         self,
         telemetry: _OperationTelemetry,
         started: float,
-        outcome: str,
-        failure_category: str | None,
+        report: _CallReport,
     ) -> None:
         """Emit the bounded counter and latency metrics for one operation."""
-        labels = {"operation": telemetry.operation, "outcome": outcome}
-        if failure_category is not None:
-            labels["failure_category"] = failure_category
+        labels = {"operation": telemetry.operation, "outcome": report.value}
+        if report.failure_category is not None:
+            labels["failure_category"] = report.failure_category
         self._metrics.increment_counter(telemetry.counter, labels=labels)
         self._metrics.observe_latency_ms(
             telemetry.latency,
             (self._clock.monotonic_seconds() - started) * 1000.0,
-            labels={"operation": telemetry.operation, "outcome": outcome},
+            labels={"operation": telemetry.operation, "outcome": report.value},
         )
 
     async def ensure(self, snapshot: PricingSnapshot) -> EnsuredPricingSnapshot:
@@ -118,8 +138,7 @@ class InstrumentedPricingSnapshotRepository:
             If any constraint other than content-hash uniqueness fails.
         """
         started = self._clock.monotonic_seconds()
-        outcome = "error"
-        failure_category: str | None = None
+        report = _CallReport()
         with self._tracer.start_span(
             "pricing_snapshot.ensure_snapshot",
             attributes={"operation": _ENSURE_TELEMETRY.operation},
@@ -127,21 +146,13 @@ class InstrumentedPricingSnapshotRepository:
             try:
                 ensured = await self._repository.ensure(snapshot)
             except IntegrityError, PricingSnapshotIntegrityError:
-                failure_category = "pricing_snapshot.integrity"
+                report.failure_category = "pricing_snapshot.integrity"
                 raise
             else:
-                outcome = ensured.outcome.value
+                report.value = ensured.outcome.value
                 return ensured
             finally:
-                span.set_attribute("outcome", outcome)
-                if failure_category is not None:
-                    span.set_attribute("failure_category", failure_category)
-                self._record_outcome(
-                    _ENSURE_TELEMETRY,
-                    started,
-                    outcome,
-                    failure_category,
-                )
+                self._finish_span(span, _ENSURE_TELEMETRY, started, report)
 
     async def get(self, pricing_snapshot_id: PricingSnapshotId) -> PricingSnapshot:
         """Read a stored snapshot, reporting its outcome and failure category.
@@ -159,8 +170,7 @@ class InstrumentedPricingSnapshotRepository:
             If the stored row no longer hashes to its recorded content hash.
         """
         started = self._clock.monotonic_seconds()
-        outcome = "error"
-        failure_category: str | None = None
+        report = _CallReport()
         with self._tracer.start_span(
             "pricing_snapshot.get_snapshot",
             attributes={"operation": _GET_TELEMETRY.operation},
@@ -168,21 +178,18 @@ class InstrumentedPricingSnapshotRepository:
             try:
                 snapshot = await self._repository.get(pricing_snapshot_id)
             except PricingSnapshotNotFoundError:
-                outcome = "not_found"
-                failure_category = "pricing_snapshot.not_found"
+                report.value = "not_found"
+                report.failure_category = "pricing_snapshot.not_found"
                 raise
             except PricingSnapshotIntegrityError:
-                outcome = "integrity_mismatch"
-                failure_category = "pricing_snapshot.tampered"
+                report.value = "integrity_mismatch"
+                report.failure_category = "pricing_snapshot.tampered"
                 # The identifier is unbounded and may be sensitive; keep it on
                 # the span only, never on a metric label.
                 span.set_attribute("pricing_snapshot_id", str(pricing_snapshot_id))
                 raise
             else:
-                outcome = "found"
+                report.value = "found"
                 return snapshot
             finally:
-                span.set_attribute("outcome", outcome)
-                if failure_category is not None:
-                    span.set_attribute("failure_category", failure_category)
-                self._record_outcome(_GET_TELEMETRY, started, outcome, failure_category)
+                self._finish_span(span, _GET_TELEMETRY, started, report)
