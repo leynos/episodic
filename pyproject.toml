@@ -621,16 +621,17 @@ reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI r
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
-    "episodic.api.authorization._authorization_failure_category",
-    "episodic.api.authorization._authorization_failure_diagnostic_id",
-    "episodic.api.authorization._handle_authorization_adapter_failure",
+    "episodic.api.authorization_observability._authorization_failure_category",
+    "episodic.api.authorization_observability._authorization_failure_diagnostic_id",
 ]
-reason = "Falcon invokes AuthorizationMiddleware.process_request, which delegates category mapping, diagnostic fingerprints, and 503 response handling through these helpers."
+reason = "AuthorizationMiddleware delegates safe failure categorization and diagnostic fingerprints to AuthorizationObserver before shaping the 503 response."
 
 [[tool.skylos.dead_code.entrypoints]]
-type = "function"
-full_name = ["episodic.api.authorization._record_authorization_adapter_failure"]
-reason = "Falcon invokes AuthorizationMiddleware.process_request, which records the bounded failure metric through this helper."
+type = "method"
+full_name = [
+    "episodic.api.authorization_observability.AuthorizationObserver._record_adapter_failure_metric",
+]
+reason = "AuthorizationObserver records the bounded failure metric through the injected MetricsPort."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "parameter"
@@ -786,11 +787,13 @@ full_name = [
 reason = "Authorization middleware dispatches to this production AuthorizationPort implementation."
 
 [[tool.skylos.dead_code.entrypoints]]
-type = "function"
+type = "method"
 full_name = [
-    "episodic.api.authorization._log_authorization_warning",
+    "episodic.api.authorization_observability.AuthorizationObserver._log_warning",
+    "episodic.api.authorization_observability.AuthorizationObserver.record_denial",
+    "episodic.api.authorization_observability.AuthorizationObserver.record_adapter_failure",
 ]
-reason = "AuthorizationMiddleware.process_request calls this for denials and adapter failures, including when metric recording fails."
+reason = "AuthorizationMiddleware calls the injected AuthorizationObservabilityPort for denials and adapter failures; the observer routes warning output through the central logging port."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"

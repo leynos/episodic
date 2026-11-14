@@ -7,11 +7,12 @@ from unittest import mock
 import pytest
 
 from tests.fixtures.authorization import (
+    AuthorizationWarningLogger,
     DenyAllAuthorization,
     ForbidSeriesProfilesAuthorization,
     RaisingAuthorization,
     build_authorization_test_client,
-    patch_authorization_warning_backend,
+    make_authorization_warning_backend,
 )
 
 if typ.TYPE_CHECKING:
@@ -21,9 +22,9 @@ if typ.TYPE_CHECKING:
 
 
 @pytest.fixture
-def authorization_warning_backend(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
-    """Capture authorization warnings through a mocked logger backend."""
-    return patch_authorization_warning_backend(monkeypatch)
+def authorization_warning_backend() -> AuthorizationWarningLogger:
+    """Capture authorization warnings through an injected fake logger."""
+    return make_authorization_warning_backend()
 
 
 class _WarningFailureCase(typ.NamedTuple):
@@ -35,6 +36,7 @@ class _WarningFailureCase(typ.NamedTuple):
     code: str
     message: str
     warning_calls: int
+    warning_error: type[Exception] | None = RuntimeError
 
 
 @pytest.mark.parametrize(
@@ -64,6 +66,30 @@ class _WarningFailureCase(typ.NamedTuple):
         ),
         pytest.param(
             _WarningFailureCase(
+                RaisingAuthorization(),
+                KeyError,
+                503,
+                "service_unavailable",
+                "Authorization service is unavailable.",
+                2,
+                None,
+            ),
+            id="key-error-from-metrics-sink",
+        ),
+        pytest.param(
+            _WarningFailureCase(
+                RaisingAuthorization(),
+                IndexError,
+                503,
+                "service_unavailable",
+                "Authorization service is unavailable.",
+                2,
+                None,
+            ),
+            id="index-error-from-metrics-sink",
+        ),
+        pytest.param(
+            _WarningFailureCase(
                 DenyAllAuthorization(),
                 None,
                 401,
@@ -84,17 +110,43 @@ class _WarningFailureCase(typ.NamedTuple):
             ),
             id="forbidden-warning-fails",
         ),
+        pytest.param(
+            _WarningFailureCase(
+                DenyAllAuthorization(),
+                None,
+                401,
+                "unauthorized",
+                "Authorization is required.",
+                1,
+                KeyError,
+            ),
+            id="key-error-from-warning-sink",
+        ),
+        pytest.param(
+            _WarningFailureCase(
+                DenyAllAuthorization(),
+                None,
+                401,
+                "unauthorized",
+                "Authorization is required.",
+                1,
+                IndexError,
+            ),
+            id="index-error-from-warning-sink",
+        ),
     ],
 )
 def test_warning_failures_do_not_interrupt_authorization_response(
     session_factory: async_sessionmaker[AsyncSession],
-    authorization_warning_backend: mock.Mock,
+    authorization_warning_backend: AuthorizationWarningLogger,
     case: _WarningFailureCase,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Logging errors cannot replace the canonical authorization response."""
-    authorization_warning_backend.warning.side_effect = RuntimeError(
-        "warning backend unavailable"
+    authorization_warning_backend.warning_failure = (
+        None
+        if case.warning_error is None
+        else case.warning_error("warning backend unavailable")
     )
     metrics = mock.Mock()
     if case.metrics_error is not None:
@@ -105,6 +157,7 @@ def test_warning_failures_do_not_interrupt_authorization_response(
         session_factory,
         case.authorization,
         metrics=metrics,
+        warning_logger=authorization_warning_backend,
     )
 
     response = client.simulate_get(
@@ -120,20 +173,21 @@ def test_warning_failures_do_not_interrupt_authorization_response(
         "message": case.message,
         "details": {},
     }, "warning failures must preserve the canonical response envelope"
-    assert authorization_warning_backend.warning.call_count == case.warning_calls, (
+    assert len(authorization_warning_backend.warning_calls) == case.warning_calls, (
         "warning attempts must match the authorization failure path"
     )
     assert metrics.increment_counter.call_count == int(case.status == 503), (
         "adapter failures must attempt their metric exactly once"
     )
     assert "Bearer sensitive-token" not in repr(
-        authorization_warning_backend.warning.call_args_list,
+        authorization_warning_backend.warning_calls,
     ), "authorization credentials must not reach a failed warning backend"
     fallback_lines = capsys.readouterr().err.splitlines()
+    fallback_call_count = case.warning_calls if case.warning_error is not None else 0
     assert (
         fallback_lines
         == ["Authorization warning sink failed; request details omitted."]
-        * case.warning_calls
+        * fallback_call_count
     ), "logger failures must use one fixed, credential-free signal"
 
 
@@ -158,11 +212,11 @@ class _UnavailableStandardError:
 
 def test_unavailable_warning_fallback_preserves_unauthorized_response(
     session_factory: async_sessionmaker[AsyncSession],
-    authorization_warning_backend: mock.Mock,
+    authorization_warning_backend: AuthorizationWarningLogger,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Keep the canonical response when both warning and fallback sinks fail."""
-    authorization_warning_backend.warning.side_effect = RuntimeError(
+    authorization_warning_backend.warning_failure = RuntimeError(
         "warning backend unavailable"
     )
     fallback_stream = _UnavailableStandardError()
@@ -170,6 +224,7 @@ def test_unavailable_warning_fallback_preserves_unauthorized_response(
     client = build_authorization_test_client(
         session_factory,
         DenyAllAuthorization(),
+        warning_logger=authorization_warning_backend,
     )
 
     response = client.simulate_get(

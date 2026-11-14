@@ -1,13 +1,16 @@
 """Property tests for redacted authorization route labels."""
 
+import enum
+
 import hypothesis.strategies as st
 from hypothesis import given
 
-from episodic.api.authorization import (
+from episodic.api.authorization_observability import (
     _AUTHORIZATION_LOG_METHODS,
     _AUTHORIZATION_LOG_RESOURCE_LABELS,
     _OTHER_AUTHORIZATION_LOG_METHOD,
     _UNKNOWN_AUTHORIZATION_LOG_RESOURCE,
+    _authorization_decision_label,
     _authorization_method_label,
     _authorization_route_label,
 )
@@ -21,6 +24,12 @@ _ALLOWED_METHOD_LABELS = frozenset((
     *_AUTHORIZATION_LOG_METHODS,
     _OTHER_AUTHORIZATION_LOG_METHOD,
 ))
+
+
+class _ForgedAuthorizationDecision(enum.StrEnum):
+    """Represent an enum value that must not become an audit label."""
+
+    INJECTED = "forged\nBearer sensitive-token"
 
 
 @given(log_character=st.characters(categories=_LOG_SENSITIVE_CATEGORIES))
@@ -61,3 +70,10 @@ def test_authorization_method_labels_are_always_allow_listed(method: str) -> Non
     actual = _authorization_method_label(method)
 
     assert actual in _ALLOWED_METHOD_LABELS, f"unexpected label {actual!r}"
+
+
+def test_authorization_decision_labels_reject_unknown_enum_values() -> None:
+    """An unexpected enum value cannot inject text into authorization logs."""
+    actual = _authorization_decision_label(_ForgedAuthorizationDecision.INJECTED)
+
+    assert actual == "unknown", f"unexpected decision label {actual!r}"

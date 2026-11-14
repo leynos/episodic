@@ -8,11 +8,13 @@ import pytest
 
 from episodic.api import authorization as authorization_module
 from tests.fixtures.authorization import (
+    AuthorizationWarningLogger,
     DenyAllAuthorization,
     ForbidSeriesProfilesAuthorization,
     RaisingAuthorization,
+    build_authorization_observer,
     build_authorization_test_client,
-    patch_authorization_warning_backend,
+    make_authorization_warning_backend,
 )
 
 if typ.TYPE_CHECKING:
@@ -26,9 +28,9 @@ if typ.TYPE_CHECKING:
 
 
 @pytest.fixture
-def authorization_warning_backend(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
-    """Capture authorization warnings through a mocked logger backend."""
-    return patch_authorization_warning_backend(monkeypatch)
+def authorization_warning_backend() -> AuthorizationWarningLogger:
+    """Capture authorization warnings through an injected fake logger."""
+    return make_authorization_warning_backend()
 
 
 class _AuthorizationHeaderFailure:
@@ -182,7 +184,7 @@ class _AuthorizationFailureLogCase(typ.NamedTuple):
 )
 def test_authorization_adapter_failures_log_fixed_categories_without_details(
     session_factory: async_sessionmaker[AsyncSession],
-    authorization_warning_backend: mock.Mock,
+    authorization_warning_backend: AuthorizationWarningLogger,
     case: _AuthorizationFailureLogCase,
 ) -> None:
     """Adapter failures emit bounded logs and metrics without exception text."""
@@ -192,6 +194,7 @@ def test_authorization_adapter_failures_log_fixed_categories_without_details(
         session_factory,
         case.authorization,
         metrics=metrics,
+        warning_logger=authorization_warning_backend,
     )
 
     response = client.simulate_get(
@@ -205,17 +208,21 @@ def test_authorization_adapter_failures_log_fixed_categories_without_details(
         if case.expected_diagnostic_id is not None
         else ""
     )
-    authorization_warning_backend.warning.assert_called_once_with(
-        f"Authorization adapter failed with {case.expected_category}"
-        f"{diagnostic_id} for GET /v1/series-profiles.",
-        exc_info=None,
-        stack_info=False,
-    )
+    assert authorization_warning_backend.warning_calls == [
+        (
+            (
+                f"Authorization adapter failed with {case.expected_category}"
+                f"{diagnostic_id} for GET /v1/series-profiles."
+            ),
+            None,
+            False,
+        )
+    ], "adapter failures must emit one sanitized warning"
     metrics.increment_counter.assert_called_once_with(
         "authorization_adapter_failure_total",
         labels={"category": case.expected_category},
     )
-    warning_call = repr(authorization_warning_backend.warning.call_args)
+    warning_call = repr(authorization_warning_backend.warning_calls)
     for forbidden_value in case.forbidden_values:
         assert forbidden_value not in warning_call, (
             f"{forbidden_value!r} must not reach the warning logger"
@@ -224,7 +231,7 @@ def test_authorization_adapter_failures_log_fixed_categories_without_details(
 
 def test_metrics_failure_does_not_interrupt_authorization_adapter_response(
     session_factory: async_sessionmaker[AsyncSession],
-    authorization_warning_backend: mock.Mock,
+    authorization_warning_backend: AuthorizationWarningLogger,
 ) -> None:
     """Metrics errors cannot mask the adapter failure response or leak details."""
     metrics = mock.Mock()
@@ -233,6 +240,7 @@ def test_metrics_failure_does_not_interrupt_authorization_adapter_response(
         session_factory,
         _AuthorizationHeaderFailure(),
         metrics=metrics,
+        warning_logger=authorization_warning_backend,
     )
 
     response = client.simulate_get(
@@ -241,26 +249,20 @@ def test_metrics_failure_does_not_interrupt_authorization_adapter_response(
     )
 
     assert response.status_code == 503, "metrics failure must preserve the 503 response"
-    warning_calls = authorization_warning_backend.warning.call_args_list
+    warning_calls = authorization_warning_backend.warning_calls
     assert len(warning_calls) == 2, "both fixed warnings must be recorded"
     metric_warning, adapter_warning = warning_calls
-    assert metric_warning.args == (
+    assert metric_warning == (
         "Authorization adapter failure metric could not be recorded.",
-    ), "metrics failures must use a fixed warning"
-    assert metric_warning.kwargs == {
-        "exc_info": None,
-        "stack_info": False,
-    }, "metrics warnings must not include exception metadata"
+        None,
+        False,
+    ), "metrics failures must use a fixed warning without exception metadata"
     expected_adapter_message = (
         "Authorization adapter failed with runtime_error for GET /v1/series-profiles."
     )
-    assert adapter_warning.args == (expected_adapter_message,), (
-        "adapter failures must still be logged after metrics fail"
+    assert adapter_warning == (expected_adapter_message, None, False), (
+        "adapter warning must follow a metrics failure"
     )
-    assert adapter_warning.kwargs == {
-        "exc_info": None,
-        "stack_info": False,
-    }, "adapter warnings must not include exception metadata"
     assert "Bearer sensitive-token" not in repr(
         warning_calls,
     ), "authorization credentials must not reach either warning"
@@ -268,11 +270,12 @@ def test_metrics_failure_does_not_interrupt_authorization_adapter_response(
 
 @pytest.mark.asyncio
 async def test_missing_metrics_does_not_add_a_failure_warning(
-    authorization_warning_backend: mock.Mock,
+    authorization_warning_backend: AuthorizationWarningLogger,
 ) -> None:
     """Adapter failures remain safe when the middleware uses no metrics port."""
     middleware = authorization_module.AuthorizationMiddleware(
         _AuthorizationHeaderFailure(),
+        build_authorization_observer(authorization_warning_backend),
     )
     request = mock.Mock()
     request.path = "/v1/series-profiles"
@@ -289,13 +292,18 @@ async def test_missing_metrics_does_not_add_a_failure_warning(
         "details": {},
     }, "adapter failures must use the canonical service-unavailable envelope"
     assert response.complete is True, "adapter failures must stop request dispatch"
-    authorization_warning_backend.warning.assert_called_once_with(
-        "Authorization adapter failed with runtime_error for GET /v1/series-profiles.",
-        exc_info=None,
-        stack_info=False,
-    )
+    assert authorization_warning_backend.warning_calls == [
+        (
+            (
+                "Authorization adapter failed with runtime_error "
+                "for GET /v1/series-profiles."
+            ),
+            None,
+            False,
+        )
+    ], "adapter runtime failures must emit one sanitized warning"
     assert "Bearer sensitive-token" not in repr(
-        authorization_warning_backend.warning.call_args,
+        authorization_warning_backend.warning_calls,
     ), "the warning must not include the Authorization header value"
 
 

@@ -169,7 +169,7 @@ def _emit(
     logger: LoggerHandle,
     log_call: _LogCall,
 ) -> None:
-    """Format and dispatch one log request through the wrapped backend."""
+    """Dispatch logs; retry only signature-mismatch DEBUG ``TypeError`` failures."""
     level = log_call.level
     convenience_method = log_call.convenience_method
     message = _format_message(log_call.template, log_call.args)

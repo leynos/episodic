@@ -20,6 +20,10 @@ from falcon import asgi
 from episodic.logging import get_logger, log_error
 
 from .authorization import AuthorizationMiddleware
+from .authorization_observability import (
+    AuthorizationObservabilityPort,
+    AuthorizationObserver,
+)
 from .errors import serialize_http_error
 from .routes import _register_api_routes
 
@@ -154,11 +158,35 @@ class _ShutdownHooksMiddleware:
             raise first_failure
 
 
-def create_app(dependencies: ApiDependencies) -> asgi.App:
-    """Build and return Falcon ASGI application for canonical APIs."""
+def create_app(
+    dependencies: ApiDependencies,
+    *,
+    authorization_observer: AuthorizationObservabilityPort | None = None,
+) -> asgi.App:
+    """Build a Falcon application and its API-boundary middleware.
+
+    Parameters
+    ----------
+    dependencies : ApiDependencies
+        Ports and adapters used by the canonical API resources.
+    authorization_observer : AuthorizationObservabilityPort | None, optional
+        Observer for authorization logs and bounded failure metrics. When
+        omitted, the composition root builds one from the application logging
+        and metrics ports.
+
+    Returns
+    -------
+    asgi.App
+        The configured Falcon ASGI application.
+    """
     app = asgi.App()
+    if authorization_observer is None:
+        authorization_observer = AuthorizationObserver(
+            get_logger("episodic.api.authorization"),
+            dependencies.metrics,
+        )
     app.add_middleware(
-        AuthorizationMiddleware(dependencies.authorization, dependencies.metrics)
+        AuthorizationMiddleware(dependencies.authorization, authorization_observer)
     )
     app.add_middleware(
         _GenerationRouteMetricsMiddleware(

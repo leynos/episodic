@@ -2109,24 +2109,29 @@ rules.
 
 ### Authorization and adapter failure observability
 
-The API composition root passes the `AuthorizationPort` and shared
-`MetricsPort` to `AuthorizationMiddleware`. The middleware owns HTTP
-authorization outcomes: denial decisions return `401` or `403`, while an
-adapter exception returns `503 service_unavailable` in the standard error
-envelope.
+The API composition root constructs an `AuthorizationObserver` from the central
+logging handle and shared `MetricsPort`, then injects its
+`AuthorizationObservabilityPort` into `AuthorizationMiddleware`. The middleware
+owns HTTP authorization outcomes: denial decisions return `401` or `403`, while
+an adapter exception returns `503 service_unavailable` in the standard error
+envelope. The observer owns the bounded log labels, failure metric, and
+best-effort sink fallback. Its scope is this authorization boundary; it is not
+a general-purpose logging or metrics adapter.
 
-The middleware records adapter failures in
-`authorization_adapter_failure_total` with one bounded `category` label. Known
-categories cover assertion, attribute, index, key, operating-system, runtime,
-type, and value errors; other exceptions use `unknown_error`. Recording is
-best-effort, so a metrics-sink failure does not mask the `503` response. If an
-authorization warning cannot be emitted, the middleware writes the fixed marker
+The observer records adapter failures in `authorization_adapter_failure_total`
+with one bounded `category` label. Known categories cover assertion, attribute,
+index, key, operating-system, runtime, type, and value errors; other exceptions
+use `unknown_error`. Recording is best-effort for the explicitly handled sink
+failures: attribute, index, key, operating-system, runtime, type, and value
+errors. If a metrics sink fails, the observer emits a fixed warning. If an
+authorization warning cannot be emitted, the observer writes the fixed marker
 `Authorization warning sink failed; request details omitted.` to standard error
-without request data or exception details. This independent fallback is
-best-effort too: an unavailable or unwritable standard-error stream can lose
-the marker, but the canonical `401`, `403`, or `503` response remains
-unchanged. Keep this handling in the authorization boundary; shared logging
-helpers retain their normal exception-propagation behaviour for other callers.
+without request data or exception details. The stderr fallback is best-effort
+too: an unavailable or unwritable stream can lose the marker. Keep this
+handling in the authorization boundary; shared logging helpers retain their
+normal exception-propagation behaviour for other callers. Unexpected sink
+exceptions outside the explicit handled set propagate so new failures remain
+visible.
 
 The warning log includes the fixed category, an allow-listed method, and an
 allow-listed resource root. For `unknown_error`, it also includes a
