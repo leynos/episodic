@@ -59,7 +59,8 @@ minimum sizes below every corpus unit) so the corpus measures detection ability
 rather than configuration taste. Findings were matched to labels by unordered
 span overlap. Unlabelled findings were preserved separately instead of being
 converted into false positives after the fact. The raw reports, oracle,
-normalizer, and normalized counts are under `benchmarks/duplication/`.
+normalizer, and normalized counts are under `benchmarks/duplication/` in
+`df12-python-lints`.
 
 ## Labelled corpus results
 
@@ -91,9 +92,9 @@ The same behaviour scales badly on production code. Run over `episodic/` on
 settings; tightened to gate strength it still reported 18, every one of which
 adjudication found to be an intentional idiom parallel rather than a semantic
 clone (both raw reports and their run configurations are retained under
-`benchmarks/duplication/results/` beside the adjudicated summary
-`pyscn-1.29.1-episodic-type4.json`). Those results cover only the parseable
-portion of `episodic/`: pyscn reported parse errors for
+`benchmarks/duplication/results/` in `df12-python-lints`, beside the
+adjudicated summary `pyscn-1.29.1-episodic-type4.json`). Those results cover
+only the parseable portion of `episodic/`: pyscn reported parse errors for
 `episodic/api/authorization.py` and `episodic/canonical/prompts.py`, so both
 modules were excluded from the scan and from the 18-pair adjudication, which
 spanned every pair pyscn reported rather than every module in the tree. The
@@ -107,7 +108,7 @@ allowlist absorbing the known parallels.
 
 Configurations were tuned generationally against the corpus oracle, with the
 production scan as the second-generation fitness signal; the score tables are
-retained under `benchmarks/duplication/results/`.
+retained under `benchmarks/duplication/results/` in `df12-python-lints`.
 
 - Generation 1 swept 60 pyscn and 189 PyChase configurations against the
   corpus. Both plateaued at F1 0.889 over all ten labels (perfect precision,
@@ -172,8 +173,8 @@ similarity with a configurable threshold). The released
 `nose-cli-x86_64-unknown-linux-gnu` 0.20.0 binary ran against the same corpus
 oracle through `parse_nose_pairs`, which expands each reported family into its
 unordered member pairs. The sweep table is retained in
-`benchmarks/duplication/results/tuning-nose-0.20.0.json` alongside the raw
-reports.
+`benchmarks/duplication/results/tuning-nose-0.20.0.json` in `df12-python-lints`
+alongside the raw reports.
 
 | Configuration                    | Lane            | TP  | FP  | FN  | TN  | Unmatched | Precision   | Recall | F1          |
 | -------------------------------- | --------------- | --: | --: | --: | --: | --------: | ----------: | -----: | ----------: |

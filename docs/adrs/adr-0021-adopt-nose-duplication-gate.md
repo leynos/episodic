@@ -107,7 +107,9 @@ favour of the incumbent.
   duplication below it did not. The ranked surface stayed saturated, so see the
   2026-11-14 update below.
 - The benchmark corpus, tuning tables, and adjudication evidence behind the
-  tool choice remain under `benchmarks/duplication/` and are summarized in
+  tool choice are retained under `benchmarks/duplication/` in
+  `df12-python-lints` (moved there from this repository on 2026-11-14) and are
+  summarized in
   [the duplication head-to-head](../pychase-pyscn-duplication-head-to-head.md).
 
 ## Update: nose runs as df12-duplication, every family adjudicated (2026-11-14)

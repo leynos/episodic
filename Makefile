@@ -80,7 +80,7 @@ DUPLICATION = $(UV_ENV) NOSE_BIN='$(NOSE_BIN)' $(UV) tool run \
 # the targets. Python 3.14 is required: interrogate parses the source with the
 # interpreter that runs it, and this code uses template strings.
 INTERROGATE_VERSION ?= 1.7.0
-INTERROGATE_TARGETS ?= alembic benchmarks episodic openai_test_types.py scripts tests
+INTERROGATE_TARGETS ?= alembic episodic openai_test_types.py scripts tests
 # Level 2 prints a MISSED row per undocumented definition, which the
 # `interrogate` target fails on: the rounded percentage alone passes a lone gap.
 INTERROGATE_FLAGS ?= -vv --no-color --ext pyi --fail-under 100

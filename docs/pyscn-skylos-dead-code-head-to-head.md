@@ -50,7 +50,7 @@ The checked-in corpus contains 19 labels fixed before either full scan:
 Findings were matched by source location. Unlabelled findings were preserved
 separately instead of being converted into false positives after the fact. The
 raw reports, oracle, normalizer, and normalized counts are under
-`benchmarks/dead_code/`.
+`benchmarks/dead_code/` in `df12-python-lints`.
 
 ## Labelled corpus results
 
