@@ -76,7 +76,8 @@ def test_conversion_rejects_an_oversized_plan_document() -> None:
 @pytest.mark.parametrize("year", [1, 99, 999])
 def test_frozen_instant_keeps_a_four_digit_year(year: int) -> None:
     """The migration's instant must pad the year the way the domain does."""
-    instant = _migration()._instant(dt.datetime(year, 1, 1, tzinfo=dt.UTC))
+    stored = dt.datetime(year, 1, 1, tzinfo=dt.UTC)
+    instant = _migration()._instant(stored, uuid.uuid4())
 
     assert instant == f"{year:04d}-01-01T00:00:00.000000Z", (
         "a migrated row must hash identically to the application's encoding"
@@ -123,6 +124,12 @@ def test_shared_hash_with_different_content_aborts(
     message = str(rejection.value)
     assert str(survivor) in message, "the collision must name the survivor"
     assert str(duplicate) in message, "the collision must name the duplicate"
+    # The survivor's conversion executes before the duplicate is compared, so
+    # the table is left partly rewritten unless the caller rolls back. The
+    # Alembic transaction boundary test proves that rollback.
     assert len(connection.statements) == 1, (
-        "the conflicting row must not be written or merged"
+        "only the survivor may be written before the collision aborts the merge"
     )
+    assert "UPDATE pricing_snapshots SET schema_version = 1" in str(
+        connection.statements[0]
+    ), "the recorded statement must be the survivor's conversion"

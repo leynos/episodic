@@ -13,6 +13,7 @@ import collections.abc as cabc
 import datetime as dt
 import hashlib
 import json
+import logging
 import math
 import re
 import typing as typ
@@ -31,8 +32,7 @@ depends_on: str | None = None
 _Row = cabc.Mapping[str, object]
 _RATE_SCALE = 1_000_000
 _MAX_JSON_INT = 2**53 - 1
-# The legacy table never stored an SLA4OAI row's plan text, so the upgraded row
-# carries the legacy columns as JSON under a media type naming that reconstruction.
+# No legacy plan text survives, so the plan row keeps its columns as JSON.
 _LEGACY_DOCUMENT_MEDIA_TYPE = "application/json"
 _MAX_SOURCE_DOCUMENT_BYTES = 262_144  # Mirrors SourceDocument's cap.
 _LEGACY_METRIC_UNITS: typ.Final = {
@@ -73,10 +73,11 @@ _EMPTY_TABLE_GUARD = (
 )
 
 
-def _instant(value: dt.datetime) -> str:
-    """Format an instant exactly as the application canonicalizer does."""
-    # ``strftime("%Y")`` leaves years below 1000 unpadded, so the year is
-    # formatted separately and the remaining fields keep their fixed widths.
+def _instant(value: object, snapshot_id: object) -> str:
+    """Format a stored instant exactly as the application canonicalizer does."""
+    if not isinstance(value, dt.datetime):
+        _reject(snapshot_id, "instant is not a datetime")
+    # ``strftime`` leaves years below 1000 unpadded, so pad the year here.
     utc = value.astimezone(dt.UTC)
     return f"{utc.year:04d}-{utc:%m-%dT%H:%M:%S.%f}Z"
 
@@ -96,13 +97,6 @@ def _reject(snapshot_id: object, detail: str) -> typ.NoReturn:
     """Raise a conversion error naming the offending snapshot."""
     msg = f"pricing snapshot {snapshot_id}: {detail}"
     raise CommandError(msg)
-
-
-def _row_instant(value: object, snapshot_id: object) -> dt.datetime:
-    """Reject a legacy row whose instant is not a datetime."""
-    if not isinstance(value, dt.datetime):
-        _reject(snapshot_id, "instant is not a datetime")
-    return value
 
 
 def _convert_rates(
@@ -159,15 +153,13 @@ def _canonical_document(
     return {
         "currency": row["currency"],
         "effective_from": (
-            None
-            if effective_from is None
-            else _instant(_row_instant(effective_from, row["id"]))
+            None if effective_from is None else _instant(effective_from, row["id"])
         ),
         "model": row["model"],
         "operation": row["operation"],
         "provider_name": row["provider_name"],
         "rates": rates,
-        "retrieved_at": _instant(_row_instant(row["retrieved_at"], row["id"])),
+        "retrieved_at": _instant(row["retrieved_at"], row["id"]),
         "schema_version": 1,
         "service_kind": "llm",
         "source_document": None,
@@ -186,9 +178,8 @@ def _validate_text_fields(row: _Row, snapshot_id: object) -> None:
 
 def _validate_currency_and_source_kind(row: _Row, snapshot_id: object) -> None:
     """Reject a currency or source kind the version 1 schema does not define."""
-    # The domain pattern is repeated rather than imported because a migration
-    # must keep converting rows the way it always did, even when the domain
-    # validator later changes.
+    # The domain pattern is repeated rather than imported: a migration keeps
+    # converting rows the way it always did, whatever the domain validator does.
     currency = row["currency"]
     if not isinstance(currency, str) or not _CURRENCY_CODE.fullmatch(currency):
         _reject(snapshot_id, "currency must be a three-letter uppercase ASCII code")
@@ -207,13 +198,6 @@ def _validate_json_columns(row: _Row, snapshot_id: object) -> None:
         _reject(snapshot_id, "a rate card snapshot must price at least one metric")
 
 
-def _validate_row(row: _Row, snapshot_id: object) -> None:
-    """Reject a legacy row that cannot become a valid version 1 snapshot."""
-    _validate_text_fields(row, snapshot_id)
-    _validate_currency_and_source_kind(row, snapshot_id)
-    _validate_json_columns(row, snapshot_id)
-
-
 def _converted_row(
     row: _Row,
 ) -> tuple[
@@ -221,7 +205,9 @@ def _converted_row(
 ]:
     """Convert one legacy row and return its rates, metadata, document, identity."""
     snapshot_id = row["id"]
-    _validate_row(row, snapshot_id)
+    _validate_text_fields(row, snapshot_id)
+    _validate_currency_and_source_kind(row, snapshot_id)
+    _validate_json_columns(row, snapshot_id)
     raw_rates = typ.cast("cabc.Mapping[str, object]", row["rates_minor_per_metric"])
     raw_metadata = typ.cast("cabc.Mapping[str, object]", row["source_metadata"])
     rates = _convert_rates(raw_rates, snapshot_id)
@@ -248,18 +234,17 @@ def _converted_row(
 
 def _add_new_columns() -> None:
     """Add the schema-version-1 columns as nullable."""
-    for column, type_ in (
-        ("schema_version", sa.Integer()),
-        ("service_kind", sa.Text()),
-        ("rates", postgresql.JSONB()),
-        ("source_document_media_type", sa.Text()),
-        ("source_document_content", sa.Text()),
+    for column in (
+        sa.Column("schema_version", sa.Integer()),
+        sa.Column("service_kind", sa.Text()),
+        sa.Column("rates", postgresql.JSONB()),
+        sa.Column("source_document_media_type", sa.Text()),
+        sa.Column("source_document_content", sa.Text()),
+        sa.Column(
+            "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
     ):
-        op.add_column("pricing_snapshots", sa.Column(column, type_))
-    recorded_at = sa.Column(
-        "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now()
-    )
-    op.add_column("pricing_snapshots", recorded_at)
+        op.add_column("pricing_snapshots", column)
 
 
 def _tighten_new_columns() -> None:
@@ -278,13 +263,17 @@ def _drop_legacy_columns() -> None:
 
 def _legacy_rows(connection: sa.Connection) -> list[dict[str, object]]:
     """Read every legacy row, oldest first so the earliest survives a merge."""
-    query = sa.text(
+    statement = sa.text(
         "SELECT id, provider_name, model, operation, source_kind, currency, "
-        "rates_minor_per_metric, source_metadata, retrieved_at, "
-        "effective_from, billing_period_key FROM pricing_snapshots "
-        "ORDER BY retrieved_at, id"
+        "rates_minor_per_metric, source_metadata, retrieved_at, effective_from, "
+        "billing_period_key FROM pricing_snapshots ORDER BY retrieved_at, id"
     )
-    return [dict(row._mapping) for row in connection.execute(query)]
+    return [dict(row._mapping) for row in connection.execute(statement)]
+
+
+def _lock_table(connection: sa.Connection) -> None:
+    """Take the lock a stop-the-world conversion needs."""
+    connection.execute(sa.text("LOCK TABLE pricing_snapshots IN ACCESS EXCLUSIVE MODE"))
 
 
 def _merge_equivalent_row(
@@ -312,11 +301,17 @@ def _merge_equivalent_row(
     )
 
 
+def _migration_log() -> logging.Logger:
+    """Return Alembic's migration logger, resolved after env.py's ``fileConfig``."""
+    # A module-level logger would already exist when fileConfig disables loggers.
+    return logging.getLogger("alembic.runtime.migration")
+
+
 def _write_converted_rows(connection: sa.Connection, rows: cabc.Sequence[_Row]) -> None:
     """Convert and write every legacy row, merging byte-identical content."""
-    # A shared hash alone is not proof of equal content, so the canonical text
-    # is compared before two rows collapse into one survivor.
+    # A shared hash is not proof of equal content, so the text is compared.
     survivors: dict[str, tuple[object, str]] = {}
+    merged = 0
     for row in rows:
         rates, metadata, source_document, content_hash, text = _converted_row(row)
         first = survivors.get(content_hash)
@@ -324,6 +319,7 @@ def _write_converted_rows(connection: sa.Connection, rows: cabc.Sequence[_Row]) 
             if first[1] != text:
                 _reject(row["id"], f"collides with {first[0]}: content differs")
             _merge_equivalent_row(connection, duplicate=row["id"], survivor=first[0])
+            merged += 1
             continue
         survivors[content_hash] = (row["id"], text)
         document = source_document or {}
@@ -345,6 +341,12 @@ def _write_converted_rows(connection: sa.Connection, rows: cabc.Sequence[_Row]) 
                 "id": row["id"],
             },
         )
+    # One bounded line per upgrade; no content or metadata is ever logged.
+    _migration_log().info(
+        "pricing snapshots converted to schema version 1: converted=%d merged=%d",
+        len(survivors),
+        merged,
+    )
 
 
 def upgrade() -> None:
@@ -357,7 +359,7 @@ def upgrade() -> None:
         _drop_legacy_columns()
         return
     connection = op.get_bind()
-    connection.execute(sa.text("LOCK TABLE pricing_snapshots IN ACCESS EXCLUSIVE MODE"))
+    _lock_table(connection)
     _add_new_columns()
     _write_converted_rows(connection, _legacy_rows(connection))
     _tighten_new_columns()
@@ -371,14 +373,12 @@ def downgrade() -> None:
         op.execute(_EMPTY_TABLE_GUARD)
     else:
         connection = op.get_bind()
-        connection.execute(
-            sa.text("LOCK TABLE pricing_snapshots IN ACCESS EXCLUSIVE MODE")
-        )
+        _lock_table(connection)
         stored = connection.scalar(sa.text("SELECT count(*) FROM pricing_snapshots"))
         if stored:
             msg = (
-                "pricing_snapshots must be empty to downgrade "
-                "20261110_000017; converted rows cannot be mapped back"
+                "pricing_snapshots must be empty to downgrade 20261110_000017: "
+                "converted rows cannot be mapped back"
             )
             raise CommandError(msg)
     for name, _ in _CHECK_CONSTRAINTS:

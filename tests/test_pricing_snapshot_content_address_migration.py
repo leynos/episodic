@@ -1,8 +1,10 @@
 """Online and offline coverage for the content-address migration."""
 
 import datetime as dt
+import hashlib
 import io
 import json
+import logging
 import typing as typ
 import uuid
 
@@ -29,7 +31,9 @@ from tests.fixtures.legacy_pricing_snapshots import (
     rows,
     seed_legacy_rows,
     upgrade,
+    upgrade_is_rejected,
 )
+from tests.fixtures.migration_doubles import RecordMessages, colliding_sha256
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -159,6 +163,28 @@ async def test_upgrade_merges_rows_that_differ_only_by_billing_period(
 
 
 @pytest.mark.asyncio
+async def test_upgrade_reports_its_conversion_totals(
+    migrated_engine: AsyncEngine,
+) -> None:
+    """An operator watching the upgrade learns how much work it committed."""
+    # Handlers cannot see the line, but filters survive env.py's fileConfig.
+    recorder = RecordMessages()
+    logger = logging.getLogger("alembic.runtime.migration")
+    logger.addFilter(recorder)
+    try:
+        async with migrated_engine.begin() as connection:
+            await _seed_duplicate_rows(connection)
+            await upgrade(connection)
+    finally:
+        logger.removeFilter(recorder)
+
+    expected = "pricing snapshots converted to schema version 1: converted=1 merged=1"
+    assert expected in recorder.messages, (
+        f"the upgrade must report its conversion totals, got {recorder.messages!r}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_upgrade_preserves_a_legacy_sla4oai_row(
     migrated_engine: AsyncEngine,
 ) -> None:
@@ -212,6 +238,42 @@ async def test_upgrade_preserves_a_legacy_sla4oai_row(
     )
     assert converted["content_hash"] == pricing_snapshot_content_hash(expected), (
         "the store must recompute the migrated identity without an integrity error"
+    )
+
+
+@pytest.mark.asyncio
+async def test_upgrade_rolls_back_a_content_hash_collision(
+    migrated_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A collision aborts inside the upgrade and rewrites no stored row."""
+    survivor = uuid.UUID(int=91)
+    duplicate = uuid.UUID(int=92)
+    async with migrated_engine.begin() as connection:
+        await seed_legacy_rows(
+            connection,
+            [
+                legacy_row(survivor, provider_name="openai", content_hash="legacy-a"),
+                legacy_row(
+                    duplicate, provider_name="anthropic", content_hash="legacy-b"
+                ),
+            ],
+        )
+        # Two different documents can only share an identity if the digest
+        # repeats, so the hash function is forced rather than an input found.
+        monkeypatch.setattr(hashlib, "sha256", colliding_sha256)
+        await upgrade_is_rejected(connection, "content differs")
+        stored = {str(row["id"]): row for row in await rows(connection)}
+
+    assert set(stored) == {str(survivor), str(duplicate)}, (
+        "the aborted upgrade must keep both legacy rows"
+    )
+    assert {row["content_hash"] for row in stored.values()} == {
+        "legacy-a",
+        "legacy-b",
+    }, "the survivor's rewrite must be rolled back, not committed"
+    assert all(row["rates_minor_per_metric"] for row in stored.values()), (
+        "the legacy rate column must survive the aborted upgrade"
     )
 
 
