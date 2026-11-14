@@ -22,6 +22,7 @@ import typing as typ
 
 from .domain_validation import (
     _copy_json_mapping,
+    _require_positive_integer,
     _validate_non_empty_text,
 )
 from .qa_artefact_validation import (
@@ -31,7 +32,6 @@ from .qa_artefact_validation import (
     _validate_enum_member,
     _validate_non_negative_integer,
     _validate_optional_non_negative_integer,
-    _validate_positive_integer,
 )
 
 if typ.TYPE_CHECKING:
@@ -258,11 +258,11 @@ class QaEvaluationSummary:
         """Validate field types, versions, and the documented bounds."""
         _validate_enum_member(self.evaluator, "evaluator", QaEvaluator)
         _validate_non_empty_text(self.evaluator_version, "evaluator_version")
-        _validate_positive_integer(
+        _require_positive_integer(
             self.artefact_schema_version,
             "artefact_schema_version",
         )
-        _validate_positive_integer(
+        _require_positive_integer(
             self.compliance_policy_version,
             "compliance_policy_version",
         )

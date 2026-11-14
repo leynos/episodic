@@ -24,7 +24,6 @@ module re-exports their public names to preserve the original import path.
 
 import collections.abc as cabc
 import dataclasses as dc
-import datetime as dt
 import typing as typ
 
 from episodic.canonical.episode_errors import EpisodeNotFoundError
@@ -48,6 +47,7 @@ from episodic.generation.launcher_support_sources import (
     GenerationSourceLimits,
     source_from_document,
 )
+from episodic.runtime_providers import Clock
 
 if typ.TYPE_CHECKING:
     import uuid
@@ -56,7 +56,6 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.cost.recorder import CostRecorderPort
 
-type Clock = cabc.Callable[[], dt.datetime]
 type DraftIdFactoryFactory = cabc.Callable[[], cabc.Callable[[str], str]]
 
 __all__ = [

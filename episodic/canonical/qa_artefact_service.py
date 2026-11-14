@@ -17,36 +17,29 @@ mapping, so the idempotency key and the compliance verdict cannot differ
 between them.
 """
 
-import collections.abc as cabc
 import dataclasses as dc
-import datetime as dt
 import typing as typ
 import uuid
 
 from episodic.qa.chrono import ChronoRuntimeEstimate
 from episodic.qa.pedante.types import PedanteEvaluationResult
+from episodic.runtime_providers import Clock, UuidFactory, utc_now
 
 from .qa_artefact_pedante import evaluation_from_pedante
 from .qa_artefact_recording import (
     QaEvaluationTarget,
     QaEvaluatorFailure,
-    UuidFactory,
     evaluation_from_chrono,
     evaluation_from_failure,
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    import datetime as dt
+
     from .qa_artefact_ports import QaEvaluationListRequest
     from .qa_artefacts import QaEvaluation, QaEvaluationSummary
     from .unit_of_work_protocols import CanonicalUnitOfWork
-
-type Clock = cabc.Callable[[], dt.datetime]
-
-
-def _utc_now() -> dt.datetime:
-    """Return the current timezone-aware UTC timestamp."""
-    return dt.datetime.now(dt.UTC)
-
 
 type QaEvaluationOutcome = (
     PedanteEvaluationResult | ChronoRuntimeEstimate | QaEvaluatorFailure
@@ -196,7 +189,7 @@ class QaEvaluationRecorder:
     """
 
     uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
-    clock: Clock = _utc_now
+    clock: Clock = utc_now
     uuid_factory: UuidFactory = uuid.uuid7
 
     async def record(

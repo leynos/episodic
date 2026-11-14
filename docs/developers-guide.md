@@ -294,7 +294,7 @@ The target runs this repository-wide pipeline, in order:
    separate future-annotations pass;
 6. `ambrleaks` over Syrupy snapshots under `tests`;
 7. a blocking Skylos dead-code scan; and
-8. a blocking nose code-duplication gate.
+8. a blocking nose code-duplication gate (`df12-duplication`).
 
 The built-in Pylint pass runs the pinned `pylint==$(PYLINT_VERSION)` through
 `uv tool run --managed-python --python 3.14`, isolated from the project
@@ -461,7 +461,9 @@ holds the code.
 ## Code-duplication gate
 
 `make lint` (and the standalone `make duplication` target) runs
-`scripts/duplication_gate.py check`, which drives the pinned nose detector with
+`df12-duplication check`, the installed duplication command from
+`df12-python-lints` (pinned by `DF12_GATES_SHA` in the Makefile; CI also runs
+the shared-actions `df12-duplication` action). It drives the nose detector with
 the `[tool.nose]` settings in `pyproject.toml` and fails while unsuppressed
 duplication families remain. Findings name every member as a
 `path:start-end ~ path:start-end` family, with nose's unit name appended to
@@ -470,26 +472,24 @@ a finding can be pasted directly into a refactoring task or coding-agent
 prompt. The tool choice, settings, and exception policy follow ADR-021 and
 [the duplication head-to-head](pychase-pyscn-duplication-head-to-head.md).
 
-Both targets depend on `make install-nose`, which installs the `nose-cli`
-release binary at `NOSE_VERSION` into `.tools/nose` using `cargo-binstall`'s
-git mode against the upstream repository, because the crate is not published on
-crates.io. The target is a no-op once the binary reports the pinned version,
-and CI restores `.tools/nose` from a cache keyed on the runner operating system
-and that version. The gate itself re-verifies `nose --version` against
-`[tool.nose] version` before scanning and refuses to run on a mismatch,
-pointing at `make install-nose`; set `NOSE_BIN` to point the gate at another
-binary. `tests/test_toolchain_contract.py` asserts that the Makefile pin, the
-CI pin, and `[tool.nose] version` agree, and that the install and version-check
-commands actually reference the pin.
+The target first runs `df12-duplication install`, which downloads the nose
+release named by `[tool.nose] version` into `.tools/nose` and verifies it
+against the digest table shipped in the package; `[tool.nose] version` is the
+only detector pin, so no second pin needs to agree with it. The install is a
+no-op once the binary reports that version, and the command refuses to scan
+with a binary at another version. Set `NOSE_BIN` to point the gate at another
+binary.
 
 `[tool.nose]` pins what is scanned and how: the `episodic` package and
 `openai_test_types.py` as roots, `mode = "syntax,semantic,near"` so a change to
 nose's defaults cannot widen or narrow the gate silently, a floor of 24
 intermediate-language tokens, `surface = "all"` so families nose hides behind
-its dashboard ranking are still adjudicated, and `top = 30` ranked families.
-The semantic channel reports only exact intermediate-language equivalence, so
-the gate blocks on a narrow, witness-backed subset of semantic duplication;
-broader Type-4 duplication remains a review concern.
+its dashboard ranking are still adjudicated, and `top = 0`, which adjudicates
+every family: the command refuses a saturated report, so a ranking cut cannot
+hide a family from the gate. The semantic channel reports only exact
+intermediate-language equivalence, so the gate blocks on a narrow,
+witness-backed subset of semantic duplication; broader Type-4 duplication
+remains a review concern.
 
 Treat every new finding as copy-paste until proven otherwise: prefer extracting
 the shared logic over suppressing the report. When the parallel structure is
@@ -509,9 +509,8 @@ fragment-level findings nose reports without a name, such as shared import
 blocks. An entry silences a family only when _every_ location in that family
 matches one of its keys, so a new copy in an unlisted file still blocks the
 gate. Omit `SECOND` to record a single-key entry, which silences every family
-whose members all sit under that key. `make duplication-allow` accepts one
-`SECOND`; for a family with more members, call
-`scripts/duplication_gate.py allow` directly and repeat `--second`.
+whose members all sit under that key. `SECOND` takes a space-separated list of
+further keys, so a family of any size is recorded with one command.
 
 The target refuses empty keys or reasons and stores entries under
 `[tool.duplication_gate]`. The gate reports entries that no longer cover any
@@ -521,17 +520,29 @@ request modules) are covered by reasoned path-glob entries in that same table,
 rather than by a separate exclusion list, so they stay reviewable and
 stale-checked.
 
-Allowlist updates take an advisory cross-process lock, so a concurrent writer
-waits until the current update completes. If a writer is cancelled or
-interrupted, closing its lock descriptor releases the lock. Each successful
-update fsyncs a temporary sibling before atomically replacing `pyproject.toml`
-with the destination file's mode preserved. This prevents concurrent allowlist
-updates from overwriting one another.
+`df12-duplication allow` serializes updates through the ignored
+`.pyproject.toml.df12.lock` beside `pyproject.toml` and replaces the file
+atomically with its mode preserved, so concurrent updates cannot overwrite one
+another.
 
 nose is deterministic: repeated scans of the same tree produce byte-identical
 reports without a hash-seed or interpreter pin, so the gate needs no
-environment of its own beyond the pinned binary. Its helper tests run through
-`make duplication-test`.
+environment of its own beyond the pinned binary. The command's own behaviour is
+tested in `df12-python-lints`, not here.
+
+### Adjudicating every family
+
+With `top = 0` the gate adjudicates every family nose reports, not a ranked
+slice. The reasoned entries in `[tool.duplication_gate]` came from adjudicating
+the whole report once: families whose repetition is a real, cleanly shareable
+helper were refactored (the default clock and identifier providers in
+`episodic/runtime_providers.py`, the shared generation field validator in
+`episodic/generation/field_validation.py`, and one positive-integer validator in
+`episodic/canonical/domain_validation.py`), and the rest are recorded with a
+reason specific to that family: annotation-only import blocks, port and
+protocol declarations, adapter pairs that implement one port, mapper
+directions, and validators whose exception contracts differ by layer. A new
+family is adjudicated the same way, in the change that introduces it.
 
 ## Spelling policy
 

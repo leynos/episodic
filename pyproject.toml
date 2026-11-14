@@ -703,8 +703,7 @@ type = "function"
 full_name = [
     "episodic.cost.ports._validate_currency_code",
     "episodic.cost.ports._validate_usage_metrics",
-    "episodic.generation.guest_bios_models._ensure_non_empty_fields",
-    "episodic.generation.show_notes_models._ensure_non_empty_fields",
+    "episodic.generation.field_validation.ensure_non_empty_fields",
     "episodic.generation.show_notes_models._ensure_optional_iso8601_duration",
     "episodic.generation.show_notes_models._normalize_optional_tei_locator",
     "episodic.orchestration._dto._coerce_single_model_tier",
@@ -861,22 +860,22 @@ names = []
 "StaleEventSequence" = "Reserved generation-run port error required by the accepted lifecycle contract."
 "UploadInitRequest" = "Reserved source-intake request DTO required by the accepted upload contract."
 
-# Detector settings for the blocking duplication gate
-# (scripts/duplication_gate.py). The gate runs the pinned `nose` binary; keep
-# `version` in sync with NOSE_VERSION in the Makefile. The three detection
-# channels are pinned explicitly so a change to nose's defaults cannot widen
-# or narrow the gate silently, and `surface = "all"` adjudicates nose's
-# widened view rather than its five-family dashboard, which hides families
-# behind a ranking cut. `top` bounds how many ranked families the gate
-# adjudicates; duplication valuable enough to enter that ranking blocks the
-# build.
+# Detector settings for the blocking duplication gate, the installed
+# `df12-duplication` command from df12-python-lints. `version` is the only
+# nose pin: the command downloads that release and verifies it against the
+# digest table shipped in the package. The three detection channels are pinned
+# explicitly so a change to nose's defaults cannot widen or narrow the gate
+# silently, and `surface = "all"` adjudicates nose's widened view rather than
+# its five-family dashboard. `top = 0` adjudicates every family: the command
+# refuses a saturated report, so a ranking cut cannot hide a family from the
+# gate.
 [tool.nose]
 version = "0.20.0"
 roots = ["episodic", "openai_test_types.py"]
 mode = "syntax,semantic,near"
 min-size = 24
 surface = "all"
-top = 30
+top = 0
 
 # Reasoned exceptions for the duplication gate. Entries key on locations, not
 # line spans: `path` (glob) matches any location in matching files, and
@@ -884,7 +883,7 @@ top = 30
 # key; a `members` entry names several. Either silences a family only when
 # every location in it matches one of the entry's keys, so a new copy in an
 # unlisted file still blocks. Record entries with
-# `make duplication-allow FIRST=... [SECOND=...] REASON=...` and remove them
+# `make duplication-allow FIRST=... [SECOND='...'] REASON=...` and remove them
 # when the gate reports them as stale.
 [tool.duplication_gate]
 
@@ -976,6 +975,276 @@ reason = "Per-tool TEI enrichment modules: an identical import surface over the 
 members = ["episodic/canonical/storage/qa_artefact_storage_runtime.py", "episodic/cli/client.py", "episodic/llm/openai_api/adapter.py"]
 reason = "The observability port and default-adapter import block is a port surface, not logic: the QA storage runtime, the CLI client, and the OpenAI adapter each bind the no-op and production adapters their own runtime composes. Re-exporting the same names through an indirection module would add a hop every reader must follow without removing behaviour."
 
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/dependencies.py", "episodic/api/handlers.py", "episodic/api/serializers.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/ingestion_service.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/canonical/profile_templates/helpers.py", "episodic/canonical/profile_templates/types.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/canonical/storage/uow.py", "episodic/canonical/unit_of_work_protocols.py", "episodic/canonical/upload_protocols.py", "episodic/cost/storage/metering.py", "episodic/generation/launcher_host.py", "episodic/operation_observation.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/orchestration/langgraph_costs.py"]
+reason = "Annotation-only TYPE_CHECKING import blocks: each module imports the domain, port and observability names its own signatures use. An import list cannot be factored into a helper, and a re-export facade would add a hop every reader must follow."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/episode_tei.py", "episodic/api/resources/generation_runs_events.py", "episodic/api/resources/qa_artefacts.py"]
+reason = "Three Falcon resources share a constructor storing the unit-of-work factory and tracer, and a span envelope around parse-path-id, open-unit-of-work and error mapping. Each endpoint parses different parameters and maps different domain errors to the HTTP envelope, so a shared template would hide the per-endpoint error contract."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/entity_protocols.py::EpisodeRepository", "episodic/canonical/entity_protocols.py::EpisodeTemplateRepository", "episodic/canonical/entity_protocols.py::IngestionJobRepository", "episodic/canonical/entity_protocols.py::SeriesProfileRepository", "episodic/canonical/generation_run_ports.py::GenerationCheckpointPort", "episodic/canonical/generation_run_ports.py::GenerationRunRepository", "episodic/canonical/history_protocols.py::EpisodeTemplateHistoryRepository", "episodic/canonical/history_protocols.py::SeriesProfileHistoryRepository", "episodic/canonical/reference_protocols.py::ReferenceBindingRepository", "episodic/canonical/reference_protocols.py::ReferenceDocumentRepository", "episodic/canonical/reference_protocols.py::ReferenceDocumentRevisionRepository", "episodic/canonical/upload_protocols.py::IdempotencyStore", "episodic/canonical/upload_protocols.py::IngestionJobSourceRepository", "episodic/canonical/upload_protocols.py::UploadRepository", "episodic/cost/ports.py::CostLedgerPort"]
+reason = "Protocol classes for different aggregates share only the async abstract-method and docstring layout. The operations, arguments and results are each port's own contract; merging them would couple unrelated ports."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/adapters/generation_runs.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/review_checkpoints.py"]
+reason = "The in-memory adapters and the SQLAlchemy stores implement the same generation-run port twice. The matching signatures and validation preludes are the port contract, enforced by the shared contract scenarios; one side filters a list and the other builds a query."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/qa_artefacts.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/generation/launcher.py", "episodic/orchestration/_planning_orchestrator.py"]
+reason = "Annotation-only import blocks of five modules, each naming its own types; import lists cannot be shared."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/generation_runs_events.py", "episodic/api/resources/qa_artefacts.py"]
+reason = "Constructor and span envelope as for the Falcon resource family; the QA evaluation resource reads one evaluation with its findings while the events resource pages a cursor, with different not-found categories."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/_error_logging.py", "episodic/canonical/qa_artefact_validation.py", "episodic/canonical/storage/integrity_helpers.py", "episodic/concurrent_interpreters.py", "episodic/generation/chapter_marker_models.py", "episodic/generation/draft_script_parsing.py", "episodic/generation/guest_bios_models.py", "episodic/generation/show_notes_models.py", "episodic/orchestration/_checkpoint_payload.py"]
+reason = "One-line early returns on different parameters in nine modules, each with its own return contract; there is no logic to extract."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/history_repositories.py::SqlAlchemyEpisodeTemplateHistoryRepository", "episodic/canonical/storage/history_repositories.py::SqlAlchemySeriesProfileHistoryRepository"]
+reason = "Both repositories parameterise one shared generic base through a ClassVar HistoryRepositoryConfig. Only the record type, parent field and mapper differ, so the repetition is the declarative configuration."
+[[tool.duplication_gate.allow]]
+unit = "episodic/api/resources/base.py"
+reason = "Parallel abstract-method declarations (path-id extraction, serializer hook) for two Falcon resource hierarchies whose handler bodies diverge; one shared base would force methods a fetch resource does not need."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/prompts.py::_coerce_mapping", "episodic/generation/guest_bios_parsing.py::_decode_object", "episodic/generation/guest_bios_parsing.py::_require_list", "episodic/orchestration/_checkpoint_payload.py::_as_object_payload"]
+reason = "Each helper validates a JSON object for a different layer and raises that layer's own error type (canonical prompts, guest-bios response format, checkpoint payload), so the exception contract differs."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/domain_validation.py::_validate_non_empty_text", "episodic/generation/draft_script_types.py::_require_non_empty_text", "episodic/qa/pedante/types.py::_require_non_empty_string_field"]
+reason = "The three validators raise different messages ('must be a non-empty string.' against 'must be non-empty.') that their own tests assert, in three layers. Unifying them would change observable messages."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/generation_run_ports.py::GenerationEventLog", "episodic/canonical/object_store.py::ObjectStorePort", "episodic/cost/recorder.py::CostRecorderPort"]
+reason = "Three unrelated ports share documentation layout and abstract-method shape, not logic."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/generation_run_port_adapter.py::list_checkpoints", "episodic/canonical/storage/generation_run_port_adapter.py::list_events", "episodic/canonical/storage/generation_run_port_adapter.py::list_runs"]
+reason = "Three adapter methods forward to three different stores with different filters, defaults and return types; the shared part is limit and offset forwarding."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/helpers_query.py", "episodic/canonical/reference_documents/helpers.py"]
+reason = "The API helper raises the Falcon validation envelope and the service helper raises ReferenceValidationError. The hexagonal boundary keeps the two apart."
+[[tool.duplication_gate.allow]]
+unit = "episodic/cost/ports.py"
+reason = "Both frozen cost records call the shared currency validator and check non-negative cost in __post_init__ over their own fields; the validators are already shared helpers."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/reference_documents/_binding_queries.py"
+reason = "The paged variant also returns the unpaginated total, so its query and return shape differ; the shared preamble validates one request."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/mappers.py", "episodic/canonical/storage/repositories.py"]
+reason = "Import blocks: the mappers module re-exports what the repositories module consumes."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/guest_bios_parsing.py::_require_non_empty_string", "episodic/qa/pedante/parsing.py::_require_non_empty_string_item", "episodic/worker/tasks.py::_require_non_empty_string"]
+reason = "Each reader raises its own error class (guest-bios response format, Pedante parsing, worker task) over a different payload."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/episode_tei.py::_tei_not_found", "episodic/api/resources/generation_runs_errors.py::_ingestion_job_not_found", "episodic/api/resources/generation_runs_errors.py::_run_not_found"]
+reason = "One-line wrappers over http_error, each naming a distinct error code and message."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/handlers.py::UpdateEntityRequest", "episodic/canonical/domain_ingestion.py::SourceDocument", "episodic/canonical/profile_templates/services/_generic.py::_KindDispatch"]
+reason = "Dataclasses for different operations share declaration layout and docstring shape; their fields differ."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/chapter_marker_models.py::_require_optional_string", "episodic/generation/guest_bios_parsing.py::_require_optional_string", "episodic/generation/show_notes_parsing.py::_require_optional_string"]
+reason = "Each reader raises its own parser's error (chapter markers, show notes, guest bios) for its own tool contract."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/idempotency.py::_require_non_empty", "episodic/canonical/uploads.py::_require_non_empty", "episodic/qa/chrono.py::_ensure_non_empty_string"]
+reason = "Three-line blank checks in canonical and QA layers with different field wording; the layers keep separate error contexts."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/entity_protocols.py", "episodic/canonical/reference_protocols.py"]
+reason = "Both protocols declare get and list_by_ids over different aggregates; the shared shape is the port layout."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/chapter_marker_generator.py", "episodic/generation/show_notes.py"]
+reason = "Both carry an llm port and a config of different config types."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/tei_payload.py::require_mapping", "episodic/generation/tei_payload.py::require_sequence"]
+reason = "Same error-class-parameterised guard structure with a different type test and noun; one generic guard would take the test and the noun as parameters and read worse."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/chapter_marker_generator.py::build_prompt", "episodic/generation/show_notes.py::build_prompt"]
+reason = "Each builds a different prompt from different template inputs; only the signature shape repeats."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/guest_bios.py", "episodic/generation/show_notes.py"]
+reason = "Each builds its request with its own system prompt and payload; the shared lines are the request-construction idiom."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/adapters/generation_runs.py", "episodic/canonical/storage/generation_runs.py"]
+reason = "Both stores import the same domain records and port types for annotations and results."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/generation_run_errors.py"
+reason = "Two exception classes each format their own message from the checkpoint identifier."
+[[tool.duplication_gate.allow]]
+unit = "episodic/cost/pricing_catalogue/file_loader.py"
+reason = "Two typed readers (string, integer mapping) raise ValueError with field-specific messages from different value tests."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/generation_runs.py", "episodic/canonical/generation_persistence_types.py"]
+reason = "Import blocks that both pull the shared clock providers plus their own annotation types."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/generation_run_errors.py::__init__"
+reason = "Five constructors each format a distinct message from their own identifier."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/runtime.py", "episodic/canonical/storage/repositories.py"]
+reason = "Annotation-only imports of different layers."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/profile_templates/services/_generic.py"
+reason = "Two dispatch tables bind different repositories, labels and serializers; the shape is the table."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/storage/generation_run_mappers.py"
+reason = "Field-by-field copies between different domain and record types."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/source_intake_runtime.py", "episodic/canonical/storage/generation_run_storage_runtime.py", "episodic/canonical/storage/qa_artefact_storage_runtime.py", "episodic/canonical/storage/source_intake_repository_runtime.py"]
+reason = "A two-line guard in four factories, each returning its own runtime dataclass."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/reference_documents/_binding_creation.py", "episodic/canonical/reference_documents/_binding_validation.py"]
+reason = "Both modules import the same reference types for their own functions."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/generation_runs_errors.py::_generation_input_error", "episodic/api/source_intake_support.py::_source_payload_invalid"]
+reason = "One-line wrappers over http_error with different error codes."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/history_repositories.py", "episodic/canonical/storage/mappers.py"]
+reason = "Re-exported history mappers imported by the repositories that use them."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/chapter_marker_models.py", "episodic/generation/draft_script_parsing.py"]
+reason = "The chapter-marker parser raises TypeError and the draft-script parser raises its response-format error; the exception contract differs."
+[[tool.duplication_gate.allow]]
+members = ["episodic/cost/ports.py::PricedCall", "episodic/cost/ports.py::TaskRollupLedgerEntry"]
+reason = "Two persisted ledger-row dataclasses with overlapping leading fields; the schemas are separate."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/source_intake_mappers.py::_upload_from_record", "episodic/canonical/storage/source_intake_mappers.py::_upload_to_record"]
+reason = "The two directions of one mapping list the same fields once each."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/reference_mappers.py::_reference_binding_from_record", "episodic/canonical/storage/reference_mappers.py::_reference_binding_to_record"]
+reason = "The two directions of one mapping list the same fields once each."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/storage/review_checkpoints.py"]
+reason = "Each adapter logs under its own event name and tests a different terminal predicate; the log call is the shared idiom."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/__init__.py", "episodic/canonical/unit_of_work_protocols.py"]
+reason = "The package surface and the unit-of-work protocols name the same repository protocols."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/launcher.py", "episodic/generation/launcher_host.py"]
+reason = "Annotation-only imports of the same launcher support types."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/generation_persistence.py", "episodic/canonical/storage/review_checkpoints.py"]
+reason = "Annotation-only imports of different modules."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/ingestion_service.py::_build_conflict_metadata", "episodic/canonical/ingestion_service.py::_build_ingestion_request"]
+reason = "Both build a dict from outcome and weighting data but with different keys and sources."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/episode_errors.py::__init__", "episodic/canonical/generation_persistence_types.py::__init__"]
+reason = "Two exception types in different layers each format a message from an episode identifier."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/reference_mappers.py::_reference_document_from_record", "episodic/canonical/storage/reference_mappers.py::_reference_document_to_record"]
+reason = "The two directions of one mapping list the same fields once each."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/helpers.py::_build_profile_data", "episodic/api/helpers.py::_build_template_fields"]
+reason = "Each parses a different payload shape into a different update-fields dataclass."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/qa_artefact_outcomes.py::emit_failed", "episodic/canonical/storage/qa_artefact_outcomes.py::emit_replayed"]
+reason = "Metric emitters with different counter names and labels."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/history_mappers.py::_episode_template_history_to_record", "episodic/canonical/storage/history_mappers.py::_series_profile_history_to_record"]
+reason = "Mappers to different record types with different parent identifiers."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/source_intake_runtime.py", "episodic/canonical/storage/source_intake_repository_runtime.py"]
+reason = "Both runtimes import the shared clock providers and observability ports for their own dataclass."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/storage/source_intake_repositories.py"
+reason = "Two update statements set different states and raise different not-found messages; extracting them would hide the state machine."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/launcher_support_sources.py::aggregate_bytes", "episodic/generation/launcher_support_sources.py::normalized_bytes", "episodic/generation/launcher_support_sources.py::source_bytes", "episodic/generation/launcher_support_sources.py::source_count"]
+reason = "Four classmethods each build a distinct stable rejection message."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/history_repositories.py", "episodic/generation/launcher_support.py"]
+reason = "Annotation-only imports of different layers."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/profile_templates/types.py::_EpisodeTemplateHistoryRepository", "episodic/canonical/profile_templates/types.py::_SeriesProfileHistoryRepository"]
+reason = "Parallel read protocols over different entity types."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/generation_runs.py::__init__", "episodic/canonical/storage/qa_artefacts.py::__init__"]
+reason = "Each constructor stores a session and binds its own runtime type."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/source_intake_support.py::require_str", "episodic/qa/pedante/parsing.py::_require_non_empty_string"]
+reason = "A payload-dict reader that raises Pedante's error and a source-intake reader with its own error."
+[[tool.duplication_gate.allow]]
+members = ["episodic/qa/chrono_langgraph.py", "episodic/qa/langgraph.py"]
+reason = "Both import dataclasses and typing for their own state types."
+[[tool.duplication_gate.allow]]
+members = ["episodic/observability/_structured.py::observe_latency_ms", "episodic/observability/_structured.py::observe_value"]
+reason = "Structured-log metric methods with different event names and value fields."
+[[tool.duplication_gate.allow]]
+unit = "episodic/concurrent_interpreters.py"
+reason = "Two counter calls with different reason labels for distinct selection outcomes."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/profile_templates/_brief_serializers.py::_serialize_profile_for_brief", "episodic/canonical/profile_templates/_brief_serializers.py::_serialize_template_for_brief"]
+reason = "Each serializes different entity fields."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/storage/repositories.py::update"
+reason = "Each delegates to _update_entity_fields with its own field list."
+[[tool.duplication_gate.allow]]
+unit = "episodic/llm/openai_chat.py"
+reason = "A two-line guard at the start of distinct validators with different results. A two-line guard in three validators with different results."
+[[tool.duplication_gate.allow]]
+members = ["episodic/orchestration/_checkpoint_payload.py::_action_result_to_payload", "episodic/orchestration/_checkpoint_payload.py::_planner_result_to_payload"]
+reason = "Each serializes a different result type with different keys."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/storage/repositories.py"
+reason = "A limit and mapper tail over two different record types."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/domain_generation.py::cancel", "episodic/canonical/domain_generation.py::time_out"]
+reason = "Each returns a replaced checkpoint with a different terminal status; the terminal guard is already shared in _raise_if_terminal."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/generation_run_port_adapter.py::cancel_checkpoint", "episodic/canonical/storage/generation_run_port_adapter.py::time_out_checkpoint"]
+reason = "Each forwards to a different store transition."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/domain_validation.py::_require_positive_integer", "episodic/canonical/qa_artefact_validation.py::_validate_non_negative_integer"]
+reason = "Sibling guards with different bounds and messages."
+[[tool.duplication_gate.allow]]
+members = ["episodic/cost/pricing_catalogue/file_loader.py::_is_non_negative_int", "episodic/llm/openai_validation.py::_is_non_negative_int"]
+reason = "A one-expression predicate in two independent packages; sharing it would add a cross-package dependency for one expression."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/chapter_marker_models.py", "episodic/generation/guest_bios_parsing.py"]
+reason = "Response parsers for different tools read different keys through shared helpers."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/guest_bios_parsing.py", "episodic/generation/show_notes_parsing.py"]
+reason = "Response parsers for different tools read different keys through shared helpers."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/profile_templates/types.py::_EpisodeTemplateRepository", "episodic/canonical/profile_templates/types.py::_SeriesProfileRepository"]
+reason = "Parallel read protocols over different entity types."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/domain_templates.py::EpisodeTemplate", "episodic/canonical/domain_templates.py::SeriesProfile"]
+reason = "Two domain value objects with different fields and invariants."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/chapter_marker_models.py", "episodic/generation/show_notes_parsing.py"]
+reason = "Response parsers for different tools read different keys through shared helpers."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/serializers.py::_optional_uuid_str", "episodic/cli/client.py::_enum_value"]
+reason = "One-line projections in the API and CLI presentation layers."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/idempotency.py::__post_init__"
+reason = "Two records validate different fields."
+[[tool.duplication_gate.allow]]
+members = ["episodic/api/resources/qa_artefacts.py::_record_not_found", "episodic/api/resources/qa_artefacts.py::_record_rejection"]
+reason = "Span-attribute pairs with different outcome categories."
+[[tool.duplication_gate.allow]]
+unit = "episodic/cost/storage/models.py"
+reason = "ORM column declarations repeated in two ledger tables."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/adapters/generation_checkpoints.py::done_event", "episodic/canonical/adapters/generation_checkpoints.py::missing_event"]
+reason = "One-line f-string builders for different event names."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/source_intake_mappers.py::_metadata_domain_to_payload", "episodic/canonical/storage/source_intake_mappers.py::_metadata_payload_to_domain"]
+reason = "Two deep-copy aliases named for their direction."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/launcher_support_sources.py::_require_source_byte_limit", "episodic/generation/launcher_support_sources.py::_require_source_size"]
+reason = "Different limits and different error factories."
+[[tool.duplication_gate.allow]]
+unit = "episodic/api/resources/generation_runs_events.py"
+reason = "Two guards for different missing entities."
+[[tool.duplication_gate.allow]]
+members = ["episodic/llm/openai_api/utils_config.py::_is_non_negative_number", "episodic/llm/openai_api/utils_config.py::_is_positive_number"]
+reason = "Thin wrappers over _meets_finite_numeric_floor with a different floor."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/domain_generation.py"
+reason = "A one-line call to the shared _raise_if_terminal guard."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/validation.py"
+reason = "A two-line early return in two validators for different callbacks."
+[[tool.duplication_gate.allow]]
+unit = "episodic/llm/openai_responses.py"
+reason = "A two-line guard in two parsers with different results."
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/domain_episodes.py"
+reason = "The same shared validator called on different fields."
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"

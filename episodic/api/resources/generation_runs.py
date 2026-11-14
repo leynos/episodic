@@ -1,9 +1,7 @@
 """Falcon resources for no-QA generation-run creation and polling."""
 
 import dataclasses as dc
-import datetime as dt
 import typing as typ
-import uuid
 
 import falcon
 
@@ -45,9 +43,11 @@ from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.source_intake_service import SourceIntakeError
 from episodic.generation.launcher import GenerationRunAdmissionError
 from episodic.observability import NoopTracer
+from episodic.runtime_providers import Clock, UuidFactory, utc_now, uuid7
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import uuid
 
     from episodic.api.types import UowFactory
     from episodic.generation.launcher import GenerationRunLauncher
@@ -61,19 +61,6 @@ __all__ = [
 
 _GENERATION_RUN_OPERATION = "generation_run.create"
 _DEFAULT_MAX_SOURCE_COUNT = 32
-
-type Clock = cabc.Callable[[], dt.datetime]
-type UuidFactory = cabc.Callable[[], uuid.UUID]
-
-
-def _utc_now() -> dt.datetime:
-    """Return the current UTC timestamp."""
-    return dt.datetime.now(dt.UTC)
-
-
-def _uuid7() -> uuid.UUID:
-    """Return a time-ordered UUID."""
-    return uuid.uuid7()
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -95,8 +82,8 @@ class GenerationRunsResourceConfig:
     """
 
     launcher: GenerationRunLauncher | None
-    clock: Clock = _utc_now
-    uuid_factory: UuidFactory = _uuid7
+    clock: Clock = utc_now
+    uuid_factory: UuidFactory = uuid7
     max_source_count: int | None = None
     tracer: TracerPort | None = None
 

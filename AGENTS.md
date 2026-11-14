@@ -106,17 +106,17 @@
     [retaining deferred implementation][deferred-implementation], which
     requires a directly tested behaviour, the still-open consumer, and the
     condition that deletes the entry.
-    The lint pipeline ends with the blocking nose duplication gate, which
-    `make lint` provisions through `make install-nose`. Prefer extracting
-    shared logic over suppressing a finding; when parallel structure is
-    intentional, record a reasoned exception with
-    `make duplication-allow FIRST='path[::name]' [SECOND='path[::name]']
+    The lint pipeline includes the blocking nose duplication gate, the
+    installed `df12-duplication` command, which `make lint` provisions through
+    `make duplication`. It adjudicates every family (`top = 0`). Prefer
+    extracting shared logic over suppressing a finding; when parallel
+    structure is intentional, record a reasoned exception with
+    `make duplication-allow FIRST='path[::name]' SECOND='path[::name] ...'
     REASON="why this stays"`, and remove entries the gate reports as stale.
     Keys are repository-relative path globs, optionally suffixed `::name` to
     require nose's unit name; an entry silences a family only when every
-    member location matches one of its keys. `make duplication-allow` takes one
-    `SECOND` key, so record families with more members by invoking
-    `scripts/duplication_gate.py allow` with a repeated `--second`.
+    member location matches one of its keys. `SECOND` takes a space-separated
+    list, so record families with more members in one command.
   - **Formatting:** Adheres to formatting standards (`make check-fmt`; use
     `make fmt` to apply fixes).
   - **Typechecking:** Passes type checking (`make typecheck`).
