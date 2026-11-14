@@ -1,23 +1,22 @@
 """Authorization adapters and client builders for API tests."""
 
 import dataclasses as dc
+import logging
 import typing as typ
-from unittest import mock
 
 from falcon import testing
 
 from episodic import logging as episodic_logging
-from episodic.api import authorization as authorization_module
 from episodic.api import create_app
 from episodic.api.authorization import (
     AuthorizationContext,
     AuthorizationDecision,
     AuthorizationPort,
 )
+from episodic.api.authorization_observability import AuthorizationObserver
 from tests.fixtures.api import build_api_dependencies
 
 if typ.TYPE_CHECKING:
-    import pytest
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.observability import MetricsPort
@@ -56,16 +55,45 @@ class RaisingAuthorization:
         raise self._error_type(msg)
 
 
-def patch_authorization_warning_backend(
-    monkeypatch: pytest.MonkeyPatch,
-) -> mock.Mock:
-    """Capture authorization warnings through a mocked logger backend."""
-    backend = mock.Mock()
+class AuthorizationWarningLogger:
+    """Capture injected warning calls using the logging-port method contract."""
+
+    def __init__(self) -> None:
+        """Initialize the warning-call recorder."""
+        self.warning_calls: list[tuple[str, object | None, bool]] = []
+        self.warning_failure: Exception | None = None
+
+    def log(
+        self,
+        level: int | str,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record warning-level calls through the generic logging port."""
+        if level not in {logging.WARNING, episodic_logging.LogLevel.WARNING}:
+            return
+        self.warning_calls.append((message, exc_info, stack_info))
+        if self.warning_failure is not None:
+            raise self.warning_failure
+
+
+def make_authorization_warning_backend() -> AuthorizationWarningLogger:
+    """Return an explicit fake logger for authorization observer tests."""
+    return AuthorizationWarningLogger()
+
+
+def build_authorization_observer(
+    warning_logger: object,
+    metrics: MetricsPort | None = None,
+) -> AuthorizationObserver:
+    """Build an observer with injected fake logging and optional metrics."""
     logger = episodic_logging.LoggerHandle(
-        typ.cast("episodic_logging._CompatibleLogger", backend)
+        typ.cast("episodic_logging._CompatibleLogger", warning_logger)
     )
-    monkeypatch.setattr(authorization_module, "logger", logger)
-    return backend
+    return AuthorizationObserver(logger, metrics)
 
 
 def build_authorization_test_client(
@@ -73,6 +101,7 @@ def build_authorization_test_client(
     authorization: AuthorizationPort,
     *,
     metrics: MetricsPort | None = None,
+    warning_logger: object | None = None,
 ) -> testing.TestClient:
     """Build a canonical API client with an authorization adapter.
 
@@ -84,6 +113,8 @@ def build_authorization_test_client(
         Adapter used to decide requests to protected endpoints.
     metrics : MetricsPort or None, optional
         Metrics sink used by the authorization middleware.
+    warning_logger : object | None, optional
+        Fake logger injected into the authorization observer for assertions.
 
     Returns
     -------
@@ -96,4 +127,9 @@ def build_authorization_test_client(
     )
     if metrics is not None:
         dependencies = dc.replace(dependencies, metrics=metrics)
-    return testing.TestClient(create_app(dependencies))
+    observer = (
+        None
+        if warning_logger is None
+        else build_authorization_observer(warning_logger, dependencies.metrics)
+    )
+    return testing.TestClient(create_app(dependencies, authorization_observer=observer))
