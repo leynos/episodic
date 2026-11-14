@@ -5,13 +5,9 @@ from SQLAlchemy persistence. Production callers use the default bundle, while
 tests may provide deterministic collaborators through the unit of work.
 """
 
-import collections.abc as cabc
 import dataclasses as dc
-import datetime as dt
-import uuid
 
-type Clock = cabc.Callable[[], dt.datetime]
-type UuidFactory = cabc.Callable[[], uuid.UUID]
+from episodic.runtime_providers import Clock, UuidFactory, utc_now, uuid7
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -49,6 +45,6 @@ def generation_run_storage_runtime(
     if runtime is not None:
         return runtime
     return GenerationRunStorageRuntime(
-        clock=lambda: dt.datetime.now(dt.UTC),
-        uuid_factory=uuid.uuid7,
+        clock=utc_now,
+        uuid_factory=uuid7,
     )

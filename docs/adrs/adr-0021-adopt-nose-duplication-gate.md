@@ -102,10 +102,23 @@ favour of the incumbent.
   globs with optional unit names rather than `path::qualname` pairs. A
   fragment-level finding such as a shared import block carries no name at all,
   and `::name` keys never match it.
-- Gating on the top 30 ranked families bounds what the gate adjudicates.
-  Duplication valuable enough to enter that ranking blocks the build;
-  duplication below it does not, and the bound must be revisited if the ranked
-  surface stays saturated.
+- Gating on the top 30 ranked families bounded what the gate adjudicated.
+  Duplication valuable enough to enter that ranking blocked the build;
+  duplication below it did not. The ranked surface stayed saturated, so see the
+  2026-11-14 update below.
 - The benchmark corpus, tuning tables, and adjudication evidence behind the
   tool choice remain under `benchmarks/duplication/` and are summarized in
   [the duplication head-to-head](../pychase-pyscn-duplication-head-to-head.md).
+
+## Update: nose runs as df12-duplication, every family adjudicated (2026-11-14)
+
+The gate is now the installed `df12-duplication` command from
+`df12-python-lints`, provisioned by `make duplication` and run in CI through
+the shared-actions `df12-duplication` action. `[tool.nose] version` is the only
+detector pin; the vendored gate scripts, `make install-nose`,
+`make duplication-test`, the `cargo-binstall` install and the CI binary cache
+were removed. The command refuses a saturated report, so `top` is `0`: the
+earlier gate adjudicated 30 of 171 families and left the rest unenforced. All
+171 were adjudicated: the clock and identifier providers, the generation field
+validator and the positive-integer validator were refactored, and every other
+family carries a reasoned entry in `[tool.duplication_gate]`.

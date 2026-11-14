@@ -18,6 +18,8 @@ from episodic.llm import (
     ProviderCallUsage,
 )
 
+from .field_validation import ensure_non_empty_fields
+
 type JsonMapping = dict[str, object]
 
 _DEFAULT_SYSTEM_PROMPT = (
@@ -43,15 +45,6 @@ _ISO_8601_DURATION_PATTERN = re.compile(
     r")?"
     r")$"
 )
-
-
-def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
-    """Reject blank or whitespace-only string fields on a dataclass instance."""
-    for field_name in field_names:
-        value = getattr(instance, field_name)
-        if not isinstance(value, str) or not value.strip():
-            msg = f"{field_name} must be non-empty."
-            raise ValueError(msg)
 
 
 def _ensure_optional_iso8601_duration(timestamp: str | None) -> None:
@@ -98,7 +91,7 @@ class ShowNotesEntry:
 
     def __post_init__(self) -> None:
         """Reject blank topic and summary fields."""
-        _ensure_non_empty_fields(self, "topic", "summary")
+        ensure_non_empty_fields(self, "topic", "summary")
         _ensure_optional_iso8601_duration(self.timestamp)
         object.__setattr__(
             self,

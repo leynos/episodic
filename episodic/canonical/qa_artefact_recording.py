@@ -10,7 +10,6 @@ The Pedante projection, which is the only one that contributes findings, lives
 in :mod:`episodic.canonical.qa_artefact_pedante`.
 """
 
-import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 import uuid
@@ -28,10 +27,9 @@ if typ.TYPE_CHECKING:
     import datetime as dt
 
     from episodic.qa.chrono import ChronoRuntimeEstimate
+    from episodic.runtime_providers import UuidFactory
 
     from .domain_enums import JsonMapping
-
-type UuidFactory = cabc.Callable[[], uuid.UUID]
 
 _NO_GENERATION_RUN = "-"
 

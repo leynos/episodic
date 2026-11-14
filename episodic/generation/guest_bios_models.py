@@ -20,6 +20,8 @@ from episodic.llm import (
     ProviderCallUsage,
 )
 
+from .field_validation import ensure_non_empty_fields
+
 if typ.TYPE_CHECKING:
     import uuid
 
@@ -33,15 +35,6 @@ _DEFAULT_SYSTEM_PROMPT = (
     '"reference_document_revision_id". Optional fields: "role" and '
     '"tei_locator".'
 )
-
-
-def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
-    """Reject blank or whitespace-only string fields on a dataclass instance."""
-    for field_name in field_names:
-        value = getattr(instance, field_name)
-        if not isinstance(value, str) or not value.strip():
-            msg = f"{field_name} must be non-empty."
-            raise ValueError(msg)
 
 
 def _normalize_optional_string(value: str | None) -> str | None:
@@ -64,7 +57,7 @@ class GuestBioSource:
 
     def __post_init__(self) -> None:
         """Reject blank source identifiers and source text."""
-        _ensure_non_empty_fields(
+        ensure_non_empty_fields(
             self,
             "display_name",
             "reference_document_id",
@@ -86,7 +79,7 @@ class GuestBioEntry:
 
     def __post_init__(self) -> None:
         """Reject blank required fields and normalize optional metadata."""
-        _ensure_non_empty_fields(
+        ensure_non_empty_fields(
             self,
             "display_name",
             "bio",

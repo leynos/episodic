@@ -26,6 +26,7 @@ from episodic.canonical.generation_run_ports import (
     event_seq,
 )
 from episodic.logging import log_event as _log_event
+from episodic.runtime_providers import utc_now
 
 from .generation_checkpoints import InMemoryGenerationCheckpointMixin
 from .generation_run_lease_reclamation import (
@@ -35,14 +36,9 @@ from .generation_run_lease_reclamation import (
 type TimeProvider = cabc.Callable[[], dt.datetime]
 
 
-def _now_utc() -> dt.datetime:
-    """Return the current UTC time for in-memory records."""
-    return dt.datetime.now(dt.UTC)
-
-
 def _default_time_provider() -> TimeProvider:
     """Return the default in-memory timestamp provider."""
-    return _now_utc
+    return utc_now
 
 
 @dc.dataclass(slots=True)

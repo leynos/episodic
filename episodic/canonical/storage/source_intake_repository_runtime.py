@@ -13,19 +13,15 @@ Resolve the production provider bundle:
 True
 """
 
-import collections.abc as cabc
 import dataclasses as dc
-import datetime as dt
 import uuid
 from typing import TYPE_CHECKING  # ruff: ignore[banned-import-from]  # Review requires this import form.
 
 from episodic.observability import NoopMetrics, PerfCounterClock
+from episodic.runtime_providers import Clock, UuidFactory, utc_now
 
 if TYPE_CHECKING:
     from episodic.observability import MetricsPort, MonotonicClockPort
-
-type Clock = cabc.Callable[[], dt.datetime]
-type UuidFactory = cabc.Callable[[], uuid.UUID]
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -48,11 +44,6 @@ class SourceIntakeStorageRuntime:
     uuid_factory: UuidFactory
     metrics: MetricsPort
     monotonic_clock: MonotonicClockPort
-
-
-def _utc_now() -> dt.datetime:
-    """Return the current UTC timestamp for idempotency records."""
-    return dt.datetime.now(dt.UTC)
 
 
 def _new_uuid() -> uuid.UUID:
@@ -85,7 +76,7 @@ def source_intake_storage_runtime(
     if runtime is not None:
         return runtime
     return SourceIntakeStorageRuntime(
-        clock=_utc_now,
+        clock=utc_now,
         uuid_factory=_new_uuid,
         metrics=NoopMetrics() if metrics is None else metrics,
         monotonic_clock=PerfCounterClock()

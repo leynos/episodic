@@ -5,9 +5,7 @@ persistence. Production callers use the default bundle, while tests may inject
 deterministic collaborators through the unit of work.
 """
 
-import collections.abc as cabc
 import dataclasses as dc
-import datetime as dt
 
 from episodic.observability import (
     MetricsPort,
@@ -17,8 +15,7 @@ from episodic.observability import (
     PerfCounterClock,
     TracerPort,
 )
-
-type Clock = cabc.Callable[[], dt.datetime]
+from episodic.runtime_providers import Clock, utc_now
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -76,7 +73,7 @@ def qa_artefact_storage_runtime(
     if runtime is not None:
         return runtime
     return QaArtefactStorageRuntime(
-        clock=lambda: dt.datetime.now(dt.UTC),
+        clock=utc_now,
         metrics=NoopMetrics() if metrics is None else metrics,
         tracer=NoopTracer() if tracer is None else tracer,
         monotonic_clock=(

@@ -18,7 +18,6 @@ from .qa_artefact_compliance import compliance_status_for_pedante
 from .qa_artefact_recording import (
     QaEvaluationTarget,
     QaSummaryDraft,
-    UuidFactory,
 )
 from .qa_artefacts import (
     QaEvaluation,
@@ -29,6 +28,8 @@ from .qa_artefacts import (
 
 if typ.TYPE_CHECKING:
     import uuid
+
+    from episodic.runtime_providers import UuidFactory
 
 
 def _finding_from_pedante(

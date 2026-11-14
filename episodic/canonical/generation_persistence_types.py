@@ -1,28 +1,18 @@
 """Commands, typed errors, and projections for draft persistence services."""
 
-import collections.abc as cabc
 import dataclasses as dc
-import datetime as dt
 import typing as typ
-import uuid
+
+from episodic.runtime_providers import Clock, UuidFactory, utc_now, uuid7
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    import datetime as dt
+    import uuid
+
     from episodic.canonical.ingestion_sources import IngestionJobSource
     from episodic.canonical.uploads import Upload
     from episodic.generation.draft_script import DraftScriptResult
-
-type Clock = cabc.Callable[[], dt.datetime]
-type UuidFactory = cabc.Callable[[], uuid.UUID]
-
-
-def _utc_now() -> dt.datetime:
-    """Return a timezone-aware UTC timestamp."""
-    return dt.datetime.now(dt.UTC)
-
-
-def _uuid7() -> uuid.UUID:
-    """Return a monotonic storage UUID."""
-    return uuid.uuid7()
 
 
 class DraftScriptPersistenceError(Exception):
@@ -216,8 +206,8 @@ class EpisodeMaterialisationRequest:
 
     ingestion_job_id: uuid.UUID
     title: str
-    clock: Clock = _utc_now
-    uuid_factory: UuidFactory = _uuid7
+    clock: Clock = utc_now
+    uuid_factory: UuidFactory = uuid7
     max_source_count: int = 32
 
 
@@ -243,7 +233,7 @@ class DraftScriptPersistenceRequest:
     generation_run_id: uuid.UUID
     result: DraftScriptResult
     expected_revision: int
-    clock: Clock = _utc_now
+    clock: Clock = utc_now
 
 
 @dc.dataclass(frozen=True, slots=True)

@@ -1,4 +1,4 @@
-"""Configure imports for duplication-gate script tests."""
+"""Configure imports for the script tests."""
 
 import sys
 from pathlib import Path

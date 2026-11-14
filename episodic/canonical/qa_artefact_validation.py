@@ -56,13 +56,6 @@ def _validate_non_negative_integer(value: int, field_name: str) -> None:
         raise ValueError(msg)
 
 
-def _validate_positive_integer(value: int, field_name: str) -> None:
-    """Require an exact positive integer, excluding booleans."""
-    if type(value) is not int or value < 1:
-        msg = f"{field_name} must be a positive integer."
-        raise ValueError(msg)
-
-
 def _validate_optional_non_negative_integer(
     value: int | None,
     field_name: str,

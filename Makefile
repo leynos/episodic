@@ -67,13 +67,13 @@ DF12_GATES = git+https://github.com/leynos/df12-python-lints.git@$(DF12_GATES_SH
 DF12_REPOSITORY = $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 SKYLOS = $(UV_ENV) $(UV) tool run --python 3.14 --from \
 	'df12-python-lints[skylos] @ $(DF12_GATES)' df12-skylos
-# Keep this pin in sync with the CI nose install step;
-# tests/test_toolchain_contract.py enforces the match.
-NOSE_VERSION ?= 0.20.0
-NOSE_TOOLS_DIR ?= .tools/nose
-NOSE_BIN ?= $(NOSE_TOOLS_DIR)/nose
-CARGO_BINSTALL ?= cargo-binstall
-DUPLICATION_GATE = $(UV_ENV) NOSE_BIN=$(NOSE_BIN) $(UV) run scripts/duplication_gate.py
+# The duplication gate is the installed df12-duplication command. It downloads
+# the nose release named by [tool.nose] version and verifies it against the
+# digest table shipped in the package, so no nose pin lives here. The detector
+# binary lives in .tools/nose next to the Makefile; set NOSE_BIN to run another.
+NOSE_BIN ?= $(DF12_REPOSITORY)/.tools/nose/nose
+DUPLICATION = $(UV_ENV) NOSE_BIN='$(NOSE_BIN)' $(UV) tool run \
+	--from 'df12-python-lints[duplication] @ $(DF12_GATES)' df12-duplication
 
 # Interrogate scans each target recursively, subject to its default exclusions
 # (check a new file against the verbose report). Add a new Python directory to
@@ -90,7 +90,7 @@ INTERROGATE ?= $(UV_ENV) $(UV) tool run --python 3.14 \
 .PHONY: help all clean build build-release lint interrogate fmt check-fmt \
         markdownlint nixie spelling test typecheck typecheck-path \
         crosshair check-migrations skylos skylos-allow validate \
-        install-nose duplication duplication-test duplication-allow \
+        duplication duplication-allow \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
         $(TOOLS) $(VENV_TOOLS) test-workflow-contracts
 
@@ -167,43 +167,19 @@ interrogate: ## Enforce complete Python docstring coverage
 	    exit 1; \
 	  fi
 
-lint: interrogate check-architecture install-nose skylos ## Run linters
+lint: interrogate check-architecture skylos duplication ## Run linters
 	$(UV_ENV) $(UV) run ruff check
 	$(PYLINT) $(PYLINT_TARGETS)
 	$(DF12_PYLINT) $(PYLINT_TARGETS)
 	$(DF12_FUTURE_ANNOTATIONS) $(PYLINT_TARGETS)
 	$(AMBRLEAKS) tests
-	$(DUPLICATION_GATE) check
 
 skylos: ## Detect dead production code
 	$(SKYLOS) check --repository $(DF12_REPOSITORY)
 
-install-nose: ## Install the pinned nose duplication detector
-	@if [ "$$($(NOSE_BIN) --version 2>/dev/null)" = "nose $(NOSE_VERSION)" ]; then \
-	  printf "nose %s already installed at %s\n" "$(NOSE_VERSION)" "$(NOSE_BIN)"; \
-	else \
-	  printf "Installing nose %s into %s\n" "$(NOSE_VERSION)" "$(NOSE_TOOLS_DIR)"; \
-	  mkdir -p "$(NOSE_TOOLS_DIR)"; \
-	  $(CARGO_BINSTALL) --no-confirm --install-path "$(NOSE_TOOLS_DIR)" \
-	    --git https://github.com/corca-ai/nose 'nose-cli@$(NOSE_VERSION)'; \
-	fi
-
-duplication: install-nose ## Run the blocking code-duplication gate
-	$(DUPLICATION_GATE) check
-
-duplication-test: ## Run the duplication-gate helper tests
-	@$(UV_ENV) NOSE_BIN=$(NOSE_BIN) $(UV) run --no-project \
-		--with pytest==9.0.2 --with cyclopts==4.25.2 \
-		--with tomlkit==0.15.1 --with 'hypothesis[asyncio]==6.165.6' \
-		python -m pytest -c /dev/null --rootdir=. -p no:cacheprovider \
-		scripts/tests/test_atomic_write.py \
-		scripts/tests/test_duplication_gate.py \
-		scripts/tests/test_duplication_gate_commands.py \
-		scripts/tests/test_duplication_gate_make.py \
-		scripts/tests/test_duplication_gate_persistence.py \
-		scripts/tests/test_duplication_gate_properties.py \
-		scripts/tests/test_make_install_nose.py \
-		scripts/tests/test_nose_detector.py
+duplication: ## Run the blocking code-duplication gate
+	$(DUPLICATION) install --repository $(DF12_REPOSITORY)
+	$(DUPLICATION) check --repository $(DF12_REPOSITORY)
 
 # Accept FIRST/SECOND/REASON (and skylos SYMBOL) only from the make command
 # line. `NAME` is ambient under WSL, which injects the hostname there, so the
@@ -214,11 +190,13 @@ duplication-allow: export DUPLICATION_FIRST = $(call cli_value,FIRST)
 duplication-allow: export DUPLICATION_SECOND = $(call cli_value,SECOND)
 duplication-allow: export DUPLICATION_REASON = $(call cli_value,REASON)
 duplication-allow: ## Record one reasoned duplication exception
-	@test -n "$${DUPLICATION_FIRST}" || { printf "Error: FIRST is required (path[::name])\\n" >&2; exit 2; }
-	@test -n "$${DUPLICATION_REASON}" || { printf "Error: REASON is required for a duplication exception\\n" >&2; exit 2; }
-	$(DUPLICATION_GATE) allow --first "$${DUPLICATION_FIRST}" \
-		$(if $(call cli_value,SECOND),--second "$${DUPLICATION_SECOND}",) \
-		--reason "$${DUPLICATION_REASON}"
+	@case "$${DUPLICATION_FIRST}" in *[![:space:]]*) ;; *) printf 'Error: FIRST is required (path[::name])\n' >&2; exit 2;; esac
+	@case "$${DUPLICATION_REASON}" in *[![:space:]]*) ;; *) printf 'Error: REASON is required for a duplication exception\n' >&2; exit 2;; esac
+	@case "$${DUPLICATION_SECOND}" in *[![:print:][:space:]]*) printf 'Error: SECOND members must be printable text\n' >&2; exit 2;; esac
+	@$(DUPLICATION) install --repository $(DF12_REPOSITORY)
+	@set -f; set --; for key in $${DUPLICATION_SECOND}; do set -- "$$@" --second "$$key"; done; \
+		$(DUPLICATION) allow --repository $(DF12_REPOSITORY) --first "$${DUPLICATION_FIRST}" "$$@" \
+			--reason "$${DUPLICATION_REASON}"
 
 skylos-allow: export SKYLOS_SYMBOL = $(call cli_value,SYMBOL)
 skylos-allow: export SKYLOS_REASON = $(call cli_value,REASON)
