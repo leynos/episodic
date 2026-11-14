@@ -159,6 +159,9 @@ jobs:
       - name: Run lint
         run: make lint
 
+      - name: Dead-code gate
+        uses: leynos/shared-actions/.github/actions/df12-skylos@88ac795de687eda016db24983f87a25d6db49fdb
+
       - name: Run duplication gate tests
         run: make duplication-test
 

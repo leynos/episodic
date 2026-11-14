@@ -484,6 +484,14 @@ also_copy = [
 [tool.uv]
 package = true
 
+# The dead-code gate is the installed `df12-skylos` command from
+# df12-python-lints. `roots` limits liveness analysis to the production sources
+# the gate always scanned; the test, script and benchmark trees stay out of the
+# liveness graph. Entry-point rules below are native Skylos configuration.
+[tool.df12_skylos]
+roots = ["alembic", "episodic", "openai_test_types.py"]
+python = "3.14"
+
 [tool.skylos.gate]
 strict = true
 

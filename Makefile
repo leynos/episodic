@@ -56,14 +56,17 @@ DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
 	--ignore-paths='^tests/steps/test_.*_steps[.]py$$'
 AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
-SKYLOS_VERSION = 4.33.2
-# Pin the tool interpreter: Skylos parses sources with its own runtime `ast`,
-# so an older default Python misreads the project's 3.14 syntax.
-SKYLOS_CLI = $(UV_ENV) $(UV) tool run --python 3.14 \
-	--from 'skylos==$(SKYLOS_VERSION)' skylos
-SKYLOS = $(SKYLOS_CLI) \
-	--config-file pyproject.toml
-SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
+# The dead-code gate is the installed df12-skylos command; its `skylos` extra
+# carries the one Skylos pin, and the command runs the native scan under a fixed
+# hash seed. It scans the Makefile's own directory, so the scan, the allow
+# helper and their lock agree when make is invoked from another working
+# directory. Skylos parses source with its own runtime `ast`, so the tool
+# environment runs Python 3.14.
+DF12_GATES_SHA ?= b83e3eb850de93b3f9ce7fbc9ffdb429925714dc
+DF12_GATES = git+https://github.com/leynos/df12-python-lints.git@$(DF12_GATES_SHA)
+DF12_REPOSITORY = $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+SKYLOS = $(UV_ENV) $(UV) tool run --python 3.14 --from \
+	'df12-python-lints[skylos] @ $(DF12_GATES)' df12-skylos
 # Keep this pin in sync with the CI nose install step;
 # tests/test_toolchain_contract.py enforces the match.
 NOSE_VERSION ?= 0.20.0
@@ -86,7 +89,7 @@ INTERROGATE ?= $(UV_ENV) $(UV) tool run --python 3.14 \
 
 .PHONY: help all clean build build-release lint interrogate fmt check-fmt \
         markdownlint nixie spelling test typecheck typecheck-path \
-        crosshair check-migrations skylos-allow validate \
+        crosshair check-migrations skylos skylos-allow validate \
         install-nose duplication duplication-test duplication-allow \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
         $(TOOLS) $(VENV_TOOLS) test-workflow-contracts
@@ -164,14 +167,16 @@ interrogate: ## Enforce complete Python docstring coverage
 	    exit 1; \
 	  fi
 
-lint: interrogate check-architecture install-nose ## Run linters
+lint: interrogate check-architecture install-nose skylos ## Run linters
 	$(UV_ENV) $(UV) run ruff check
 	$(PYLINT) $(PYLINT_TARGETS)
 	$(DF12_PYLINT) $(PYLINT_TARGETS)
 	$(DF12_FUTURE_ANNOTATIONS) $(PYLINT_TARGETS)
 	$(AMBRLEAKS) tests
-	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
 	$(DUPLICATION_GATE) check
+
+skylos: ## Detect dead production code
+	$(SKYLOS) check --repository $(DF12_REPOSITORY)
 
 install-nose: ## Install the pinned nose duplication detector
 	@if [ "$$($(NOSE_BIN) --version 2>/dev/null)" = "nose $(NOSE_VERSION)" ]; then \
@@ -217,12 +222,8 @@ duplication-allow: ## Record one reasoned duplication exception
 
 skylos-allow: export SKYLOS_SYMBOL = $(call cli_value,SYMBOL)
 skylos-allow: export SKYLOS_REASON = $(call cli_value,REASON)
-skylos-allow: ## Document one named Skylos exception, not an entry point
-	@test -n "$${SKYLOS_SYMBOL}" || { printf "Error: SYMBOL is required for a named whitelist exception\\n" >&2; exit 2; }
-	@test -n "$${SKYLOS_REASON}" || { printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2; }
-	# The whitelist subcommand must be skylos's first argument; global
-	# options such as --config-file make the main parser treat it as a path.
-	$(SKYLOS_CLI) whitelist "$${SKYLOS_SYMBOL}" --reason "$${SKYLOS_REASON}"
+skylos-allow: ## Document one verified Skylos exception (SYMBOL=name REASON=text)
+	$(SKYLOS) allow --repository $(DF12_REPOSITORY) --symbol="$${SKYLOS_SYMBOL}" --reason="$${SKYLOS_REASON}"
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run hecate check

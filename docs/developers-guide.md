@@ -367,13 +367,19 @@ separately provisioned `ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for
 both commands. Maintainers must update both package pins together and validate
 the complete `make lint` pipeline.
 
-Skylos is separately provisioned by the Makefile at exact release `4.33.2` and
-runs locally with concise, non-interactive output under CPython 3.14. Keep this
-interpreter requirement: Skylos's runtime `ast` parser must understand the
-project's Python 3.14 syntax. The lint command disables uploads and provenance
-collection, selects only dead-code analysis, and fails when an unexplained
+Skylos runs as the installed `df12-skylos` command from `df12-python-lints`,
+pinned by `DF12_GATES_SHA` in the Makefile; the package's `skylos` extra
+carries the one Skylos pin. `make lint` runs it through the `skylos`
+prerequisite and CI runs the shared-actions `df12-skylos` action. It runs
+locally and non-interactively under CPython 3.14. Keep this interpreter
+requirement: Skylos's runtime `ast` parser must understand the project's Python
+3.14 syntax. The production roots (`alembic`, `episodic` and
+`openai_test_types.py`) live in `[tool.df12_skylos]`. The command disables
+uploads and provenance collection, selects only dead-code analysis, fixes the
+hash seed that Skylos's module naming depends on, and fails when an unexplained
 finding remains. It does not invoke cloud or Large Language Model (LLM)
-analysis and never modifies source files.
+analysis and never modifies source files. `make skylos` runs the gate alone;
+`df12-skylos validate-config` checks the configuration's shape.
 
 Treat every new finding as dead code until its runtime caller is verified.
 Remove genuine dead code. For framework callbacks, protocol implementations, or
@@ -401,8 +407,11 @@ make skylos-allow SYMBOL=registered_handler \
   REASON="Loaded by the plugin registry; verified in the registry contract test"
 ```
 
-The target refuses empty `SYMBOL` and `REASON` values and stores the
-explanation under `[tool.skylos.whitelist.documented]`; it does not create
+The symbol must be a plain Python identifier, because Skylos matches whitelist
+keys against a definition's simple name; use an entry-point rule for a
+qualified name. The command refuses empty `SYMBOL` and `REASON` values and
+stores the explanation under `[tool.skylos.whitelist.documented]`, serializing
+edits through the ignored `.pyproject.toml.df12.lock`; it does not create
 entry-point rules. Do not generate baselines, scrape reports into
 configuration, or add bulk unexplained exceptions. Use inline suppression only
 when neither an entry-point rule nor a named exception can describe the

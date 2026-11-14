@@ -27,6 +27,16 @@ maintainers must remove when they become stale.
   remain live through precise, reasoned configuration rather than bulk
   baselines or unexplained inline suppressions.
 
+## Update: Skylos runs as df12-skylos (2026-11-14)
+
+Skylos now runs as the installed `df12-skylos` command from df12-python-lints
+(pinned by `DF12_GATES_SHA`), and in CI through the shared-actions
+`df12-skylos` action. The production roots live in `[tool.df12_skylos]`; the
+`SKYLOS_*` Makefile variables, the vendored allow recipe and the Makefile
+contract suite were removed, and the command fixes the hash seed that Skylos's
+module naming depends on. The entry-point rules and documented exceptions
+remain native `[tool.skylos]` configuration.
+
 ## Addendum: rename the Skylos allowlist argument (2026-09-03)
 
 The `skylos-allow` Make target now accepts `SYMBOL` instead of `NAME`. WSL
