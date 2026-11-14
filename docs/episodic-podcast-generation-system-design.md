@@ -2107,6 +2107,38 @@ Reusable reference repositories are implemented through dedicated adapters for
 including target-kind enforcement and `effective_from_episode_id` applicability
 rules.
 
+### Authorization and adapter failure observability
+
+The API composition root constructs an `AuthorizationObserver` from the central
+logging handle and shared `MetricsPort`, then injects its
+`AuthorizationObservabilityPort` into `AuthorizationMiddleware`. The middleware
+owns HTTP authorization outcomes: denial decisions return `401` or `403`, while
+an adapter exception returns `503 service_unavailable` in the standard error
+envelope. The observer owns the bounded log labels, failure metric, and
+best-effort sink fallback. Its scope is this authorization boundary; it is not
+a general-purpose logging or metrics adapter.
+
+The observer records adapter failures in `authorization_adapter_failure_total`
+with one bounded `category` label. Known categories cover assertion, attribute,
+index, key, operating-system, runtime, type, and value errors; other exceptions
+use `unknown_error`. Known sink failures trigger a fixed warning or the marker
+`Authorization warning sink failed; request details omitted.` on standard
+error. The middleware contains any ordinary exception that escapes the built-in
+or an injected observer and attempts the same marker, so observability failures
+do not replace the canonical HTTP response. The marker contains no request data
+or exception details. The stderr fallback is best-effort: an unavailable or
+unwritable stream can lose the marker. Keep this handling in the authorization
+boundary; shared logging helpers retain their normal exception-propagation
+behaviour for other callers.
+
+The warning log includes the fixed category, an allow-listed method, and an
+allow-listed resource root. For `unknown_error`, it also includes a
+12-character SHA-256 prefix of the exception type's module and qualified name;
+the raw type name is not logged. The log omits exception text, traceback
+details, raw paths, and credentials because adapter context can contain the raw
+`Authorization` header. The metric label remains the fixed category, so the
+diagnostic identifier does not increase metric cardinality.
+
 ### Profile/template REST (Representational State Transfer) API (Application Programming Interface) specification
 
 The profile/template API (Application Programming Interface) is exposed through

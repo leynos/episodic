@@ -7,9 +7,10 @@ import typing as typ
 
 import falcon
 
-from episodic.logging import get_logger, log_debug, log_warning
+from .authorization_observability import _record_authorization_outcome_best_effort
 
-logger = get_logger(__name__)
+if typ.TYPE_CHECKING:
+    from .authorization_observability import AuthorizationObservabilityPort
 
 
 class AuthorizationDecision(enum.StrEnum):
@@ -92,9 +93,22 @@ class StaticBearerTokenAuthorization:
 class AuthorizationMiddleware:
     """Falcon middleware that short-circuits unauthorized `/v1` requests."""
 
-    def __init__(self, authorization: AuthorizationPort) -> None:
-        """Store the authorization port used to decide each `/v1` request."""
+    def __init__(
+        self,
+        authorization: AuthorizationPort,
+        observer: AuthorizationObservabilityPort,
+    ) -> None:
+        """Initialize middleware with decision and observability ports.
+
+        Parameters
+        ----------
+        authorization : AuthorizationPort
+            Async port that decides the outcome for each protected request.
+        observer : AuthorizationObservabilityPort
+            Boundary observer for credential-free logs and bounded metrics.
+        """
         self._authorization = authorization
+        self._observer = observer
 
     async def process_request(
         self,
@@ -112,21 +126,14 @@ class AuthorizationMiddleware:
         )
         try:
             result = _authorization_result(await self._authorization.decide(context))
-        except OSError, RuntimeError, TypeError, ValueError:
-            log_warning(
-                logger,
-                "Authorization adapter failed for %s %s.",
-                context.method,
-                context.path,
-                exc_info=True,
+        except Exception as error:  # ruff: ignore[blind-except]  # Adapter errors may contain credentials.
+            self._record_authorization_outcome(error, context)
+            _set_authorization_response(
+                resp,
+                code="service_unavailable",
+                message="Authorization service is unavailable.",
+                status=falcon.HTTP_503,
             )
-            resp.media = {
-                "code": "service_unavailable",
-                "message": "Authorization service is unavailable.",
-                "details": {},
-            }
-            resp.status = falcon.HTTP_503
-            resp.complete = True
             return
 
         match result.decision:
@@ -134,30 +141,55 @@ class AuthorizationMiddleware:
                 req.context.principal_id = result.principal_id
                 return
             case AuthorizationDecision.UNAUTHORIZED:
-                _log_authorization_denial(result.decision, context)
-                resp.media = {
-                    "code": "unauthorized",
-                    "message": "Authorization is required.",
-                    "details": {},
-                }
-                resp.status = falcon.HTTP_401
+                self._record_authorization_outcome(result.decision, context)
+                _set_authorization_response(
+                    resp,
+                    code="unauthorized",
+                    message="Authorization is required.",
+                    status=falcon.HTTP_401,
+                )
             case AuthorizationDecision.FORBIDDEN:
-                _log_authorization_denial(result.decision, context)
-                resp.media = {
-                    "code": "forbidden",
-                    "message": "Access to this resource is forbidden.",
-                    "details": {},
-                }
-                resp.status = falcon.HTTP_403
+                self._record_authorization_outcome(result.decision, context)
+                _set_authorization_response(
+                    resp,
+                    code="forbidden",
+                    message="Access to this resource is forbidden.",
+                    status=falcon.HTTP_403,
+                )
             case _:
-                _log_authorization_denial(result.decision, context)
-                resp.media = {
-                    "code": "internal_error",
-                    "message": "Unexpected authorization decision.",
-                    "details": {},
-                }
-                resp.status = falcon.HTTP_503
-        resp.complete = True
+                self._record_authorization_outcome(result.decision, context)
+                _set_authorization_response(
+                    resp,
+                    code="internal_error",
+                    message="Unexpected authorization decision.",
+                    status=falcon.HTTP_503,
+                )
+
+    def _record_authorization_outcome(
+        self,
+        outcome: object,
+        context: AuthorizationContext,
+    ) -> None:
+        """Contain observer failures at the HTTP response boundary."""
+        _record_authorization_outcome_best_effort(
+            self._observer,
+            outcome,
+            method=context.method,
+            path=context.path,
+        )
+
+
+def _set_authorization_response(
+    response: falcon.Response,
+    *,
+    code: str,
+    message: str,
+    status: str,
+) -> None:
+    """Set the canonical authorization envelope and stop request dispatch."""
+    response.media = {"code": code, "message": message, "details": {}}
+    response.status = status
+    response.complete = True
 
 
 def _authorization_result(
@@ -167,17 +199,3 @@ def _authorization_result(
     if isinstance(outcome, AuthorizationResult):
         return outcome
     return AuthorizationResult(decision=outcome)
-
-
-def _log_authorization_denial(
-    decision: AuthorizationDecision,
-    context: AuthorizationContext,
-) -> None:
-    """Log non-permit decisions without recording credential material."""
-    log_debug(
-        logger,
-        "Authorization denied with %s for %s %s.",
-        decision,
-        context.method,
-        context.path,
-    )

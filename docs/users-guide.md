@@ -461,6 +461,29 @@ access. Requests for resources owned by another principal use the same
 not-found response as requests for resources that do not exist. Health
 endpoints are not covered by this `/v1` authorization requirement.
 
+The `unauthorized` and `forbidden` decisions return `401 Unauthorized` and
+`403 Forbidden`, respectively. The service records each decision through the
+application logging port at `WARNING`. Each record contains the fixed decision
+label, an allow-listed HTTP method, and an allow-listed resource root. Invalid
+adapter decisions use `unknown`; other method tokens use `<other>`. An
+unrecognized resource root uses the fixed `/v1/<unknown>` label. Dynamic and
+unrecognized path segments are omitted because URLs can carry credentials.
+Records exclude the `Authorization` header and bearer token. If an
+authorization adapter fails, the service returns `503 Service Unavailable` in
+the standard error envelope and records an
+`authorization_adapter_failure_total` counter through its metrics port. The
+counter has only a bounded `category` label: `assertion_error`,
+`attribute_error`, `index_error`, `key_error`, `os_error`, `runtime_error`,
+`type_error`, `value_error`, or `unknown_error`. `ConnectionError` and
+`TimeoutError` use `os_error`. Metrics and warning delivery are best-effort.
+Ordinary exceptions from the observer or its sinks do not replace the canonical
+`401`, `403`, or `503` response. The service attempts a fixed, credential-free
+marker on standard error if observation fails; that fallback is best-effort
+too. Adapter-failure warnings use the fixed category and omit exception
+details. A warning with `unknown_error` also includes a 12-character diagnostic
+identifier derived from the exception type; it does not log the type name or
+exception message. Metrics continue to use only the bounded category label.
+
 ### Migration note for the next minor release
 
 Before upgrading to the next minor release, apply the new Alembic revisions.
@@ -650,6 +673,13 @@ Only the bounded `operation`, `outcome`, `failure_category`, `representation`,
 and `pagination` attributes are logged. Credentials and response payloads are
 never included. `WARNING`, `ERROR`, and `CRITICAL` leave telemetry off while
 still surfacing the command's own warnings and errors.
+
+`episodic.logging.log_debug(logger, template, *args, exc_info=None)` formats a
+message with percent-style arguments and emits it at `DEBUG`. It calls
+`logger.debug` when available and falls back to the logger's generic `log`
+method when `debug` is absent or its inspectable signature rejects the helper's
+keyword arguments. The optional `exc_info` value is forwarded to the logger. A
+`TypeError` not identified as a signature mismatch propagates without a retry.
 
 ### Worker runtime
 

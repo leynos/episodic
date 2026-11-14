@@ -619,6 +619,21 @@ full_name = [
 reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI request, response, and shutdown protocols."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.authorization_observability._authorization_failure_category",
+    "episodic.api.authorization_observability._authorization_failure_diagnostic_id",
+]
+reason = "AuthorizationMiddleware delegates safe failure categorization and diagnostic fingerprints to AuthorizationObserver before shaping the 503 response."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.api.authorization_observability.AuthorizationObserver._record_adapter_failure_metric",
+]
+reason = "AuthorizationObserver records the bounded failure metric through the injected MetricsPort."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "parameter"
 full_name = [
     "episodic.api.app._GenerationRouteMetricsMiddleware.process_request.resp",
@@ -770,6 +785,15 @@ full_name = [
     "episodic.api.authorization.StaticBearerTokenAuthorization.decide",
 ]
 reason = "Authorization middleware dispatches to this production AuthorizationPort implementation."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.api.authorization_observability.AuthorizationObserver._log_warning",
+    "episodic.api.authorization_observability.AuthorizationObserver._record_denial",
+    "episodic.api.authorization_observability.AuthorizationObserver._record_adapter_failure",
+]
+reason = "AuthorizationObserver.record_authorization_outcome dispatches outcomes to the private record helpers; those helpers and _record_adapter_failure_metric call _log_warning for bounded diagnostics."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"

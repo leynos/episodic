@@ -846,7 +846,41 @@ Authorization scaffold:
 - Non-permit decisions short-circuit with the canonical error envelope:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
-  `503`, so policy-backend outages are not reported as resource failures.
+  `503`, so policy-backend outages are not reported as resource failures. When
+  a metrics sink is configured, each failure also increments
+  `authorization_adapter_failure_total` with only the bounded `category` label,
+  providing an aggregate diagnostic signal without exposing exception details.
+- Denial and adapter-failure warning records include only a fixed decision or
+  failure-category label, an allow-listed standard HTTP method or the `<other>`
+  placeholder, and an allow-listed resource root for recognized `/v1/`
+  resources. An unrecognized resource root uses the fixed `/v1/<unknown>`
+  label. Malformed adapter decisions use the fixed label `unknown`. Dynamic and
+  unrecognized path segments are omitted because URLs can carry credentials.
+  The adapter still receives the unmodified `AuthorizationContext.path`.
+  Adapter-failure categories are scoped to these authorization audit warnings;
+  they do not form a general exception taxonomy. The `os_error` category
+  includes `OSError`, `ConnectionError`, and `TimeoutError`; `AssertionError`,
+  `AttributeError`, `IndexError`, `KeyError`, `RuntimeError`, `TypeError`, and
+  `ValueError` map to their corresponding category names. Other caught
+  exceptions, including `LookupError`, use `unknown_error`. Those warnings add
+  a 12-character SHA-256 prefix of the exception type's module and qualified
+  name, without logging either name or exception text. The metric still uses
+  only the fixed category label. Warnings omit exception metadata, which could
+  contain the raw authorization header. Metrics are best-effort on adapter
+  failures. If warning emission fails, the authorization boundary writes the
+  fixed marker `Authorization warning sink failed; request details omitted.`
+  directly to standard error; it never includes request data or exception
+  details. This fallback is also best-effort: if standard error is unavailable
+  or cannot be written, the marker may be lost, while the canonical `401`,
+  `403`, or `503` response remains unchanged. The composition root injects the
+  `AuthorizationObservabilityPort`; its `AuthorizationObserver` owns these
+  bounded labels and best-effort sinks. The middleware also contains ordinary
+  exceptions from custom observers at the HTTP boundary and attempts the same
+  fixed marker. Keep this observer scoped to authorization because it preserves
+  that boundary's response contract; shared logging helpers retain their normal
+  exception propagation for other callers. The system design records this
+  metrics dependency and bounded diagnostic policy in
+  [Authorization and adapter failure observability](episodic-podcast-generation-system-design.md#authorization-and-adapter-failure-observability).
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.
 
@@ -3118,6 +3152,12 @@ level. Keep that pair together: a new adapter that logs through femtologging
 needs a configuration seam and an end-to-end delivery test, not only a unit
 test of the adapter.
 
+The wrappers fall back to the backend's generic `log` method when a level
+method is absent. If a DEBUG call raises `TypeError` and signature inspection
+shows that its method rejects the helper's keyword arguments, `log_debug`
+retries through `log()`. A `TypeError` from a compatible DEBUG method and
+errors from other emission methods propagate without a retry.
+
 Use `log_event(...)` for structured event fields on the port's configured
 logger. When an event must use a caller's `LoggerHandle`, use
 `format_log_event(event, **fields)` to build the stable JSON message, then emit
@@ -3134,6 +3174,11 @@ limited to its backend and private type support.
 
 The architectural decision and its consequences are recorded in
 [ADR-025](adrs/adr-0025-central-logging-port.md).
+
+Authorization warnings log only a standard HTTP method or `<other>`, and an
+allow-listed resource root for `/v1/` requests. Dynamic and unrecognized path
+segments are omitted because URLs can carry credentials. The authorization
+adapter still receives the original path through `AuthorizationContext`.
 
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:
@@ -3274,6 +3319,10 @@ Two private Protocol types define the backend logger surface wrapped by
   ```
 
   `level` accepts an `int | LogLevel` value.
+
+`episodic/_logging_types.py` also owns the private wrapper configuration and
+signature predicate used by the port's DEBUG compatibility fallback. These
+internals exist only for backend dispatch and are not a second logging API.
 
 In every signature, the message (and `level` plus message for `log`) are
 positional-only before `/`, and `exc_info` and `stack_info` are keyword-only
