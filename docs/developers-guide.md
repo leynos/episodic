@@ -2935,6 +2935,19 @@ statement construction, which a persistence-only timer would hide. The store
 itself reads no clock and writes no metric, so a test or a script can call it
 with no sink at all.
 
+Labels are limited to the fixed `operation`, `outcome`, and `failure_category`
+values, the last being `pricing_snapshot.integrity`,
+`pricing_snapshot.not_found`, or `pricing_snapshot.tampered`; a snapshot
+identifier appears on the span only. Extracting the decorator from the store
+preserved this vocabulary unchanged, so dashboards and alerts that match the
+counter, latency, and span names keep working.
+
+A driver-level integrity failure outside the content hash, such as a
+primary-key conflict, is not reclassified. It propagates as
+`sqlalchemy.exc.IntegrityError` while a conflicted content hash without a
+stored row raises `PricingSnapshotIntegrityError`, so callers can tell a
+storage fault from untrustworthy pricing content.
+
 ### Schema version 1 canonical form
 
 The canonical document is the JSON object defined by

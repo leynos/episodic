@@ -26,11 +26,27 @@ Any wrapper, container entry point, or local documentation that invokes
 The release adds the `qa_evaluations` and `qa_findings` tables and three
 PostgreSQL enum types: `qa_evaluator`, `qa_compliance_status`, and
 `qa_finding_severity`. Apply the migration before starting the API or any
-worker:
+worker.
 
-```console
-uv run alembic upgrade head
-```
+The same upgrade converts pricing snapshots (see
+[Pricing snapshots](#pricing-snapshots) below) by reading and rewriting every
+existing row under an `ACCESS EXCLUSIVE` lock, so the whole upgrade is
+stop-the-world. Perform these steps in order:
+
+1. Stop every writer: scale launchers, workers, and API pods to zero, and wait
+   for in-flight requests to drain. A row committed after the backup is not in
+   it.
+2. Take a complete database backup that includes `pricing_snapshots`,
+   `run_pricing_pins`, `cost_ledger_entries`, and `alembic_version`.
+3. Apply the migration:
+
+   ```console
+   uv run alembic upgrade head
+   ```
+
+4. Roll out the new image, and keep writers stopped until the migration has
+   committed and the new image is serving. A writer that resumes early either
+   blocks behind the exclusive lock or races the conversion.
 
 `make check-migrations` reports drift between the object-relational mapping
 (ORM) models and the migration history. A deployment that skips this step fails
@@ -62,13 +78,14 @@ and form a working reference. See
 [Pricing snapshots](users-guide.md#pricing-snapshots) in the users' guide for
 the rate rules and the full conversion.
 
-Migration `20261110_000017` converts stored `2.4.4` rows. It reads and rewrites
-every row under an `ACCESS EXCLUSIVE` lock, so the upgrade is stop-the-world:
-stop launchers, workers, and API pods before applying it. The migration
-converts per-million integer rates to exact fractions, and merges rows that
-differ only by billing period, repointing cost ledger entries and run pricing
-pins at the survivor. It aborts with an error naming the snapshot when two rows
-share a content hash but encode different content.
+Migration `20261110_000017` converts stored `2.4.4` rows. It runs during the
+stop-the-world upgrade described under
+[Database migration](#database-migration). The migration converts per-million
+integer rates to exact fractions, and merges rows that differ only by billing
+period, repointing cost ledger entries and run pricing pins at the survivor. It
+aborts with an error naming the snapshot when two rows share a content hash but
+encode different content, and the aborted transaction leaves both rows and the
+schema as they were.
 
 The offline (`--sql`) form refuses to run unless `pricing_snapshots` is empty,
 because hash recomputation needs Python. Downgrade is refused while

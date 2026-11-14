@@ -435,14 +435,56 @@ Success is observable as follows:
   `ruff: ignore[docstring-extraneous-exception]` on `load_snapshot`'s
   docstring, because the documented exception is now raised in its private
   helpers; the public `Raises` contract is unchanged.
-- [ ] (2026-11-13) Round-14 Unit Architecture remediation. Snapshot telemetry
+- [x] (2026-11-13) Round-14 Unit Architecture remediation. Snapshot telemetry
   moved out of the store into `InstrumentedPricingSnapshotRepository`; the
   store took an injectable `uuid_factory`; read and reuse purity tests were
   added; `FilePricingCatalogue.resolve` documents the exceptions its lazy load
   can raise. Focused suites green (52 passed across the store, purity,
   observability, Hecate-config, and file-loader tests) and scoped `ty` checks
-  pass. Outstanding: the seven commit gates for the round-14 tree, then the
-  commit, push, and the CodeRabbit assessment reply.
+  pass. Landed as `2b105d54` (telemetry split), the verification-obligations
+  commit titled "Prove the snapshot verification obligations", `ac5b0911`
+  (collision guard), and `1de4b92b` (conversion and telemetry-split
+  documentation), then `aec993f0` after the hosted CodeScene repair; all seven
+  commit gates passed on each pushed tree, and the CodeRabbit assessment reply
+  for the round was posted as comment `6867046741`. The saved Developer
+  Documentation observation about this entry staying unchecked is corrected
+  here.
+- [x] (2026-11-14) Round-15 assessment follow-up. CodeRabbit's substantive
+  answer (comment `6867558424`) left six items; each has a disposition.
+  1. Migration safety: `docs/migration-0.2.0.md` now puts the stop, drain,
+     complete-backup, upgrade, and restart sequence before the upgrade command.
+  2. Transaction-boundary collision: the unit test now states that the
+     survivor's conversion executes first, and
+     `test_upgrade_rolls_back_a_content_hash_collision` drives the real Alembic
+     upgrade with `hashlib.sha256` forced to one constant digest, proving the
+     aborted transaction leaves both legacy rows and their columns intact.
+  3. Reuse and tamper strength: the collision unit test asserts the recorded
+     statement is the survivor's `UPDATE`; the new
+     `tests/test_cost_pricing_snapshot_tamper.py` edits each source-document
+     column independently, covers a valid `source_kind` change on a stored
+     `sla4oai_plan` row, and keeps the `recorded_at` negative control.
+  4. ExecPlan evidence: the round-14 entry above is checked with its verified
+     commits and gate evidence.
+  5. Observability and domain warnings: the recorder logs one
+     `pricing_snapshot_pin_refused` warning naming the refused snapshot and the
+     subject it prices; migration `20261110_000017` emits one INFO line with
+     converted and merged totals through a lazily resolved
+     `alembic.runtime.migration` logger; the `ensure` port documents that
+     non-hash driver integrity failures propagate unchanged, with a primary-key
+     conflict test; and the developers' guide records the fixed label
+     vocabulary, confirming the decorator extraction preserved it.
+  6. Historical hashes: no candidate ever deployed schema-version-1 hashes.
+     `git ls-tree -r --name-only origin/main` lists neither
+     `episodic/cost/pricing_snapshot_hash.py` nor the revision file;
+     `git merge-base --is-ancestor HEAD origin/main` exits 1; `git tag`
+     lists no tags, and `git grep -l 20261110_000017 origin/main -- alembic`
+     finds nothing. The unpadded-year defect therefore never shipped and no
+     compatibility path is required.
+  7. Line budget: the revision pays for the lifecycle log by folding the
+     instant validator into `_instant`, sharing one table-lock helper, and
+     adding columns from `sa.Column` values, so a frozen migration stays at
+     400 lines; the migration test's filter and digest doubles moved to
+     `tests/fixtures/migration_doubles.py`, taking it to 385.
 
 ## Surprises & discoveries
 
