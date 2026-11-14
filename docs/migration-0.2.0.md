@@ -90,6 +90,15 @@ schema as they were.
 The offline (`--sql`) form refuses to run unless `pricing_snapshots` is empty,
 because hash recomputation needs Python. Downgrade is refused while
 `pricing_snapshots` is non-empty, because converted rows cannot be mapped back.
+
+The migration converts only `2.4.4` rows. A snapshot written by an unreleased
+`0.2.0` candidate could therefore already be stored in the new shape with a
+content hash the released encoder does not reproduce. Reading it raises
+`PricingSnapshotIntegrityError`, and every call pinned to it fails the same
+way. Check the backup taken in step 2 for `pricing_snapshots` rows that already
+carry `schema_version = 1`, and plan to re-create any that fail verification
+from the current rate cards.
+
 The reasoning behind the format is recorded in
 [ADR 028: Content-addressed pricing snapshots](adrs/adr-0028-content-addressed-pricing-snapshots.md).
 

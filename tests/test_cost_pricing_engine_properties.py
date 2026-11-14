@@ -2,7 +2,6 @@
 
 import datetime as dt
 import math
-import typing as typ
 from fractions import Fraction
 
 import hypothesis.strategies as st
@@ -23,9 +22,6 @@ from episodic.cost.pricing_snapshot import (
     UsageUnit,
 )
 
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
 _METRICS = (
     "input_tokens",
     "output_tokens",
@@ -36,9 +32,6 @@ _OPERATION = "chat_completions"
 _LEGACY_PER_UNITS = 1_000_000
 _MAX_LEGACY_RATE = 1_000_000
 _REDUCIBLE_LEGACY_RATES = (8, 40, 100, 500, 250_000)
-
-_REDUCTION_CLASSES_SEEN: set[bool] = set()
-_ROUNDING_FAULT_DISAGREEMENTS: set[tuple[int, int]] = set()
 
 
 def _snapshot(rates: dict[str, MeteredRate]) -> PricingSnapshot:
@@ -121,18 +114,6 @@ def _rounded_true_division_cost(amounts: dict[str, int], usage: dict[str, int]) 
             Fraction(usage[metric] * amounts[metric], _LEGACY_PER_UNITS)
             for metric in _METRICS
         ),
-    )
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _assert_inv_legacy_eq_non_vacuity() -> cabc.Iterator[None]:
-    """Assert the run exercised both reduction classes and rejected the fault."""
-    yield
-    assert {True, False} == _REDUCTION_CLASSES_SEEN, (
-        "Expected both reducible and already-reduced legacy rates"
-    )
-    assert _ROUNDING_FAULT_DISAGREEMENTS, (
-        "Expected the seeded true-division fault to disagree with the oracle"
     )
 
 
@@ -268,9 +249,7 @@ def test_legacy_integer_rates_match_floor_division_oracle(
     snapshot = _snapshot(_legacy_rates(amounts))
 
     for metric in _METRICS:
-        is_reducible = math.gcd(amounts[metric], _LEGACY_PER_UNITS) > 1
-        event(f"reducible={is_reducible}")
-        _REDUCTION_CLASSES_SEEN.add(is_reducible)
+        event(f"reducible={math.gcd(amounts[metric], _LEGACY_PER_UNITS) > 1}")
         contribution = _price(engine, snapshot, {metric: usage[metric]})
         assert contribution.computed_cost_minor == (
             usage[metric] * amounts[metric] // _LEGACY_PER_UNITS
@@ -368,5 +347,27 @@ def test_rounded_true_division_fault_is_rejected_by_the_oracle(
 
     fault = _rounded_true_division_cost(amounts, usage)
     if fault != oracle:
-        _ROUNDING_FAULT_DISAGREEMENTS.add((oracle, fault))
         event("seeded fault disagrees with the oracle")
+
+
+def test_legacy_rate_witnesses_cover_both_reduction_classes() -> None:
+    """Deterministic witnesses keep both reduction classes exercised."""
+    reducible = _legacy_rates(dict.fromkeys(_METRICS, 8))["input_tokens"]
+    already_reduced = _legacy_rates(dict.fromkeys(_METRICS, 3))["input_tokens"]
+
+    assert reducible.per_units < _LEGACY_PER_UNITS, (
+        f"an 8 per million rate must reduce, got {reducible!r}"
+    )
+    assert already_reduced.per_units == _LEGACY_PER_UNITS, (
+        f"a 3 per million rate is already in lowest terms, got {already_reduced!r}"
+    )
+
+
+def test_seeded_rounding_fault_disagrees_with_the_oracle_on_a_witness() -> None:
+    """One witness shows the seeded fault is distinguishable from the oracle."""
+    amounts = dict.fromkeys(_METRICS, 1)
+    usage = dict.fromkeys(_METRICS, 500_000)
+
+    assert _rounded_true_division_cost(amounts, usage) != _oracle_cost(
+        amounts, usage
+    ), "the seeded true-division fault must disagree with the oracle somewhere"

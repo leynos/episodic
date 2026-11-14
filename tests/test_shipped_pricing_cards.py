@@ -30,7 +30,7 @@ _ORIGINAL_RATE = "    amount_minor: 1\n    per_units: 125000\n"
 
 def _catalogue(directory: pathlib.Path) -> FilePricingCatalogue:
     """Load every card in *directory* eagerly."""
-    return FilePricingCatalogue.from_directory(directory, now=lambda: _NOW)
+    return FilePricingCatalogue(directory, now=lambda: _NOW)
 
 
 @pytest.mark.asyncio

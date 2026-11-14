@@ -67,7 +67,7 @@ async def test_loader_propagates_the_effective_instant(
     """The parsed effective date reaches the domain snapshot as an aware instant."""
     _write_card(tmp_path, _card())
 
-    snapshot = await FilePricingCatalogue.from_directory(tmp_path).resolve(_SUBJECT)
+    snapshot = await FilePricingCatalogue(tmp_path).resolve(_SUBJECT)
 
     assert snapshot.effective_from == dt.datetime(2026, 6, 1, tzinfo=dt.UTC), (
         f"expected the parsed effective date, got {snapshot.effective_from!r}"
@@ -80,6 +80,46 @@ async def test_loader_propagates_the_effective_instant(
     )
 
 
+@pytest.mark.asyncio
+async def test_resolve_reads_only_the_cards_loaded_at_construction(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A resolution must not re-read the directory the catalogue was built from."""
+    _write_card(tmp_path, _card())
+    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-15T00:00:00Z")
+    _write_card(tmp_path, _card().replace("amount_minor: 15", "amount_minor: 99"))
+
+    snapshot = await catalogue.resolve(_SUBJECT)
+
+    rate = snapshot.rates["input_tokens"]
+    assert (rate.amount_minor, rate.per_units) == (3, 200_000), (
+        "a resolution must use the 15 per million card loaded at construction, "
+        f"not the edited file on disk; got {rate!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_decimal_amount_reduces_before_the_integer_limit_is_checked(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A reducible decimal rate is accepted even when its raw parts overflow."""
+    _write_card(
+        tmp_path,
+        _card().replace(
+            "amount_minor: 15, per_units: 1000000",
+            'amount_minor: "7.5", per_units: 5000000000000000',
+        ),
+    )
+    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-15T00:00:00Z")
+
+    snapshot = await catalogue.resolve(_SUBJECT)
+
+    rate = snapshot.rates["input_tokens"]
+    assert (rate.amount_minor, rate.per_units) == (3, 2_000_000_000_000_000), (
+        f"7.5 per 5e15 units must reduce to 3 per 2e15, got {rate!r}"
+    )
+
+
 @pytest.mark.parametrize("invalid_value", ["false", "0", "[]", "{}"])
 def test_loader_rejects_a_non_string_effective_from(
     tmp_path: pathlib.Path,
@@ -89,7 +129,7 @@ def test_loader_rejects_a_non_string_effective_from(
     _write_card(tmp_path, _card(effective_from=invalid_value))
 
     with pytest.raises(PricingCatalogueError, match="effective_from"):
-        FilePricingCatalogue.from_directory(tmp_path)
+        FilePricingCatalogue(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -167,7 +207,7 @@ def test_loader_rejects_an_invalid_card(
     _write_card(tmp_path, body)
 
     with pytest.raises(PricingCatalogueError, match=match):
-        FilePricingCatalogue.from_directory(tmp_path)
+        FilePricingCatalogue(tmp_path)
 
 
 def test_loader_reports_undecodable_bytes_with_the_file_name(
@@ -177,7 +217,7 @@ def test_loader_reports_undecodable_bytes_with_the_file_name(
     path = _write_bytes(tmp_path, b"\xff\xfe")
 
     with pytest.raises(PricingCatalogueError, match=rf"{path.name}: cannot read card"):
-        FilePricingCatalogue.from_directory(tmp_path)
+        FilePricingCatalogue(tmp_path)
 
 
 def test_loader_reports_unreadable_cards_with_the_file_name(
@@ -187,7 +227,7 @@ def test_loader_reports_unreadable_cards_with_the_file_name(
     (tmp_path / "broken.yaml").mkdir()
 
     with pytest.raises(PricingCatalogueError, match=r"cannot read card.*broken\.yaml"):
-        FilePricingCatalogue.from_directory(tmp_path)
+        FilePricingCatalogue(tmp_path)
 
 
 def test_loader_reports_a_reader_error_with_the_file_name(
@@ -197,7 +237,7 @@ def test_loader_reports_a_reader_error_with_the_file_name(
     path = _write_bytes(tmp_path, b"schema_version: 1\n\x00")
 
     with pytest.raises(PricingCatalogueError, match=rf"{path.name}: invalid YAML"):
-        FilePricingCatalogue.from_directory(tmp_path)
+        FilePricingCatalogue(tmp_path)
 
 
 def test_loader_reports_an_impossible_yaml_timestamp(
@@ -211,4 +251,4 @@ def test_loader_reports_an_impossible_yaml_timestamp(
     _write_card(tmp_path, body)
 
     with pytest.raises(PricingCatalogueError, match=r"openai\.yaml: invalid YAML"):
-        FilePricingCatalogue.from_directory(tmp_path)
+        FilePricingCatalogue(tmp_path)

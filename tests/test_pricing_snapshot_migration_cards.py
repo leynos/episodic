@@ -132,9 +132,7 @@ def _legacy_identity(snapshot: PricingSnapshot) -> PricingSnapshot:
 
 async def _shipped_snapshot(subject: PricingSubject) -> PricingSnapshot:
     """Resolve the rewritten card the branch ships for *subject*."""
-    catalogue = FilePricingCatalogue.from_directory(
-        _SHIPPED_CARD_DIRECTORY, now=lambda: _NOW
-    )
+    catalogue = FilePricingCatalogue(_SHIPPED_CARD_DIRECTORY, now=lambda: _NOW)
     return await catalogue.resolve(subject)
 
 
@@ -154,7 +152,7 @@ def test_legacy_fixtures_are_the_shipped_bytes() -> None:
 def test_the_current_loader_rejects_the_legacy_cards() -> None:
     """Startup refuses a 2.4.4 card and names the offending file."""
     with pytest.raises(PricingCatalogueError, match="legacy") as rejection:
-        FilePricingCatalogue.from_directory(_LEGACY_CARD_DIRECTORY, now=lambda: _NOW)
+        FilePricingCatalogue(_LEGACY_CARD_DIRECTORY, now=lambda: _NOW)
 
     assert ".yaml" in str(rejection.value), (
         "the rejection must name the card that needs converting"

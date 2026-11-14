@@ -2905,14 +2905,19 @@ absent.
 `PricingCataloguePort` resolves a `PricingSnapshot` for a subject;
 `FilePricingCatalogue` is the file-backed adapter and parses schema-version-1
 cards strictly, rejecting unknown keys, legacy fields, and malformed rates with
-`PricingCatalogueError` that names the file. `PricingSnapshotRepository`
-persists and reads snapshots, and `SqlAlchemyPricingSnapshotStore` implements
-it inside the canonical unit of work. The store performs no reporting; the unit
-of work wraps it in `InstrumentedPricingSnapshotRepository`
+`PricingCatalogueError` that names the file. Constructing the adapter loads and
+validates every card, so a broken catalogue fails at start-up and the `resolve`
+query performs no file I/O. `PricingSnapshotRepository` persists and reads
+snapshots, and `SqlAlchemyPricingSnapshotStore` implements it inside the
+canonical unit of work. The store performs no reporting; the unit of work wraps
+it in `InstrumentedPricingSnapshotRepository`
 (`episodic/cost/storage/pricing_snapshot_telemetry.py`), which emits the
 counters, latency observations, and spans. `CostRecorder` composes the ledger,
 snapshot repository, catalogue, and `PricingEngine`, and prices a pinned call
-from the stored row rather than from the card file.
+from the stored row rather than from the card file. `record_provider_call`
+reads an existing pin in `_read_pinned_snapshot`, then persists an unpinned
+snapshot in `_persist_snapshot` before the ledger write, so the write is named
+at the call site rather than hidden in a lookup helper.
 
 ### Snapshot identity and integrity
 
@@ -2955,11 +2960,11 @@ dashboard or alert keyed on a retired signal does not fail loudly; it simply
 stops matching, so each one needs a deliberate migration. The new signals are
 not drop-in equivalents of the names they replace.
 
-| Retired signal                                                                                                   | Status now                                                                                                                                                                                                                                                              |
-| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pricing_snapshot.input_validation` counter and span, labelled `failure_category=pricing_snapshot.input_invalid` | Retired with no replacement. A snapshot is now a validated value object, so the store never receives the naive instant whose encoding used to fail. An unusable rate card fails earlier as `PricingCatalogueError`, which the launcher maps to `cost.pricing_snapshot`. |
-| `outcome=collision` and `failure_category=pricing_snapshot.collision` on `pricing_snapshot.ensure`               | Retired, and the two cases it named are now distinct. Byte-identical content at a shared hash is a reuse (`outcome=reused`); a stored row that does not match its hash is a failure (`outcome=error` with `failure_category=pricing_snapshot.integrity`).               |
-| `failure_category=pricing_snapshot.integrity` for any `IntegrityError`                                           | Same label, wider meaning: it now also covers a stored row failing verification, not only a driver-level constraint failure.                                                                                                                                            |
+| Retired signal                                                                                                   | Status now                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pricing_snapshot.input_validation` counter and span, labelled `failure_category=pricing_snapshot.input_invalid` | Retired with no replacement. A snapshot is now a validated value object, so the store never receives the naive instant whose encoding used to fail. An unusable rate card fails earlier, while the runtime builds the catalogue, as `PricingCatalogueError`; that error is a `ValueError`, not a `PricingSnapshotError`, so the launcher's taxonomy reports it as `unexpected`. |
+| `outcome=collision` and `failure_category=pricing_snapshot.collision` on `pricing_snapshot.ensure`               | Retired, and the two cases it named are now distinct. Byte-identical content at a shared hash is a reuse (`outcome=reused`); a stored row that does not match its hash is a failure (`outcome=error` with `failure_category=pricing_snapshot.integrity`).                                                                                                                       |
+| `failure_category=pricing_snapshot.integrity` for any `IntegrityError`                                           | Same label, wider meaning: it now also covers a stored row failing verification, not only a driver-level constraint failure.                                                                                                                                                                                                                                                    |
 
 The `pricing_snapshot.ensure` counter, its
 `pricing_snapshot.ensure.duration_ms` observation, and the

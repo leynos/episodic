@@ -12,6 +12,7 @@ Examples
 """
 
 import decimal
+import math
 import typing as typ
 
 import yaml
@@ -193,11 +194,12 @@ def _parse_rate(
         unit = UsageUnit(unit_value)
     except ValueError:
         _fail(path, f"rate {metric!r} unit {unit_value!r} is not supported.")
-    return MeteredRate.reduced(
-        amount,
-        per_units * amount_denominator,
-        unit,
-    )
+    # Reduce before the value object bounds the parts, so a decimal amount that
+    # only clears the canonical integer limit by carrying a large denominator
+    # is accepted on its exact price rather than on how it was written.
+    denominator = per_units * amount_denominator
+    divisor = math.gcd(amount, denominator)
+    return MeteredRate.reduced(amount // divisor, denominator // divisor, unit)
 
 
 def _parse_rates(

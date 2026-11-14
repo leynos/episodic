@@ -164,8 +164,9 @@ class RecordingLedger:
         return 0
 
     async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
-        """Capture the provider-call entry."""
+        """Capture the provider-call entry, recording the call order."""
         self.recorded_call = entry
+        self.calls.append(("record_call", entry.pricing_snapshot_id))
         return CostLedgerEntryId("entry:provider-call")
 
     async def record_task_rollup(

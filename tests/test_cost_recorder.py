@@ -179,13 +179,16 @@ async def test_cost_recorder_rejects_a_pin_for_another_subject(
     assert "pin_refused" in template, (
         f"the diagnostic must be identifiable by name, got {template!r}"
     )
-    assert args[0] == surrogate_snapshot_id(other_subject), (
+    assert args[0] == request.workflow_run_id, (
+        "the diagnostic must name the run that pinned the snapshot"
+    )
+    assert args[1] == surrogate_snapshot_id(other_subject), (
         "the diagnostic must name the refused snapshot"
     )
-    assert args[1] == other_subject.subject, (
+    assert args[2] == other_subject.subject, (
         "the diagnostic must name the subject the pin prices"
     )
-    assert args[2] == requested, (
+    assert args[3] == requested, (
         "the diagnostic must name the subject the call requested"
     )
 
@@ -194,8 +197,9 @@ async def test_cost_recorder_rejects_a_pin_for_another_subject(
 async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> None:
     """Unpinned calls persist the resolved snapshot before the ledger row."""
     latest_snapshot = _snapshot(input_token_rate=1_000_000)
-    ledger = RecordingLedger(pinned_snapshot_id=None)
-    snapshots = RecordingSnapshots(snapshot=latest_snapshot)
+    calls: list[tuple[str, PricingSnapshotId]] = []
+    ledger = RecordingLedger(pinned_snapshot_id=None, calls=calls)
+    snapshots = RecordingSnapshots(snapshot=latest_snapshot, calls=calls)
     recorder = CostRecorder(
         ledger=ledger,
         snapshots=snapshots,
@@ -205,13 +209,17 @@ async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> N
 
     await recorder.record_provider_call(_provider_call_record())
 
+    stored_id = surrogate_snapshot_id(latest_snapshot)
     assert snapshots.ensured_snapshots == [latest_snapshot], (
         "unpinned calls must persist the resolved snapshot before recording"
     )
+    assert calls == [("ensure", stored_id), ("record_call", stored_id)], (
+        f"the snapshot must be persisted before the ledger references it; got {calls!r}"
+    )
     assert ledger.recorded_call is not None, "Expected value to be present"
-    assert ledger.recorded_call.pricing_snapshot_id == surrogate_snapshot_id(
-        latest_snapshot
-    ), "the ledger row must reference the persisted snapshot"
+    assert ledger.recorded_call.pricing_snapshot_id == stored_id, (
+        "the ledger row must reference the persisted snapshot"
+    )
 
 
 @pytest.mark.asyncio

@@ -11,9 +11,9 @@ that is not after now. A rate card is effective-dated rather than
 billing-period-scoped, so the same card keeps pricing later periods until a
 newer one takes over.
 
-Construct with `FilePricingCatalogue.from_directory` to load every file
-eagerly, so a malformed catalogue stops the process at startup. Callers should
-handle ``LookupError`` for missing prices and `PricingCatalogueError` (a
+Constructing a catalogue loads every file at once, so a malformed catalogue
+stops the process at startup and `resolve` never performs file I/O. Callers
+should handle ``LookupError`` for missing prices and `PricingCatalogueError` (a
 ``ValueError``) for malformed or ambiguous files.
 """
 
@@ -65,7 +65,7 @@ class _LoadedSnapshot:
 
 
 class FilePricingCatalogue:
-    """Resolve pricing snapshots from immutable YAML files."""
+    """Resolve pricing snapshots from immutable YAML files held in memory."""
 
     def __init__(
         self,
@@ -73,40 +73,25 @@ class FilePricingCatalogue:
         *,
         now: cabc.Callable[[], str] = _default_now,
     ) -> None:
-        """Store the pricing directory and the callable that supplies timestamps."""
-        self._directory = pathlib.Path(directory)
-        self._now = now
-        self._cache: list[_LoadedSnapshot] | None = None
-
-    @classmethod
-    def from_directory(
-        cls,
-        directory: str | pathlib.Path,
-        *,
-        now: cabc.Callable[[], str] = _default_now,
-    ) -> FilePricingCatalogue:
-        """Build a catalogue and load every card eagerly.
+        """Load, validate, and hold every card under *directory*.
 
         Parameters
         ----------
-        directory : str | pathlib.Path
+        directory : str | pathlib.Path, optional
             Directory holding ``*.yaml`` and ``*.yml`` pricing cards.
         now : collections.abc.Callable[[], str], optional
             Clock returning the current instant as an ISO-8601 string.
 
-        Returns
-        -------
-        FilePricingCatalogue
-            Catalogue whose cards have all been parsed and validated.
-
         Raises
         ------
         PricingCatalogueError
-            If any card is malformed, legacy, or ambiguous.
-        """  # ruff: ignore[docstring-extraneous-exception]  # Eager loading delegates to the parser.
-        catalogue = cls(directory, now=now)
-        catalogue._load_snapshots()
-        return catalogue
+            If a card is malformed, legacy, or duplicates another card's
+            subject and effective instant.
+        OSError
+            If the directory or one of its cards cannot be read.
+        """  # ruff: ignore[docstring-extraneous-exception]  # Loading delegates to the parser.
+        self._now = now
+        self._cards = _load_cards(pathlib.Path(directory))
 
     async def resolve(
         self,
@@ -133,26 +118,21 @@ class FilePricingCatalogue:
         ------
         LookupError
             If no card matches the subject and is effective at the instant.
-        PricingCatalogueError
-            If a card on disk is malformed, has an unknown field, or duplicates
-            another card's subject and effective instant.
-        OSError
-            If the card directory or one of its cards cannot be read.
 
         Notes
         -----
-        The catalogue is loaded lazily on the first resolution, so a directory
-        that was healthy when the catalogue was constructed can still fail
-        here. Callers that start serving at boot should resolve once during
-        start-up to surface a broken card before the first request.
-        """  # ruff: ignore[docstring-extraneous-exception]  # Documents exceptions propagated by the lazy loader.
+        The cards were parsed and validated when the catalogue was
+        constructed, so a resolution reads no files and raises no I/O or parse
+        error. A card edited on disk after construction is not observed until
+        the process builds a new catalogue.
+        """
         now = parse_instant(
             self._now() if at is None else at,
             error_message=_timestamp_timezone_error,
         )
         candidates = [
             loaded
-            for loaded in self._load_snapshots()
+            for loaded in self._cards
             if loaded.snapshot.subject == subject and loaded.sort_key <= now
         ]
         if not candidates:
@@ -164,38 +144,36 @@ class FilePricingCatalogue:
             raise LookupError(msg)
         return max(candidates, key=lambda loaded: loaded.sort_key).snapshot
 
-    def _load_snapshots(self) -> list[_LoadedSnapshot]:
-        """Load, validate, and cache every pricing card."""
-        if self._cache is not None:
-            return self._cache
-        if not self._directory.exists():
-            self._cache = []
-            return self._cache
-        loaded = [
-            _LoadedSnapshot(snapshot=load_snapshot(path), path=path)
-            for path in self._card_paths()
-        ]
-        self._reject_duplicates(loaded)
-        self._cache = loaded
-        return loaded
 
-    def _card_paths(self) -> list[pathlib.Path]:
-        """Return every card path in deterministic order."""
-        return sorted((
-            *self._directory.glob("*.yaml"),
-            *self._directory.glob("*.yml"),
-        ))
+def _load_cards(directory: pathlib.Path) -> tuple[_LoadedSnapshot, ...]:
+    """Load, validate, and order every pricing card under *directory*."""
+    if not directory.exists():
+        return ()
+    loaded = tuple(
+        _LoadedSnapshot(snapshot=load_snapshot(path), path=path)
+        for path in _card_paths(directory)
+    )
+    _reject_duplicates(loaded)
+    return loaded
 
-    @staticmethod
-    def _reject_duplicates(loaded: cabc.Sequence[_LoadedSnapshot]) -> None:
-        """Reject two cards for one subject and effective instant."""
-        seen: dict[tuple[PricingSubject, dt.datetime | None], pathlib.Path] = {}
-        for entry in loaded:
-            previous = seen.get(entry.identity)
-            if previous is not None:
-                msg = (
-                    f"Pricing snapshots {previous} and {entry.path} both price "
-                    f"{entry.snapshot.subject} from {entry.snapshot.effective_from}."
-                )
-                raise PricingCatalogueError(msg)
-            seen[entry.identity] = entry.path
+
+def _card_paths(directory: pathlib.Path) -> list[pathlib.Path]:
+    """Return every card path in deterministic order."""
+    return sorted((
+        *directory.glob("*.yaml"),
+        *directory.glob("*.yml"),
+    ))
+
+
+def _reject_duplicates(loaded: cabc.Sequence[_LoadedSnapshot]) -> None:
+    """Reject two cards for one subject and effective instant."""
+    seen: dict[tuple[PricingSubject, dt.datetime | None], pathlib.Path] = {}
+    for entry in loaded:
+        previous = seen.get(entry.identity)
+        if previous is not None:
+            msg = (
+                f"Pricing snapshots {previous} and {entry.path} both price "
+                f"{entry.snapshot.subject} from {entry.snapshot.effective_from}."
+            )
+            raise PricingCatalogueError(msg)
+        seen[entry.identity] = entry.path

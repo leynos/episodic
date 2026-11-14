@@ -1,7 +1,7 @@
 """Schema-version-1 file catalogue loading and resolution.
 
 Each test writes one or more YAML cards into ``tmp_path`` and loads them with
-``FilePricingCatalogue.from_directory`` under a frozen clock, so effective-date
+``FilePricingCatalogue`` under a frozen clock, so effective-date
 selection and strict parsing are exercised without touching the shipped cards.
 Run the module with ``pytest tests/test_cost_pricing_catalogue_v1.py``.
 """
@@ -68,7 +68,7 @@ def _card(
 
 def _catalogue(directory: pathlib.Path, now: str) -> FilePricingCatalogue:
     """Build an eagerly loaded catalogue with a frozen clock."""
-    return FilePricingCatalogue.from_directory(
+    return FilePricingCatalogue(
         directory,
         now=lambda: now,
     )

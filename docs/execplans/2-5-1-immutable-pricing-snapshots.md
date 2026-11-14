@@ -473,13 +473,19 @@ Success is observable as follows:
      non-hash driver integrity failures propagate unchanged, with a primary-key
      conflict test; and the developers' guide records the fixed label
      vocabulary, confirming the decorator extraction preserved it.
-  6. Historical hashes: no candidate ever deployed schema-version-1 hashes.
-     `git ls-tree -r --name-only origin/main` lists neither
+  6. Historical hashes: the Git checks establish only that no
+     schema-version-1 candidate reached `origin/main`. `git ls-tree -r
+     --name-only origin/main` lists neither
      `episodic/cost/pricing_snapshot_hash.py` nor the revision file;
      `git merge-base --is-ancestor HEAD origin/main` exits 1; `git tag`
      lists no tags, and `git grep -l 20261110_000017 origin/main -- alembic`
-     finds nothing. The unpadded-year defect therefore never shipped and no
-     compatibility path is required.
+     finds nothing. They say nothing about feature branches, alpha
+     environments, or persistent databases, so they cannot rule out an
+     unpadded-year hash written outside `main`; whether one exists is a
+     deployment question this plan cannot answer from the repository. If one
+     did, the corrected reader would reject that snapshot and every call
+     pinned to it would fail; `docs/migration-0.2.0.md` records how to detect
+     such a row in the pre-upgrade backup and the recovery it needs.
   7. Line budget: the revision pays for the lifecycle log by folding the
      instant validator into `_instant`, sharing one table-lock helper, and
      adding columns from `sa.Column` values, so a frozen migration stays at
@@ -514,6 +520,44 @@ Success is observable as follows:
      mistaken for a completed upgrade;
      `test_upgrade_reports_its_conversion_totals` asserts both lines. The
      pin-refusal test now also asserts the requested subject (`args[2]`).
+- [x] (2026-11-14) Round-17 assessment follow-up. CodeRabbit's reply on
+  `baad900f` confirmed three of the four round-16 items, corrected the
+  telemetry transition, and upheld the standing Unit Architecture pre-merge
+  failure; the four unresolved inline threads are also dispositioned here.
+  1. Unit Architecture, catalogue query: `FilePricingCatalogue` now loads,
+     validates, and holds every card in its constructor, so `resolve` is a
+     pure read over that set and cannot raise `OSError` or
+     `PricingCatalogueError`. `from_directory` is gone; one constructor states
+     the contract. `test_resolve_reads_only_the_cards_loaded_at_construction`
+     rewrites the card on disk after construction and asserts the resolution
+     still returns the loaded rate.
+  2. Unit Architecture, recorder command: `_resolve_snapshot_for_record` is
+     split into the read-only `_read_pinned_snapshot` and the explicitly named
+     `_persist_snapshot`, which `record_provider_call` calls before the ledger
+     write. `RecordingLedger.record_call` joins the shared call log, so
+     `test_cost_recorder_persists_snapshot_for_unpinned_provider_call` now
+     asserts `ensure` precedes `record_call` across both ports.
+  3. Classification correction: the guide claimed `PricingCatalogueError` maps
+     to `cost.pricing_snapshot`. `classify_failure` maps `PricingSnapshotError`
+     only, and `PricingCatalogueError` is a `ValueError`, so the guide now
+     states that a broken card reports `unexpected`.
+  4. Decimal rates (codex review): `_parse_rate` reduces the combined fraction
+     before `MeteredRate.reduced` bounds the parts, so a card such as
+     `amount_minor: "7.5"` per `5000000000000000` units is accepted at its
+     exact price instead of failing on the intermediate denominator.
+     `test_decimal_amount_reduces_before_the_integer_limit_is_checked` covers
+     it.
+  5. Property-test hygiene: the module-scoped autouse fixture that required
+     unrelated tests to run is removed. Deterministic witness tests establish
+     both reduction classes and one rounding-fault disagreement, so a focused
+     selection such as `test_zero_usage_produces_zero_cost` passes alone.
+  6. Missing-row telemetry:
+     `tests/test_cost_snapshot_observability.py` uses a syntactically valid
+     absent UUID, so the read reaches the database lookup.
+  7. Historical hashes: item 6 above now limits its conclusion to the Git
+     checks and points at the recovery note in `docs/migration-0.2.0.md`.
+  8. Pin-refusal diagnostic: the warning names the workflow run as well as the
+     refused snapshot and both subjects.
 
 ## Surprises & discoveries
 
@@ -1565,10 +1609,10 @@ expected-failure markers, then the implementation.
 4. Catalogue: `PricingCataloguePort.resolve(subject: PricingSubject)`.
    Extract YAML document parsing into
    `episodic/cost/pricing_catalogue/_document.py` (v1 parser, decimal-string
-   `amount_minor` conversion, legacy-format rejection). Add
-   `FilePricingCatalogue.from_directory(path, *, now=…)` that loads and
-   validates every file eagerly (duplicate subject plus `effective_from`
-   rejected) and raise `PricingCatalogueError(ValueError)` naming the file.
+   `amount_minor` conversion, legacy-format rejection). Make
+   `FilePricingCatalogue(path, *, now=…)` load and validate every file when it
+   is constructed (duplicate subject plus `effective_from` rejected) and raise
+   `PricingCatalogueError(ValueError)` naming the file.
    `episodic/api/runtime.py` uses the factory so a bad catalogue fails at
    startup.
 5. Recorder and callers: `CostProviderOperation` gains `service_kind`, set to
@@ -2104,7 +2148,7 @@ class PricingSnapshotRepository(typ.Protocol):
   `CostProviderOperation(service_kind, provider_name, model, operation)`.
 - `episodic/cost/pricing_catalogue/_document.py` (`outbound_adapter`): v1
   YAML parsing; `episodic/cost/pricing_catalogue/file_loader.py`:
-  `FilePricingCatalogue.from_directory(...)`, `PricingCatalogueError`.
+  `FilePricingCatalogue(directory, *, now=...)`, `PricingCatalogueError`.
 - `episodic/cost/storage/pricing_snapshot_store.py` (`outbound_adapter`):
   `SqlAlchemyPricingSnapshotStore(session, *, uuid_factory=uuid.uuid7)`.
 - `episodic/cost/storage/pricing_snapshot_telemetry.py` (`outbound_adapter`):

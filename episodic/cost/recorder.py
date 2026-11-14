@@ -230,10 +230,22 @@ class CostRecorder:
             operation=record.operation,
         )
 
-    async def _resolve_snapshot_for_record(
+    async def _read_pinned_snapshot(
         self, record: ProviderCallRecord
-    ) -> tuple[PricingSnapshot, PricingSnapshotId]:
-        """Resolve the stored snapshot and its identifier for a provider call."""
+    ) -> tuple[PricingSnapshot, PricingSnapshotId] | None:
+        """Read the run's pinned snapshot and identifier, or None when unpinned.
+
+        Returns
+        -------
+        tuple[PricingSnapshot, PricingSnapshotId] or None
+            The pinned snapshot and its stored identifier, or None when the run
+            has no pin and the call must resolve and persist one.
+
+        Raises
+        ------
+        PricingSnapshotIntegrityError
+            If the pinned snapshot prices a different subject than the call.
+        """
         key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,
             provider_name=record.provider_name,
@@ -242,40 +254,36 @@ class CostRecorder:
             billing_period_key=record.billing_period_key,
         )
         pinned_snapshot_id = await self.ledger.get_run_pricing_pin(key)
-        if pinned_snapshot_id is not None:
-            pinned = await self.snapshots.get(pinned_snapshot_id)
-            subject = self._record_subject(record)
-            if pinned.subject != subject:
-                # The pin key omits the service kind, so two service kinds that
-                # share every other field would collide. Refuse rather than
-                # price this call with another service's rates.
-                msg = (
-                    f"pinned pricing snapshot {pinned_snapshot_id} prices "
-                    f"{pinned.subject!r}, not {subject!r}."
-                )
-                # The refusal is the only signal that a run pinned the wrong
-                # snapshot kind; without it the failure looks like any other
-                # integrity error in the logs.
-                log_warning(
-                    _log,
-                    "pricing_snapshot_pin_refused snapshot=%s pinned=%r requested=%r",
-                    pinned_snapshot_id,
-                    pinned.subject,
-                    subject,
-                )
-                raise PricingSnapshotIntegrityError(msg)
+        if pinned_snapshot_id is None:
+            return None
+        pinned = await self.snapshots.get(pinned_snapshot_id)
+        subject = self._record_subject(record)
+        if pinned.subject == subject:
             return pinned, pinned_snapshot_id
-        # Resolve at the instant the call was captured, not at wall-clock now:
-        # a card that became effective in between must not reprice this call.
-        snapshot = await self._resolve_pricing_snapshot(
-            self._record_subject(record),
-            at=record.recorded_at,
+        # The pin key omits the service kind, so two service kinds that share
+        # every other field would collide. Refuse rather than price this call
+        # with another service's rates.
+        msg = (
+            f"pinned pricing snapshot {pinned_snapshot_id} prices "
+            f"{pinned.subject!r}, not {subject!r}."
         )
-        # Unpinned calls must persist the snapshot before the ledger row
-        # references it; pinned calls skip this because the pin's foreign key
-        # already guarantees the stored row exists.
+        # The refusal is the only signal that a run pinned the wrong snapshot
+        # kind; without it the failure looks like any other integrity error in
+        # the logs.
+        log_warning(
+            _log,
+            "pricing_snapshot_pin_refused run=%s snapshot=%s pinned=%r requested=%r",
+            record.workflow_run_id,
+            pinned_snapshot_id,
+            pinned.subject,
+            subject,
+        )
+        raise PricingSnapshotIntegrityError(msg)
+
+    async def _persist_snapshot(self, snapshot: PricingSnapshot) -> PricingSnapshotId:
+        """Persist *snapshot* and return the identifier the store assigned."""
         ensured = await self.snapshots.ensure(snapshot)
-        return snapshot, ensured.pricing_snapshot_id
+        return ensured.pricing_snapshot_id
 
     async def record_provider_call(
         self,
@@ -300,7 +308,19 @@ class CostRecorder:
         CostAccountingError
             If pricing or ledger validation fails.
         """  # ruff: ignore[docstring-extraneous-exception]  # Collaborating ports propagate these domain exceptions.
-        snapshot, pricing_snapshot_id = await self._resolve_snapshot_for_record(record)
+        pinned = await self._read_pinned_snapshot(record)
+        if pinned is None:
+            # Resolve at the instant the call was captured, not at wall-clock
+            # now: a card that became effective in between must not reprice it.
+            snapshot = await self._resolve_pricing_snapshot(
+                self._record_subject(record),
+                at=record.recorded_at,
+            )
+            # An unpinned call must persist the snapshot before the ledger row
+            # references it; a pin's foreign key already guarantees its row.
+            pricing_snapshot_id = await self._persist_snapshot(snapshot)
+        else:
+            snapshot, pricing_snapshot_id = pinned
         priced_call = self.pricing_engine.price(
             snapshot,
             PricingRequest(
