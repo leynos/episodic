@@ -170,12 +170,13 @@ against this repository at `bb40bc85` with the action's own runner:
 
 _Table 1: Coverage report scope comparison._
 
-The unscoped run measures 258 test files, 5 scripts and 3 benchmarks alongside
-the code under test. The scoped run drops those and gains four `episodic`
-modules that no test imports, which discovery never saw and which the scope
-counts as the noughts they are. The first ratcheting run after a scope change
-therefore reads a baseline measured over a different file set; expect one run
-of noise before the floor is meaningful again.
+The unscoped run measures 258 test files, 5 scripts and 3 benchmark modules
+(since moved to `df12-python-lints`) alongside the code under test. The scoped
+run drops those and gains four `episodic` modules that no test imports, which
+discovery never saw and which the scope counts as the noughts they are. The
+first ratcheting run after a scope change therefore reads a baseline measured
+over a different file set; expect one run of noise before the floor is
+meaningful again.
 
 ### The coverage environment is not a document tree
 
@@ -283,10 +284,9 @@ The target runs this repository-wide pipeline, in order:
 
 1. Interrogate docstring coverage (`make interrogate`), which runs Interrogate
    `1.7.0` on CPython 3.14 (it parses source with the interpreter that runs it)
-   over `alembic`, `benchmarks`, `episodic`, `openai_test_types.py`, `scripts`,
-   and `tests`. It fails when the tool exits non-zero and when the verbose
-   report holds any `MISSED` row, including a lone gap that a rounded
-   percentage would hide;
+   over `alembic`, `episodic`, `openai_test_types.py`, `scripts`, and `tests`.
+   It fails when the tool exits non-zero and when the verbose report holds any
+   `MISSED` row, including a lone gap that a rounded percentage would hide;
 2. Hecate architecture import-boundary checks;
 3. Ruff formatting-independent lint checks;
 4. the focused built-in Pylint 4 rules under CPython 3.14;

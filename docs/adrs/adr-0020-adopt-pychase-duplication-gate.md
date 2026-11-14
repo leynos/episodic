@@ -37,7 +37,8 @@ and that semantic duplication remains a human review concern.
   without any copy-paste.
 - The benchmark corpus, tuning tables, and production adjudication that
   justify the tool choice and thresholds are retained under
-  `benchmarks/duplication/` and summarized in
+  `benchmarks/duplication/` in `df12-python-lints` (moved there from this
+  repository on 2026-11-14) and summarized in
   [the duplication head-to-head](../pychase-pyscn-duplication-head-to-head.md).
 
 ## Addendum: nose 0.20.0 evaluated and not adopted (2026-08-27)
@@ -51,7 +52,7 @@ spans without the qualified unit names this gate's allowlist keys on. The
 decision stands: PyChase remains the blocking detector, no tool enforces
 Type-4, and nose is the first candidate to revisit if PyChase's interpreter and
 hash-seed pins become untenable. Evidence is retained under
-`benchmarks/duplication/results/` (`nose-0.20.0*.json`,
+`benchmarks/duplication/results/` in `df12-python-lints` (`nose-0.20.0*.json`,
 `tuning-nose-0.20.0.json`) and summarized in the head-to-head's nose follow-up
 section.
 
