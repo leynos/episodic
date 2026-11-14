@@ -1304,6 +1304,37 @@ Success is observable as follows:
   `select()` of an entity the session already holds from its identity map, so a
   check can pass on attributes that no longer match the row.
 
+- Round 20 at `19d4a884`: the approval request was answered with two
+  pre-merge findings, both valid, plus a documentation correction.
+  - The **Domain Architecture** warning held that
+    `PricingCataloguePort.resolve` took an ISO-8601 string, so a serialization
+    format crossed into the domain. The port now takes an aware
+    `dt.datetime | None`, `FilePricingCatalogue`'s clock returns a
+    `dt.datetime` and `resolve` refuses a naive instant, and `CostRecorder`
+    parses `ProviderCallRecord.recorded_at` once at its own boundary before
+    calling the port. `tests/test_cost_pricing_catalogue_v1.py` gained a
+    naive-instant case.
+  - The **Testing (Overall)** error held that no test detected a broken
+    downgrade restoration. `tests/test_pricing_snapshot_downgrade_schema.py`
+    downgrades an empty table, then asserts both legacy columns are present
+    and `NOT NULL`, every v1 column and CHECK constraint is gone, and the
+    recorded revision is the legacy one. Removing the `nullable=False`
+    alteration makes it fail with `is_nullable = YES` for both columns; the
+    alteration was restored afterwards.
+  - The upgrade guide claimed a `content_hash` conflict proves both rows hold
+    identical content. It now requires decoding both rows, re-encoding each
+    from its own stored fields, comparing the canonical content including the
+    source documents, and stopping when they differ.
+- Lesson: a uniqueness conflict is not a content-equality proof. Two rows can
+  share a hash because one of them stores a hash its own content does not
+  produce, so an operator must re-derive and compare before repointing
+  references; repointing on the strength of the conflict alone would reprice
+  recorded history.
+- Lesson: a documented error contract on a port is a type contract too. Taking
+  an ISO-8601 string forced every caller, including one holding the instant it
+  recorded, to hand a serialization format across a domain boundary. Parsing
+  belongs where the string is read, not in the port that consumes the instant.
+
 Record outcomes at each milestone boundary and at completion, including the
 conformance check results and any upstream document changes.
 
