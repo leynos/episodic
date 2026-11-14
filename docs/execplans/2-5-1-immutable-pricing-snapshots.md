@@ -603,15 +603,30 @@ Success is observable as follows:
   replayed commit identical. All seven gates passed on the rebased head
   `76da3d83` (`make test` 2361 passed, 3 skipped, 75 snapshots), which was then
   force-pushed with an explicit lease.
-- [x] (2026-11-14) Duplication-gate repair on the second-rebase head
-  `e8afd7e1`. `make lint` stopped at its blocking `duplication` prerequisite
-  with nine unsuppressed families, so no later gate ran. Root cause: the first
-  rebase's merge resolution dropped upstream's reasoned exception for the
-  shared cost port import block (`episodic/cost/__init__.py`,
-  `episodic/cost/recorder.py`, `episodic/cost/storage/adapters.py`); `main` had
-  112 allow entries where this branch had 111, and that was the only
-  difference. The entry was restored verbatim. The remaining eight families
-  were paid down by disposition rather than suppression:
+- [x] (2026-11-14) Rebase onto `main` at `6e3da8aa`, after four upstream
+  commits landed: `3a24d302` (tool list removed from `AGENTS.md`), `3a1df0fd`
+  (Skylos gate moved onto `df12-python-lints`), `f939b32d` (nose gate moved onto
+  `df12-duplication`, every family adjudicated), and `6e3da8aa` (the Skylos
+  and nose benchmarks removed). The upstream pull request became `CONFLICTING`
+  again. One conflict: `docs/repository-layout.md`, where upstream had deleted
+  the `benchmarks/` row and this branch had added a `config/` row; the deletion
+  was kept and the new row retained. The tree was clean afterwards (0 behind,
+  60 ahead) at head `e8afd7e1`, and that head's `make test` collection is 210
+  tests smaller than `76da3d83`'s because `6e3da8aa` deleted
+  `tests/test_dead_code_benchmark.py`,
+  `tests/test_dead_code_benchmark_properties.py` and
+  `tests/test_duplication_benchmark_nose.py`; no test on this branch was
+  removed.
+- [x] (2026-11-14) Duplication-gate repair at head `331c5808`. `make lint` on
+  `e8afd7e1` stopped at its blocking `duplication` prerequisite with nine
+  unsuppressed families, so no later gate ran. Root cause: replaying this
+  branch's `pyproject.toml` commits onto `6e3da8aa` dropped the reasoned
+  exception `f939b32d` had added for the shared cost port import block
+  (`episodic/cost/__init__.py`, `episodic/cost/recorder.py`,
+  `episodic/cost/storage/adapters.py`); `main` had 112 allow entries where this
+  branch had 111, and that was the only difference. The entry was restored
+  verbatim. The remaining eight families were paid down by disposition rather
+  than suppression:
 
   1. The `_require_non_empty_string` family gained
      `episodic/cost/pricing_snapshot.py::_require_non_blank`, and its reason now
@@ -636,9 +651,14 @@ Success is observable as follows:
      `cost/storage/models.py` unit entry, re-keyed as a two-member entry
      covering the cross-package ORM family that replaced it.
 
-  `make duplication` passes with 171 allowed findings, and the focused
-  `tests/test_cost_snapshot_observability.py` (5 passed) and
-  `tests/test_uow_autospec_regression.py` (2 passed) suites are green.
+  All seven gates then passed sequentially on `331c5808`: `make check-fmt` (953
+  files formatted, 133 Markdown unchanged), `make typecheck` (ty 0.0.32),
+  `make lint` (interrogate 100%, Hecate, Ruff, Pylint 10.00/10 three times,
+  ambrleaks, Skylos, and
+  `duplication gate passed; 171 allowed by reasoned exceptions`), `make test`
+  (2151 passed, 3 skipped, 74 snapshots), `make check-migrations` (head
+  `20261110_000017`, no drift), `make markdownlint` (0 issues in 133 files) and
+  `make nixie`.
 
 ## Surprises & discoveries
 
@@ -729,15 +749,15 @@ Success is observable as follows:
   merge state before suspecting the workflow, and rebase rather than re-running
   CI.
 - Observation (2026-11-14): a rebase can silently drop an upstream reasoned
-  exception from `[tool.duplication_gate]`. Evidence: the first rebase resolved
-  `pyproject.toml` without a textual conflict, yet the merge took this branch's
-  111 allow entries over `main`'s 112, losing the entry for the cost port
-  import block, and only the post-rebase `make lint` revealed it. The gate
-  reported four further entries as unmatched rather than removing them, so it
-  flags both directions of drift. Impact: after a rebase, compare the
-  allow-list entry count and content against the base rather than trusting a
-  clean merge, and read the `is unmatched in this scan` lines as work, not
-  noise.
+  exception from `[tool.duplication_gate]`. Evidence: the rebase onto
+  `6e3da8aa` resolved `pyproject.toml` without a textual conflict, yet the
+  result carried this branch's 111 allow entries instead of `main`'s 112,
+  losing the entry for the cost port import block, and only the post-rebase
+  `make lint` revealed it. The gate reported four further entries as unmatched
+  rather than removing them, so it flags both directions of drift. Impact:
+  after a rebase, compare the allow-list entry count and content against the
+  base rather than trusting a clean merge, and read the
+  `is unmatched in this scan` lines as work, not noise.
 
 ## Decision log
 
