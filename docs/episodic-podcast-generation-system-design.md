@@ -2121,17 +2121,15 @@ a general-purpose logging or metrics adapter.
 The observer records adapter failures in `authorization_adapter_failure_total`
 with one bounded `category` label. Known categories cover assertion, attribute,
 index, key, operating-system, runtime, type, and value errors; other exceptions
-use `unknown_error`. Recording is best-effort for the explicitly handled sink
-failures: attribute, index, key, operating-system, runtime, type, and value
-errors. If a metrics sink fails, the observer emits a fixed warning. If an
-authorization warning cannot be emitted, the observer writes the fixed marker
-`Authorization warning sink failed; request details omitted.` to standard error
-without request data or exception details. The stderr fallback is best-effort
-too: an unavailable or unwritable stream can lose the marker. Keep this
-handling in the authorization boundary; shared logging helpers retain their
-normal exception-propagation behaviour for other callers. Unexpected sink
-exceptions outside the explicit handled set propagate so new failures remain
-visible.
+use `unknown_error`. Known sink failures trigger a fixed warning or the marker
+`Authorization warning sink failed; request details omitted.` on standard
+error. The middleware contains any ordinary exception that escapes the built-in
+or an injected observer and attempts the same marker, so observability failures
+do not replace the canonical HTTP response. The marker contains no request data
+or exception details. The stderr fallback is best-effort: an unavailable or
+unwritable stream can lose the marker. Keep this handling in the authorization
+boundary; shared logging helpers retain their normal exception-propagation
+behaviour for other callers.
 
 The warning log includes the fixed category, an allow-listed method, and an
 allow-listed resource root. For `unknown_error`, it also includes a

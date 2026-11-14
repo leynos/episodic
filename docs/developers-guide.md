@@ -872,15 +872,14 @@ Authorization scaffold:
   directly to standard error; it never includes request data or exception
   details. This fallback is also best-effort: if standard error is unavailable
   or cannot be written, the marker may be lost, while the canonical `401`,
-  `403`, or `503` response is preserved for the explicitly handled sink failures
-  (`AttributeError`, `IndexError`, `KeyError`, `OSError`, `RuntimeError`,
-  `TypeError`, and `ValueError`). The composition root injects the
+  `403`, or `503` response remains unchanged. The composition root injects the
   `AuthorizationObservabilityPort`; its `AuthorizationObserver` owns these
-  bounded labels and best-effort sinks. Keep this observer scoped to
-  authorization because it preserves that boundary's response contract; shared
-  logging helpers retain their normal exception propagation. Other unexpected
-  sink exceptions propagate. The system design records this metrics dependency
-  and bounded diagnostic policy in
+  bounded labels and best-effort sinks. The middleware also contains ordinary
+  exceptions from custom observers at the HTTP boundary and attempts the same
+  fixed marker. Keep this observer scoped to authorization because it preserves
+  that boundary's response contract; shared logging helpers retain their normal
+  exception propagation for other callers. The system design records this
+  metrics dependency and bounded diagnostic policy in
   [Authorization and adapter failure observability](episodic-podcast-generation-system-design.md#authorization-and-adapter-failure-observability).
 - Roadmap item `5.1` is expected to add policy-backed role or scope checks
   behind the authorization port.

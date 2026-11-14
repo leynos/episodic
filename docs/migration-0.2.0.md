@@ -63,10 +63,10 @@ If the authorization adapter fails while handling a `/v1` request, the API
 returns `503 service_unavailable` in the standard error envelope. The service
 records the failure in `authorization_adapter_failure_total` with a bounded
 `category` label. The warning log omits exception details because the adapter
-context can contain the raw authorization header. Explicitly handled
-observability-sink failures preserve the canonical `503` response; unexpected
-sink exceptions can propagate through the API error path. No new server setting
-is required.
+context can contain the raw authorization header. Ordinary exceptions from the
+observer or its sinks do not replace the canonical response. The service
+attempts a fixed, credential-free marker on standard error when observation
+fails; that fallback is best-effort too. No new server setting is required.
 
 Custom logging integrations should emit through the `episodic.logging` helpers.
 The new `log_debug` helper falls back to a logger's generic `log` method when a

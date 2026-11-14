@@ -128,13 +128,10 @@ class AuthorizationObserver:
         path : str
             Original request path; only its allow-listed resource root is logged.
         """
-        try:
-            if isinstance(outcome, Exception):
-                self._record_adapter_failure(outcome, method=method, path=path)
-                return
-            self._record_denial(outcome, method=method, path=path)
-        except Exception as observer_error:
-            raise observer_error from None
+        if isinstance(outcome, Exception):
+            self._record_adapter_failure(outcome, method=method, path=path)
+            return
+        self._record_denial(outcome, method=method, path=path)
 
     def _record_denial(
         self,
@@ -195,6 +192,24 @@ class AuthorizationObserver:
             )
 
 
+def _record_authorization_outcome_best_effort(
+    observer: AuthorizationObservabilityPort,
+    outcome: object,
+    *,
+    method: str,
+    path: str,
+) -> None:
+    """Keep observability failures from changing the canonical HTTP response."""
+    try:
+        observer.record_authorization_outcome(
+            outcome,
+            method=method,
+            path=path,
+        )
+    except Exception:  # ruff: ignore[blind-except]  # Observation cannot replace the canonical HTTP response.
+        _write_authorization_warning_fallback()
+
+
 def _write_authorization_warning_fallback() -> None:
     """Write a fixed stderr marker when the central warning sink fails."""
     stream = sys.stderr
@@ -203,7 +218,7 @@ def _write_authorization_warning_fallback() -> None:
     try:
         stream.write(_AUTHORIZATION_WARNING_FALLBACK_MESSAGE)
         stream.flush()
-    except _AUTHORIZATION_SINK_FAILURES:  # fmt: skip
+    except Exception:  # ruff: ignore[blind-except]  # The fallback must not replace the canonical HTTP response.
         return
 
 
