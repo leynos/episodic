@@ -97,7 +97,7 @@
     entry-point rule cannot describe the boundary: run
 
     ```sh
-    make skylos-allow SYMBOL=episodic.api.handlers.handle_get_entity \
+    make skylos-allow SYMBOL=handle_get_entity \
       REASON="Loaded by plugin registry"
     ```
 
