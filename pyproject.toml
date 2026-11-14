@@ -790,10 +790,10 @@ reason = "Authorization middleware dispatches to this production AuthorizationPo
 type = "method"
 full_name = [
     "episodic.api.authorization_observability.AuthorizationObserver._log_warning",
-    "episodic.api.authorization_observability.AuthorizationObserver.record_denial",
-    "episodic.api.authorization_observability.AuthorizationObserver.record_adapter_failure",
+    "episodic.api.authorization_observability.AuthorizationObserver._record_denial",
+    "episodic.api.authorization_observability.AuthorizationObserver._record_adapter_failure",
 ]
-reason = "AuthorizationMiddleware calls the injected AuthorizationObservabilityPort for denials and adapter failures; the observer routes warning output through the central logging port."
+reason = "AuthorizationObserver.record_authorization_outcome dispatches outcomes to the private record helpers; those helpers and _record_adapter_failure_metric call _log_warning for bounded diagnostics."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
