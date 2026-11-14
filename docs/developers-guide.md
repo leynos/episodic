@@ -378,8 +378,9 @@ requirement: Skylos's runtime `ast` parser must understand the project's Python
 uploads and provenance collection, selects only dead-code analysis, fixes the
 hash seed that Skylos's module naming depends on, and fails when an unexplained
 finding remains. It does not invoke cloud or Large Language Model (LLM)
-analysis and never modifies source files. `make skylos` runs the gate alone;
-`df12-skylos validate-config` checks the configuration's shape.
+analysis and never modifies source files. `make skylos` runs the gate alone; it
+validates the `pyproject.toml` configuration's shape before it scans, so a
+malformed rule fails there.
 
 Treat every new finding as dead code until its runtime caller is verified.
 Remove genuine dead code. For framework callbacks, protocol implementations, or
