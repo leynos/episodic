@@ -13,6 +13,14 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 
+_NOW = dt.datetime(2026, 6, 15, tzinfo=dt.UTC)
+
+
+def _frozen_now() -> dt.datetime:
+    """Return the frozen catalogue instant."""
+    return _NOW
+
+
 _SUBJECT = PricingSubject(
     service_kind=PricedService.LLM,
     provider_name="openai",
@@ -86,7 +94,7 @@ async def test_resolve_reads_only_the_cards_loaded_at_construction(
 ) -> None:
     """A resolution must not re-read the directory the catalogue was built from."""
     _write_card(tmp_path, _card())
-    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-15T00:00:00Z")
+    catalogue = FilePricingCatalogue(tmp_path, now=_frozen_now)
     _write_card(tmp_path, _card().replace("amount_minor: 15", "amount_minor: 99"))
 
     snapshot = await catalogue.resolve(_SUBJECT)
@@ -110,7 +118,7 @@ async def test_decimal_amount_reduces_before_the_integer_limit_is_checked(
             'amount_minor: "7.5", per_units: 5000000000000000',
         ),
     )
-    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-15T00:00:00Z")
+    catalogue = FilePricingCatalogue(tmp_path, now=_frozen_now)
 
     snapshot = await catalogue.resolve(_SUBJECT)
 
@@ -132,7 +140,7 @@ async def test_insignificant_trailing_zeros_do_not_trip_the_exponent_limit(
             'amount_minor: "1.0000000000000000000000000000000"',
         ),
     )
-    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-15T00:00:00Z")
+    catalogue = FilePricingCatalogue(tmp_path, now=_frozen_now)
 
     snapshot = await catalogue.resolve(_SUBJECT)
 
@@ -180,7 +188,7 @@ async def test_zero_cost_rate_with_a_positive_denominator_is_accepted(
         tmp_path,
         _card().replace("amount_minor: 15", "amount_minor: 0"),
     )
-    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-15T00:00:00Z")
+    catalogue = FilePricingCatalogue(tmp_path, now=_frozen_now)
 
     snapshot = await catalogue.resolve(_SUBJECT)
 

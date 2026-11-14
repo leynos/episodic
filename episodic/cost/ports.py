@@ -34,6 +34,7 @@ from episodic.cost.primitives import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import datetime as dt
 
     from episodic.cost.pricing_snapshot import PricingSnapshot, PricingSubject
 
@@ -228,7 +229,7 @@ class PricingCataloguePort(typ.Protocol):
         self,
         subject: PricingSubject,
         *,
-        at: str | None = None,
+        at: dt.datetime | None = None,
     ) -> PricingSnapshot:
         """Resolve the pricing snapshot for a priced subject.
 
@@ -236,10 +237,10 @@ class PricingCataloguePort(typ.Protocol):
         ----------
         subject : PricingSubject
             Service kind, provider, model, and operation to price.
-        at : str or None, optional
-            ISO-8601 instant to resolve at. Defaults to the current time; a
-            recorded call passes the instant it was captured so a later rate
-            change cannot reprice it.
+        at : datetime.datetime or None, optional
+            Timezone-aware instant to resolve at. Defaults to the current
+            time; a recorded call passes the instant it was captured so a
+            later rate change cannot reprice it.
 
         Returns
         -------

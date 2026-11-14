@@ -17,6 +17,7 @@ import dataclasses as dc
 import datetime as dt
 import typing as typ
 
+from episodic.cost._time import parse_instant
 from episodic.cost.engine import PricingRequest
 from episodic.cost.ports import (
     BillingPeriodKey,
@@ -43,6 +44,9 @@ from episodic.cost.pricing_snapshot_ports import PricingSnapshotIntegrityError
 from episodic.logging import get_logger, log_warning
 
 _log = get_logger(__name__)
+_RECORDED_AT_TIMEZONE_ERROR = (
+    "provider call recorded_at must include timezone information."
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -130,7 +134,7 @@ class CostRecorder:
         self,
         subject: PricingSubject,
         *,
-        at: str | None = None,
+        at: dt.datetime | None = None,
     ) -> PricingSnapshot:
         """Resolve the snapshot that a run should use for this subject.
 
@@ -138,9 +142,9 @@ class CostRecorder:
         ----------
         subject : PricingSubject
             Service kind, provider, model, and operation to price.
-        at : str or None, optional
-            ISO-8601 instant the call was captured at. Defaults to now, which
-            is correct when pinning a run before its calls are made.
+        at : datetime.datetime or None, optional
+            Timezone-aware instant the call was captured at. Defaults to now,
+            which is correct when pinning a run before its calls are made.
 
         Returns
         -------
@@ -305,6 +309,8 @@ class CostRecorder:
         ------
         LookupError
             If the catalogue cannot resolve a pricing snapshot.
+        ValueError
+            If ``record.recorded_at`` is not timezone-aware.
         CostAccountingError
             If pricing or ledger validation fails.
         """  # ruff: ignore[docstring-extraneous-exception]  # Collaborating ports propagate these domain exceptions.
@@ -314,7 +320,10 @@ class CostRecorder:
             # now: a card that became effective in between must not reprice it.
             snapshot = await self._resolve_pricing_snapshot(
                 self._record_subject(record),
-                at=record.recorded_at,
+                at=parse_instant(
+                    record.recorded_at,
+                    error_message=_RECORDED_AT_TIMEZONE_ERROR,
+                ),
             )
             # An unpinned call must persist the snapshot before the ledger row
             # references it; a pin's foreign key already guarantees its row.

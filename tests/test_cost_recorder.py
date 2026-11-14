@@ -75,13 +75,13 @@ class _DriftingCatalogue:
     """Catalogue fake that always resolves the latest authored snapshot."""
 
     latest_snapshot: PricingSnapshot
-    resolved_at: list[str | None] = dc.field(default_factory=list)
+    resolved_at: list[dt.datetime | None] = dc.field(default_factory=list)
 
     async def resolve(
         self,
         subject: PricingSubject,
         *,
-        at: str | None = None,
+        at: dt.datetime | None = None,
     ) -> PricingSnapshot:
         """Return the latest resolvable snapshot, recording the cutoff."""
         del subject
@@ -236,7 +236,7 @@ async def test_unpinned_call_resolves_at_its_recorded_instant() -> None:
 
     await recorder.record_provider_call(_provider_call_record())
 
-    assert catalogue.resolved_at == ["2026-06-04T00:00:00Z"], (
+    assert catalogue.resolved_at == [dt.datetime(2026, 6, 4, tzinfo=dt.UTC)], (
         "an unpinned call must resolve at the instant it was captured"
     )
 

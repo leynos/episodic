@@ -56,7 +56,7 @@ if typ.TYPE_CHECKING:
 
     type SessionFactory = async_sessionmaker[AsyncSession]
 
-NOW = "2026-06-04T00:00:00Z"
+NOW = dt.datetime(2026, 6, 4, tzinfo=dt.UTC)
 _INSTANT = dt.datetime(2026, 5, 1, tzinfo=dt.UTC)
 BILLING_PERIOD = BillingPeriodKey("2026-06")
 LLM_RUN_ID = "bdd-pinned-run"
@@ -255,7 +255,7 @@ async def record_llm_call(
         retry_attempt=0,
         billing_period_key=BILLING_PERIOD,
         workflow_run_id=run_id,
-        recorded_at=NOW,
+        recorded_at=NOW.isoformat(),
     )
     async with context.session_factory() as session:
         entry_id = await build_recorder(

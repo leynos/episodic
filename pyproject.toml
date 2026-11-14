@@ -1272,6 +1272,9 @@ reason = "A two-line guard in two parsers with different results."
 [[tool.duplication_gate.allow]]
 unit = "episodic/canonical/domain_episodes.py"
 reason = "The same shared validator called on different fields."
+[[tool.duplication_gate.allow]]
+members = ["episodic/runtime_providers.py::utc_now", "episodic/cost/pricing_catalogue/file_loader.py::_default_now"]
+reason = "Two one-line clock defaults at different layers: the service-runtime providers expose the production clock for injected collaborators, and the file catalogue keeps a local default so it can be constructed without a runtime composition root."
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"

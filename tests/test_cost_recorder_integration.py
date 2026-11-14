@@ -1,6 +1,7 @@
 """Integration tests for the cost recorder against SQL persistence."""
 
 import dataclasses as dc
+import datetime as dt
 import textwrap
 import typing as typ
 
@@ -33,7 +34,7 @@ if typ.TYPE_CHECKING:
 
 _PINNED_RUN_ID = "workflow-run-pinned-rates"
 _RATE_CARD_FILE = "openai-2026-06.yaml"
-_NOW = "2026-06-04T00:00:00Z"
+_NOW = dt.datetime(2026, 6, 4, tzinfo=dt.UTC)
 
 
 def _write_rate_card(directory: pathlib.Path, *, input_rate: int) -> None:
@@ -78,7 +79,7 @@ class _SingleSnapshotCatalogue:
         self,
         subject: PricingSubject,
         *,
-        at: str | None = None,
+        at: dt.datetime | None = None,
     ) -> PricingSnapshot:
         """Return the fixture snapshot for any lookup."""
         del subject, at
@@ -209,7 +210,7 @@ async def _record_pinned_provider_call(
                 retry_attempt=0,
                 billing_period_key=BillingPeriodKey("2026-06"),
                 workflow_run_id=_PINNED_RUN_ID,
-                recorded_at=_NOW,
+                recorded_at=_NOW.isoformat(),
             ),
         )
         await session.commit()

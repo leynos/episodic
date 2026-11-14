@@ -22,8 +22,6 @@ import datetime as dt
 import pathlib
 import typing as typ
 
-from episodic.cost._time import parse_instant
-
 from ._document import load_snapshot
 from ._errors import PricingCatalogueError
 
@@ -38,9 +36,9 @@ _timestamp_timezone_error = (
 )
 
 
-def _default_now() -> str:
-    """Return the current UTC instant as an ISO-8601 string."""
-    return dt.datetime.now(dt.UTC).isoformat()
+def _default_now() -> dt.datetime:
+    """Return the current UTC instant."""
+    return dt.datetime.now(dt.UTC)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -71,7 +69,7 @@ class FilePricingCatalogue:
         self,
         directory: str | pathlib.Path = _default_pricing_directory,
         *,
-        now: cabc.Callable[[], str] = _default_now,
+        now: cabc.Callable[[], dt.datetime] = _default_now,
     ) -> None:
         """Load, validate, and hold every card under *directory*.
 
@@ -79,8 +77,8 @@ class FilePricingCatalogue:
         ----------
         directory : str | pathlib.Path, optional
             Directory holding ``*.yaml`` and ``*.yml`` pricing cards.
-        now : collections.abc.Callable[[], str], optional
-            Clock returning the current instant as an ISO-8601 string.
+        now : collections.abc.Callable[[], datetime.datetime], optional
+            Clock returning the current timezone-aware instant.
 
         Raises
         ------
@@ -97,7 +95,7 @@ class FilePricingCatalogue:
         self,
         subject: PricingSubject,
         *,
-        at: str | None = None,
+        at: dt.datetime | None = None,
     ) -> PricingSnapshot:
         """Return the latest effective snapshot for a priced subject.
 
@@ -105,9 +103,9 @@ class FilePricingCatalogue:
         ----------
         subject : PricingSubject
             Service kind, provider, model, and operation to price.
-        at : str or None, optional
-            ISO-8601 instant to resolve at. Defaults to the catalogue clock; a
-            recorded call passes the instant it was captured.
+        at : datetime.datetime or None, optional
+            Timezone-aware instant to resolve at. Defaults to the catalogue
+            clock; a recorded call passes the instant it was captured.
 
         Returns
         -------
@@ -118,6 +116,8 @@ class FilePricingCatalogue:
         ------
         LookupError
             If no card matches the subject and is effective at the instant.
+        ValueError
+            If the chosen instant is not timezone-aware.
 
         Notes
         -----
@@ -126,10 +126,9 @@ class FilePricingCatalogue:
         error. A card edited on disk after construction is not observed until
         the process builds a new catalogue.
         """
-        now = parse_instant(
-            self._now() if at is None else at,
-            error_message=_timestamp_timezone_error,
-        )
+        now = self._now() if at is None else at
+        if now.tzinfo is None:
+            raise ValueError(_timestamp_timezone_error)
         candidates = [
             loaded
             for loaded in self._cards

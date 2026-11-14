@@ -66,7 +66,7 @@ def _card(
     """
 
 
-def _catalogue(directory: pathlib.Path, now: str) -> FilePricingCatalogue:
+def _catalogue(directory: pathlib.Path, now: dt.datetime) -> FilePricingCatalogue:
     """Build an eagerly loaded catalogue with a frozen clock."""
     return FilePricingCatalogue(
         directory,
@@ -82,7 +82,7 @@ def _revised_catalogue(directory: pathlib.Path) -> FilePricingCatalogue:
         "new.yaml",
         _card(effective_from="2026-05-15T00:00:00Z", input_amount="20"),
     )
-    return _catalogue(directory, "2026-06-04T00:00:00Z")
+    return _catalogue(directory, dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
 
 
 @pytest.mark.asyncio
@@ -103,12 +103,26 @@ async def test_resolution_uses_the_captured_call_time(tmp_path: pathlib.Path) ->
     """A call captured before a rate change keeps the earlier card."""
     catalogue = _revised_catalogue(tmp_path)
 
-    snapshot = await catalogue.resolve(_SUBJECT, at="2026-05-10T00:00:00Z")
+    snapshot = await catalogue.resolve(
+        _SUBJECT, at=dt.datetime(2026, 5, 10, tzinfo=dt.UTC)
+    )
 
     rate = snapshot.rates["input_tokens"]
     assert (rate.amount_minor, rate.per_units) == (1, 100_000), (
         "a call captured before the new card must keep the earlier rate"
     )
+
+
+@pytest.mark.asyncio
+async def test_resolution_rejects_a_naive_instant(tmp_path: pathlib.Path) -> None:
+    """A naive instant cannot be ordered against an effective date."""
+    _write(tmp_path, "may.yaml", _card())
+    catalogue = _catalogue(tmp_path, dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
+
+    naive_instant = dt.datetime(2026, 5, 10)  # ruff: ignore[call-datetime-without-tzinfo] - naive on purpose.
+
+    with pytest.raises(ValueError, match="timezone"):
+        await catalogue.resolve(_SUBJECT, at=naive_instant)
 
 
 @pytest.mark.asyncio
@@ -120,7 +134,7 @@ async def test_crlf_plan_document_is_stored_verbatim(
     (tmp_path / "plan.yaml").write_bytes(
         (body.strip() + "\n").replace("\n", "\r\n").encode("utf-8")
     )
-    catalogue = _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+    catalogue = _catalogue(tmp_path, dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
 
     snapshot = await catalogue.resolve(_SUBJECT)
 
@@ -135,7 +149,7 @@ async def test_a_card_keeps_applying_in_a_later_month(
 ) -> None:
     """A May card still prices June usage; billing periods left the snapshot."""
     _write(tmp_path, "may.yaml", _card())
-    catalogue = _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+    catalogue = _catalogue(tmp_path, dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
 
     snapshot = await catalogue.resolve(_SUBJECT)
 
@@ -148,7 +162,7 @@ async def test_a_card_keeps_applying_in_a_later_month(
 async def test_future_dated_card_is_ignored(tmp_path: pathlib.Path) -> None:
     """A card that is not yet effective cannot price a call."""
     _write(tmp_path, "future.yaml", _card(effective_from="2026-07-01T00:00:00Z"))
-    catalogue = _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+    catalogue = _catalogue(tmp_path, dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
 
     with pytest.raises(LookupError, match="No pricing snapshot"):
         await catalogue.resolve(_SUBJECT)
@@ -162,7 +176,7 @@ def test_duplicate_subject_and_effective_instant_is_rejected(
     _write(tmp_path, "b.yaml", _card(input_amount="20"))
 
     with pytest.raises(PricingCatalogueError, match=r"a\.yaml|b\.yaml"):
-        _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+        _catalogue(tmp_path, dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
 
 
 def test_legacy_document_format_is_rejected(tmp_path: pathlib.Path) -> None:
@@ -188,7 +202,7 @@ def test_legacy_document_format_is_rejected(tmp_path: pathlib.Path) -> None:
         PricingCatalogueError,
         match=r"legacy\.yaml.*schema version 1.*users-guide",
     ):
-        _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+        _catalogue(tmp_path, dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
 
 
 @pytest.mark.asyncio
@@ -197,7 +211,7 @@ async def test_decimal_string_amounts_convert_exactly(
 ) -> None:
     """A decimal string expresses a fractional minor-unit price exactly."""
     _write(tmp_path, "card.yaml", _card(cached_amount='"7.5"'))
-    catalogue = _catalogue(tmp_path, "2026-06-04T00:00:00Z")
+    catalogue = _catalogue(tmp_path, dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
 
     snapshot = await catalogue.resolve(_SUBJECT)
 
@@ -212,7 +226,7 @@ async def test_missing_directory_is_an_empty_catalogue(
     tmp_path: pathlib.Path,
 ) -> None:
     """A deployment without cards loads, then fails to resolve."""
-    catalogue = _catalogue(tmp_path / "absent", "2026-06-04T00:00:00Z")
+    catalogue = _catalogue(tmp_path / "absent", dt.datetime(2026, 6, 4, tzinfo=dt.UTC))
 
     with pytest.raises(LookupError, match="No pricing snapshot"):
         await catalogue.resolve(_SUBJECT)

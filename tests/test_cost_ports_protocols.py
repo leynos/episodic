@@ -142,7 +142,7 @@ class _StaticPricingCatalogue:
         self,
         subject: PricingSubject,
         *,
-        at: str | None = None,
+        at: dt.datetime | None = None,
     ) -> PricingSnapshot:
         """Return a deterministic snapshot for protocol conformance tests."""
         del at

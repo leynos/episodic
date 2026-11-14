@@ -1,6 +1,7 @@
 """Service-kind handling in the cost recorder's subject resolution."""
 
 import dataclasses as dc
+import typing as typ
 
 import pytest
 
@@ -28,6 +29,9 @@ from tests.fixtures.cost import (
     v1_pricing_snapshot,
 )
 
+if typ.TYPE_CHECKING:
+    import datetime as dt
+
 
 @dc.dataclass(slots=True)
 class _RecordingCatalogue:
@@ -40,7 +44,7 @@ class _RecordingCatalogue:
         self,
         subject: PricingSubject,
         *,
-        at: str | None = None,
+        at: dt.datetime | None = None,
     ) -> PricingSnapshot:
         """Capture the subject and return a snapshot that prices it."""
         del at

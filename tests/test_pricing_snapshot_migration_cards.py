@@ -41,7 +41,7 @@ _LEGACY_CARD_DIRECTORY = _FIXTURE_DIRECTORY / "legacy_pricing_cards"
 _SHIPPED_CARD_DIRECTORY = (
     pathlib.Path(__file__).resolve().parents[1] / "config" / "pricing-snapshots"
 )
-_NOW = "2026-09-01T00:00:00Z"
+_NOW = dt.datetime(2026, 9, 1, tzinfo=dt.UTC)
 
 #: Digest of each byte copy, taken from the 2.4.4 release, so a fixture that
 #: drifts from the shipped bytes fails instead of quietly weakening the test.

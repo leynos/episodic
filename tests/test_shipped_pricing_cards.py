@@ -1,5 +1,6 @@
 """Coverage for the shipped pricing cards."""
 
+import datetime as dt
 import pathlib
 
 import pytest
@@ -16,7 +17,7 @@ from episodic.cost.pricing_snapshot import (
 _REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CARD_DIRECTORY = _REPOSITORY_ROOT / "config" / "pricing-snapshots"
 _CARD = _CARD_DIRECTORY / "openai-2026-05.yaml"
-_NOW = "2026-06-04T00:00:00Z"
+_NOW = dt.datetime(2026, 6, 4, tzinfo=dt.UTC)
 _SUBJECT = PricingSubject(
     service_kind=PricedService.LLM,
     provider_name="openai",
