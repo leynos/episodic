@@ -126,7 +126,7 @@ retained under `benchmarks/duplication/results/` in `df12-python-lints`.
 
 Every candidate from the selected configuration was adjudicated by reading both
 members
-([the production adjudication report](results/production-adjudication.json)):
+([the production adjudication report](https://github.com/leynos/df12-python-lints/blob/0938cba71222509b18243557f3ec61f5e80c6c77/benchmarks/duplication/results/production-adjudication.json)):
 
 | Disposition                | Count | Interpretation                                                              |
 | -------------------------- | ----: | --------------------------------------------------------------------------- |
