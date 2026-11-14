@@ -125,14 +125,11 @@ class AuthorizationMiddleware:
         try:
             result = _authorization_result(await self._authorization.decide(context))
         except Exception as error:  # ruff: ignore[blind-except]  # Adapter errors may contain credentials.
-            try:
-                self._observer.record_authorization_outcome(
-                    error,
-                    method=context.method,
-                    path=context.path,
-                )
-            except Exception as observer_error:
-                raise observer_error from None
+            self._observer.record_authorization_outcome(
+                error,
+                method=context.method,
+                path=context.path,
+            )
             _set_authorization_response(
                 resp,
                 code="service_unavailable",
