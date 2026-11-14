@@ -120,6 +120,29 @@ async def columns(connection: AsyncConnection) -> set[str]:
     return {str(row[0]) for row in result}
 
 
+async def column_nullability(connection: AsyncConnection) -> dict[str, str]:
+    """Return ``is_nullable`` for each ``pricing_snapshots`` column."""
+    result = await connection.execute(
+        sa.text(
+            "SELECT column_name, is_nullable FROM information_schema.columns "
+            "WHERE table_name = 'pricing_snapshots'"
+        )
+    )
+    return {str(row[0]): str(row[1]) for row in result}
+
+
+async def check_constraints(connection: AsyncConnection) -> set[str]:
+    """Return the CHECK constraints declared on ``pricing_snapshots``."""
+    result = await connection.execute(
+        sa.text(
+            "SELECT con.conname FROM pg_constraint AS con "
+            "JOIN pg_class AS rel ON rel.oid = con.conrelid "
+            "WHERE rel.relname = 'pricing_snapshots' AND con.contype = 'c'"
+        )
+    )
+    return {str(row[0]) for row in result}
+
+
 async def rows(connection: AsyncConnection) -> list[dict[str, object]]:
     """Return every converted snapshot row keyed by column name."""
     result = await connection.execute(sa.text("SELECT * FROM pricing_snapshots"))
