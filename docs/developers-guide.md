@@ -559,22 +559,12 @@ Do not edit generated entries in `typos.toml`; any edits are overwritten on the
 next run. Put only narrow repository-specific proper nouns, identifiers, quoted
 upstream titles, fixtures, stems or exclusions in `typos.local.toml`.
 
-### Atomic writes
+### Spelling cache and atomic writes
 
 `make spelling` runs the external `typos-config-builder` gate, so no repository
-script writes a spelling cache.
-
-`scripts/atomic_write.py` provides `atomic_write` for replacing generated files
-through a temporary sibling and `Path.replace`. It is a neutral persistence
-helper that belongs to neither caller's domain; today its live consumer is the
-duplication allowlist writer in `scripts/duplication_allowlist.py`.
-
-Its `AtomicWriteOptions` value object controls the policy: the defaults create
-missing parent directories, do not preserve an existing destination mode, and
-do not call `fsync`. The duplication allowlist writer instead disables parent
-creation, preserves the destination mode, and syncs temporary file contents
-before replacement and parent-directory metadata after replacement, because it
-updates the existing repository `pyproject.toml` under its own lock.
+script writes a spelling cache. The repository carries no atomic-write helper:
+the duplication allowlist writer that used one is now `df12-duplication allow`
+in `df12-python-lints`.
 
 Keep upstream API spellings in fenced code where practical. The gate ignores
 fenced code blocks but still checks inline code spans, so an identifier that

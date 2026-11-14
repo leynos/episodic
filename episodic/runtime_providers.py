@@ -14,10 +14,32 @@ type UuidFactory = cabc.Callable[[], uuid.UUID]
 
 
 def utc_now() -> dt.datetime:
-    """Return the current timezone-aware UTC timestamp."""
+    """Return the current timezone-aware UTC timestamp.
+
+    Returns
+    -------
+    datetime.datetime
+        The current time with ``tzinfo`` set to UTC.
+
+    Examples
+    --------
+    >>> utc_now().tzinfo is dt.UTC
+    True
+    """
     return dt.datetime.now(dt.UTC)
 
 
 def uuid7() -> uuid.UUID:
-    """Return a time-ordered UUID."""
+    """Return a time-ordered (version 7) UUID.
+
+    Returns
+    -------
+    uuid.UUID
+        A new version 7 identifier.
+
+    Examples
+    --------
+    >>> uuid7().version
+    7
+    """
     return uuid.uuid7()
