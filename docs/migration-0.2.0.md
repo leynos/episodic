@@ -2,8 +2,8 @@
 
 This guide describes what a deployment must change when it moves from Episodic
 0.1.0 to 0.2.0. It covers the renamed command-line entry point, the database
-migration that must run before the service starts, and the new quality
-assurance (QA) retrieval interfaces.
+migration that must run before the service starts, the pricing snapshot
+conversion, and the new quality assurance (QA) retrieval interfaces.
 
 ## Renamed command-line entry point
 
@@ -26,15 +26,95 @@ Any wrapper, container entry point, or local documentation that invokes
 The release adds the `qa_evaluations` and `qa_findings` tables and three
 PostgreSQL enum types: `qa_evaluator`, `qa_compliance_status`, and
 `qa_finding_severity`. Apply the migration before starting the API or any
-worker:
+worker.
 
-```console
-uv run alembic upgrade head
-```
+The same upgrade converts pricing snapshots (see
+[Pricing snapshots](#pricing-snapshots) below) by reading and rewriting every
+existing row under an `ACCESS EXCLUSIVE` lock, so the whole upgrade is
+stop-the-world. Perform these steps in order:
+
+1. Stop every writer: scale launchers, workers, and API pods to zero, and wait
+   for in-flight requests to drain. A row committed after the backup is not in
+   it.
+2. Take a complete database backup that includes `pricing_snapshots`,
+   `run_pricing_pins`, `cost_ledger_entries`, and `alembic_version`.
+3. Apply the migration:
+
+   ```console
+   uv run alembic upgrade head
+   ```
+
+4. Roll out the new image, and keep writers stopped until the migration has
+   committed and the new image is serving. A writer that resumes early either
+   blocks behind the exclusive lock or races the conversion.
 
 `make check-migrations` reports drift between the object-relational mapping
 (ORM) models and the migration history. A deployment that skips this step fails
 when the QA recording or retrieval paths first touch the missing tables.
+
+## Pricing snapshots
+
+Rate cards in the `2.4.4` format are rejected at startup with a
+`PricingCatalogueError` naming the file, so every card must be converted before
+the service starts. The legacy fields are `pricing_snapshot_id`,
+`billing_period_key`, and `rates_minor_per_metric`.
+
+A schema-version-1 card has these fields:
+
+- `schema_version`: must be `1`.
+- `service_kind`: `llm`, `tts`, or `helper_service`.
+- `provider_name`, `model`, and `operation`: the priced subject.
+- `source_kind`: `provider_rate_card` or `sla4oai_plan`.
+- `currency`: a three-letter ISO 4217 code.
+- `rates`: a mapping from metric name to a rate, where each rate gives an exact
+  `amount_minor`, `per_units`, and `unit`.
+- `source_metadata`: an optional string mapping, such as `source_url`.
+- `retrieved_at`: a timezone-aware instant.
+- `effective_from`: an optional timezone-aware instant.
+
+The billing period now lives on run pins and ledger rows, not on the snapshot.
+The shipped cards under `config/pricing-snapshots/` are already in this shape
+and form a working reference. See
+[Pricing snapshots](users-guide.md#pricing-snapshots) in the users' guide for
+the rate rules and the full conversion.
+
+Migration `20261110_000017` converts stored `2.4.4` rows. It runs during the
+stop-the-world upgrade described under
+[Database migration](#database-migration). The migration converts per-million
+integer rates to exact fractions, and merges rows that differ only by billing
+period, repointing cost ledger entries and run pricing pins at the survivor. It
+aborts with an error naming the snapshot when two rows share a content hash but
+encode different content, and the aborted transaction leaves both rows and the
+schema as they were.
+
+The offline (`--sql`) form refuses to run unless `pricing_snapshots` is empty,
+because hash recomputation needs Python. Downgrade is refused while
+`pricing_snapshots` is non-empty, because converted rows cannot be mapped back.
+
+The migration converts only `2.4.4` rows. A snapshot written by an unreleased
+`0.2.0` candidate could therefore already be stored in the new shape with a
+content hash the released encoder does not reproduce. Reading it raises
+`PricingSnapshotIntegrityError`, and every call pinned to it fails the same
+way. Check the backup taken in step 2 for `pricing_snapshots` rows that already
+carry `schema_version = 1`.
+
+Repair such a row from its own stored fields, never from the current rate
+cards. The row holds the whole snapshot — subject, rates, instants, and source
+document — and the released encoder derives the content hash from exactly those
+fields, so decoding the row and re-encoding it produces the hash the store
+verifies. Write that hash back to the row's `content_hash` in a single
+statement. The identifier does not change, so every run pricing pin and cost
+ledger entry that references the row keeps pointing at the prices that were
+recorded with it. Re-creating the snapshot from today's cards would instead
+price recorded history at today's rates, and would not repair the pins that
+still reference the original row.
+
+`content_hash` is unique, so an update that collides with an existing row means
+both rows encode identical content. Repoint the pins and ledger entries at the
+surviving row, as the migration does for duplicate rows.
+
+The reasoning behind the format is recorded in
+[ADR 028: Content-addressed pricing snapshots](adrs/adr-0028-content-addressed-pricing-snapshots.md).
 
 ## QA retrieval over REST
 

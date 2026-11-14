@@ -3,69 +3,71 @@
 import dataclasses as dc
 import datetime as dt
 import inspect
+import uuid
 
 import pytest
 
+from episodic.cost import CurrencyCode, PricingSourceKind
 from episodic.cost.engine import PricingEngine, PricingRequest
 from episodic.cost.ports import (
     BillingPeriodKey,
     CostLedgerEntryId,
     CostLedgerPort,
-    CurrencyCode,
     IdempotencyKey,
     MeteringCounterKey,
     MeteringPort,
     PricedCall,
     PricingCataloguePort,
-    PricingSnapshot,
     PricingSnapshotId,
-    PricingSourceKind,
     ProviderCallLedgerEntry,
     RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.cost.pricing_snapshot import (
+    MeteredRate,
+    PricedService,
+    PricingSnapshot,
+    PricingSubject,
+    UsageUnit,
+)
+from episodic.cost.pricing_snapshot_ports import (
+    EnsuredPricingSnapshot,
+    PricingSnapshotNotFoundError,
+    PricingSnapshotRepository,
+    SnapshotEnsureOutcome,
+)
 from episodic.cost.recorder import CostRecorderPort
 from episodic.llm.ports import LLMResponse, LLMUsage, ProviderCallUsage
 from tests.generation_run_launcher_support import RecordingCostRecorder
 
-_DEFAULT_BILLING_PERIOD = BillingPeriodKey("2026-06")
-_DEFAULT_SNAPSHOT_KEY = RunPricingKey(
-    workflow_run_id="run:test",
+_DEFAULT_SUBJECT = PricingSubject(
+    service_kind=PricedService.LLM,
     provider_name="vidai",
     model="mock-gpt",
     operation="chat_completions",
-    billing_period_key=_DEFAULT_BILLING_PERIOD,
 )
 
 
-def _make_snapshot(
-    pricing_snapshot_id: PricingSnapshotId,
-    *,
-    key: RunPricingKey = _DEFAULT_SNAPSHOT_KEY,
-) -> PricingSnapshot:
+def _make_snapshot(subject: PricingSubject = _DEFAULT_SUBJECT) -> PricingSnapshot:
     """Build a deterministic pricing snapshot for protocol tests."""
     return PricingSnapshot(
-        pricing_snapshot_id=pricing_snapshot_id,
-        provider_name=key.provider_name,
-        model=key.model,
-        operation=key.operation,
+        service_kind=subject.service_kind,
+        provider_name=subject.provider_name,
+        model=subject.model,
+        operation=subject.operation,
         source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
         currency=CurrencyCode("USD"),
-        billing_period_key=key.billing_period_key,
-        rates_minor_per_metric={"input_tokens": 1_000_000},
+        rates={
+            "input_tokens": MeteredRate.reduced(1, 1, UsageUnit.TOKEN),
+        },
         source_metadata={"source": "test"},
-        content_hash="sha256:test",
-        retrieved_at="2026-06-04T00:00:00Z",
+        retrieved_at=dt.datetime(2026, 6, 4, tzinfo=dt.UTC),
     )
 
 
 class _InMemoryCostLedger:
     """Fake cost ledger for protocol conformance tests."""
-
-    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Accept a fake snapshot persistence request."""
-        _ = snapshot
 
     async def pin_run_pricing(
         self,
@@ -98,34 +100,53 @@ class _InMemoryCostLedger:
         return CostLedgerEntryId(f"rollup:{rollup.idempotency_key}")
 
 
-class _StaticPricingCatalogue:
-    """Fake pricing catalogue that returns deterministic snapshots."""
+class _InMemoryPricingSnapshots:
+    """Fake snapshot repository keyed by content hash, like the real store."""
 
-    async def get_snapshot(
-        self,
-        pricing_snapshot_id: PricingSnapshotId,
-    ) -> PricingSnapshot:
-        """Return a deterministic snapshot for protocol conformance tests."""
-        return _make_snapshot(pricing_snapshot_id)
+    def __init__(self) -> None:
+        """Start with no stored snapshots."""
+        self._stored: dict[PricingSnapshotId, PricingSnapshot] = {}
+        self._by_content_hash: dict[str, PricingSnapshotId] = {}
 
-    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
-        self,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-    ) -> PricingSnapshot:
-        """Return a deterministic snapshot for protocol conformance tests."""
-        return _make_snapshot(
-            PricingSnapshotId("snapshot:test"),
-            key=RunPricingKey(
-                workflow_run_id="run:test",
-                provider_name=provider_name,
-                model=model,
-                operation=operation,
-                billing_period_key=billing_period_key,
-            ),
+    async def ensure(self, snapshot: PricingSnapshot) -> EnsuredPricingSnapshot:
+        """Store the snapshot once and report whether this call inserted it."""
+        existing = self._by_content_hash.get(snapshot.content_hash)
+        if existing is not None:
+            return EnsuredPricingSnapshot(
+                pricing_snapshot_id=existing,
+                outcome=SnapshotEnsureOutcome.REUSED,
+            )
+        # The real store assigns a UUIDv7 surrogate on first insert and reuses
+        # it for the same content hash thereafter.
+        pricing_snapshot_id = PricingSnapshotId(str(uuid.uuid7()))
+        self._by_content_hash[snapshot.content_hash] = pricing_snapshot_id
+        self._stored[pricing_snapshot_id] = snapshot
+        return EnsuredPricingSnapshot(
+            pricing_snapshot_id=pricing_snapshot_id,
+            outcome=SnapshotEnsureOutcome.PERSISTED,
         )
+
+    async def get(self, pricing_snapshot_id: PricingSnapshotId) -> PricingSnapshot:
+        """Return the stored snapshot or raise the not-found port error."""
+        try:
+            return self._stored[pricing_snapshot_id]
+        except KeyError as exc:
+            msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
+            raise PricingSnapshotNotFoundError(msg) from exc
+
+
+class _StaticPricingCatalogue:
+    """Fake pricing catalogue that returns a deterministic snapshot."""
+
+    async def resolve(
+        self,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
+    ) -> PricingSnapshot:
+        """Return a deterministic snapshot for protocol conformance tests."""
+        del at
+        return _make_snapshot(subject)
 
 
 class _InMemoryMetering:
@@ -146,6 +167,7 @@ class _InMemoryMetering:
 def test_cost_protocol_fakes_satisfy_public_ports() -> None:
     """Concrete cost collaborators expose the published protocol surfaces."""
     ledger = _InMemoryCostLedger()
+    snapshots = _InMemoryPricingSnapshots()
     catalogue = _StaticPricingCatalogue()
     metering = _InMemoryMetering()
 
@@ -165,11 +187,13 @@ def test_cost_protocol_fakes_satisfy_public_ports() -> None:
     assert inspect.iscoroutinefunction(ledger.record_task_rollup), (
         "Expected condition to hold"
     )
-    assert isinstance(catalogue, PricingCataloguePort), (
+    assert isinstance(snapshots, PricingSnapshotRepository), (
         "Expected value to have the required type"
     )
-    assert inspect.iscoroutinefunction(catalogue.get_snapshot), (
-        "Expected condition to hold"
+    assert inspect.iscoroutinefunction(snapshots.ensure), "Expected condition to hold"
+    assert inspect.iscoroutinefunction(snapshots.get), "Expected condition to hold"
+    assert isinstance(catalogue, PricingCataloguePort), (
+        "Expected value to have the required type"
     )
     assert inspect.iscoroutinefunction(catalogue.resolve), "Expected condition to hold"
     assert isinstance(metering, MeteringPort), (
@@ -198,14 +222,13 @@ def test_recording_cost_recorder_satisfies_public_port() -> None:
 
 def test_pricing_engine_returns_priced_call() -> None:
     """The pricing engine has the deterministic domain pricing surface."""
-    snapshot = _make_snapshot(PricingSnapshotId("snapshot:test"))
+    snapshot = _make_snapshot()
 
     priced_call = PricingEngine().price(
         snapshot,
         PricingRequest(
             usage={"input_tokens": 3},
             operation="chat_completions",
-            billing_period_key=BillingPeriodKey("2026-06"),
         ),
     )
 
@@ -249,7 +272,7 @@ def test_llm_response_accepts_optional_provider_call_usage() -> None:
 
 def test_pricing_snapshot_rejects_naive_effective_from() -> None:
     """A naive effective date must fail value-object validation."""
-    aware = _make_snapshot(PricingSnapshotId("snapshot:aware"))
+    aware = _make_snapshot()
 
     with pytest.raises(ValueError, match="effective_from must be timezone-aware"):
         dc.replace(
@@ -260,7 +283,7 @@ def test_pricing_snapshot_rejects_naive_effective_from() -> None:
 
 def test_pricing_snapshot_rejects_non_datetime_effective_from() -> None:
     """A non-datetime effective date must fail with a TypeError."""
-    aware = _make_snapshot(PricingSnapshotId("snapshot:typed"))
+    aware = _make_snapshot()
 
     with pytest.raises(TypeError, match="effective_from must be a datetime"):
         dc.replace(

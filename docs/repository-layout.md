@@ -17,9 +17,12 @@ The following tree is an orientation sketch, not a complete file listing.
 ├── docs/
 │   ├── adrs/
 │   └── execplans/
+├── config/
+│   └── pricing-snapshots/
 ├── episodic/
 │   ├── api/
 │   ├── canonical/
+│   ├── cost/
 │   ├── generation/
 │   ├── llm/
 │   ├── orchestration/
@@ -50,6 +53,7 @@ _Figure 1: Simplified repository tree for contributor orientation._
 | `.github/`       | Continuous Integration (CI), release, dependency, and infrastructure workflow definitions. |
 | `.rules/`        | Python-specific local coding rules referenced by `AGENTS.md`.                              |
 | `alembic/`       | Database migration environment and versioned schema migrations.                            |
+| `config/`        | Shipped runtime configuration data, including immutable `pricing-snapshots/*.yaml` cards.  |
 | `docs/`          | Long-lived project documentation, design material, guides, plans, and decision records.    |
 | `episodic/`      | Python package source for the Episodic application and domain logic.                       |
 | `infra/`         | Infrastructure-as-code modules, cluster configuration, and GitOps templates.               |
@@ -70,6 +74,9 @@ The `episodic/` package is grouped by feature and boundary:
 - `episodic/canonical/` contains canonical domain models, ports, storage
   adapters, pagination, ingestion services, profile templates, and reference
   document functionality.
+- `episodic/cost/` contains cost-accounting ports, the pricing engine, exact
+  metered rates, content-addressed pricing snapshots and their SQLAlchemy
+  store, the file-backed pricing catalogue, and the cost recorder.
 - `episodic/generation/` contains generation services for show notes, chapter
   markers, guest biographies, draft scripts, generation-run launching, and Text
   Encoding Initiative (TEI) payloads.

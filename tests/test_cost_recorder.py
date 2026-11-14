@@ -1,44 +1,50 @@
 """Tests for the cost recorder coordinator."""
 
 import dataclasses as dc
+import datetime as dt
 
 import pytest
 
+from episodic.cost import (
+    CurrencyCode,
+    PricingSnapshotIntegrityError,
+    PricingSourceKind,
+)
+from episodic.cost import recorder as recorder_module
 from episodic.cost.engine import PricingEngine
 from episodic.cost.ports import (
     BillingPeriodKey,
-    CostLedgerEntryId,
-    CurrencyCode,
     IdempotencyKey,
     PricingModel,
-    PricingSnapshot,
     PricingSnapshotId,
-    PricingSourceKind,
-    ProviderCallLedgerEntry,
-    RunPricingKey,
-    TaskRollupLedgerEntry,
     UsageSource,
+)
+from episodic.cost.pricing_snapshot import (
+    MeteredRate,
+    PricedService,
+    PricingSnapshot,
+    PricingSubject,
+    UsageUnit,
 )
 from episodic.cost.recorder import (
     CostProviderOperation,
     CostRecorder,
     ProviderCallRecord,
 )
+from tests.fixtures.cost import (
+    RecordingLedger,
+    RecordingSnapshots,
+    surrogate_snapshot_id,
+)
 
 
-def _snapshot(
-    pricing_snapshot_id: str,
-    *,
-    input_token_rate: int,
-) -> PricingSnapshot:
-    """Build a pricing snapshot for recorder tests.
+def _snapshot(*, input_token_rate: int) -> PricingSnapshot:
+    """Build an immutable pricing snapshot for recorder tests.
 
     Parameters
     ----------
-    pricing_snapshot_id
-        Snapshot identifier to assign to the immutable test snapshot.
     input_token_rate
-        Minor-unit rate to use for the ``input_tokens`` metric.
+        Minor units charged per one million ``input_tokens``.
 
     Returns
     -------
@@ -46,196 +52,206 @@ def _snapshot(
         Immutable pricing snapshot with fixed test values.
     """
     return PricingSnapshot(
-        pricing_snapshot_id=PricingSnapshotId(pricing_snapshot_id),
+        service_kind=PricedService.LLM,
         provider_name="openai",
         model="gpt-4o-mini",
         operation="chat_completions",
         source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
         currency=CurrencyCode("USD"),
-        billing_period_key=BillingPeriodKey("2026-06"),
-        rates_minor_per_metric={"input_tokens": input_token_rate},
+        rates={
+            "input_tokens": MeteredRate.reduced(
+                input_token_rate,
+                1_000_000,
+                UsageUnit.TOKEN,
+            ),
+        },
         source_metadata={"source": "test"},
-        content_hash=f"sha256:{pricing_snapshot_id}",
-        retrieved_at="2026-06-04T00:00:00Z",
+        retrieved_at=dt.datetime(2026, 6, 4, tzinfo=dt.UTC),
     )
-
-
-@dc.dataclass(slots=True)
-class _PinnedLedger:
-    """Ledger fake that exposes one existing run pricing pin."""
-
-    pinned_snapshot_id: PricingSnapshotId | None
-    recorded_call: ProviderCallLedgerEntry | None = None
-    ensured_snapshots: list[PricingSnapshot] = dc.field(default_factory=list)
-    calls: list[tuple[str, PricingSnapshotId]] = dc.field(default_factory=list)
-
-    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Capture snapshots the recorder persists, mirroring idempotency."""
-        self.calls.append(("ensure", snapshot.pricing_snapshot_id))
-        if snapshot not in self.ensured_snapshots:
-            self.ensured_snapshots.append(snapshot)
-
-    async def pin_run_pricing(
-        self,
-        key: RunPricingKey,
-        pricing_snapshot_id: PricingSnapshotId,
-        pinned_at: str,
-    ) -> None:
-        """Accept a fake run-pricing pin, recording the call order."""
-        _ = (key, pinned_at)
-        self.calls.append(("pin", pricing_snapshot_id))
-
-    async def get_run_pricing_pin(self, key: RunPricingKey) -> PricingSnapshotId | None:
-        """Return the fake pinned snapshot identifier."""
-        _ = key
-        return self.pinned_snapshot_id
-
-    async def sum_provider_call_costs(self, workflow_run_id: str) -> int:
-        """Return zero for tests that do not exercise roll-ups."""
-        _ = workflow_run_id
-        return 0
-
-    async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
-        """Capture the provider-call entry."""
-        self.recorded_call = entry
-        return CostLedgerEntryId("entry:provider-call")
-
-    async def record_task_rollup(
-        self,
-        rollup: TaskRollupLedgerEntry,
-    ) -> CostLedgerEntryId:
-        """Accept a roll-up entry."""
-        _ = rollup
-        return CostLedgerEntryId("entry:rollup")
 
 
 @dc.dataclass(frozen=True, slots=True)
 class _DriftingCatalogue:
-    """Catalogue fake with a latest snapshot and an older pinned snapshot."""
+    """Catalogue fake that always resolves the latest authored snapshot."""
 
-    pinned_snapshot: PricingSnapshot
     latest_snapshot: PricingSnapshot
+    resolved_at: list[str | None] = dc.field(default_factory=list)
 
-    async def get_snapshot(
+    async def resolve(
         self,
-        pricing_snapshot_id: PricingSnapshotId,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
     ) -> PricingSnapshot:
-        """Return the exact pinned snapshot by identifier."""
-        assert pricing_snapshot_id == self.pinned_snapshot.pricing_snapshot_id, (
-            "Expected values to match"
-        )
-        return self.pinned_snapshot
-
-    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
-        self,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-    ) -> PricingSnapshot:
-        """Return the latest resolvable snapshot."""
-        _ = (provider_name, model, operation, billing_period_key)
+        """Return the latest resolvable snapshot, recording the cutoff."""
+        del subject
+        self.resolved_at.append(at)
         return self.latest_snapshot
+
+
+def _provider_call_record() -> ProviderCallRecord:
+    """Build a provider-call record with fixed test values."""
+    return ProviderCallRecord(
+        idempotency_key=IdempotencyKey("run:abc:node:planner:call:1:attempt:0"),
+        parent_cost_entry_id=None,
+        provider_type="llm",
+        provider_name="openai",
+        model="gpt-4o-mini",
+        workflow_node="planner",
+        operation="chat_completions",
+        usage={"input_tokens": 3},
+        usage_source=UsageSource.PROVIDER,
+        usage_complete=True,
+        pricing_model=PricingModel.PAYG,
+        retry_attempt=0,
+        billing_period_key=BillingPeriodKey("2026-06"),
+        workflow_run_id="run-abc",
+        recorded_at="2026-06-04T00:00:00Z",
+    )
 
 
 @pytest.mark.asyncio
 async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None:
     """Existing run pins keep historical rates even after catalogue drift."""
-    pinned_snapshot = _snapshot("snapshot:old", input_token_rate=1_000_000)
-    latest_snapshot = _snapshot("snapshot:new", input_token_rate=9_000_000)
-    ledger = _PinnedLedger(pinned_snapshot_id=pinned_snapshot.pricing_snapshot_id)
+    pinned_snapshot = _snapshot(input_token_rate=1_000_000)
+    latest_snapshot = _snapshot(input_token_rate=9_000_000)
+    ledger = RecordingLedger(pinned_snapshot_id=surrogate_snapshot_id(pinned_snapshot))
+    snapshots = RecordingSnapshots(snapshot=pinned_snapshot)
     recorder = CostRecorder(
         ledger=ledger,
-        pricing_catalogue=_DriftingCatalogue(
-            pinned_snapshot=pinned_snapshot,
-            latest_snapshot=latest_snapshot,
-        ),
+        snapshots=snapshots,
+        pricing_catalogue=_DriftingCatalogue(latest_snapshot=latest_snapshot),
         pricing_engine=PricingEngine(),
     )
 
-    await recorder.record_provider_call(
-        ProviderCallRecord(
-            idempotency_key=IdempotencyKey("run:abc:node:planner:call:1:attempt:0"),
-            parent_cost_entry_id=None,
-            provider_type="llm",
-            provider_name="openai",
-            model="gpt-4o-mini",
-            workflow_node="planner",
-            operation="chat_completions",
-            usage={"input_tokens": 3},
-            usage_source=UsageSource.PROVIDER,
-            usage_complete=True,
-            pricing_model=PricingModel.PAYG,
-            retry_attempt=0,
-            billing_period_key=BillingPeriodKey("2026-06"),
-            workflow_run_id="run-abc",
-            recorded_at="2026-06-04T00:00:00Z",
-        ),
-    )
+    await recorder.record_provider_call(_provider_call_record())
 
     assert ledger.recorded_call is not None, "Expected value to be present"
-    assert ledger.recorded_call.pricing_snapshot_id == PricingSnapshotId(
-        "snapshot:old",
+    assert ledger.recorded_call.pricing_snapshot_id == surrogate_snapshot_id(
+        pinned_snapshot
     ), "recorder must use the pinned snapshot identifier"
     assert ledger.recorded_call.computed_cost_minor == 3, (
         "cost must be computed from the pinned 1_000_000 rate, not drifted rates"
     )
-    assert not ledger.ensured_snapshots, (
-        "pinned calls must skip snapshot persistence; the pin's foreign key "
-        "already guarantees the stored row exists"
+    assert snapshots.calls == [("get", surrogate_snapshot_id(pinned_snapshot))], (
+        "pinned calls must read the stored snapshot rather than the catalogue"
+    )
+
+
+def _capture_pin_refusals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, tuple[object, ...]]]:
+    """Record the warnings the recorder emits through the logging port."""
+    emitted: list[tuple[str, tuple[object, ...]]] = []
+
+    def _record(_logger: object, template: str, *args: object) -> None:
+        """Keep the template and its arguments for later assertion."""
+        emitted.append((template, args))
+
+    monkeypatch.setattr(recorder_module, "log_warning", _record)
+    return emitted
+
+
+@pytest.mark.asyncio
+async def test_cost_recorder_rejects_a_pin_for_another_subject(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pin that prices a different subject must not price this call."""
+    pinned_snapshot = _snapshot(input_token_rate=1_000_000)
+    other_subject = dc.replace(pinned_snapshot, operation="synthesize")
+    ledger = RecordingLedger(pinned_snapshot_id=surrogate_snapshot_id(other_subject))
+    recorder = CostRecorder(
+        ledger=ledger,
+        snapshots=RecordingSnapshots(snapshot=other_subject),
+        pricing_catalogue=_DriftingCatalogue(latest_snapshot=pinned_snapshot),
+        pricing_engine=PricingEngine(),
+    )
+    refusals = _capture_pin_refusals(monkeypatch)
+    request = _provider_call_record()
+    requested = dc.replace(other_subject, operation=request.operation).subject
+
+    with pytest.raises(PricingSnapshotIntegrityError, match="prices"):
+        await recorder.record_provider_call(request)
+
+    assert ledger.recorded_call is None, "a mismatched pin must not record a cost"
+    assert len(refusals) == 1, f"a refused pin must be reported once: {refusals!r}"
+    template, args = refusals[0]
+    assert "pin_refused" in template, (
+        f"the diagnostic must be identifiable by name, got {template!r}"
+    )
+    assert args[0] == request.workflow_run_id, (
+        "the diagnostic must name the run that pinned the snapshot"
+    )
+    assert args[1] == surrogate_snapshot_id(other_subject), (
+        "the diagnostic must name the refused snapshot"
+    )
+    assert args[2] == other_subject.subject, (
+        "the diagnostic must name the subject the pin prices"
+    )
+    assert args[3] == requested, (
+        "the diagnostic must name the subject the call requested"
     )
 
 
 @pytest.mark.asyncio
 async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> None:
     """Unpinned calls persist the resolved snapshot before the ledger row."""
-    latest_snapshot = _snapshot("snapshot:new", input_token_rate=1_000_000)
-    ledger = _PinnedLedger(pinned_snapshot_id=None)
+    latest_snapshot = _snapshot(input_token_rate=1_000_000)
+    calls: list[tuple[str, PricingSnapshotId]] = []
+    ledger = RecordingLedger(pinned_snapshot_id=None, calls=calls)
+    snapshots = RecordingSnapshots(snapshot=latest_snapshot, calls=calls)
     recorder = CostRecorder(
         ledger=ledger,
-        pricing_catalogue=_DriftingCatalogue(
-            pinned_snapshot=latest_snapshot,
-            latest_snapshot=latest_snapshot,
-        ),
+        snapshots=snapshots,
+        pricing_catalogue=_DriftingCatalogue(latest_snapshot=latest_snapshot),
         pricing_engine=PricingEngine(),
     )
 
-    await recorder.record_provider_call(
-        ProviderCallRecord(
-            idempotency_key=IdempotencyKey("run:abc:node:planner:call:2:attempt:0"),
-            parent_cost_entry_id=None,
-            provider_type="llm",
-            provider_name="openai",
-            model="gpt-4o-mini",
-            workflow_node="planner",
-            operation="chat_completions",
-            usage={"input_tokens": 3},
-            usage_source=UsageSource.PROVIDER,
-            usage_complete=True,
-            pricing_model=PricingModel.PAYG,
-            retry_attempt=0,
-            billing_period_key=BillingPeriodKey("2026-06"),
-            workflow_run_id="run-abc",
-            recorded_at="2026-06-04T00:00:00Z",
-        ),
+    await recorder.record_provider_call(_provider_call_record())
+
+    stored_id = surrogate_snapshot_id(latest_snapshot)
+    assert snapshots.ensured_snapshots == [latest_snapshot], (
+        "unpinned calls must persist the resolved snapshot before recording"
+    )
+    assert calls == [("ensure", stored_id), ("record_call", stored_id)], (
+        f"the snapshot must be persisted before the ledger references it; got {calls!r}"
+    )
+    assert ledger.recorded_call is not None, "Expected value to be present"
+    assert ledger.recorded_call.pricing_snapshot_id == stored_id, (
+        "the ledger row must reference the persisted snapshot"
     )
 
-    assert ledger.ensured_snapshots == [latest_snapshot], (
-        "unpinned calls must persist the resolved snapshot before recording"
+
+@pytest.mark.asyncio
+async def test_unpinned_call_resolves_at_its_recorded_instant() -> None:
+    """A later rate change must not reprice a call captured earlier."""
+    latest_snapshot = _snapshot(input_token_rate=1_000_000)
+    catalogue = _DriftingCatalogue(latest_snapshot=latest_snapshot)
+    recorder = CostRecorder(
+        ledger=RecordingLedger(pinned_snapshot_id=None),
+        snapshots=RecordingSnapshots(snapshot=latest_snapshot),
+        pricing_catalogue=catalogue,
+        pricing_engine=PricingEngine(),
+    )
+
+    await recorder.record_provider_call(_provider_call_record())
+
+    assert catalogue.resolved_at == ["2026-06-04T00:00:00Z"], (
+        "an unpinned call must resolve at the instant it was captured"
     )
 
 
 @pytest.mark.asyncio
 async def test_cost_recorder_persists_snapshot_before_pinning() -> None:
     """The real pin method ensures the snapshot before writing the pin."""
-    snapshot = _snapshot("snapshot:pin-order", input_token_rate=1_000_000)
-    ledger = _PinnedLedger(pinned_snapshot_id=None)
+    snapshot = _snapshot(input_token_rate=1_000_000)
+    calls: list[tuple[str, PricingSnapshotId]] = []
+    ledger = RecordingLedger(pinned_snapshot_id=None, calls=calls)
+    snapshots = RecordingSnapshots(snapshot=snapshot, calls=calls)
     recorder = CostRecorder(
         ledger=ledger,
-        pricing_catalogue=_DriftingCatalogue(
-            pinned_snapshot=snapshot,
-            latest_snapshot=snapshot,
-        ),
+        snapshots=snapshots,
+        pricing_catalogue=_DriftingCatalogue(latest_snapshot=snapshot),
         pricing_engine=PricingEngine(),
     )
 
@@ -243,6 +259,7 @@ async def test_cost_recorder_persists_snapshot_before_pinning() -> None:
         "run-pin-order",
         (
             CostProviderOperation(
+                service_kind=PricedService.LLM,
                 provider_name="openai",
                 model="gpt-4o-mini",
                 operation="chat_completions",
@@ -251,7 +268,7 @@ async def test_cost_recorder_persists_snapshot_before_pinning() -> None:
         BillingPeriodKey("2026-06"),
     )
 
-    assert ledger.calls == [
-        ("ensure", snapshot.pricing_snapshot_id),
-        ("pin", snapshot.pricing_snapshot_id),
-    ], f"the snapshot must be persisted before it is pinned; got {ledger.calls!r}"
+    assert calls == [
+        ("ensure", surrogate_snapshot_id(snapshot)),
+        ("pin", surrogate_snapshot_id(snapshot)),
+    ], f"the snapshot must be persisted before it is pinned; got {calls!r}"

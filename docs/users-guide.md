@@ -821,6 +821,150 @@ require a live RabbitMQ broker.
 - Monitoring spend and usage dashboards
 - Optimizing costs with model tiering
 
+#### Pricing snapshots
+
+Provider rate cards live as immutable YAML snapshots under
+`config/pricing-snapshots/`. Each card describes one priced operation and is
+identified by the SHA-256 hash of its canonical content, so editing a card
+creates a new version rather than changing the old one. A run pins the
+provider, model, operation, and billing period through `run_pricing_pins`, and
+its ledger rows reference the snapshot they were priced from. Historical costs
+therefore stay reproducible after a card is edited or deleted.
+
+A schema-version-1 card has these fields:
+
+- `schema_version`: must be `1`.
+- `service_kind`: `llm`, `tts`, or `helper_service`.
+- `provider_name`, `model`, and `operation`: the priced subject.
+- `source_kind`: `provider_rate_card` or `sla4oai_plan`.
+- `currency`: a three-letter ISO 4217 code.
+- `rates`: a mapping from metric name to a rate.
+- `retrieved_at`: a timezone-aware instant.
+- `effective_from`: an optional timezone-aware instant.
+- `source_metadata`: an optional string mapping, such as `source_url`.
+
+Each rate has `amount_minor`, `per_units`, and `unit`. `amount_minor` is an
+integer or a decimal string and `per_units` is a positive integer, so a price
+of 7.5 minor units per million tokens is written exactly:
+
+```yaml
+cached_input_tokens:
+  amount_minor: "7.5"
+  per_units: 1000000
+  unit: token
+```
+
+`unit` is one of `token`, `character`, `millisecond`, or `request`. A
+non-positive `per_units` is rejected when the card loads, with an error naming
+the file; a free metric is written as `amount_minor: 0` with a positive
+denominator. Rates are normalized to lowest terms when loaded, so `"7.5"` per
+1000000 and `3` per 400000 describe the same rate and produce the same content
+hash.
+
+A metric whose quantity the system already reports must use that quantity's
+unit: the token metrics (`input_tokens`, `output_tokens`, `cached_input_tokens`,
+`cache_write_tokens`, `reasoning_tokens`, `audio_input_tokens`,
+`audio_output_tokens`) use `token`, `input_characters` uses `character`,
+`output_audio_milliseconds` uses `millisecond`, and `requests` uses `request`.
+A card that pairs one of these names with another unit is rejected at startup.
+Other metric names are open and keep whatever unit the card states.
+
+An LLM card:
+
+```yaml
+schema_version: 1
+service_kind: llm
+provider_name: openai
+model: gpt-4o-mini
+operation: chat_completions
+source_kind: provider_rate_card
+currency: USD
+rates:
+  input_tokens:
+    amount_minor: 3
+    per_units: 200000
+    unit: token
+  output_tokens:
+    amount_minor: 3
+    per_units: 50000
+    unit: token
+  cached_input_tokens:
+    amount_minor: "7.5"
+    per_units: 1000000
+    unit: token
+source_metadata:
+  source_url: https://openai.com/api/pricing/
+retrieved_at: "2026-05-01T00:00:00Z"
+effective_from: "2026-05-01T00:00:00Z"
+```
+
+A TTS card prices characters and audio duration:
+
+```yaml
+schema_version: 1
+service_kind: tts
+provider_name: acme
+model: voice-1
+operation: tts
+source_kind: provider_rate_card
+currency: USD
+rates:
+  input_characters:
+    amount_minor: 1500
+    per_units: 1000000
+    unit: character
+  output_audio_milliseconds:
+    amount_minor: 5
+    per_units: 60000
+    unit: millisecond
+source_metadata:
+  source_url: https://example.test/tts-pricing
+retrieved_at: "2026-05-01T00:00:00Z"
+effective_from: "2026-05-01T00:00:00Z"
+```
+
+To correct a rate, edit the card in place and deploy it. The corrected file has
+a new content hash, so it becomes a new snapshot version; runs that already
+pinned the earlier version keep pricing from the stored row. A new run uses the
+corrected rate only when the corrected card is the applicable card for its
+subject, meaning it has the latest `effective_from` that is not in the future.
+An unpinned call resolves its card at the instant the call was recorded, not at
+the moment its cost is written, so a card that becomes effective while the call
+runs cannot reprice it.
+
+Cards written for the earlier `2.4.4` format are rejected at startup with an
+error naming the file and the legacy fields it found (`pricing_snapshot_id`,
+`billing_period_key`, or `rates_minor_per_metric`). Convert each card to the
+schema-version-1 shape above: drop the legacy identifier and billing period,
+rename `rates_minor_per_metric` to `rates`, and give every rate an explicit
+`per_units` and `unit`. Each legacy integer rate was minor units per 1,000,000
+tokens, so it becomes `amount_minor: <value>`, `per_units: 1000000`, and
+`unit: token`. The billing period now lives on run pins and ledger rows, not on
+the snapshot.
+
+A missing pinned snapshot or a stored row that no longer matches its content
+hash fails the generation under the stable `cost.pricing_snapshot` category. An
+invalid card stops the process at startup with an error naming the file.
+
+Upgrading a deployment that holds `2.4.4` rows is stop-the-world. Stop every
+writer first: scale launchers, workers, and API pods to zero, and wait for
+in-flight requests to drain, because a row committed after the backup is not in
+it. Then take a complete database backup that includes `pricing_snapshots`,
+`run_pricing_pins`, `cost_ledger_entries`, and `alembic_version`, run
+`alembic upgrade head`, and roll out the new image. Keep the writers stopped
+until the migration has committed and the new image is serving: the migration
+reads every existing row under an exclusive lock on `pricing_snapshots`, so a
+writer that resumes early either blocks or races the conversion. In the local
+Podman/kind preview, replacing the application pod also deletes the `emptyDir`
+source-blob store, so re-upload source documents after the upgrade as described
+in the preview notes above. The migration converts every existing row to schema
+version 1. A legacy `sla4oai_plan` row keeps its kind and gains a source
+document holding the row's own fields as JSON (`application/json`), because the
+earlier release stored a plan's rates and metadata but not the plan text. Its
+offline (`--sql`) form refuses to run unless `pricing_snapshots` is empty,
+because hash recomputation needs Python. Downgrade refuses unless the table is
+empty.
+
 ### Advanced Topics
 
 - Customizing LangGraph workflows

@@ -10,7 +10,7 @@ Typical application code wires concrete adapters at the composition root,
 then coordinates pricing through `CostRecorder`:
 
 ```python
-recorder = CostRecorder(ledger, catalogue, PricingEngine())
+recorder = CostRecorder(ledger, snapshots, catalogue, PricingEngine())
 entry_id = await recorder.record_provider_call(record)
 ```
 
@@ -30,15 +30,29 @@ from episodic.cost.ports import (
     PricedCall,
     PricingCataloguePort,
     PricingModel,
-    PricingSnapshot,
-    PricingSnapshotCollisionError,
     PricingSnapshotId,
-    PricingSourceKind,
     ProviderCallLedgerEntry,
     RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.cost.pricing_snapshot import (
+    MeteredRate,
+    PricedService,
+    PricingSnapshot,
+    PricingSubject,
+    SourceDocument,
+    UsageUnit,
+)
+from episodic.cost.pricing_snapshot_ports import (
+    EnsuredPricingSnapshot,
+    PricingSnapshotError,
+    PricingSnapshotIntegrityError,
+    PricingSnapshotNotFoundError,
+    PricingSnapshotRepository,
+    SnapshotEnsureOutcome,
+)
+from episodic.cost.primitives import PricingSourceKind
 from episodic.cost.recorder import CostRecorderPort
 
 __all__ = [
@@ -47,20 +61,30 @@ __all__ = [
     "CostLedgerPort",
     "CostRecorderPort",
     "CurrencyCode",
+    "EnsuredPricingSnapshot",
     "IdempotencyKey",
     "LedgerScope",
+    "MeteredRate",
     "MeteringCounterKey",
     "MeteringPort",
     "PricedCall",
+    "PricedService",
     "PricingCataloguePort",
     "PricingEngine",
     "PricingModel",
     "PricingSnapshot",
-    "PricingSnapshotCollisionError",
+    "PricingSnapshotError",
     "PricingSnapshotId",
+    "PricingSnapshotIntegrityError",
+    "PricingSnapshotNotFoundError",
+    "PricingSnapshotRepository",
     "PricingSourceKind",
+    "PricingSubject",
     "ProviderCallLedgerEntry",
     "RunPricingKey",
+    "SnapshotEnsureOutcome",
+    "SourceDocument",
     "TaskRollupLedgerEntry",
     "UsageSource",
+    "UsageUnit",
 ]

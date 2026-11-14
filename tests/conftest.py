@@ -38,6 +38,10 @@ pytest_plugins: list[str] = [
     "tests.fixtures.api_errors",
     "tests.fixtures.ingestion",
     "tests.fixtures.binding",
+    # The pricing-snapshot steps live in their own module to keep each file
+    # under the 400-line limit; pytest-bdd registers step fixtures in the
+    # defining module, so the module must be loaded as a plugin.
+    "tests.steps.pricing_snapshots_step_definitions",
 ]
 
 

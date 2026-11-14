@@ -15,14 +15,27 @@ Tests can use in-memory fakes; see ``tests/test_cost_ports_protocols.py``.
 """
 
 import dataclasses as dc
-import datetime as dt
 import enum
 import typing as typ
+
+from episodic.cost.primitives import (
+    BillingPeriodKey,
+    CostAccountingError,
+    CostLedgerEntryId,
+    CurrencyCode,
+    IdempotencyKey,
+    MeteringCounterKey,
+    PricingSnapshotId,
+    validate_currency_code,
+)
+from episodic.cost.primitives import (
+    PricingSourceKind as PricingSourceKind,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-_ISO_CURRENCY_CODE_LENGTH = 3
+    from episodic.cost.pricing_snapshot import PricingSnapshot, PricingSubject
 
 
 class LedgerScope(enum.StrEnum):
@@ -43,13 +56,6 @@ class PricingModel(enum.StrEnum):
     SUBSCRIPTION_ALLOCATED = "subscription_allocated"
 
 
-class PricingSourceKind(enum.StrEnum):
-    """Source document type for a pricing snapshot."""
-
-    PROVIDER_RATE_CARD = "provider_rate_card"
-    SLA4OAI_PLAN = "sla4oai_plan"
-
-
 class UsageSource(enum.StrEnum):
     """How usage metrics were obtained."""
 
@@ -58,43 +64,12 @@ class UsageSource(enum.StrEnum):
     ROLLUP = "rollup"
 
 
-PricingSnapshotId = typ.NewType("PricingSnapshotId", str)
-CostLedgerEntryId = typ.NewType("CostLedgerEntryId", str)
-IdempotencyKey = typ.NewType("IdempotencyKey", str)
-CurrencyCode = typ.NewType("CurrencyCode", str)
-BillingPeriodKey = typ.NewType("BillingPeriodKey", str)
-MeteringCounterKey = typ.NewType("MeteringCounterKey", str)
-
-
-class CostAccountingError(Exception):
-    """Base exception for cost accounting failures."""
-
-
 class UnknownPricedMetricError(CostAccountingError):
     """Raised when usage includes a metric absent from the pricing snapshot."""
 
 
 class OperationMismatchError(CostAccountingError):
     """Raised when a pricing snapshot is used for the wrong operation."""
-
-
-class BillingPeriodMismatchError(CostAccountingError):
-    """Raised when a pricing snapshot is used for the wrong billing period."""
-
-
-class PricingSnapshotCollisionError(CostAccountingError):
-    """Raised when one content hash maps to two snapshot identifiers."""
-
-
-def _validate_currency_code(currency: CurrencyCode) -> None:
-    """Validate an ISO 4217-style currency code."""
-    currency_value = str(currency)
-    if len(currency_value) != _ISO_CURRENCY_CODE_LENGTH or not currency_value.isalpha():
-        msg = "currency must be a three-letter ISO 4217 code."
-        raise ValueError(msg)
-    if currency_value != currency_value.upper():
-        msg = "currency must use uppercase ISO 4217 letters."
-        raise ValueError(msg)
 
 
 def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:
@@ -107,41 +82,6 @@ def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:
 
 
 @dc.dataclass(frozen=True, slots=True)
-class PricingSnapshot:
-    """Immutable pricing input used by the deterministic pricing engine.
-
-    ``effective_from`` is an optional timezone-aware ``datetime``; the
-    catalogue keeps snapshots unset or not after now, selecting the latest.
-    """
-
-    pricing_snapshot_id: PricingSnapshotId
-    provider_name: str
-    model: str
-    operation: str
-    source_kind: PricingSourceKind
-    currency: CurrencyCode
-    billing_period_key: BillingPeriodKey
-    rates_minor_per_metric: cabc.Mapping[str, int]
-    source_metadata: cabc.Mapping[str, str]
-    content_hash: str
-    retrieved_at: str
-    effective_from: dt.datetime | None = None
-
-    def __post_init__(self) -> None:
-        """Validate value-object invariants."""
-        _validate_currency_code(self.currency)
-        _validate_usage_metrics(self.rates_minor_per_metric)
-        if self.effective_from is None:
-            return
-        if not isinstance(self.effective_from, dt.datetime):
-            msg = "effective_from must be a datetime or None."
-            raise TypeError(msg)
-        if self.effective_from.tzinfo is None:
-            msg = "effective_from must be timezone-aware."
-            raise ValueError(msg)
-
-
-@dc.dataclass(frozen=True, slots=True)
 class PricedCall:
     """Computed cost for one provider call."""
 
@@ -151,7 +91,7 @@ class PricedCall:
 
     def __post_init__(self) -> None:
         """Validate cost invariants."""
-        _validate_currency_code(self.currency)
+        validate_currency_code(self.currency)
         if self.computed_cost_minor < 0:
             msg = "computed_cost_minor must be non-negative."
             raise ValueError(msg)
@@ -182,7 +122,7 @@ class ProviderCallLedgerEntry:
 
     def __post_init__(self) -> None:
         """Validate ledger entry invariants."""
-        _validate_currency_code(self.currency)
+        validate_currency_code(self.currency)
         _validate_usage_metrics(self.usage)
         if self.computed_cost_minor < 0:
             msg = "computed_cost_minor must be non-negative."
@@ -206,7 +146,7 @@ class TaskRollupLedgerEntry:
 
     def __post_init__(self) -> None:
         """Validate roll-up entry invariants."""
-        _validate_currency_code(self.currency)
+        validate_currency_code(self.currency)
         if self.computed_cost_minor < 0:
             msg = "computed_cost_minor must be non-negative."
             raise ValueError(msg)
@@ -226,24 +166,6 @@ class RunPricingKey:
 @typ.runtime_checkable
 class CostLedgerPort(typ.Protocol):
     """Port for append-only cost ledger persistence."""
-
-    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Persist an immutable pricing snapshot; reuse an existing row.
-
-        Run pricing pins and ledger entries reference snapshots by
-        identifier, so the snapshot must be persisted before it is pinned.
-
-        Parameters
-        ----------
-        snapshot : PricingSnapshot
-            Immutable snapshot to persist.
-
-        Examples
-        --------
-        Repeated ``await ledger.ensure_snapshot(snapshot)`` calls with
-        one ``pricing_snapshot_id`` reuse the persisted row.
-        """
-        raise NotImplementedError
 
     async def pin_run_pricing(
         self,
@@ -302,63 +224,41 @@ class CostLedgerPort(typ.Protocol):
 class PricingCataloguePort(typ.Protocol):
     """Port for resolving immutable pricing snapshots."""
 
-    async def get_snapshot(
+    async def resolve(
         self,
-        pricing_snapshot_id: PricingSnapshotId,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
     ) -> PricingSnapshot:
-        """Return one immutable pricing snapshot by identifier.
+        """Resolve the pricing snapshot for a priced subject.
 
         Parameters
         ----------
-        pricing_snapshot_id : PricingSnapshotId
-            Snapshot identifier pinned to a workflow run.
+        subject : PricingSubject
+            Service kind, provider, model, and operation to price.
+        at : str or None, optional
+            ISO-8601 instant to resolve at. Defaults to the current time; a
+            recorded call passes the instant it was captured so a later rate
+            change cannot reprice it.
 
         Returns
         -------
         PricingSnapshot
-            Immutable snapshot matching the requested identifier.
+            Immutable snapshot that prices the subject.
 
         Raises
         ------
         LookupError
-            Raised when the snapshot identifier is unknown.
-        """
-        raise NotImplementedError
-
-    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
-        self,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-    ) -> PricingSnapshot:
-        """Resolve the pricing snapshot for a provider operation.
-
-        Parameters
-        ----------
-        provider_name : str
-            Provider identifier, for example `openai`.
-        model : str
-            Provider model identifier.
-        operation : str
-            Provider operation, for example `chat_completions`.
-        billing_period_key : BillingPeriodKey
-            Billing period used to select the immutable rate card.
-
-        Returns
-        -------
-        PricingSnapshot
-            Immutable snapshot that prices the provider operation.
-
-        Raises
-        ------
+            Raised when no applicable snapshot exists for the subject.
         NotImplementedError
             Raised by the protocol stub.
 
         Notes
         -----
-        Implementations must return the snapshot pinned for the provider,
-        model, operation, and billing period tuple.
+        Implementations must return the snapshot applicable to the subject at
+        ``at``. A snapshot is effective-dated, not billing-period-scoped, so
+        the same card keeps pricing later periods until a newer one takes
+        effect.
         """
         raise NotImplementedError
 

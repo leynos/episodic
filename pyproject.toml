@@ -586,6 +586,11 @@ reason = "The mixin's no-op must match GenerationRunLeaseReclamationPort.fail_ex
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
+full_name = ["episodic.cost.pricing_snapshot._require_schema_version"]
+reason = "PricingSnapshot.__post_init__ validates the version through this helper, which has a single call site; with --no-grep-verify Skylos resolves single-call private helpers as unused."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
 full_name = [
     "episodic.cli.entrypoint.main",
     "episodic.cli.app.build_app.launcher",
@@ -701,7 +706,6 @@ reason = "Clock, no-op, and recording adapters satisfy runtime-selected protocol
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
-    "episodic.cost.ports._validate_currency_code",
     "episodic.cost.ports._validate_usage_metrics",
     "episodic.generation.field_validation.ensure_non_empty_fields",
     "episodic.generation.show_notes_models._ensure_optional_iso8601_duration",
@@ -816,6 +820,21 @@ full_name = ["episodic.observability._structured._emit_structured_event"]
 reason = "StructuredLogMetrics.increment_counter, StructuredLogMetrics._emit_value, _NoopSpan.__exit__, and StructuredLogTracer.start_span call this shared helper; Skylos flags it despite these local callers."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.cost.pricing_snapshot._validated_rates",
+    "episodic.cost.pricing_snapshot._validated_metadata",
+    "episodic.cost.pricing_snapshot._require_identifier",
+    "episodic.cost.pricing_snapshot._freeze_mapping",
+]
+reason = "PricingSnapshot.__post_init__ reaches these validators, directly or through the validators it calls, on every construction from the recorder, snapshot store, and catalogue; Skylos does not follow the dataclass __post_init__ hook."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = ["episodic.cost.pricing_snapshot.PricingSnapshot._validate_source"]
+reason = "PricingSnapshot.__post_init__ calls this source-kind validator on every construction; Skylos does not follow the dataclass __post_init__ hook."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "variable"
 full_name = [
     "episodic.api.runtime.GRANIAN_FACTORY_TARGET",
@@ -916,10 +935,6 @@ members = ["episodic/canonical/reference_documents/__init__.py", "episodic/canon
 reason = "Service re-export blocks; the package surface and the services facade list the same operations."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/cost/__init__.py", "episodic/cost/recorder.py", "episodic/cost/storage/adapters.py"]
-reason = "Cost port import blocks: the package surface, the recorder, and the storage adapter name the same ports."
-
-[[tool.duplication_gate.allow]]
 members = ["episodic/orchestration/_guest_bios_executor.py", "episodic/orchestration/_show_notes_executor.py"]
 reason = "Per-tool executors: an identical import surface and an error-translation dispatcher that each bind their own domain exception pair and tool label at the point of use."
 
@@ -1018,8 +1033,23 @@ reason = "Three adapter methods forward to three different stores with different
 members = ["episodic/api/helpers_query.py", "episodic/canonical/reference_documents/helpers.py"]
 reason = "The API helper raises the Falcon validation envelope and the service helper raises ReferenceValidationError. The hexagonal boundary keeps the two apart."
 [[tool.duplication_gate.allow]]
+members = ["episodic/cost/__init__.py", "episodic/cost/recorder.py", "episodic/cost/storage/adapters.py"]
+reason = "Cost port import blocks: the package surface, the recorder, and the storage adapter name the same ports."
+[[tool.duplication_gate.allow]]
 unit = "episodic/cost/ports.py"
 reason = "Both frozen cost records call the shared currency validator and check non-negative cost in __post_init__ over their own fields; the validators are already shared helpers."
+[[tool.duplication_gate.allow]]
+members = ["episodic/cost/pricing_snapshot.py::_require_aware", "episodic/canonical/qa_artefact_validation.py::_validate_aware_datetime"]
+reason = "Two timezone guards in independent packages: one raises over keyword-only pricing-snapshot fields to protect the content hash, the other over positional QA-artefact field names."
+[[tool.duplication_gate.allow]]
+members = ["episodic/cost/pricing_snapshot.py::_require_member", "episodic/qa/pedante/types.py::_require_enum_field"]
+reason = "Instance-of guards narrowed to a different expected type: the snapshot member is a value-object class, the Pedante field an enum member."
+[[tool.duplication_gate.allow]]
+members = ["episodic/cost/storage/adapters.py::record_call", "episodic/cost/storage/adapters.py::record_task_rollup"]
+reason = "Both defer to the same _insert_ledger_row helper; what remains is the values builder each ledger row kind supplies."
+[[tool.duplication_gate.allow]]
+members = ["episodic/cost/pricing_snapshot.py::subject", "episodic/cost/recorder.py::subject"]
+reason = "Each type exposes the property its own port requires; both delegate to pricing_subject_of."
 [[tool.duplication_gate.allow]]
 unit = "episodic/canonical/reference_documents/_binding_queries.py"
 reason = "The paged variant also returns the unpaginated total, so its query and return shape differ; the shared preamble validates one request."
@@ -1027,8 +1057,8 @@ reason = "The paged variant also returns the unpaginated total, so its query and
 members = ["episodic/canonical/storage/mappers.py", "episodic/canonical/storage/repositories.py"]
 reason = "Import blocks: the mappers module re-exports what the repositories module consumes."
 [[tool.duplication_gate.allow]]
-members = ["episodic/generation/guest_bios_parsing.py::_require_non_empty_string", "episodic/qa/pedante/parsing.py::_require_non_empty_string_item", "episodic/worker/tasks.py::_require_non_empty_string"]
-reason = "Each reader raises its own error class (guest-bios response format, Pedante parsing, worker task) over a different payload."
+members = ["episodic/generation/guest_bios_parsing.py::_require_non_empty_string", "episodic/qa/pedante/parsing.py::_require_non_empty_string_item", "episodic/worker/tasks.py::_require_non_empty_string", "episodic/cost/pricing_snapshot.py::_require_non_blank"]
+reason = "Each reader raises over its own field names: guest-bios response format, Pedante parsing, a worker task, and the pricing-snapshot identifiers. The shared part is one blank test."
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/resources/episode_tei.py::_tei_not_found", "episodic/api/resources/generation_runs_errors.py::_ingestion_job_not_found", "episodic/api/resources/generation_runs_errors.py::_run_not_found"]
 reason = "One-line wrappers over http_error, each naming a distinct error code and message."
@@ -1062,9 +1092,6 @@ reason = "Both stores import the same domain records and port types for annotati
 [[tool.duplication_gate.allow]]
 unit = "episodic/canonical/generation_run_errors.py"
 reason = "Two exception classes each format their own message from the checkpoint identifier."
-[[tool.duplication_gate.allow]]
-unit = "episodic/cost/pricing_catalogue/file_loader.py"
-reason = "Two typed readers (string, integer mapping) raise ValueError with field-specific messages from different value tests."
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/resources/generation_runs.py", "episodic/canonical/generation_persistence_types.py"]
 reason = "Import blocks that both pull the shared clock providers plus their own annotation types."
@@ -1189,8 +1216,8 @@ reason = "Each forwards to a different store transition."
 members = ["episodic/canonical/domain_validation.py::_require_positive_integer", "episodic/canonical/qa_artefact_validation.py::_validate_non_negative_integer"]
 reason = "Sibling guards with different bounds and messages."
 [[tool.duplication_gate.allow]]
-members = ["episodic/cost/pricing_catalogue/file_loader.py::_is_non_negative_int", "episodic/llm/openai_validation.py::_is_non_negative_int"]
-reason = "A one-expression predicate in two independent packages; sharing it would add a cross-package dependency for one expression."
+members = ["episodic/cost/storage/adapters.py::__init__", "episodic/cost/storage/metering.py::__init__"]
+reason = "Two session-bound SQLAlchemy stores each bind the single dependency their own port declares; a shared base would couple unrelated ports."
 [[tool.duplication_gate.allow]]
 members = ["episodic/generation/chapter_marker_models.py", "episodic/generation/guest_bios_parsing.py"]
 reason = "Response parsers for different tools read different keys through shared helpers."
@@ -1216,8 +1243,8 @@ reason = "Two records validate different fields."
 members = ["episodic/api/resources/qa_artefacts.py::_record_not_found", "episodic/api/resources/qa_artefacts.py::_record_rejection"]
 reason = "Span-attribute pairs with different outcome categories."
 [[tool.duplication_gate.allow]]
-unit = "episodic/cost/storage/models.py"
-reason = "ORM column declarations repeated in two ledger tables."
+members = ["episodic/cost/storage/models.py", "episodic/canonical/storage/entity_models.py"]
+reason = "ORM column declarations: the timezone-aware timestamp, text, and JSONB columns are the declarative mapping style, and each table names its own columns and nullability."
 [[tool.duplication_gate.allow]]
 members = ["episodic/canonical/adapters/generation_checkpoints.py::done_event", "episodic/canonical/adapters/generation_checkpoints.py::missing_event"]
 reason = "One-line f-string builders for different event names."
@@ -1355,7 +1382,13 @@ prefixes = [
     "episodic.canonical.upload_protocols",
     "episodic.canonical.uploads",
     "episodic.cost.ports",
+    "episodic.cost.pricing_snapshot",
+    "episodic.cost.pricing_snapshot_hash",
+    "episodic.cost.pricing_snapshot_ports",
+    "episodic.cost.pricing_snapshot_values",
     "episodic.cost.engine",
+    "episodic.cost.primitives",
+    "episodic.json_canonicalization",
     "episodic.llm.ports",
     "episodic.metrics_ports",
     "episodic.observability",

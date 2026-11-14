@@ -20,6 +20,7 @@ from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.cost.ports import BillingPeriodKey
+from episodic.cost.pricing_snapshot import PricedService
 from episodic.cost.recorder import CostProviderOperation
 from episodic.generation.launcher_support import (
     Failure,
@@ -155,6 +156,7 @@ class _PersistenceMixin(_MixinBase):
             str(run_id),
             (
                 CostProviderOperation(
+                    service_kind=PricedService.LLM,
                     provider_name=self.provider_name,
                     model=result.model,
                     operation=self.provider_operation,

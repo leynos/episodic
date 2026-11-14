@@ -1,12 +1,14 @@
 """Application coordinator for cost recording.
 
-`CostRecorder` composes a pricing catalogue, the pure `PricingEngine`, and a
-ledger port. Orchestration code submits a `ProviderCallRecord`; the recorder
-resolves the pricing snapshot, computes a `PricedCall`, builds the ledger
-entry, and delegates persistence to `CostLedgerPort`.
+`CostRecorder` composes a pricing catalogue, the pure `PricingEngine`, a
+snapshot repository, and a ledger port. Orchestration code submits a
+`ProviderCallRecord`; the recorder resolves the pricing snapshot, computes a
+`PricedCall`, builds the ledger entry, and delegates persistence to
+`CostLedgerPort`. Pinned runs are priced from the persisted snapshot, so edits
+to the source rate card never reprice recorded history.
 
 ```python
-recorder = CostRecorder(ledger, catalogue, PricingEngine())
+recorder = CostRecorder(ledger, snapshots, catalogue, PricingEngine())
 entry_id = await recorder.record_provider_call(record)
 ```
 """
@@ -26,17 +28,28 @@ from episodic.cost.ports import (
     PricedCall,
     PricingCataloguePort,
     PricingModel,
-    PricingSnapshot,
     ProviderCallLedgerEntry,
     RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.cost.pricing_snapshot import (
+    PricedService,
+    PricingSnapshot,
+    PricingSubject,
+    pricing_subject_of,
+)
+from episodic.cost.pricing_snapshot_ports import PricingSnapshotIntegrityError
+from episodic.logging import get_logger, log_warning
+
+_log = get_logger(__name__)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.cost.engine import PricingEngine
+    from episodic.cost.pricing_snapshot_ports import PricingSnapshotRepository
+    from episodic.cost.primitives import PricingSnapshotId
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -64,9 +77,15 @@ class ProviderCallRecord:
 class CostProviderOperation:
     """Provider operation whose pricing should be pinned for a run."""
 
+    service_kind: PricedService
     provider_name: str
     model: str
     operation: str
+
+    @property
+    def subject(self) -> PricingSubject:
+        """The priced subject this operation pins."""
+        return pricing_subject_of(self)
 
 
 @typ.runtime_checkable
@@ -103,40 +122,32 @@ class CostRecorder:
     """Coordinate pricing and ledger writes for orchestration code."""
 
     ledger: CostLedgerPort
+    snapshots: PricingSnapshotRepository
     pricing_catalogue: PricingCataloguePort
     pricing_engine: PricingEngine
 
-    async def _resolve_pricing_snapshot(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
+    async def _resolve_pricing_snapshot(
         self,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
+        subject: PricingSubject,
+        *,
+        at: str | None = None,
     ) -> PricingSnapshot:
-        """Resolve the snapshot that a run should use for this operation.
+        """Resolve the snapshot that a run should use for this subject.
 
         Parameters
         ----------
-        provider_name : str
-            Provider identifier.
-        model : str
-            Provider model identifier.
-        operation : str
-            Provider operation to price.
-        billing_period_key : BillingPeriodKey
-            Billing period selected for the run.
+        subject : PricingSubject
+            Service kind, provider, model, and operation to price.
+        at : str or None, optional
+            ISO-8601 instant the call was captured at. Defaults to now, which
+            is correct when pinning a run before its calls are made.
 
         Returns
         -------
         PricingSnapshot
             Immutable snapshot that should be pinned for the run.
         """
-        return await self.pricing_catalogue.resolve(
-            provider_name,
-            model,
-            operation,
-            billing_period_key,
-        )
+        return await self.pricing_catalogue.resolve(subject, at=at)
 
     async def pin_run_pricing(
         self,
@@ -165,23 +176,18 @@ class CostRecorder:
             existing_pin = await self.ledger.get_run_pricing_pin(key)
             if existing_pin is not None:
                 continue
-            snapshot = await self._resolve_pricing_snapshot(
-                provider.provider_name,
-                provider.model,
-                provider.operation,
-                billing_period_key,
-            )
-            await self.ledger.ensure_snapshot(snapshot)
+            snapshot = await self._resolve_pricing_snapshot(provider.subject)
+            ensured = await self.snapshots.ensure(snapshot)
             await self.ledger.pin_run_pricing(
                 key,
-                snapshot.pricing_snapshot_id,
+                ensured.pricing_snapshot_id,
                 pinned_at,
             )
 
     @staticmethod
     def _build_provider_call_entry(
         record: ProviderCallRecord,
-        snapshot: PricingSnapshot,
+        pricing_snapshot_id: PricingSnapshotId,
         priced_call: PricedCall,
     ) -> ProviderCallLedgerEntry:
         """Construct a provider-call ledger entry from priced call data."""
@@ -193,7 +199,7 @@ class CostRecorder:
             provider_name=record.provider_name,
             workflow_node=record.workflow_node,
             operation=record.operation,
-            pricing_snapshot_id=snapshot.pricing_snapshot_id,
+            pricing_snapshot_id=pricing_snapshot_id,
             usage=record.usage,
             usage_source=record.usage_source,
             usage_complete=record.usage_complete,
@@ -206,10 +212,40 @@ class CostRecorder:
             recorded_at=record.recorded_at,
         )
 
-    async def _resolve_snapshot_for_record(
+    @staticmethod
+    def _record_subject(record: ProviderCallRecord) -> PricingSubject:
+        """Return the priced subject a provider-call record describes."""
+        try:
+            service_kind = PricedService(record.provider_type)
+        except ValueError:
+            msg = (
+                f"provider_type {record.provider_type!r} does not name a "
+                "priced service kind."
+            )
+            raise ValueError(msg) from None
+        return PricingSubject(
+            service_kind=service_kind,
+            provider_name=record.provider_name,
+            model=record.model,
+            operation=record.operation,
+        )
+
+    async def _read_pinned_snapshot(
         self, record: ProviderCallRecord
-    ) -> tuple[PricingSnapshot, bool]:
-        """Resolve the snapshot and report whether a run pricing pin selected it."""
+    ) -> tuple[PricingSnapshot, PricingSnapshotId] | None:
+        """Read the run's pinned snapshot and identifier, or None when unpinned.
+
+        Returns
+        -------
+        tuple[PricingSnapshot, PricingSnapshotId] or None
+            The pinned snapshot and its stored identifier, or None when the run
+            has no pin and the call must resolve and persist one.
+
+        Raises
+        ------
+        PricingSnapshotIntegrityError
+            If the pinned snapshot prices a different subject than the call.
+        """
         key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,
             provider_name=record.provider_name,
@@ -219,14 +255,35 @@ class CostRecorder:
         )
         pinned_snapshot_id = await self.ledger.get_run_pricing_pin(key)
         if pinned_snapshot_id is None:
-            snapshot = await self._resolve_pricing_snapshot(
-                record.provider_name,
-                record.model,
-                record.operation,
-                record.billing_period_key,
-            )
-            return snapshot, False
-        return await self.pricing_catalogue.get_snapshot(pinned_snapshot_id), True
+            return None
+        pinned = await self.snapshots.get(pinned_snapshot_id)
+        subject = self._record_subject(record)
+        if pinned.subject == subject:
+            return pinned, pinned_snapshot_id
+        # The pin key omits the service kind, so two service kinds that share
+        # every other field would collide. Refuse rather than price this call
+        # with another service's rates.
+        msg = (
+            f"pinned pricing snapshot {pinned_snapshot_id} prices "
+            f"{pinned.subject!r}, not {subject!r}."
+        )
+        # The refusal is the only signal that a run pinned the wrong snapshot
+        # kind; without it the failure looks like any other integrity error in
+        # the logs.
+        log_warning(
+            _log,
+            "pricing_snapshot_pin_refused run=%s snapshot=%s pinned=%r requested=%r",
+            record.workflow_run_id,
+            pinned_snapshot_id,
+            pinned.subject,
+            subject,
+        )
+        raise PricingSnapshotIntegrityError(msg)
+
+    async def _persist_snapshot(self, snapshot: PricingSnapshot) -> PricingSnapshotId:
+        """Persist *snapshot* and return the identifier the store assigned."""
+        ensured = await self.snapshots.ensure(snapshot)
+        return ensured.pricing_snapshot_id
 
     async def record_provider_call(
         self,
@@ -251,22 +308,32 @@ class CostRecorder:
         CostAccountingError
             If pricing or ledger validation fails.
         """  # ruff: ignore[docstring-extraneous-exception]  # Collaborating ports propagate these domain exceptions.
-        snapshot, is_pinned = await self._resolve_snapshot_for_record(record)
-        if not is_pinned:
-            # Unpinned calls must persist the snapshot before the ledger row
-            # references it; pinned calls skip this because the pin's foreign
-            # key already guarantees the stored row exists.
-            await self.ledger.ensure_snapshot(snapshot)
+        pinned = await self._read_pinned_snapshot(record)
+        if pinned is None:
+            # Resolve at the instant the call was captured, not at wall-clock
+            # now: a card that became effective in between must not reprice it.
+            snapshot = await self._resolve_pricing_snapshot(
+                self._record_subject(record),
+                at=record.recorded_at,
+            )
+            # An unpinned call must persist the snapshot before the ledger row
+            # references it; a pin's foreign key already guarantees its row.
+            pricing_snapshot_id = await self._persist_snapshot(snapshot)
+        else:
+            snapshot, pricing_snapshot_id = pinned
         priced_call = self.pricing_engine.price(
             snapshot,
             PricingRequest(
                 usage=record.usage,
                 operation=record.operation,
-                billing_period_key=record.billing_period_key,
                 is_estimated=record.usage_source is UsageSource.ESTIMATED,
             ),
         )
-        entry = self._build_provider_call_entry(record, snapshot, priced_call)
+        entry = self._build_provider_call_entry(
+            record,
+            pricing_snapshot_id,
+            priced_call,
+        )
         return await self.ledger.record_call(entry)
 
     async def finalize_run(
