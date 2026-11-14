@@ -67,5 +67,13 @@ async def test_upgrade_rejection_rolls_back_the_top_level_transaction(
     async with migrated_engine.connect() as connection:
         with pytest.raises(CommandError, match="content differs"):
             await connection.run_sync(migrate, "upgrade", NEW_REVISION)
+        # Closing a connection rolls back outstanding transactional state, so
+        # the persisted checks below would also pass if only the close undid the
+        # conversion. Assert Alembic left no transaction open while the
+        # connection is still live, so the rollback is proven to be its own.
+        assert not connection.in_transaction(), (
+            "the aborted upgrade must roll back its own transaction, not rely "
+            "on the connection closing"
+        )
 
     await _assert_legacy_rows_intact(migrated_engine)

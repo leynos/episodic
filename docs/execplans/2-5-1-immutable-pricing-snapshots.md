@@ -558,6 +558,36 @@ Success is observable as follows:
      checks and points at the recovery note in `docs/migration-0.2.0.md`.
   8. Pin-refusal diagnostic: the warning names the workflow run as well as the
      refused snapshot and both subjects.
+- [x] (2026-11-14) Round-18 review follow-up. CodeRabbit's resumed review on
+  `4f0bf058` confirmed the two Unit Architecture findings were addressed and
+  raised three further items.
+  1. Zero denominator (minor): `_parse_rate` validated the parts but not the
+     sign, and `math.gcd(0, 0)` is zero, so a card with `amount_minor: 0` and
+     `per_units: 0` raised `ZeroDivisionError`, which `_build_snapshot` does not
+     translate and which escapes the documented `PricingCatalogueError`
+     contract. `per_units` must now be positive, rejected with a message naming
+     the file and the metric. The regression test covers zero over zero, a
+     priced amount over zero, and a negative denominator, and a companion test
+     keeps a zero-cost rate with a positive denominator loadable.
+  2. Snapshot recovery guidance (major): the migration note told operators to
+     re-create a failed row from the current rate cards, which would reprice
+     recorded history and would not repair the pins referencing the original
+     row. It now says to decode the row's own stored fields, re-encode them with
+     the released encoder, and update only `content_hash` in place, so the
+     identifier and every referencing pin and ledger entry stay valid, with the
+     unique-hash collision case described.
+  3. Rollback proof (trivial): the top-level rollback test now asserts
+     `not connection.in_transaction()` while the connection is still open, so
+     the persisted-state checks cannot pass on the strength of close-time
+     rollback alone.
+  4. ADR immutability (Developer Documentation pre-merge warning): ADR-015's
+     `## Status` and original Neutral TTS bullet are restored as accepted, and
+     the amendment plus the revised TTS consequence move into the
+     `## Addendum (2026-11-11)`. EP-M5 item 1 records the corrected placement.
+  5. Architecture enforcement (same warning): the `domain_ports` entry in
+     `docs/developers-guide.md` now names the cost domain modules, why each is
+     a domain rule or port rather than an adapter, and
+     `tests/test_production_hecate_cost_config.py` as the regression guard.
 
 ## Surprises & discoveries
 
@@ -1721,10 +1751,13 @@ passes all scenarios; all gates pass.
 
 ### EP-M5: documentation, roadmap, and final gates
 
-1. ADR-028 status `Accepted` with the date; ADR-015 gains a status note
-   ("Amended by ADR-028: content-addressed identity, exact rates, TTS and
-   helper documents; billing period removed from snapshots") and its Neutral
-   TTS bullet is updated.
+1. ADR-028 status `Accepted` with the date; ADR-015 records the amendment in
+   its `## Addendum (2026-11-11)` ("Amended by ADR-028: content-addressed
+   identity, exact rates, TTS and helper documents; billing period removed from
+   snapshots") and states the revised TTS consequence there. The ADR's
+   `## Status` and original Neutral bullet stay as accepted, because an ADR is
+   a record of the decision that was taken; a later round corrected an earlier
+   in-place edit that had rewritten them.
 2. Design document: amend the cost bullets near lines 1501–1511, the future
    SLA contract near lines 1520–1532, the `pricing_snapshots` data-model bullet
    near lines 1673–1676, and the port description near lines 809–815 (also

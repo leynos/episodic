@@ -854,9 +854,12 @@ cached_input_tokens:
   unit: token
 ```
 
-`unit` is one of `token`, `character`, `millisecond`, or `request`. Rates are
-normalized to lowest terms when loaded, so `"7.5"` per 1000000 and `3` per
-400000 describe the same rate and produce the same content hash.
+`unit` is one of `token`, `character`, `millisecond`, or `request`. A
+non-positive `per_units` is rejected when the card loads, with an error naming
+the file; a free metric is written as `amount_minor: 0` with a positive
+denominator. Rates are normalized to lowest terms when loaded, so `"7.5"` per
+1000000 and `3` per 400000 describe the same rate and produce the same content
+hash.
 
 A metric whose quantity the system already reports must use that quantity's
 unit: the token metrics (`input_tokens`, `output_tokens`, `cached_input_tokens`,

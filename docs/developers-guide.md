@@ -1355,7 +1355,18 @@ The enforced groups are:
 - `logging_internals`: private logger backend protocols used by the port. This
   group has no dependency on the femtologging backend.
 - `domain_ports`: canonical domain types, canonical ports, ingestion ports,
-  canonical constraint names, and LLM ports.
+  canonical constraint names, LLM ports, and the cost domain. The cost modules
+  belong here because each states a domain rule or a port rather than an
+  adapter: `episodic.cost.primitives` holds the value types,
+  `episodic.cost.ports` the ledger and usage contracts, `episodic.cost.engine`
+  the pricing arithmetic, `episodic.cost.pricing_snapshot` and its `_hash`,
+  `_ports`, and `_values` siblings the snapshot identity and integrity rules,
+  and `episodic.json_canonicalization` the shared canonical encoding those
+  hashes depend on. `tests/test_production_hecate_cost_config.py` is the
+  regression guard: it asserts each of those modules is still grouped as
+  `domain_ports`, that the group may depend only on itself and `logging_port`,
+  that it is matched before `outbound_adapter`, and that every cost module —
+  adapters and the catalogue included — keeps its intended group.
 - `application`: canonical services, profile/template workflows,
   reference-document workflows, generation services, and the QA evaluator
   runtimes (`episodic.qa.chrono` with its LangGraph adapters), which adapt

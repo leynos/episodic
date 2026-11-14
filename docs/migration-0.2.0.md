@@ -96,8 +96,22 @@ The migration converts only `2.4.4` rows. A snapshot written by an unreleased
 content hash the released encoder does not reproduce. Reading it raises
 `PricingSnapshotIntegrityError`, and every call pinned to it fails the same
 way. Check the backup taken in step 2 for `pricing_snapshots` rows that already
-carry `schema_version = 1`, and plan to re-create any that fail verification
-from the current rate cards.
+carry `schema_version = 1`.
+
+Repair such a row from its own stored fields, never from the current rate
+cards. The row holds the whole snapshot — subject, rates, instants, and source
+document — and the released encoder derives the content hash from exactly those
+fields, so decoding the row and re-encoding it produces the hash the store
+verifies. Write that hash back to the row's `content_hash` in a single
+statement. The identifier does not change, so every run pricing pin and cost
+ledger entry that references the row keeps pointing at the prices that were
+recorded with it. Re-creating the snapshot from today's cards would instead
+price recorded history at today's rates, and would not repair the pins that
+still reference the original row.
+
+`content_hash` is unique, so an update that collides with an existing row means
+both rows encode identical content. Repoint the pins and ledger entries at the
+surviving row, as the migration does for duplicate rows.
 
 The reasoning behind the format is recorded in
 [ADR 028: Content-addressed pricing snapshots](adrs/adr-0028-content-addressed-pricing-snapshots.md).

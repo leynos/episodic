@@ -2,9 +2,7 @@
 
 ## Status
 
-Accepted. Amended by ADR-028: content-addressed identity, exact rates,
-Text-to-Speech (TTS) and helper documents, and the billing period removed from
-snapshots.
+Accepted.
 
 ## Context
 
@@ -158,8 +156,8 @@ Normalized metrics:
 
 - Budget reservation, commitment, and release semantics remain out of scope for
   this roadmap slice.
-- TTS pricing is representable in a snapshot, but no TTS adapter or usage
-  producer exercises it yet.
+- Text-to-Speech pricing is reserved in schema names and enum values but is not
+  exercised by the initial implementation.
 
 ## Addendum (2026-10-10)
 
@@ -198,6 +196,11 @@ same validation.
 
 ## Addendum (2026-11-11)
 
+This ADR is amended by ADR-028: content-addressed identity, exact rates,
+Text-to-Speech (TTS) and helper documents, and the billing period removed from
+snapshots. The decision above is unchanged; this addendum records the
+supersession and the one consequence it revises.
+
 ADR-028 supersedes the snapshot representation in the 2026-10-10 addendum.
 Snapshots are now schema version 1 with a domain-derived SHA-256 content hash,
 exact `MeteredRate(amount_minor, per_units, unit)` rates normalized to lowest
@@ -212,6 +215,10 @@ additionally verifies that a stored row still hashes to its recorded identity.
 The `rates_minor_per_metric` JSONB column and the raw-file-digest content hash
 described above no longer exist. Migration `20261110_000017` converts the
 `2.4.4` rows.
+
+The TTS consequence also changes. TTS pricing is now representable in a
+snapshot, but no TTS adapter or usage producer exercises it yet, so the
+reservation recorded above is a live shape rather than a reserved name.
 
 ## References
 

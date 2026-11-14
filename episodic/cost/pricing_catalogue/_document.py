@@ -189,6 +189,11 @@ def _parse_rate(
         metric,
     )
     per_units = _require_int(rate, "per_units", path)
+    # A zero denominator is a card error, not a crash: `math.gcd(0, 0)` is zero,
+    # so the reduction below would divide by zero and escape the documented
+    # PricingCatalogueError contract without naming the file.
+    if per_units <= 0:
+        _fail(path, f"rate {metric!r} per_units must be positive.")
     unit_value = _require_string(rate, "unit", path)
     try:
         unit = UsageUnit(unit_value)

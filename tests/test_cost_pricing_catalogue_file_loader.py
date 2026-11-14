@@ -120,6 +120,54 @@ async def test_decimal_amount_reduces_before_the_integer_limit_is_checked(
     )
 
 
+@pytest.mark.parametrize(
+    ("amount_minor", "per_units"),
+    [
+        pytest.param("0", "0", id="zero-amount-zero-denominator"),
+        pytest.param("15", "0", id="priced-amount-zero-denominator"),
+        pytest.param("15", "-1000000", id="negative-denominator"),
+    ],
+)
+def test_loader_rejects_a_non_positive_denominator(
+    tmp_path: pathlib.Path,
+    amount_minor: str,
+    per_units: str,
+) -> None:
+    """A non-positive denominator is a card error naming the file, not a crash."""
+    _write_card(
+        tmp_path,
+        _card().replace(
+            "amount_minor: 15, per_units: 1000000",
+            f"amount_minor: {amount_minor}, per_units: {per_units}",
+        ),
+    )
+
+    with pytest.raises(
+        PricingCatalogueError,
+        match=r"openai\.yaml: rate 'input_tokens' per_units must be positive",
+    ):
+        FilePricingCatalogue(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_zero_cost_rate_with_a_positive_denominator_is_accepted(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A free metric is a price, so it must still load and reduce to zero."""
+    _write_card(
+        tmp_path,
+        _card().replace("amount_minor: 15", "amount_minor: 0"),
+    )
+    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-15T00:00:00Z")
+
+    snapshot = await catalogue.resolve(_SUBJECT)
+
+    rate = snapshot.rates["input_tokens"]
+    assert (rate.amount_minor, rate.per_units) == (0, 1), (
+        f"a zero amount must reduce to 0 per 1, got {rate!r}"
+    )
+
+
 @pytest.mark.parametrize("invalid_value", ["false", "0", "[]", "{}"])
 def test_loader_rejects_a_non_string_effective_from(
     tmp_path: pathlib.Path,
