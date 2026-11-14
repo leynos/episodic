@@ -1,5 +1,6 @@
 """Authorization adapter failure logging tests."""
 
+import traceback
 import typing as typ
 from unittest import mock
 
@@ -305,6 +306,34 @@ async def test_missing_metrics_does_not_add_a_failure_warning(
     assert "Bearer sensitive-token" not in repr(
         authorization_warning_backend.warning_calls,
     ), "the warning must not include the Authorization header value"
+
+
+@pytest.mark.asyncio
+async def test_observer_failure_does_not_chain_adapter_credentials(
+    authorization_warning_backend: AuthorizationWarningLogger,
+) -> None:
+    """Do not expose adapter exception text through an observer traceback."""
+    authorization_warning_backend.warning_failure = AssertionError(
+        "warning backend assertion"
+    )
+    middleware = authorization_module.AuthorizationMiddleware(
+        _AuthorizationHeaderFailure(),
+        build_authorization_observer(authorization_warning_backend),
+    )
+    request = mock.Mock()
+    request.path = "/v1/series-profiles"
+    request.method = "GET"
+    request.get_header.return_value = "Bearer sensitive-token"
+
+    with pytest.raises(AssertionError) as caught:
+        await middleware.process_request(request, mock.Mock())
+
+    assert caught.value.__suppress_context__ is True, (
+        "observer failures must suppress the credential-bearing adapter context"
+    )
+    assert "Bearer sensitive-token" not in "".join(
+        traceback.format_exception(caught.value)
+    ), "observer tracebacks must not expose adapter exception text"
 
 
 @pytest.mark.parametrize(
