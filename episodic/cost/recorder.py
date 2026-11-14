@@ -40,6 +40,9 @@ from episodic.cost.pricing_snapshot import (
     pricing_subject_of,
 )
 from episodic.cost.pricing_snapshot_ports import PricingSnapshotIntegrityError
+from episodic.logging import get_logger, log_warning
+
+_log = get_logger(__name__)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -249,6 +252,16 @@ class CostRecorder:
                 msg = (
                     f"pinned pricing snapshot {pinned_snapshot_id} prices "
                     f"{pinned.subject!r}, not {subject!r}."
+                )
+                # The refusal is the only signal that a run pinned the wrong
+                # snapshot kind; without it the failure looks like any other
+                # integrity error in the logs.
+                log_warning(
+                    _log,
+                    "pricing_snapshot_pin_refused snapshot=%s pinned=%r requested=%r",
+                    pinned_snapshot_id,
+                    pinned.subject,
+                    subject,
                 )
                 raise PricingSnapshotIntegrityError(msg)
             return pinned, pinned_snapshot_id

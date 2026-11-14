@@ -10,6 +10,7 @@ from episodic.cost import (
     PricingSnapshotIntegrityError,
     PricingSourceKind,
 )
+from episodic.cost import recorder as recorder_module
 from episodic.cost.engine import PricingEngine
 from episodic.cost.ports import (
     BillingPeriodKey,
@@ -137,8 +138,24 @@ async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None
     )
 
 
+def _capture_pin_refusals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, tuple[object, ...]]]:
+    """Record the warnings the recorder emits through the logging port."""
+    emitted: list[tuple[str, tuple[object, ...]]] = []
+
+    def _record(_logger: object, template: str, *args: object) -> None:
+        """Keep the template and its arguments for later assertion."""
+        emitted.append((template, args))
+
+    monkeypatch.setattr(recorder_module, "log_warning", _record)
+    return emitted
+
+
 @pytest.mark.asyncio
-async def test_cost_recorder_rejects_a_pin_for_another_subject() -> None:
+async def test_cost_recorder_rejects_a_pin_for_another_subject(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A pin that prices a different subject must not price this call."""
     pinned_snapshot = _snapshot(input_token_rate=1_000_000)
     other_subject = dc.replace(pinned_snapshot, operation="synthesize")
@@ -149,11 +166,23 @@ async def test_cost_recorder_rejects_a_pin_for_another_subject() -> None:
         pricing_catalogue=_DriftingCatalogue(latest_snapshot=pinned_snapshot),
         pricing_engine=PricingEngine(),
     )
+    refusals = _capture_pin_refusals(monkeypatch)
 
     with pytest.raises(PricingSnapshotIntegrityError, match="prices"):
         await recorder.record_provider_call(_provider_call_record())
 
     assert ledger.recorded_call is None, "a mismatched pin must not record a cost"
+    assert len(refusals) == 1, f"a refused pin must be reported once: {refusals!r}"
+    template, args = refusals[0]
+    assert "pin_refused" in template, (
+        f"the diagnostic must be identifiable by name, got {template!r}"
+    )
+    assert args[0] == surrogate_snapshot_id(other_subject), (
+        "the diagnostic must name the refused snapshot"
+    )
+    assert args[1] == other_subject.subject, (
+        "the diagnostic must name the subject the pin prices"
+    )
 
 
 @pytest.mark.asyncio

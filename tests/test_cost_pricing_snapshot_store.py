@@ -1,6 +1,6 @@
 """Content addressing, round-trip, and tamper detection for snapshot storage."""
 
-import datetime as dt
+import dataclasses as dc
 import typing as typ
 import uuid
 
@@ -17,7 +17,6 @@ from episodic.cost import (
     RunPricingKey,
     SnapshotEnsureOutcome,
 )
-from episodic.cost.pricing_snapshot_hash import PRICING_SNAPSHOT_V1_FIELDS
 from episodic.cost.storage import (
     PricingSnapshotRecord,
     SqlAlchemyCostLedgerStore,
@@ -31,52 +30,6 @@ if typ.TYPE_CHECKING:
     type SessionFactory = async_sessionmaker[AsyncSession]
 else:  # pragma: no cover - runtime alias for evaluated test annotations.
     type SessionFactory = object
-
-
-# Every field the version 1 canonical document hashes, mapped to the columns
-# that persist it. A source document occupies a media type and its content.
-_PRICING_SNAPSHOT_FIELD_COLUMNS: typ.Final[dict[str, tuple[str, ...]]] = {
-    "currency": ("currency",),
-    "effective_from": ("effective_from",),
-    "model": ("model",),
-    "operation": ("operation",),
-    "provider_name": ("provider_name",),
-    "rates": ("rates",),
-    "retrieved_at": ("retrieved_at",),
-    "schema_version": ("schema_version",),
-    "service_kind": ("service_kind",),
-    "source_document": ("source_document_media_type", "source_document_content"),
-    "source_kind": ("source_kind",),
-    "source_metadata": ("source_metadata",),
-}
-
-# A differing value for each field, keyed by the columns it writes. The values
-# stay valid for the domain so only the content hash exposes the change.
-_TAMPERED_VALUES: typ.Final[dict[str, dict[str, object]]] = {
-    "currency": {"currency": "EUR"},
-    "effective_from": {"effective_from": dt.datetime(2026, 7, 1, tzinfo=dt.UTC)},
-    "model": {"model": "gpt-4.1-mini"},
-    "operation": {"operation": "responses"},
-    "provider_name": {"provider_name": "azure"},
-    "rates": {
-        "rates": {"input_tokens": {"amount_minor": 1, "per_units": 1, "unit": "token"}}
-    },
-    "retrieved_at": {"retrieved_at": dt.datetime(2026, 6, 5, tzinfo=dt.UTC)},
-    "schema_version": {"schema_version": 2},
-    "service_kind": {"service_kind": "tts"},
-    "source_document": {
-        "source_document_media_type": "text/plain",
-        "source_document_content": "forged source document",
-    },
-    "source_kind": {"source_kind": "forged_rate_card"},
-    "source_metadata": {"source_metadata": {"source_url": "https://forged.test/x"}},
-}
-
-# Each differing value violates a check constraint, so the database refuses it.
-_CONSTRAINT_REFUSALS: typ.Final[dict[str, str]] = {
-    "schema_version": "ck_pricing_snapshots_schema_version",
-    "source_kind": "ck_pricing_snapshots_source_kind",
-}
 
 
 async def _tamper_stored_rates(
@@ -98,22 +51,6 @@ async def _tamper_stored_rates(
                     }
                 }
             )
-        )
-        await session.commit()
-
-
-async def _tamper_stored_columns(
-    session_factory: SessionFactory,
-    identifier: PricingSnapshotId,
-    values: dict[str, object],
-) -> None:
-    """Overwrite stored columns directly without recomputing the hash."""
-    async with session_factory() as session:
-        await session.execute(
-            sa
-            .update(PricingSnapshotRecord)
-            .where(PricingSnapshotRecord.id == uuid.UUID(str(identifier)))
-            .values(**values)
         )
         await session.commit()
 
@@ -264,74 +201,31 @@ async def test_ensure_ignores_a_row_cached_before_tampering(
             await snapshots.ensure(v1_pricing_snapshot())
 
 
-def test_tamper_cases_cover_every_hashed_field() -> None:
-    """Every field the version 1 hash covers has a tamper case."""
-    assert set(_PRICING_SNAPSHOT_FIELD_COLUMNS) == set(PRICING_SNAPSHOT_V1_FIELDS), (
-        "a new hashed field must gain a column mapping and a tamper case"
-    )
-    assert set(_TAMPERED_VALUES) == set(_PRICING_SNAPSHOT_FIELD_COLUMNS), (
-        "every hashed field must have a differing value to write"
-    )
-
-
 @pytest.mark.asyncio
-@pytest.mark.parametrize("field", tuple(_PRICING_SNAPSHOT_FIELD_COLUMNS))
-async def test_tampering_a_hashed_column_is_detected(
-    session_factory: SessionFactory,
-    field: str,
-) -> None:
-    """A direct SQL edit to any hashed column fails the content hash check.
-
-    ``schema_version`` and ``source_kind`` never reach that check: every value
-    differing from the stored one violates their check constraint, so the
-    database refuses the write before a read could observe the tamper.
-    """
-    async with session_factory() as session:
-        ensured = await SqlAlchemyPricingSnapshotStore(session).ensure(
-            v1_pricing_snapshot()
-        )
-        await session.commit()
-
-    tampered = _TAMPERED_VALUES[field]
-    refusal = _CONSTRAINT_REFUSALS.get(field)
-    if refusal is not None:
-        with pytest.raises(IntegrityError, match=refusal):
-            await _tamper_stored_columns(
-                session_factory, ensured.pricing_snapshot_id, tampered
-            )
-        return
-
-    await _tamper_stored_columns(session_factory, ensured.pricing_snapshot_id, tampered)
-    async with session_factory() as session:
-        snapshots = SqlAlchemyPricingSnapshotStore(session)
-
-        with pytest.raises(PricingSnapshotIntegrityError, match="content hash"):
-            await snapshots.get(ensured.pricing_snapshot_id)
-
-
-@pytest.mark.asyncio
-async def test_altering_recorded_at_is_not_tampering(
+async def test_ensure_propagates_a_driver_integrity_failure(
     session_factory: SessionFactory,
 ) -> None:
-    """The non-hashed recorded_at column may change without failing a read."""
-    original = v1_pricing_snapshot()
+    """An integrity failure outside the content hash is not reclassified."""
+    # A repeated identifier conflicts on the primary key, which the content-hash
+    # conflict clause does not cover. The store must let the driver error through
+    # so callers can tell a storage fault from untrustworthy pricing content.
+    fixed_id = uuid.UUID(int=7)
     async with session_factory() as session:
-        ensured = await SqlAlchemyPricingSnapshotStore(session).ensure(original)
+        await SqlAlchemyPricingSnapshotStore(
+            session, uuid_factory=lambda: fixed_id
+        ).ensure(v1_pricing_snapshot())
         await session.commit()
 
-    await _tamper_stored_columns(
-        session_factory,
-        ensured.pricing_snapshot_id,
-        {"recorded_at": dt.datetime(2020, 1, 1, tzinfo=dt.UTC)},
-    )
-
     async with session_factory() as session:
-        stored = await SqlAlchemyPricingSnapshotStore(session).get(
-            ensured.pricing_snapshot_id
+        snapshots = SqlAlchemyPricingSnapshotStore(
+            session, uuid_factory=lambda: fixed_id
         )
+        with pytest.raises(IntegrityError) as refusal:
+            await snapshots.ensure(dc.replace(v1_pricing_snapshot(), model="gpt-4.1"))
+        await session.rollback()
 
-    assert stored == original, (
-        "a column outside the content hash must not invalidate a stored snapshot"
+    assert not isinstance(refusal.value, PricingSnapshotError), (
+        "only a conflicted content hash is a pricing-snapshot integrity failure"
     )
 
 

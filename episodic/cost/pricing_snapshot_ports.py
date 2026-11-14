@@ -91,6 +91,11 @@ class PricingSnapshotRepository(typ.Protocol):
         -----
         Repeated calls for the same snapshot identity reuse the stored row
         unchanged; persistence never rewrites existing values.
+
+        A driver-level integrity failure that names no conflicting snapshot,
+        such as a foreign-key violation, is not reclassified: the adapter
+        propagates the database error unchanged, so callers can distinguish a
+        storage fault from untrustworthy pricing content.
         """
         raise NotImplementedError
 
