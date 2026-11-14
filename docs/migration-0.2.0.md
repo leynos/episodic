@@ -109,9 +109,15 @@ recorded with it. Re-creating the snapshot from today's cards would instead
 price recorded history at today's rates, and would not repair the pins that
 still reference the original row.
 
-`content_hash` is unique, so an update that collides with an existing row means
-both rows encode identical content. Repoint the pins and ledger entries at the
-surviving row, as the migration does for duplicate rows.
+`content_hash` is unique, so an update can collide with an existing row. A
+conflict does not by itself prove that the two rows hold the same snapshot: the
+other row may carry an unrepaired or corrupted hash. Decode both rows,
+re-encode each from its own stored fields, and compare the canonical content,
+including the source-document bytes. If the content differs, stop and keep the
+backup, because repointing the references would silently reprice recorded
+history. If the content matches, repoint the run pricing pins and cost ledger
+entries at the surviving row and remove the duplicate in one transaction, as
+the migration does for duplicate rows.
 
 The reasoning behind the format is recorded in
 [ADR 028: Content-addressed pricing snapshots](adrs/adr-0028-content-addressed-pricing-snapshots.md).
