@@ -201,7 +201,9 @@ def _emit(
         log_method = getattr(backend, "log", None)
         if not callable(log_method):
             raise
-        log_method(level, message, exc_info=exc_info, stack_info=False)
+    else:
+        return
+    log_method(level, message, exc_info=exc_info, stack_info=False)
 
 
 def _make_log_wrapper(
