@@ -6,12 +6,14 @@ existing row untouched, and a new row must take its identifier from the
 injected factory rather than reaching for a global.
 """
 
+import contextlib
 import datetime as dt
 import typing as typ
 import uuid
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy import event
 
 from episodic.cost import (
     EnsuredPricingSnapshot,
@@ -26,7 +28,9 @@ from episodic.cost.storage import (
 from tests.fixtures.cost import v1_pricing_snapshot
 
 if typ.TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    import collections.abc as cabc
+
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
     type SessionFactory = async_sessionmaker[AsyncSession]
 else:  # pragma: no cover - runtime alias for evaluated test annotations.
@@ -72,6 +76,27 @@ async def _ensure_in_its_own_transaction(
         )
         await session.commit()
     return ensured
+
+
+@contextlib.contextmanager
+def _record_statements(engine: AsyncEngine) -> cabc.Iterator[list[str]]:
+    """Collect the SQL the engine executes inside the block."""
+    statements: list[str] = []
+
+    def _record(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        *_arguments: object,
+    ) -> None:
+        """Keep one executed statement for later inspection."""
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", _record)
+    try:
+        yield statements
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", _record)
 
 
 @pytest.mark.asyncio
@@ -124,21 +149,29 @@ async def test_get_leaves_a_pending_write_unflushed(
 @pytest.mark.asyncio
 async def test_ensure_reuses_a_row_without_rewriting_it(
     session_factory: SessionFactory,
+    migrated_engine: AsyncEngine,
 ) -> None:
     """Reusing a snapshot must not touch the stored row or its identity."""
     first = await _ensure_in_its_own_transaction(session_factory)
 
-    async with session_factory() as session:
-        second = await SqlAlchemyPricingSnapshotStore(session).ensure(
-            v1_pricing_snapshot()
-        )
-        record = await session.get(
-            PricingSnapshotRecord,
-            uuid.UUID(str(first.pricing_snapshot_id)),
-        )
-        dirty = list(session.dirty)
-        await session.commit()
+    with _record_statements(migrated_engine) as statements:
+        async with session_factory() as session:
+            second = await SqlAlchemyPricingSnapshotStore(session).ensure(
+                v1_pricing_snapshot()
+            )
+            record = await session.get(
+                PricingSnapshotRecord,
+                uuid.UUID(str(first.pricing_snapshot_id)),
+            )
+            dirty = list(session.dirty)
+            await session.commit()
 
+    updates = [sql for sql in statements if sql.lstrip().upper().startswith("UPDATE")]
+    # A reuse reads; if the recorder saw nothing, its absence proves nothing.
+    assert any(sql.lstrip().upper().startswith("SELECT") for sql in statements), (
+        f"the recorder must observe the reuse's reads: {statements!r}"
+    )
+    assert not updates, f"reuse must not rewrite the stored row: {updates!r}"
     assert second.outcome is SnapshotEnsureOutcome.REUSED, (
         "matching content must reuse the stored row"
     )

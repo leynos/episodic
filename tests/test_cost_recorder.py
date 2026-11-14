@@ -167,9 +167,11 @@ async def test_cost_recorder_rejects_a_pin_for_another_subject(
         pricing_engine=PricingEngine(),
     )
     refusals = _capture_pin_refusals(monkeypatch)
+    request = _provider_call_record()
+    requested = dc.replace(other_subject, operation=request.operation).subject
 
     with pytest.raises(PricingSnapshotIntegrityError, match="prices"):
-        await recorder.record_provider_call(_provider_call_record())
+        await recorder.record_provider_call(request)
 
     assert ledger.recorded_call is None, "a mismatched pin must not record a cost"
     assert len(refusals) == 1, f"a refused pin must be reported once: {refusals!r}"
@@ -182,6 +184,9 @@ async def test_cost_recorder_rejects_a_pin_for_another_subject(
     )
     assert args[1] == other_subject.subject, (
         "the diagnostic must name the subject the pin prices"
+    )
+    assert args[2] == requested, (
+        "the diagnostic must name the subject the call requested"
     )
 
 

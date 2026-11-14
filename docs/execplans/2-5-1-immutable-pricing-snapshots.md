@@ -485,6 +485,35 @@ Success is observable as follows:
      adding columns from `sa.Column` values, so a frozen migration stays at
      400 lines; the migration test's filter and digest doubles moved to
      `tests/fixtures/migration_doubles.py`, taking it to 385.
+- [x] (2026-11-14) Round-16 assessment follow-up. CodeRabbit's reply (comment
+  `6868716499`) could not confirm all six round-15 items and named four
+  remaining ones; each has a disposition.
+  1. Top-level rollback:
+     `tests/test_pricing_snapshot_migration_top_level_rollback.py` commits the
+     legacy seed in its own transaction, forces the digest, and upgrades a
+     connection that owns its transaction, so the rejection runs at the top
+     level rather than inside a savepoint. It then asserts both legacy rows,
+     their hashes and rates, the legacy columns, and the recorded revision.
+     The colliding seed moved to
+     `tests/fixtures/legacy_pricing_snapshots.py::collision_rows` so both
+     suites share it.
+  2. Reuse purity: `tests/test_cost_pricing_snapshot_store_purity.py` records
+     `before_cursor_execute` around a reused `ensure` and asserts the block
+     executed a `SELECT` but no `UPDATE`; the identity, dirty-state, and
+     row-count checks remain.
+  3. Telemetry transition: the developers' guide compares the vocabulary with
+     `7e4704cf`. `pricing_snapshot.input_validation` and
+     `failure_category=pricing_snapshot.input_invalid` are retired without
+     replacement, `outcome=collision` and
+     `failure_category=pricing_snapshot.collision` are split between `reused`
+     and `integrity`, and the `integrity` category widened to cover a stored
+     row failing verification. The new read signals are named with them.
+  4. Lifecycle visibility: the upgrade logs `converting legacy pricing
+     snapshots: rows=N` before converting and `pricing snapshots converted:
+     converted=N merged=M; not yet committed` after the DDL, so totals are not
+     mistaken for a completed upgrade;
+     `test_upgrade_reports_its_conversion_totals` asserts both lines. The
+     pin-refusal test now also asserts the requested subject (`args[2]`).
 
 ## Surprises & discoveries
 

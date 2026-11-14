@@ -2939,14 +2939,35 @@ Labels are limited to the fixed `operation`, `outcome`, and `failure_category`
 values, the last being `pricing_snapshot.integrity`,
 `pricing_snapshot.not_found`, or `pricing_snapshot.tampered`; a snapshot
 identifier appears on the span only. Extracting the decorator from the store
-preserved this vocabulary unchanged, so dashboards and alerts that match the
-counter, latency, and span names keep working.
+preserved the ensure vocabulary, so dashboards and alerts that match the
+`pricing_snapshot.ensure` counter, latency, and span names keep working.
 
 A driver-level integrity failure outside the content hash, such as a
 primary-key conflict, is not reclassified. It propagates as
 `sqlalchemy.exc.IntegrityError` while a conflicted content hash without a
 stored row raises `PricingSnapshotIntegrityError`, so callers can tell a
 storage fault from untrustworthy pricing content.
+
+### Telemetry changes since the comparison base
+
+The vocabulary above is not the one the store emitted at `7e4704cf`. A
+dashboard or alert keyed on a retired signal does not fail loudly; it simply
+stops matching, so each one needs a deliberate migration. The new signals are
+not drop-in equivalents of the names they replace.
+
+| Retired signal                                                                                                   | Status now                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pricing_snapshot.input_validation` counter and span, labelled `failure_category=pricing_snapshot.input_invalid` | Retired with no replacement. A snapshot is now a validated value object, so the store never receives the naive instant whose encoding used to fail. An unusable rate card fails earlier as `PricingCatalogueError`, which the launcher maps to `cost.pricing_snapshot`. |
+| `outcome=collision` and `failure_category=pricing_snapshot.collision` on `pricing_snapshot.ensure`               | Retired, and the two cases it named are now distinct. Byte-identical content at a shared hash is a reuse (`outcome=reused`); a stored row that does not match its hash is a failure (`outcome=error` with `failure_category=pricing_snapshot.integrity`).               |
+| `failure_category=pricing_snapshot.integrity` for any `IntegrityError`                                           | Same label, wider meaning: it now also covers a stored row failing verification, not only a driver-level constraint failure.                                                                                                                                            |
+
+The `pricing_snapshot.ensure` counter, its
+`pricing_snapshot.ensure.duration_ms` observation, and the
+`pricing_snapshot.ensure_snapshot` span keep their names. The
+`pricing_snapshot.get` counter, `pricing_snapshot.get.duration_ms` observation,
+and `pricing_snapshot.get_snapshot` span are new, together with the
+`pricing_snapshot.not_found` and `pricing_snapshot.tampered` categories a read
+can report.
 
 ### Schema version 1 canonical form
 

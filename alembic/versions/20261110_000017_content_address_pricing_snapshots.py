@@ -4,9 +4,8 @@ Revision ID: 20261110_000017
 Revises: 20261031_000016
 Create Date: 2026-11-10
 
-The converter and canonicalizer are frozen inline copies of the application
-logic. A migration must keep producing the same bytes after the application
-code moves on, so it may not import from ``episodic``.
+The converter and canonicalizer are frozen copies of the application logic: a
+migration may not import from ``episodic``, so it keeps producing the same bytes.
 """
 
 import collections.abc as cabc
@@ -178,8 +177,7 @@ def _validate_text_fields(row: _Row, snapshot_id: object) -> None:
 
 def _validate_currency_and_source_kind(row: _Row, snapshot_id: object) -> None:
     """Reject a currency or source kind the version 1 schema does not define."""
-    # The domain pattern is repeated rather than imported: a migration keeps
-    # converting rows the way it always did, whatever the domain validator does.
+    # Repeated, not imported: a migration converts rows as it always did.
     currency = row["currency"]
     if not isinstance(currency, str) or not _CURRENCY_CODE.fullmatch(currency):
         _reject(snapshot_id, "currency must be a three-letter uppercase ASCII code")
@@ -190,7 +188,6 @@ def _validate_currency_and_source_kind(row: _Row, snapshot_id: object) -> None:
 
 def _validate_json_columns(row: _Row, snapshot_id: object) -> None:
     """Reject JSON columns that cannot hold the version 1 shapes."""
-    # A JSONB column may hold an array or scalar, which would fail on .items().
     for field in ("rates_minor_per_metric", "source_metadata"):
         if not isinstance(row[field], cabc.Mapping):
             _reject(snapshot_id, f"{field} must be a JSON object")
@@ -283,7 +280,6 @@ def _merge_equivalent_row(
     survivor: object,
 ) -> None:
     """Point every reference at the survivor, then delete the duplicate."""
-    # Rows differing only by billing period collapse; references move, not abort.
     for statement in (
         sa.text(
             "UPDATE cost_ledger_entries SET pricing_snapshot_id = :survivor "
@@ -302,13 +298,14 @@ def _merge_equivalent_row(
 
 
 def _migration_log() -> logging.Logger:
-    """Return Alembic's migration logger, resolved after env.py's ``fileConfig``."""
-    # A module-level logger would already exist when fileConfig disables loggers.
+    """Return the migration logger, resolved after env.py disables loggers."""
     return logging.getLogger("alembic.runtime.migration")
 
 
-def _write_converted_rows(connection: sa.Connection, rows: cabc.Sequence[_Row]) -> None:
-    """Convert and write every legacy row, merging byte-identical content."""
+def _write_converted_rows(
+    connection: sa.Connection, rows: cabc.Sequence[_Row]
+) -> tuple[int, int]:
+    """Convert and write every legacy row, returning its converted and merged counts."""
     # A shared hash is not proof of equal content, so the text is compared.
     survivors: dict[str, tuple[object, str]] = {}
     merged = 0
@@ -341,12 +338,7 @@ def _write_converted_rows(connection: sa.Connection, rows: cabc.Sequence[_Row]) 
                 "id": row["id"],
             },
         )
-    # One bounded line per upgrade; no content or metadata is ever logged.
-    _migration_log().info(
-        "pricing snapshots converted to schema version 1: converted=%d merged=%d",
-        len(survivors),
-        merged,
-    )
+    return len(survivors), merged
 
 
 def upgrade() -> None:
@@ -361,9 +353,17 @@ def upgrade() -> None:
     connection = op.get_bind()
     _lock_table(connection)
     _add_new_columns()
-    _write_converted_rows(connection, _legacy_rows(connection))
+    rows = _legacy_rows(connection)
+    # One bounded line per phase; no content or metadata is ever logged.
+    _migration_log().info("converting legacy pricing snapshots: rows=%d", len(rows))
+    converted, merged = _write_converted_rows(connection, rows)
     _tighten_new_columns()
     _drop_legacy_columns()
+    _migration_log().info(
+        "pricing snapshots converted: converted=%d merged=%d; not yet committed",
+        converted,
+        merged,
+    )
 
 
 def downgrade() -> None:

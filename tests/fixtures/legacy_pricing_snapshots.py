@@ -67,6 +67,17 @@ def legacy_row(identifier: uuid.UUID, **overrides: object) -> dict[str, object]:
     return {**DEFAULT_LEGACY_ROW, "id": identifier, **overrides}
 
 
+def collision_rows(
+    survivor: uuid.UUID,
+    duplicate: uuid.UUID,
+) -> list[dict[str, object]]:
+    """Build two legacy rows whose canonical documents differ."""
+    return [
+        legacy_row(survivor, provider_name="openai", content_hash="legacy-a"),
+        legacy_row(duplicate, provider_name="anthropic", content_hash="legacy-b"),
+    ]
+
+
 def migrate(
     connection: Connection,
     direction: typ.Literal["upgrade", "downgrade"],

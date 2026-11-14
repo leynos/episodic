@@ -25,6 +25,7 @@ from tests.fixtures.legacy_pricing_snapshots import (
     LEGACY_REVISION,
     NEW_REVISION,
     assert_upgrade_fails,
+    collision_rows,
     columns,
     downgrade,
     legacy_row,
@@ -166,7 +167,7 @@ async def test_upgrade_merges_rows_that_differ_only_by_billing_period(
 async def test_upgrade_reports_its_conversion_totals(
     migrated_engine: AsyncEngine,
 ) -> None:
-    """An operator watching the upgrade learns how much work it committed."""
+    """An operator learns the upgrade's size and that the commit still follows."""
     # Handlers cannot see the line, but filters survive env.py's fileConfig.
     recorder = RecordMessages()
     logger = logging.getLogger("alembic.runtime.migration")
@@ -178,9 +179,13 @@ async def test_upgrade_reports_its_conversion_totals(
     finally:
         logger.removeFilter(recorder)
 
-    expected = "pricing snapshots converted to schema version 1: converted=1 merged=1"
-    assert expected in recorder.messages, (
-        f"the upgrade must report its conversion totals, got {recorder.messages!r}"
+    started = "converting legacy pricing snapshots: rows=2"
+    converted = "pricing snapshots converted: converted=1 merged=1; not yet committed"
+    assert started in recorder.messages, (
+        f"the upgrade must report the work it starts, got {recorder.messages!r}"
+    )
+    assert converted in recorder.messages, (
+        f"the totals must say the commit still follows, got {recorder.messages!r}"
     )
 
 
@@ -250,15 +255,7 @@ async def test_upgrade_rolls_back_a_content_hash_collision(
     survivor = uuid.UUID(int=91)
     duplicate = uuid.UUID(int=92)
     async with migrated_engine.begin() as connection:
-        await seed_legacy_rows(
-            connection,
-            [
-                legacy_row(survivor, provider_name="openai", content_hash="legacy-a"),
-                legacy_row(
-                    duplicate, provider_name="anthropic", content_hash="legacy-b"
-                ),
-            ],
-        )
+        await seed_legacy_rows(connection, collision_rows(survivor, duplicate))
         # Two different documents can only share an identity if the digest
         # repeats, so the hash function is forced rather than an input found.
         monkeypatch.setattr(hashlib, "sha256", colliding_sha256)
