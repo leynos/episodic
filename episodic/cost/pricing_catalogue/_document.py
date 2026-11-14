@@ -145,6 +145,24 @@ def _string_mapping(
     return typ.cast("dict[str, str]", value)
 
 
+def _is_representable_amount(value: decimal.Decimal) -> bool:
+    """Return whether *value* fits the decimal scale a rate may hold."""
+    _sign, digits, exponent = value.as_tuple()
+    if not isinstance(exponent, int):  # Non-finite amounts are rejected earlier.
+        return False
+    trailing_zeros = 0
+    for digit in reversed(digits):
+        if digit != 0:
+            break
+        trailing_zeros += 1
+    # Trailing zeros are insignificant: ``1.000…0`` is the rate 1, so a padded
+    # amount must not fail on its scale alone. A zero amount reduces to 0/1, so
+    # its scale cannot inflate a fraction either.
+    is_zero = trailing_zeros == len(digits)
+    scale = 0 if is_zero else exponent + trailing_zeros
+    return abs(scale) <= _MAX_DECIMAL_EXPONENT
+
+
 def _decimal_amount(amount: str, path: pathlib.Path, metric: str) -> decimal.Decimal:
     """Parse a decimal-string amount and reject a value a rate cannot hold."""
     try:
@@ -153,8 +171,7 @@ def _decimal_amount(amount: str, path: pathlib.Path, metric: str) -> decimal.Dec
         _fail(path, f"rate {metric!r} amount_minor {amount!r} is not a decimal.")
     if not value.is_finite() or value < 0:
         _fail(path, f"rate {metric!r} amount_minor must be finite and non-negative.")
-    exponent = value.as_tuple().exponent
-    if isinstance(exponent, int) and abs(exponent) > _MAX_DECIMAL_EXPONENT:
+    if not _is_representable_amount(value):
         _fail(path, f"rate {metric!r} amount_minor exponent is out of range.")
     return value
 

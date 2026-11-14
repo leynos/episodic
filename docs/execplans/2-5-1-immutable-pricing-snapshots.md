@@ -167,9 +167,10 @@ Success is observable as follows:
   pods still write `rates_minor_per_metric` and `billing_period_key`).
   Severity: medium. Likelihood: medium (the chart uses `RollingUpdate`;
   migrations are run by hand per `docs/alpha-test-4-3-2-setup-notes.md`).
-  Mitigation: document a stop-the-world upgrade (scale launchers and workers to
-  zero, migrate, roll out) in `docs/users-guide.md`. Old pods fail on
-  `NOT NULL` columns rather than corrupting data.
+  Mitigation: document a stop-the-world upgrade (scale launchers, workers, and
+  API pods to zero, drain in-flight requests, migrate, roll out) in
+  `docs/users-guide.md`. Old pods fail on `NOT NULL` columns rather than
+  corrupting data.
 - Risk: an operator has mounted their own catalogue directory through
   `PRICING_SNAPSHOT_DIRECTORY` in the old file format. Severity: medium.
   Likelihood: low (alpha only). Mitigation: the catalogue validates eagerly at
@@ -659,6 +660,23 @@ Success is observable as follows:
   (2151 passed, 3 skipped, 74 snapshots), `make check-migrations` (head
   `20261110_000017`, no drift), `make markdownlint` (0 issues in 133 files) and
   `make nixie`.
+- [x] (2026-11-14) Round-19 review follow-up. The resumed CodeRabbit review
+  raised two actionable comments, both verified against the current source and
+  fixed:
+  1. Data integrity: the upgrade procedure in this plan stopped launchers and
+     workers before the backup but left API pods running, so an accepted write
+     could land after the snapshot and be lost on restore. The shipped
+     `docs/migration-0.2.0.md` and `docs/users-guide.md` already say "launchers,
+     workers, and API pods to zero … wait for in-flight requests to drain", so
+     the plan's concrete step, the risk mitigation in this plan, and the
+     ADR-0028 consequence now match that sequence.
+  2. Functional correctness: `_decimal_amount` read the raw exponent, so
+     `amount_minor: "1.0000000000000000000000000000000"` was rejected as an
+     out-of-range exponent even though it is the exact rate 1. The guard now
+     drops insignificant trailing zeros before measuring the scale, so a padded
+     amount loads as the rate it represents while `1e999999999` and
+     `1e-999999999` are still refused. A regression test asserts the padded
+     amount resolves to 1 per 1e6.
 
 ## Surprises & discoveries
 
@@ -1951,14 +1969,17 @@ Local `make test` needs Vidai Mock 0.2.8 or later on `PATH`. Shared-host pytest
 timeouts above 180 seconds are usually host contention; re-run the failing
 module alone before treating them as failures.
 
-Before applying migration `000017` to any alpha database, scale launchers and
-workers to zero so no write lands between the dump and the upgrade, then take a
-complete database backup. A table-only dump omits `alembic_version`, so a
-restore would leave the schema and the recorded revision disagreeing. `pg_dump`
-connects through libpq, which rejects the driver-qualified forms `DATABASE_URL`
-may hold (`postgresql+asyncpg://`, `postgresql+psycopg://`), so export a plain
-`postgresql://` backup URL with the same credentials, host, and database.
-Stopping on failure keeps a failed dump from being followed by the migration:
+Before applying migration `000017` to any alpha database, scale launchers,
+workers, and API pods to zero and wait for in-flight requests to drain, so no
+write lands between the dump and the upgrade, then take a complete database
+backup. An API pod left running can commit after the snapshot, and restoring
+that backup would lose accepted writes. A table-only dump omits
+`alembic_version`, so a restore would leave the schema and the recorded
+revision disagreeing. `pg_dump` connects through libpq, which rejects the
+driver-qualified forms `DATABASE_URL` may hold (`postgresql+asyncpg://`,
+`postgresql+psycopg://`), so export a plain `postgresql://` backup URL with the
+same credentials, host, and database. Stopping on failure keeps a failed dump
+from being followed by the migration:
 
 ```bash
 set -e

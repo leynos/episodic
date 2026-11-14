@@ -303,11 +303,12 @@ a field never changes the hash of a version 1 row.
 5. Update the design document, ADR-015, the users' guide, the developers'
    guide, and the roadmap.
 
-Migration `20261110_000017` runs stop-the-world: operators scale launchers and
-workers to zero, back up the three cost tables, upgrade, then roll out the new
-image. The offline (`--sql`) upgrade emits a guard that raises unless
-`pricing_snapshots` is empty, because hash recomputation needs Python and live
-rows. Downgrade refuses unless the table is empty.
+Migration `20261110_000017` runs stop-the-world: operators scale launchers,
+workers, and API pods to zero and drain in-flight requests, back up the three
+cost tables, upgrade, then roll out the new image. The offline (`--sql`)
+upgrade emits a guard that raises unless `pricing_snapshots` is empty, because
+hash recomputation needs Python and live rows. Downgrade refuses unless the
+table is empty.
 
 ## Known risks and limitations
 

@@ -120,6 +120,28 @@ async def test_decimal_amount_reduces_before_the_integer_limit_is_checked(
     )
 
 
+@pytest.mark.asyncio
+async def test_insignificant_trailing_zeros_do_not_trip_the_exponent_limit(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A padded decimal amount is the rate it represents, not a huge scale."""
+    _write_card(
+        tmp_path,
+        _card().replace(
+            "amount_minor: 15",
+            'amount_minor: "1.0000000000000000000000000000000"',
+        ),
+    )
+    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-15T00:00:00Z")
+
+    snapshot = await catalogue.resolve(_SUBJECT)
+
+    rate = snapshot.rates["input_tokens"]
+    assert (rate.amount_minor, rate.per_units) == (1, 1_000_000), (
+        f"31 insignificant trailing zeros must load as the rate 1, got {rate!r}"
+    )
+
+
 @pytest.mark.parametrize(
     ("amount_minor", "per_units"),
     [
