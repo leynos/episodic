@@ -588,6 +588,21 @@ Success is observable as follows:
      `docs/developers-guide.md` now names the cost domain modules, why each is
      a domain rule or port rather than an adapter, and
      `tests/test_production_hecate_cost_config.py` as the regression guard.
+- [x] (2026-11-14) Second rebase onto `main` at `fcb24d3a`, after GitHub
+  created no `pull_request` run for `4e6cfbad`: the pull request was
+  `CONFLICTING`, so no merge ref could be built. Fifty-nine commits were
+  replayed. The only conflict was
+  `tests/test_cost_snapshot_persistence_properties.py`, where upstream had
+  reworked `test_ensure_snapshot_keeps_persisted_identifiers_immutable` and
+  this branch had replaced it with the content-hash-keyed
+  `test_ensure_keeps_one_immutable_row_per_content`; the replacement already
+  scopes itself to each example's content, so upstream's fix is subsumed and
+  the deletion was taken. Upstream's fixture-plugin rename to
+  `tests.fixtures.api_errors` was carried into `tests/conftest.py`.
+  `git range-diff 7e4704cf..4e6cfbad origin/main..HEAD` shows every other
+  replayed commit identical. All seven gates passed on the rebased head
+  `76da3d83` (`make test` 2361 passed, 3 skipped, 75 snapshots), which was then
+  force-pushed with an explicit lease.
 
 ## Surprises & discoveries
 
@@ -670,6 +685,13 @@ Success is observable as follows:
   `git status` was clean and `/tmp` scratch files were gone. Impact: commit
   living documents before any long-running gate; the implementer should commit
   each red, green, and refactor step promptly.
+- Observation (2026-11-14): a pull request GitHub reports as `CONFLICTING`
+  receives no `pull_request` workflow run at all, because the merge ref cannot
+  be built. Evidence: no run appeared for `4e6cfbad` while `gh pr view` reported
+  `mergeStateStatus: DIRTY`, and the same commit's `lint-test` run started
+  within a minute of the rebase that resolved the conflict. Impact: check the
+  merge state before suspecting the workflow, and rebase rather than re-running
+  CI.
 
 ## Decision log
 
