@@ -128,10 +128,13 @@ class AuthorizationObserver:
         path : str
             Original request path; only its allow-listed resource root is logged.
         """
-        if isinstance(outcome, Exception):
-            self._record_adapter_failure(outcome, method=method, path=path)
-            return
-        self._record_denial(outcome, method=method, path=path)
+        try:
+            if isinstance(outcome, Exception):
+                self._record_adapter_failure(outcome, method=method, path=path)
+                return
+            self._record_denial(outcome, method=method, path=path)
+        except Exception as observer_error:
+            raise observer_error from None
 
     def _record_denial(
         self,
