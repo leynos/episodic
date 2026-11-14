@@ -1,4 +1,16 @@
-"""Best-effort observability for the authorization HTTP boundary."""
+"""Observe authorization outcomes without changing HTTP responses.
+
+This module bounds method and resource labels, maps adapter exceptions to
+failure categories and diagnostic identifiers, records failure metrics, and
+delivers warnings through the central logging port. If warning delivery fails,
+it writes a fixed, credential-free marker to standard error.
+
+``AuthorizationMiddleware`` in :mod:`episodic.api.authorization` calls the
+observer, and :func:`episodic.api.app.create_app` wires its logger and metrics
+port. The module depends on :mod:`episodic.logging` and
+:mod:`episodic.observability`; it leaves canonical response construction to
+the HTTP adapter.
+"""
 
 import enum
 import hashlib
