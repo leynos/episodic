@@ -18,11 +18,12 @@ from episodic.logging import (
     get_logger,
     log_info,
 )
+from episodic.observability._ports import NoopTracer, NoopValueMetrics
 
 if typ.TYPE_CHECKING:
     from collections import abc as cabc
 
-    from episodic.observability._ports import SpanHandle
+    from episodic.observability._ports import SpanHandle, TracerPort, ValueMetricsPort
 
 # The structured sinks emit at INFO, so only these levels ask for their records.
 _TELEMETRY_LEVELS = frozenset({LogLevel.TRACE, LogLevel.DEBUG, LogLevel.INFO})
@@ -219,3 +220,25 @@ class StructuredLogTracer:
             name=name,
             attributes=safe_attributes,
         )
+
+
+def configure_structured_observability(
+    level: str | None,
+) -> tuple[ValueMetricsPort, TracerPort]:
+    """Configure logging and select its matching metrics and trace sinks.
+
+    Parameters
+    ----------
+    level : str | None
+        Requested logging level. Missing or invalid values use the logging
+        port's default.
+
+    Returns
+    -------
+    tuple[ValueMetricsPort, TracerPort]
+        Structured sinks when INFO telemetry is enabled, otherwise no-op sinks.
+    """
+    effective_level = configure_structured_logging(level)
+    if admits_telemetry(effective_level):
+        return StructuredLogMetrics(), StructuredLogTracer()
+    return NoopValueMetrics(), NoopTracer()

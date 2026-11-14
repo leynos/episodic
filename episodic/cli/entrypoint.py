@@ -17,10 +17,7 @@ from episodic.cli.client import CliSinks
 from episodic.cli.errors import CliError
 from episodic.observability import (
     PerfCounterClock,
-    StructuredLogMetrics,
-    StructuredLogTracer,
-    admits_telemetry,
-    configure_structured_logging,
+    configure_structured_observability,
 )
 
 if typ.TYPE_CHECKING:
@@ -61,14 +58,12 @@ def _production_sinks() -> CliSinks:
         Structured-log tracer and metrics sink with a performance-counter
         clock, or the no-op sinks when the level excludes ``INFO``.
     """
-    level = configure_structured_logging(
+    metrics, tracer = configure_structured_observability(
         os.environ.get(LOG_LEVEL_ENV, DEFAULT_LOG_LEVEL)
     )
-    if not admits_telemetry(level):
-        return CliSinks()
     return CliSinks(
-        tracer=StructuredLogTracer(),
-        metrics=StructuredLogMetrics(),
+        tracer=tracer,
+        metrics=metrics,
         clock=PerfCounterClock(),
     )
 

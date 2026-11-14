@@ -1,5 +1,6 @@
 """Falcon resources for no-QA generation-run creation and polling."""
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -75,6 +76,31 @@ def _uuid7() -> uuid.UUID:
     return uuid.uuid7()
 
 
+@dc.dataclass(frozen=True, slots=True)
+class GenerationRunsResourceConfig:
+    """Ports and deterministic seams for generation-run resource creation.
+
+    Parameters
+    ----------
+    launcher : GenerationRunLauncher | None
+        Optional launcher that schedules detached generation work.
+    clock : Clock
+        Clock used to stamp persisted run state.
+    uuid_factory : UuidFactory
+        UUID source used to create deterministic run identifiers in tests.
+    max_source_count : int | None
+        Optional limit for source materialisation.
+    tracer : TracerPort | None
+        Optional tracing port used by the resource.
+    """
+
+    launcher: GenerationRunLauncher | None
+    clock: Clock = _utc_now
+    uuid_factory: UuidFactory = _uuid7
+    max_source_count: int | None = None
+    tracer: TracerPort | None = None
+
+
 class GenerationRunsResource:
     """Create no-QA generation runs for authenticated ingestion-job owners.
 
@@ -87,26 +113,18 @@ class GenerationRunsResource:
     payloads cannot select another actor.
     """
 
-    # Pylint reports the finding the Ruff noqa below already accepts; the
-    # refactor to parameter objects is tracked in leynos/episodic#345.
-    # pylint: disable-next=too-many-arguments
-    def __init__(  # ruff: ignore[too-many-arguments]  # HTTP composition requires independent test seams.
+    def __init__(
         self,
         uow_factory: UowFactory,
-        *,
-        launcher: GenerationRunLauncher | None,
-        clock: Clock = _utc_now,
-        uuid_factory: UuidFactory = _uuid7,
-        max_source_count: int | None = None,
-        tracer: TracerPort | None = None,
+        config: GenerationRunsResourceConfig,
     ) -> None:
         """Store the unit-of-work factory, launcher, injected seams and tracer."""
         self._uow_factory = uow_factory
-        self._launcher = launcher
-        self._clock = clock
-        self._uuid_factory = uuid_factory
-        self._max_source_count = max_source_count
-        self._tracer = NoopTracer() if tracer is None else tracer
+        self._launcher = config.launcher
+        self._clock = config.clock
+        self._uuid_factory = config.uuid_factory
+        self._max_source_count = config.max_source_count
+        self._tracer = NoopTracer() if config.tracer is None else config.tracer
 
     async def on_post(
         self,
@@ -267,7 +285,9 @@ class GenerationRunsResource:
                     ),
                 )
             except SourceIntakeError as exc:
-                raise map_source_intake_error(exc) from exc
+                raise map_source_intake_error(
+                    exc,
+                ) from exc
             except DraftScriptPersistenceError as exc:
                 raise _generation_input_error(str(exc)) from exc
             now = self._clock()

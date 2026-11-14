@@ -41,13 +41,18 @@ Accepted design decisions relevant to current implementation work:
 The transport-free validators in `episodic.canonical.validation` belong to the
 canonical domain layer. They provide dependency-free, side-effect-free
 argument-shape checks that adapters may call at their boundaries;
-domain-specific validation remains with the domain type it guards. In
-particular, `validate_async_callable(callback, attribute_name)` requires a
-callable whose invocation returns an awaitable and raises `TypeError`
-otherwise. The health port uses it in `ProbeHealthObserver.from_checks`, while
-the API dependency boundary uses it for readiness probes, authorization
-decisions, and shutdown hooks. Keep this module free of adapter imports so the
-dependency direction remains inward.
+domain-specific validation remains with the domain type it guards.
+`validate_callable(callback, attribute_name, allow_none=False)` checks a
+runtime callback and can explicitly allow an absent optional callback.
+`validate_sync_callable(callback, attribute_name, allow_none=False)` rejects
+coroutine functions and objects with an async `__call__` when an adapter
+invokes the callback synchronously.
+`validate_async_callable(callback, attribute_name)` builds on the general check
+and requires an async callback. The health port uses async validation in
+`ProbeHealthObserver.from_checks`; the API dependency boundary uses it for
+readiness probes, authorization decisions, and shutdown hooks, and uses sync
+validation for unmapped-error emitters. Keep this module free of adapter
+imports so the dependency direction remains inward.
 
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
@@ -680,9 +685,12 @@ uv run --group dev python scripts/check_vidaimock_isolated.py
 
 ## Falcon HTTP runtime
 
-The canonical HTTP adapter has two layers:
+The canonical HTTP adapter has three layers:
 
-- `episodic/api/app.py` is the pure Falcon route factory.
+- `episodic/api/app.py` is the Falcon application factory. It installs
+  middleware and the error serializer, then delegates route registration.
+- `episodic/api/routes.py` constructs canonical resources and binds them to
+  Falcon paths. It is an internal helper used only by the application factory.
 - `episodic/api/runtime.py` is the Granian composition root that reads
   `DATABASE_URL` and `SOURCE_INTAKE_OBJECT_STORE_ROOT`, creates the SQLAlchemy
   session factory and filesystem object-store adapter, and injects readiness
@@ -751,7 +759,8 @@ REST error contract:
 
 - Every Falcon `HTTPError` raised by the canonical API is serialized as
   `{"code": "<machine-readable>", "message": "<human>", "details": {...}}` by
-  `episodic/api/errors.py`.
+  `episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
+  exceptions and re-exports the envelope helpers.
 - Validation helpers attach field-level details where the request parser knows
   the field and constraint, for example
   `{"field": "limit", "constraint": "range"}`.
@@ -762,6 +771,30 @@ REST error contract:
   Validation failures use `validation_error`, missing entities use `not_found`,
   stale revisions use `revision_conflict`, and remaining persistence conflicts
   use `conflict`.
+- `ApiDependencies.unmapped_error_emitter` optionally supplies the synchronous
+  logging port for unmapped API failures. When omitted, `create_app` binds the
+  production logger to the shared Falcon error serializer. Mappers return a
+  generic HTTP 500 carrying detached diagnostic metadata; they do not emit it.
+- Shared GET and history resource bases build typed handler requests and use a
+  private response helper to apply each handler's `(media, status)` result.
+  Keep that helper local to `resources/base.py`; concrete resources retain
+  endpoint-specific response assembly.
+
+The handler boundary in `episodic/api/handlers.py` uses frozen, slotted request
+objects: `GetEntityRequest`, `HistoryRequest`, `UpdateEntityRequest`, and
+`CreateEntityRequest`. Each request carries the endpoint inputs and its service
+and serializer callbacks alongside a `HandlerContext`, which contains only the
+unit-of-work factory. Handlers return a `(JsonPayload, Falcon status)` pair;
+resource methods assign those values to `resp.media` and `resp.status`. Shared
+GET and history resources use `_apply_handler_result` for that assignment,
+while create and update resources assign the pair directly.
+
+`GenerationRunsResource` receives its optional launcher, clock, UUID factory,
+source-count limit, and tracer through `GenerationRunsResourceConfig`. The API
+composition root creates that config from `ApiDependencies` when registering
+the generation-run routes. Keep the construction seam in the config so tests
+can provide deterministic clocks and identifiers without changing resource
+behaviour.
 
 REST pagination and filter contract:
 
@@ -1040,6 +1073,12 @@ whose name is in a fixed allow-list (`operation`, `outcome`, `failure_category`,
 spans cannot leak request payloads, identifiers, or other sensitive operation
 metadata into logs. `NoopTracer` is the default no-op adapter used when no
 tracing backend is wired.
+
+Composition roots that choose production tracing and metrics by
+`EPISODIC_LOG_LEVEL` should use `configure_structured_observability(level)`. It
+configures the femtologging backend and returns structured sinks when the level
+admits INFO events, or no-op sinks at higher levels. Keep this selection in the
+shared observability package rather than duplicating it in an adapter.
 
 `episodic/operation_observation.py` supplies `OperationObservation`, the shared
 helper for operation-level instrumentation: one span named from a fixed
@@ -1406,8 +1445,8 @@ payloads automatically.
 ## Series profile and episode template APIs
 
 Series profile and episode template workflows are implemented as a driving
-adapter (`episodic/api/app.py`) over domain services in
-`episodic/canonical/profile_templates/`.
+adapter (`episodic/api/app.py` and `episodic/api/routes.py`) over domain
+services in `episodic/canonical/profile_templates/`.
 
 ### Endpoints
 
@@ -1465,7 +1504,7 @@ Reusable reference-document workflows are implemented as Falcon resources in:
 - `episodic/api/resources/reference_documents.py`
 - `episodic/api/resources/reference_bindings.py`
 
-Route wiring lives in `episodic/api/app.py`, and service orchestration is
+Route wiring lives in `episodic/api/routes.py`, and service orchestration is
 implemented in `episodic/canonical/reference_documents/services.py`.
 
 See also:
@@ -1499,6 +1538,39 @@ Implementation notes:
 - Inbound adapters map typed reusable-reference service errors to Falcon HTTP
   errors through `episodic/api/errors.py`, so callers receive the shared REST
   error envelope instead of Falcon's default `{title, description}` body.
+
+### API error and request logging
+
+Shared Falcon envelope construction and serialization live in
+`episodic/api/error_envelopes.py`; `episodic/api/errors.py` maps domain
+exceptions onto that contract.
+
+For an unmapped domain exception, each API error mapper returns the generic
+HTTP 500 error with detached diagnostic metadata attached privately to the
+Falcon error. The shared Falcon error serializer emits that diagnostic through
+`ApiDependencies.unmapped_error_emitter`; `create_app` binds the production
+`episodic.logging` port there when no callback is injected. Query handlers and
+REST resource methods do not receive the logging port or emit logs. Keeping
+emission in the serializer gives every route the same explicit HTTP error
+boundary and leaves expected mapped outcomes side-effect free.
+
+The diagnostic contains detached `exc_info` with a synthetic redacted exception
+and no live traceback. Sanitized source-frame metadata records the filename,
+function, and line without retaining frames or locals. The profile-template
+mapper records the exception type, known error code, and UUID entity ID;
+unrecognized code or identifier values are redacted. The reference mapper
+records its context and exception type; the source-intake mapper records only
+the exception type. Original exception messages and chained causes are omitted
+because they may contain credentials. The serializer returns a generic client
+message for unmapped HTTP 500 errors. Expected mapped 400, 404, and 409
+outcomes produce no error log. Request-level logging and correlation remain
+planned in roadmap item 4.1.3 and are not yet guaranteed. See the
+[API logging](episodic-podcast-generation-system-design.md#api-logging) section
+of the system design for the request-correlation boundary.
+
+The reference-document resource module keeps its fixed diagnostic context in a
+private mapper helper shared by its routes. The mapper attaches the diagnostic
+to the generic error; the shared serializer owns emission for every resource.
 
 ### Internal service-module decomposition
 
@@ -1932,9 +2004,11 @@ database client. See
   a second command group.
 - `main` accepts a `CliSinks` keyword and forwards it through `build_app` into
   `CliRuntime`. `CliSinks` groups the tracer, metrics sink, and monotonic clock
-  so the entry point's parameter list stays bounded as sinks are added;
-  production leaves it unset, so the no-op adapters apply and instrumentation
-  changes no output or exit code. `QaApiClient.list_evaluations` opens one
+  so the entry point's parameter list stays bounded as sinks are added. When
+  `sinks` is unset, `main` builds production sinks from `EPISODIC_LOG_LEVEL`.
+  At the default `WARNING` level, the no-op adapters apply, so instrumentation
+  changes no output or exit code. At `INFO`, `DEBUG`, or `TRACE`, records go to
+  standard error. `QaApiClient.list_evaluations` opens one
   `cli.qa_evaluations.list` span with a bounded outcome (`success`, `api_error`,
   `rate_limited`, `transport_failure`, `invalid_url`) and emits its latency;
   tests inject `CliSinks` built from `RecordingTracer`, `RecordingMetrics`, and
@@ -3200,10 +3274,12 @@ they do not pass a backend adapter directly.
 ## Asyncio task utilities
 
 `episodic.asyncio_tasks` provides `create_task` and `create_task_in_group` as
-thin wrappers around `asyncio.TaskGroup.create_task`. Both helpers accept an
-optional set of extra keyword arguments that are validated by the internal
-`_validate_task_create_kwargs` helper before being forwarded to the underlying
-task-creation call.
+thin wrappers around `loop.create_task` and `TaskGroup.create_task`. Both
+helpers accept an optional set of extra keyword arguments that are validated by
+the internal `_validate_task_create_kwargs` helper before being forwarded to
+the underlying task-creation call. The helper validates accepted keys and
+nested metadata so the public wrappers share one validation path while binding
+their own task creator.
 
 `_validate_task_create_kwargs` accepts a `cabc.Mapping[str, object]` rather
 than a concrete `dict[str, object]`, so read-only mappings such as

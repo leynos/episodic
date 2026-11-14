@@ -3,13 +3,17 @@
 import dataclasses as dc
 import json
 import typing as typ
+from unittest import mock
 
 from episodic.logging import LoggerHandle, LogLevel
 from episodic.observability import (
+    NoopMetrics,
     NoopTracer,
     RecordingTracer,
     StructuredLogMetrics,
     StructuredLogTracer,
+    _structured,
+    configure_structured_observability,
 )
 
 
@@ -50,6 +54,31 @@ def test_recording_tracer_preserves_span_details_and_completion() -> None:
         "operation": "admit",
     }, tracer.spans
     assert tracer.spans[0].is_completed, tracer.spans
+
+
+def test_configure_structured_observability_selects_sinks_by_level() -> None:
+    """Composition roots share one level-aware structured-sink selector."""
+    with mock.patch.object(
+        _structured,
+        "configure_structured_logging",
+        side_effect=(LogLevel.INFO, LogLevel.WARNING),
+    ) as configure_logging:
+        info_metrics, info_tracer = configure_structured_observability("INFO")
+        warning_metrics, warning_tracer = configure_structured_observability("WARNING")
+
+    configure_logging.assert_has_calls([mock.call("INFO"), mock.call("WARNING")])
+    assert isinstance(info_metrics, StructuredLogMetrics), (
+        "INFO selects the structured metrics adapter"
+    )
+    assert isinstance(info_tracer, StructuredLogTracer), (
+        "INFO selects the structured tracing adapter"
+    )
+    assert isinstance(warning_metrics, NoopMetrics), (
+        "levels above INFO select a no-op metrics adapter"
+    )
+    assert isinstance(warning_tracer, NoopTracer), (
+        "levels above INFO select a no-op tracing adapter"
+    )
 
 
 def test_structured_log_tracer_allows_bounded_operation_attributes() -> None:

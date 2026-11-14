@@ -30,7 +30,10 @@ if typ.TYPE_CHECKING:
 class ReferenceBindingsResource:
     """Handle create/list endpoints for reusable reference bindings."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+    ) -> None:
         """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
@@ -65,7 +68,10 @@ class ReferenceBindingsResource:
             async with self._uow_factory() as uow:
                 binding = await create_reference_binding(uow, data=data)
         except ReferenceDocumentError as exc:
-            raise map_reference_error(exc, context="reference-binding") from exc
+            raise map_reference_error(
+                exc,
+                context="reference-binding",
+            ) from exc
 
         resp.media = serialize_reference_binding(binding)
         resp.status = falcon.HTTP_201
@@ -91,7 +97,10 @@ class ReferenceBindingsResource:
                     ),
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(exc, context="reference-binding") from exc
+            raise map_reference_error(
+                exc,
+                context="reference-binding",
+            ) from exc
 
         resp.media = {
             "items": [serialize_reference_binding(item) for item in bindings],
@@ -105,7 +114,10 @@ class ReferenceBindingsResource:
 class ReferenceBindingResource:
     """Handle get endpoint for one reusable reference binding."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+    ) -> None:
         """Store the unit-of-work factory used for each request."""
         self._uow_factory = uow_factory
 
@@ -125,7 +137,10 @@ class ReferenceBindingResource:
                     binding_id=str(parse_uuid(binding_id, "binding_id")),
                 )
         except ReferenceDocumentError as exc:
-            raise map_reference_error(exc, context="reference-binding") from exc
+            raise map_reference_error(
+                exc,
+                context="reference-binding",
+            ) from exc
 
         resp.media = serialize_reference_binding(binding)
         resp.status = falcon.HTTP_200

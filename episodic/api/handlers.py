@@ -7,12 +7,24 @@ service dispatch, and Falcon HTTP error translation.
 
 Examples
 --------
->>> media, status = await handle_get_entity(
-...     factory, profile_id, "profile_id", service_fn, serializer_fn
+>>> context = HandlerContext(uow_factory=uow_factory)
+>>> request = GetEntityRequest(
+...     context=context,
+...     entity_id=profile_id,
+...     id_field_name="profile_id",
+...     service_fn=service_fn,
+...     serializer_fn=serializer_fn,
 ... )
->>> media, status = await handle_get_history(
-...     factory, profile_id, "profile_id", history_fn, serializer_fn
+>>> media, status = await handle_get_entity(request)
+>>> request = HistoryRequest(
+...     context=context,
+...     entity_id=profile_id,
+...     id_field_name="profile_id",
+...     service_fn=history_fn,
+...     serializer_fn=serializer_fn,
+...     page=page,
 ... )
+>>> media, status = await handle_get_history(request)
 """
 
 import dataclasses as dc
@@ -21,9 +33,9 @@ import typing as typ
 import falcon
 
 from episodic.canonical.profile_templates import (
-    EntityNotFoundError,
     RevisionConflictError,
 )
+from episodic.canonical.profile_templates.types import ProfileTemplateError
 
 from .errors import map_profile_template_error, validation_error
 from .helpers import parse_uuid
@@ -41,22 +53,27 @@ if typ.TYPE_CHECKING:
     from .types import JsonPayload, UowFactory
 
 
-# Pylint reports the finding the Ruff noqa below already accepts; the
-# refactor to parameter objects is tracked in leynos/episodic#345.
-# pylint: disable-next=too-many-arguments,too-many-positional-arguments
-async def handle_get_entity[EntityT](  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared handler signature for resource adapters
-    uow_factory: UowFactory,
-    entity_id: str,
-    id_field_name: str,
-    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
-    serializer_fn: cabc.Callable[[EntityT, int], JsonPayload],
-) -> tuple[JsonPayload, str]:
-    """Handle fetch-by-identifier endpoint behaviour.
+@dc.dataclass(frozen=True, slots=True)
+class HandlerContext:
+    """Shared runtime port for the canonical API handler boundary.
 
     Parameters
     ----------
     uow_factory : UowFactory
         Factory that creates unit-of-work instances.
+    """
+
+    uow_factory: UowFactory
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GetEntityRequest[EntityT]:
+    """Inputs and ports for one fetch-by-identifier handler call.
+
+    Parameters
+    ----------
+    context : HandlerContext
+        Shared unit-of-work port.
     entity_id : str
         Raw entity identifier from the request path.
     id_field_name : str
@@ -65,6 +82,24 @@ async def handle_get_entity[EntityT](  # ruff: ignore[too-many-arguments, too-ma
         Service function that returns an entity and its revision.
     serializer_fn : cabc.Callable[[EntityT, int], JsonPayload]
         Serializer that converts the entity payload to response JSON.
+    """
+
+    context: HandlerContext
+    entity_id: str
+    id_field_name: str
+    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]
+    serializer_fn: cabc.Callable[[EntityT, int], JsonPayload]
+
+
+async def handle_get_entity[EntityT](
+    request: GetEntityRequest[EntityT],
+) -> tuple[JsonPayload, str]:
+    """Handle fetch-by-identifier endpoint behaviour.
+
+    Parameters
+    ----------
+    request : GetEntityRequest[EntityT]
+        Handler inputs, service functions and the unit-of-work factory.
 
     Returns
     -------
@@ -77,29 +112,34 @@ async def handle_get_entity[EntityT](  # ruff: ignore[too-many-arguments, too-ma
         If ``entity_id`` is not a valid UUID.
     falcon.HTTPNotFound
         If the requested entity does not exist.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
-    parsed_entity_id = parse_uuid(entity_id, id_field_name)
+    parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
     try:
-        async with uow_factory() as uow:
-            entity, revision = await service_fn(
+        async with request.context.uow_factory() as uow:
+            entity, revision = await request.service_fn(
                 uow,
                 entity_id=parsed_entity_id,
             )
-    except EntityNotFoundError as exc:
-        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)
-        raise not_found from exc
-    return serializer_fn(entity, revision), falcon.HTTP_200
+    except ProfileTemplateError as exc:
+        mapped_error = map_profile_template_error(
+            exc,
+            entity_id=parsed_entity_id,
+        )
+        raise mapped_error from exc
+    return request.serializer_fn(entity, revision), falcon.HTTP_200
 
 
 @dc.dataclass(frozen=True, slots=True)
 class HistoryRequest[EntityT]:
     """Per-call inputs for :func:`handle_get_history`.
 
-    Bundling these fields keeps the public handler signature small while
-    preserving the shared-base resource pattern that the canonical history
-    resources rely on.
+    Bundling shared ports, query inputs, and serializer callbacks keeps the
+    handler boundary explicit while preserving the shared-resource pattern.
     """
 
+    context: HandlerContext
     entity_id: str
     id_field_name: str
     service_fn: cabc.Callable[..., cabc.Awaitable[tuple[list[EntityT], int]]]
@@ -108,18 +148,14 @@ class HistoryRequest[EntityT]:
 
 
 async def handle_get_history[EntityT](
-    uow_factory: UowFactory,
     request: HistoryRequest[EntityT],
 ) -> tuple[JsonPayload, str]:
     """Handle history-list endpoint behaviour.
 
     Parameters
     ----------
-    uow_factory : UowFactory
-        Factory that creates unit-of-work instances.
     request : HistoryRequest[EntityT]
-        Parsed history-list inputs: parent identifier, service callable,
-        serializer, and pagination.
+        Shared ports, parsed inputs, and service callbacks.
 
     Returns
     -------
@@ -132,18 +168,23 @@ async def handle_get_history[EntityT](
         If the parent entity identifier is not a valid UUID.
     falcon.HTTPNotFound
         If the requested parent entity does not exist.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
     try:
-        async with uow_factory() as uow:
+        async with request.context.uow_factory() as uow:
             items, total = await request.service_fn(
                 uow,
                 parent_id=parsed_entity_id,
                 page=request.page,
             )
-    except EntityNotFoundError as exc:
-        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)
-        raise not_found from exc
+    except ProfileTemplateError as exc:
+        mapped_error = map_profile_template_error(
+            exc,
+            entity_id=parsed_entity_id,
+        )
+        raise mapped_error from exc
     return (
         {
             "items": [request.serializer_fn(item) for item in items],
@@ -166,7 +207,7 @@ def _require_payload_fields(
 
 
 def _raise_mapped_update_error(
-    exc: EntityNotFoundError | RevisionConflictError,
+    exc: ProfileTemplateError,
     *,
     entity_id: uuid.UUID,
     expected_revision: int | None,
@@ -184,6 +225,8 @@ def _raise_mapped_update_error(
         If the target entity does not exist.
     falcon.HTTPConflict
         If the expected revision does not match the persisted revision.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # The mapper returns these concrete Falcon exceptions.
     raise map_profile_template_error(
         exc,
@@ -194,28 +237,14 @@ def _raise_mapped_update_error(
     ) from exc
 
 
-# Pylint reports the finding the Ruff noqa below already accepts; the
-# refactor to parameter objects is tracked in leynos/episodic#345.
-# pylint: disable-next=too-many-arguments,too-many-positional-arguments
-async def handle_update_entity[EntityT](  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared handler signature for resource adapters
-    uow_factory: UowFactory,
-    entity_id: str,
-    id_field_name: str,
-    payload: JsonPayload,
-    required_fields: tuple[str, ...],
-    request_builder: cabc.Callable[
-        [uuid.UUID, JsonPayload],
-        UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,
-    ],
-    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
-    serializer_fn: cabc.Callable[[EntityT, int], JsonPayload],
-) -> tuple[JsonPayload, str]:
-    """Handle optimistic-lock update endpoint behaviour.
+@dc.dataclass(frozen=True, slots=True)
+class UpdateEntityRequest[EntityT]:
+    """Inputs and collaborators for one optimistic-lock update handler call.
 
     Parameters
     ----------
-    uow_factory : UowFactory
-        Factory that creates unit-of-work instances.
+    context : HandlerContext
+        Shared unit-of-work port.
     entity_id : str
         Raw entity identifier from the request path.
     id_field_name : str
@@ -223,16 +252,37 @@ async def handle_update_entity[EntityT](  # ruff: ignore[too-many-arguments, too
     payload : JsonPayload
         Parsed request payload.
     required_fields : tuple[str, ...]
-        Required payload field names for the update operation.
-    request_builder : cabc.Callable[
+        Required payload fields for the update operation.
+    request_builder : cabc.Callable
+        Builder that creates a typed update request from the parsed payload.
+    service_fn : cabc.Callable
+        Service function that executes the update.
+    serializer_fn : cabc.Callable
+        Serializer that converts the updated entity to response JSON.
+    """
+
+    context: HandlerContext
+    entity_id: str
+    id_field_name: str
+    payload: JsonPayload
+    required_fields: tuple[str, ...]
+    request_builder: cabc.Callable[
         [uuid.UUID, JsonPayload],
         UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,
     ]
-        Builder that creates a typed update request object.
-    service_fn : cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]
-        Service function that executes the update and returns entity/revision.
-    serializer_fn : cabc.Callable[[EntityT, int], JsonPayload]
-        Serializer that converts the updated entity to response JSON.
+    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]
+    serializer_fn: cabc.Callable[[EntityT, int], JsonPayload]
+
+
+async def handle_update_entity[EntityT](
+    request: UpdateEntityRequest[EntityT],
+) -> tuple[JsonPayload, str]:
+    """Handle optimistic-lock update endpoint behaviour.
+
+    Parameters
+    ----------
+    request : UpdateEntityRequest[EntityT]
+        Parsed inputs and service collaborators.
 
     Returns
     -------
@@ -247,50 +297,64 @@ async def handle_update_entity[EntityT](  # ruff: ignore[too-many-arguments, too
         If the target entity does not exist.
     falcon.HTTPConflict
         If the expected revision does not match the persisted revision.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
-    parsed_entity_id = parse_uuid(entity_id, id_field_name)
-    _require_payload_fields(payload, required_fields)
-    update_request = request_builder(parsed_entity_id, payload)
+    parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
+    _require_payload_fields(request.payload, request.required_fields)
+    update_request = request.request_builder(parsed_entity_id, request.payload)
     try:
-        async with uow_factory() as uow:
-            entity, revision = await service_fn(uow, request=update_request)
-    except (EntityNotFoundError, RevisionConflictError) as exc:
+        async with request.context.uow_factory() as uow:
+            entity, revision = await request.service_fn(
+                uow,
+                request=update_request,
+            )
+    except ProfileTemplateError as exc:
         _raise_mapped_update_error(
             exc,
             entity_id=parsed_entity_id,
             expected_revision=update_request.expected_revision,
         )
-    return serializer_fn(entity, revision), falcon.HTTP_200
+    return request.serializer_fn(entity, revision), falcon.HTTP_200
 
 
-# Pylint reports the finding the Ruff noqa below already accepts; the
-# refactor to parameter objects is tracked in leynos/episodic#345.
-# pylint: disable-next=too-many-arguments
-async def handle_create_entity[EntityT](  # ruff: ignore[too-many-arguments]  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/345 explicit shared creator signature for resource adapters
-    uow_factory: UowFactory,
-    payload: JsonPayload,
-    *,
-    required_fields: tuple[str, ...],
-    kwargs_builder: cabc.Callable[[JsonPayload], dict[str, object]],
-    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
-    serializer_fn: cabc.Callable[[EntityT, int], JsonPayload],
+@dc.dataclass(frozen=True, slots=True)
+class CreateEntityRequest[EntityT]:
+    """Inputs and collaborators for one create-entity handler call.
+
+    Parameters
+    ----------
+    context : HandlerContext
+        Shared unit-of-work port.
+    payload : JsonPayload
+        Parsed request payload.
+    required_fields : tuple[str, ...]
+        Required fields for the create operation.
+    kwargs_builder : cabc.Callable
+        Builder that maps payload values into service keyword arguments.
+    service_fn : cabc.Callable
+        Service function that creates and returns an entity and revision.
+    serializer_fn : cabc.Callable
+        Serializer that converts the created entity to response JSON.
+    """
+
+    context: HandlerContext
+    payload: JsonPayload
+    required_fields: tuple[str, ...]
+    kwargs_builder: cabc.Callable[[JsonPayload], dict[str, object]]
+    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]
+    serializer_fn: cabc.Callable[[EntityT, int], JsonPayload]
+
+
+async def handle_create_entity[EntityT](
+    request: CreateEntityRequest[EntityT],
 ) -> tuple[JsonPayload, str]:
     """Handle create endpoint behaviour.
 
     Parameters
     ----------
-    uow_factory : UowFactory
-        Factory that creates unit-of-work instances.
-    payload : JsonPayload
-        Parsed request payload.
-    required_fields : tuple[str, ...]
-        Required payload field names for the create operation.
-    kwargs_builder : cabc.Callable[[JsonPayload], dict[str, object]]
-        Builder that maps payload values into service keyword arguments.
-    service_fn : cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]
-        Service function that creates an entity and returns entity/revision.
-    serializer_fn : cabc.Callable[[EntityT, int], JsonPayload]
-        Serializer that converts the created entity to response JSON.
+    request : CreateEntityRequest[EntityT]
+        Parsed payload and service collaborators.
 
     Returns
     -------
@@ -303,15 +367,19 @@ async def handle_create_entity[EntityT](  # ruff: ignore[too-many-arguments]  # 
         If a required field is missing or the create payload is invalid.
     falcon.HTTPNotFound
         If a referenced entity required for creation does not exist.
+    falcon.HTTPInternalServerError
+        If the service raises an unmapped profile/template error.
     """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # Indirect exceptions form part of this public contract.
-    _require_payload_fields(payload, required_fields)
+    _require_payload_fields(request.payload, request.required_fields)
 
-    service_kwargs = kwargs_builder(payload)
+    service_kwargs = request.kwargs_builder(request.payload)
     try:
-        async with uow_factory() as uow:
-            entity, revision = await service_fn(uow, **service_kwargs)
-    except (EntityNotFoundError, LookupError) as exc:
-        if isinstance(exc, EntityNotFoundError):
-            raise map_profile_template_error(exc) from exc
+        async with request.context.uow_factory() as uow:
+            entity, revision = await request.service_fn(uow, **service_kwargs)
+    except ProfileTemplateError as exc:
+        raise map_profile_template_error(
+            exc,
+        ) from exc
+    except LookupError as exc:
         raise falcon.HTTPNotFound(description=str(exc)) from exc
-    return serializer_fn(entity, revision), falcon.HTTP_201
+    return request.serializer_fn(entity, revision), falcon.HTTP_201

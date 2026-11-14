@@ -8,7 +8,12 @@ import pytest
 import tests.test_http_service_scaffold_support as scaffold_support
 
 if typ.TYPE_CHECKING:
-    from episodic.api.dependencies import ReadinessProbe as ReadinessProbeType
+    from episodic.api.dependencies import (
+        ReadinessProbe as ReadinessProbeType,
+    )
+    from episodic.api.dependencies import (
+        UnmappedErrorEmitter,
+    )
     from episodic.api.types import UowFactory
 
 
@@ -29,6 +34,51 @@ def test_api_dependencies_require_authorization_port() -> None:
             uow_factory=scaffold_support.unexpected_uow_factory,
             authorization=typ.cast("typ.Any", object()),
         )
+
+
+def test_api_dependencies_require_callable_unmapped_error_emitter() -> None:
+    """Reject non-callable error emitters at the dependency boundary."""
+    from episodic.api import ApiDependencies
+
+    with pytest.raises(TypeError, match="unmapped_error_emitter"):
+        ApiDependencies(
+            uow_factory=scaffold_support.unexpected_uow_factory,
+            unmapped_error_emitter=typ.cast("typ.Any", object()),
+        )
+
+
+def test_api_dependencies_reject_async_unmapped_error_emitters() -> None:
+    """Reject asynchronous emitters that the synchronous mapper cannot await."""
+    from episodic.api import ApiDependencies
+
+    async def async_emitter(
+        _template: str,
+        *_args: object,
+        exc_info: object | None = None,
+    ) -> None:
+        """Stand in for a coroutine function supplied as the logging port."""
+        await asyncio.sleep(0)
+        del exc_info
+
+    class AsyncEmitter:
+        """Stand in for an object whose call method is a coroutine."""
+
+        async def __call__(
+            self,
+            _template: str,
+            *_args: object,
+            exc_info: object | None = None,
+        ) -> None:
+            """Stand in for an asynchronous callable object."""
+            await asyncio.sleep(0)
+            del exc_info
+
+    for emitter in (async_emitter, AsyncEmitter()):
+        with pytest.raises(TypeError, match="synchronous callable"):
+            ApiDependencies(
+                uow_factory=scaffold_support.unexpected_uow_factory,
+                unmapped_error_emitter=typ.cast("UnmappedErrorEmitter", emitter),
+            )
 
 
 def test_readiness_probe_requires_async_check() -> None:
@@ -79,6 +129,10 @@ def test_api_dependencies_validate_readiness_probe_entries() -> None:
         "object",
         type("_NamelessProbe", (), {"check": check_database})(),
     )
+    checkless_probe = typ.cast(
+        "object",
+        type("_ChecklessProbe", (), {"name": "database"})(),
+    )
 
     with pytest.raises(TypeError, match="async callable"):
         ApiDependencies(
@@ -90,4 +144,13 @@ def test_api_dependencies_validate_readiness_probe_entries() -> None:
         ApiDependencies(
             uow_factory=scaffold_support.unexpected_uow_factory,
             readiness_probes=(typ.cast("ReadinessProbeType", nameless_probe),),
+        )
+
+    with pytest.raises(
+        TypeError,
+        match=r"readiness_probes entries check must be callable",
+    ):
+        ApiDependencies(
+            uow_factory=scaffold_support.unexpected_uow_factory,
+            readiness_probes=(typ.cast("ReadinessProbeType", checkless_probe),),
         )

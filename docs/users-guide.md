@@ -385,6 +385,15 @@ Every API error uses the same envelope:
 }
 ```
 
+An unmapped server-side domain error returns HTTP 500 with the `internal_error`
+code, a generic message, and an empty `details` object. The response does not
+expose the exception text; a redacted error diagnostic is written to the server
+log by the shared Falcon error serializer. Request handlers and resource
+methods do not write per-handler error logs. Mapped validation, not-found, and
+conflict errors retain their normal 400, 404, and 409 responses. Clients should
+handle the HTTP status and stable error code rather than relying on
+exception-derived response fields.
+
 List endpoints that expose filters validate them before dispatching to the
 service layer. For example:
 
@@ -411,6 +420,22 @@ Start the service with:
 ```shell
 granian episodic.api.runtime:create_app_from_env --interface asgi --factory
 ```
+
+The Granian runtime configures structured logging before it serves requests.
+`EPISODIC_LOG_LEVEL` selects the level and defaults to `INFO`. A Python host
+that builds the Falcon app directly must configure logging before serving it;
+the error-emitter dependency remains optional:
+
+```python
+from episodic.api import ApiDependencies, create_app
+from episodic.logging import configure_logging
+
+configure_logging("INFO")
+app = create_app(ApiDependencies(uow_factory=uow_factory))
+```
+
+At levels above `INFO`, the runtime disables INFO-level metrics and trace
+events. Redacted API error diagnostics remain enabled.
 
 Required environment:
 
@@ -450,6 +475,10 @@ Python integrations that called level methods on the value returned by
 example, replace `get_logger(__name__).info("Started")` with
 `log_info(get_logger(__name__), "Started")`; direct logger methods are no
 longer part of the supported surface.
+
+Unmapped server-side domain failures return HTTP 500 with the stable
+`internal_error` code, a generic message, and empty `details`. Clients must not
+rely on exception-derived response codes, messages, or details.
 
 Structured events can be emitted with `episodic.logging.log_event`, which
 encodes event fields as JSON. See [Logging](#logging) for the supported

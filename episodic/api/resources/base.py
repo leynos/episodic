@@ -8,7 +8,8 @@ while the base classes handle payload validation and shared handler dispatch.
 Examples
 --------
 >>> class MyEntityResource(_GetResourceBase): ...
->>> resource = MyEntityResource(uow_factory)  # Handles GET via shared handler.
+>>> resource = MyEntityResource(uow_factory)
+>>> # The shared handler receives only the unit-of-work factory.
 """
 
 import collections.abc as cabc
@@ -18,7 +19,11 @@ from abc import ABC, abstractmethod
 from functools import partial
 
 from episodic.api.handlers import (
+    CreateEntityRequest,
+    GetEntityRequest,
+    HandlerContext,
     HistoryRequest,
+    UpdateEntityRequest,
     handle_create_entity,
     handle_get_entity,
     handle_get_history,
@@ -47,6 +52,14 @@ type UpdateRequestBuilder = cabc.Callable[
 ]
 
 
+async def _apply_handler_result(
+    resp: falcon.Response,
+    result: cabc.Awaitable[tuple[JsonPayload, str]],
+) -> None:
+    """Assign one shared handler result to its Falcon response."""
+    resp.media, resp.status = await result
+
+
 def history_service_fn(
     kind: EntityKind,
 ) -> cabc.Callable[..., cabc.Awaitable[tuple[list[object], int]]]:
@@ -71,11 +84,15 @@ def history_service_fn(
 
 
 class _ResourceBase(ABC):
-    """Shared base resource that stores the unit-of-work factory."""
+    """Shared base resource that stores adapter dependencies."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self,
+        uow_factory: UowFactory,
+    ) -> None:
         """Store the unit-of-work factory for the resource's handlers."""
         self._uow_factory = uow_factory
+        self._handler_context = HandlerContext(uow_factory)
 
     @staticmethod
     @abstractmethod
@@ -120,12 +137,17 @@ class _GetResourceBase[EntityT: object](_ResourceBase, ABC):
     ) -> None:
         """Fetch one entity by identifier."""
         del req
-        resp.media, resp.status = await handle_get_entity(
-            uow_factory=self._uow_factory,
-            entity_id=self._get_entity_id_from_path(**kwargs),
-            id_field_name=self._get_id_field_name(),
-            service_fn=self._get_service_fn(),
-            serializer_fn=self._get_serializer_fn(),
+        await _apply_handler_result(
+            resp,
+            handle_get_entity(
+                GetEntityRequest(
+                    context=self._handler_context,
+                    entity_id=self._get_entity_id_from_path(**kwargs),
+                    id_field_name=self._get_id_field_name(),
+                    service_fn=self._get_service_fn(),
+                    serializer_fn=self._get_serializer_fn(),
+                )
+            ),
         )
 
 
@@ -168,14 +190,17 @@ class _GetHistoryResourceBase[HistoryT: object](_ResourceBase, ABC):
         **kwargs: str,
     ) -> None:
         """List history entries for one entity."""
-        resp.media, resp.status = await handle_get_history(
-            self._uow_factory,
-            HistoryRequest(
-                entity_id=self._get_entity_id_from_path(**kwargs),
-                id_field_name=self._get_id_field_name(),
-                service_fn=self._get_service_fn(),
-                serializer_fn=self._get_serializer_fn(),
-                page=parse_pagination(req),
+        await _apply_handler_result(
+            resp,
+            handle_get_history(
+                HistoryRequest(
+                    context=self._handler_context,
+                    entity_id=self._get_entity_id_from_path(**kwargs),
+                    id_field_name=self._get_id_field_name(),
+                    service_fn=self._get_service_fn(),
+                    serializer_fn=self._get_serializer_fn(),
+                    page=parse_pagination(req),
+                )
             ),
         )
 
@@ -223,12 +248,14 @@ class _CreateResourceBase[EntityT: object](_ResourceBase, ABC):
         del kwargs
         payload = require_payload_dict(await req.get_media())
         resp.media, resp.status = await handle_create_entity(
-            uow_factory=self._uow_factory,
-            payload=payload,
-            required_fields=self._get_required_fields(),
-            kwargs_builder=self._get_kwargs_builder(),
-            service_fn=self._get_service_fn(),
-            serializer_fn=self._get_serializer_fn(),
+            CreateEntityRequest(
+                context=self._handler_context,
+                payload=payload,
+                required_fields=self._get_required_fields(),
+                kwargs_builder=self._get_kwargs_builder(),
+                service_fn=self._get_service_fn(),
+                serializer_fn=self._get_serializer_fn(),
+            )
         )
 
 
@@ -282,12 +309,14 @@ class _UpdateResourceBase[EntityT: object](_ResourceBase, ABC):
         """Update one entity by identifier."""
         payload = require_payload_dict(await req.get_media())
         resp.media, resp.status = await handle_update_entity(
-            uow_factory=self._uow_factory,
-            entity_id=self._get_entity_id_from_path(**kwargs),
-            id_field_name=self._get_id_field_name(),
-            payload=payload,
-            required_fields=self._get_required_fields(),
-            request_builder=self._get_request_builder(),
-            service_fn=self._get_update_service_fn(),
-            serializer_fn=self._get_update_serializer_fn(),
+            UpdateEntityRequest(
+                context=self._handler_context,
+                entity_id=self._get_entity_id_from_path(**kwargs),
+                id_field_name=self._get_id_field_name(),
+                payload=payload,
+                required_fields=self._get_required_fields(),
+                request_builder=self._get_request_builder(),
+                service_fn=self._get_update_service_fn(),
+                serializer_fn=self._get_update_serializer_fn(),
+            )
         )
