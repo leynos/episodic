@@ -1324,7 +1324,11 @@ Success is observable as follows:
   - The upgrade guide claimed a `content_hash` conflict proves both rows hold
     identical content. It now requires decoding both rows, re-encoding each
     from its own stored fields, comparing the canonical content including the
-    source documents, and stopping when they differ.
+    source documents, and stopping when they differ. It also requires the
+    operator to establish that the row was written by the unreleased candidate
+    and that the mismatch comes from the encoder change before rewriting any
+    hash, since a rewrite otherwise makes altered pricing pass verification.
+    A follow-up focused assessment raised that second requirement.
 - Lesson: a uniqueness conflict is not a content-equality proof. Two rows can
   share a hash because one of them stores a hash its own content does not
   produce, so an operator must re-derive and compare before repointing

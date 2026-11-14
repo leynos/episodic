@@ -98,7 +98,15 @@ content hash the released encoder does not reproduce. Reading it raises
 way. Check the backup taken in step 2 for `pricing_snapshots` rows that already
 carry `schema_version = 1`.
 
-Repair such a row from its own stored fields, never from the current rate
+Establish two things before repairing a row, because rewriting a hash makes the
+store accept whatever content the row now holds. First, the row must be one the
+unreleased candidate wrote: the backup should show it was created there, not
+edited afterwards. Second, the mismatch must come from the encoder change
+rather than from altered data. Compare the stored subject, rates, instants, and
+source document with what the run recorded. Stop and keep the backup if
+anything is inconsistent.
+
+Repair a trusted row from its own stored fields, never from the current rate
 cards. The row holds the whole snapshot — subject, rates, instants, and source
 document — and the released encoder derives the content hash from exactly those
 fields, so decoding the row and re-encoding it produces the hash the store
