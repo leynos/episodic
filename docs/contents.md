@@ -142,11 +142,18 @@ or delivery planning.
 - [ADR 027: CLI client boundary](adrs/adr-0027-cli-client-boundary.md)
   - the CLI as a REST client, its enforced import boundary, and its output and
     exit-code policy.
+- [ADR 028: Generation-run REST completion](
+  adr/adr-028-generation-run-rest-completion.md)
+  - proposed route, authorization, idempotency, and checkpoint transaction
+  decisions for roadmap item 2.6.3.
 
 [adr-017]: adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md
 
 ## Execution plans
 
+- [REST endpoints for generation runs](
+  execplans/2-6-3-rest-endpoints-for-generation-runs.md)
+  - implementation plan for roadmap task 2.6.3.
 - [Benchmark pyscn and Skylos dead-code detection](execplans/benchmark-pyscn-skylos-dead-code.md)
   - comparative evaluation plan for the two Python dead-code scanners.
 - [No-QA generation runs and TEI-P5 retrieval](
