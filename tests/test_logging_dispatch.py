@@ -2,6 +2,7 @@
 
 import functools
 import logging
+import sys
 import typing as typ
 from unittest import mock
 
@@ -158,6 +159,11 @@ class _UninspectableDebugBackend(_LogOnlyBackend):
         self.debug = _UninspectableDebugMethod()
 
 
+def _raise_caller_failure() -> typ.NoReturn:
+    """Raise the caller exception used by active DEBUG fallback coverage."""
+    raise RuntimeError
+
+
 @pytest.mark.parametrize(
     ("wrapper", "method_name", "expected_exc_info"),
     [
@@ -236,6 +242,65 @@ def test_debug_fallback_preserves_explicit_exc_info() -> None:
         "fallback logging must preserve the caller's exception information"
     )
     assert backend.calls[0][2] is exc_info, "fallback should forward the same object"
+
+
+def test_debug_fallback_preserves_active_exception() -> None:
+    """Keep the caller's active exception when a legacy logger falls back."""
+
+    class _LegacyStdlibFallbackBackend:
+        """Expose a legacy DEBUG method and capture stdlib exception context."""
+
+        def __init__(self) -> None:
+            """Initialize the exception information captured by ``log``."""
+            self.captured_exc_info: (
+                tuple[
+                    type[BaseException] | None,
+                    BaseException | None,
+                    object,
+                ]
+                | None
+            ) = None
+
+        def debug(self, message: str, /) -> None:
+            """Represent a DEBUG method that rejects helper keyword arguments."""
+            del message
+
+        def log(
+            self,
+            level: int | episodic_logging.LogLevel,
+            message: str,
+            /,
+            *,
+            exc_info: object | None = None,
+            stack_info: bool = False,
+        ) -> None:
+            """Resolve ``exc_info=True`` as stdlib logging does."""
+            del level, message, stack_info
+            if exc_info is True:
+                self.captured_exc_info = sys.exc_info()
+
+    backend = _LegacyStdlibFallbackBackend()
+    logger = episodic_logging.LoggerHandle(backend)
+    captured_exception: RuntimeError | None = None
+
+    try:
+        _raise_caller_failure()
+    except RuntimeError as error:
+        captured_exception = error
+        episodic_logging.log_debug(
+            logger,
+            "Handled caller failure",
+            exc_info=True,
+        )
+
+    assert captured_exception is not None, "the caller exception should be captured"
+    assert backend.captured_exc_info is not None, "fallback should resolve exc_info"
+    assert backend.captured_exc_info[0] is RuntimeError, (
+        "fallback should retain the caller exception type"
+    )
+    assert backend.captured_exc_info[1] is captured_exception, (
+        "fallback should retain the caller exception instance"
+    )
 
 
 def test_debug_preserves_internal_type_error_without_retry() -> None:
