@@ -7,6 +7,8 @@ import typing as typ
 
 import falcon
 
+from .authorization_observability import _record_authorization_outcome_best_effort
+
 if typ.TYPE_CHECKING:
     from .authorization_observability import AuthorizationObservabilityPort
 
@@ -125,11 +127,7 @@ class AuthorizationMiddleware:
         try:
             result = _authorization_result(await self._authorization.decide(context))
         except Exception as error:  # ruff: ignore[blind-except]  # Adapter errors may contain credentials.
-            self._observer.record_authorization_outcome(
-                error,
-                method=context.method,
-                path=context.path,
-            )
+            self._record_authorization_outcome(error, context)
             _set_authorization_response(
                 resp,
                 code="service_unavailable",
@@ -143,11 +141,7 @@ class AuthorizationMiddleware:
                 req.context.principal_id = result.principal_id
                 return
             case AuthorizationDecision.UNAUTHORIZED:
-                self._observer.record_authorization_outcome(
-                    result.decision,
-                    method=context.method,
-                    path=context.path,
-                )
+                self._record_authorization_outcome(result.decision, context)
                 _set_authorization_response(
                     resp,
                     code="unauthorized",
@@ -155,11 +149,7 @@ class AuthorizationMiddleware:
                     status=falcon.HTTP_401,
                 )
             case AuthorizationDecision.FORBIDDEN:
-                self._observer.record_authorization_outcome(
-                    result.decision,
-                    method=context.method,
-                    path=context.path,
-                )
+                self._record_authorization_outcome(result.decision, context)
                 _set_authorization_response(
                     resp,
                     code="forbidden",
@@ -167,17 +157,26 @@ class AuthorizationMiddleware:
                     status=falcon.HTTP_403,
                 )
             case _:
-                self._observer.record_authorization_outcome(
-                    result.decision,
-                    method=context.method,
-                    path=context.path,
-                )
+                self._record_authorization_outcome(result.decision, context)
                 _set_authorization_response(
                     resp,
                     code="internal_error",
                     message="Unexpected authorization decision.",
                     status=falcon.HTTP_503,
                 )
+
+    def _record_authorization_outcome(
+        self,
+        outcome: object,
+        context: AuthorizationContext,
+    ) -> None:
+        """Contain observer failures at the HTTP response boundary."""
+        _record_authorization_outcome_best_effort(
+            self._observer,
+            outcome,
+            method=context.method,
+            path=context.path,
+        )
 
 
 def _set_authorization_response(

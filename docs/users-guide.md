@@ -475,13 +475,14 @@ the standard error envelope and records an
 counter has only a bounded `category` label: `assertion_error`,
 `attribute_error`, `index_error`, `key_error`, `os_error`, `runtime_error`,
 `type_error`, `value_error`, or `unknown_error`. `ConnectionError` and
-`TimeoutError` use `os_error`. Metric recording is best-effort. Explicitly
-handled observability-sink failures preserve the canonical `503` response;
-unexpected sink exceptions can propagate through the API error path.
-Adapter-failure warnings use the fixed category and omit exception details. A
-warning with `unknown_error` also includes a 12-character diagnostic identifier
-derived from the exception type; it does not log the type name or exception
-message. Metrics continue to use only the bounded category label.
+`TimeoutError` use `os_error`. Metrics and warning delivery are best-effort.
+Ordinary exceptions from the observer or its sinks do not replace the canonical
+`401`, `403`, or `503` response. The service attempts a fixed, credential-free
+marker on standard error if observation fails; that fallback is best-effort
+too. Adapter-failure warnings use the fixed category and omit exception
+details. A warning with `unknown_error` also includes a 12-character diagnostic
+identifier derived from the exception type; it does not log the type name or
+exception message. Metrics continue to use only the bounded category label.
 
 ### Migration note for the next minor release
 
