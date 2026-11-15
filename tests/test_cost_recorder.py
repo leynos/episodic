@@ -152,13 +152,38 @@ def _capture_pin_refusals(
     return emitted
 
 
+@pytest.mark.parametrize(
+    "other_subject",
+    [
+        # The pin key omits the service kind, so two kinds that share every
+        # other subject field collide in the ledger. This is the mismatch a
+        # stored pin can actually produce.
+        pytest.param(
+            dc.replace(
+                _snapshot(input_token_rate=1_000_000),
+                service_kind=PricedService.TTS,
+            ),
+            id="service-kind-only",
+        ),
+        pytest.param(
+            dc.replace(
+                _snapshot(input_token_rate=1_000_000),
+                operation="synthesize",
+            ),
+            id="operation-only",
+        ),
+    ],
+)
 @pytest.mark.asyncio
 async def test_cost_recorder_rejects_a_pin_for_another_subject(
     monkeypatch: pytest.MonkeyPatch,
+    other_subject: PricingSnapshot,
 ) -> None:
-    """A pin that prices a different subject must not price this call."""
+    """A pin that prices another subject must not price this call."""
     pinned_snapshot = _snapshot(input_token_rate=1_000_000)
-    other_subject = dc.replace(pinned_snapshot, operation="synthesize")
+    assert other_subject.subject != pinned_snapshot.subject, (
+        "each variant must differ from the requested subject"
+    )
     ledger = RecordingLedger(pinned_snapshot_id=surrogate_snapshot_id(other_subject))
     recorder = CostRecorder(
         ledger=ledger,
@@ -168,7 +193,7 @@ async def test_cost_recorder_rejects_a_pin_for_another_subject(
     )
     refusals = _capture_pin_refusals(monkeypatch)
     request = _provider_call_record()
-    requested = dc.replace(other_subject, operation=request.operation).subject
+    requested = pinned_snapshot.subject
 
     with pytest.raises(PricingSnapshotIntegrityError, match="prices"):
         await recorder.record_provider_call(request)
