@@ -15,7 +15,7 @@ from episodic.canonical.idempotency import (
     InFlight,
     Replay,
 )
-from episodic.canonical.idempotency_service import canonical_json_bytes
+from episodic.json_canonicalization import canonical_json_bytes
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc

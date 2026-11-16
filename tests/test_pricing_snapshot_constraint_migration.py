@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from alembic import command
 from episodic.canonical.storage.alembic_helpers import alembic_config
-from episodic.cost.storage import PricingSnapshotRecord
+from tests.fixtures.legacy_pricing_snapshots import LEGACY_REVISION, LEGACY_TABLE
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -55,7 +55,7 @@ async def _constraint(connection: AsyncConnection) -> tuple[str, str, int]:
 async def _insert_snapshot(connection: AsyncConnection, snapshot_id: uuid.UUID) -> None:
     """Insert one deterministic snapshot with a shared content hash."""
     await connection.execute(
-        sa.insert(PricingSnapshotRecord).values(
+        sa.insert(LEGACY_TABLE).values(
             id=snapshot_id,
             provider_name="openai",
             model="migration-test",
@@ -93,6 +93,9 @@ async def _migration_target(
     if direction == "upgrade":
         await _prepare_legacy_schema(connection)
         return _PRICING_REVISION, _LEGACY_NAME
+    # The content-address migration refuses to rewind converted rows, so step
+    # back to its predecessor while the table is still empty.
+    await connection.run_sync(_migrate, "downgrade", LEGACY_REVISION)
     return _PREVIOUS_REVISION, _CURRENT_NAME
 
 
@@ -156,7 +159,7 @@ async def test_legacy_pricing_snapshot_constraint_upgrade_and_downgrade(
             async with connection.begin_nested():
                 await _insert_snapshot(connection, uuid.UUID(int=3))
         row_count = await connection.scalar(
-            sa.select(sa.func.count()).select_from(PricingSnapshotRecord)
+            sa.text("SELECT count(*) FROM pricing_snapshots")
         )
         assert row_count == 1, "the persisted snapshot must survive both migrations"
         await connection.run_sync(_migrate, "upgrade", _PRICING_REVISION)
@@ -297,9 +300,7 @@ async def test_rejected_pricing_snapshot_migration_obeys_full_caller_rollback(
             "full caller rollback must restore the dropped constraint and its index"
         )
         assert (
-            await connection.scalar(
-                sa.select(sa.func.count()).select_from(PricingSnapshotRecord)
-            )
+            await connection.scalar(sa.text("SELECT count(*) FROM pricing_snapshots"))
             == 0
         ), "full caller rollback must remove writes made before migration rejection"
 

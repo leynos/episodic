@@ -1,0 +1,18 @@
+pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f91
+provider_name: openai
+model: gpt-4o-mini
+operation: chat_completions
+source_kind: provider_rate_card
+currency: USD
+billing_period_key: "2026-05"
+rates_minor_per_metric:
+  input_tokens: 15
+  output_tokens: 60
+  cached_input_tokens: 8
+  reasoning_tokens: 60
+  audio_input_tokens: 40
+  audio_output_tokens: 80
+source_metadata:
+  source_url: https://openai.com/api/pricing/
+retrieved_at: "2026-05-01T00:00:00Z"
+effective_from: "2026-05-01T00:00:00Z"

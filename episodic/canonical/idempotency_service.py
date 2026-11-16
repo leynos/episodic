@@ -1,8 +1,9 @@
 """Idempotency helpers for source-intake application services."""
 
 import hashlib
-import json
 import typing as typ
+
+from episodic.json_canonicalization import canonical_json_bytes
 
 if typ.TYPE_CHECKING:
     from .domain import JsonMapping
@@ -11,17 +12,6 @@ if typ.TYPE_CHECKING:
 MULTIPART_BODY_HASH_METADATA: dict[str, tuple[str, ...]] = {
     "upload.create": ("content_type", "declared_size", "declared_sha256"),
 }
-
-
-def canonical_json_bytes(payload: JsonMapping) -> bytes:
-    """Return canonical UTF-8 JSON bytes for request fingerprinting."""
-    return json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
 
 
 def multipart_request_hash(

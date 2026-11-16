@@ -1,14 +1,23 @@
-pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f92
+schema_version: 1
+service_kind: llm
 provider_name: openai
 model: gpt-5.6-sol
 operation: chat_completions
 source_kind: provider_rate_card
 currency: USD
-billing_period_key: "2026-08"
-rates_minor_per_metric:
-  input_tokens: 200
-  output_tokens: 1000
-  cached_input_tokens: 20
+rates:
+  input_tokens:
+    amount_minor: 1
+    per_units: 5000
+    unit: token
+  output_tokens:
+    amount_minor: 1
+    per_units: 1000
+    unit: token
+  cached_input_tokens:
+    amount_minor: 1
+    per_units: 50000
+    unit: token
 source_metadata:
   source_url: https://developers.openai.com/api/docs/pricing
 retrieved_at: "2026-08-22T00:00:00Z"

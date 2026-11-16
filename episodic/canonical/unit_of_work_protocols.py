@@ -6,6 +6,7 @@ if typ.TYPE_CHECKING:
     from types import TracebackType
 
     from episodic.cost.ports import CostLedgerPort
+    from episodic.cost.pricing_snapshot_ports import PricingSnapshotRepository
 
     from .entity_protocols import (
         ApprovalEventRepository,
@@ -56,6 +57,7 @@ class CanonicalUnitOfWork(typ.Protocol):
     generation_runs: GenerationRunPort
     qa_artefacts: QaArtefactRepository
     cost_ledger: CostLedgerPort
+    pricing_snapshots: PricingSnapshotRepository
 
     async def __aenter__(self) -> CanonicalUnitOfWork:
         """Enter the unit-of-work context."""

@@ -1,0 +1,16 @@
+pricing_snapshot_id: 019e9331-49d3-74c7-9e76-567256af0298
+provider_name: anthropic
+model: claude-3-5-haiku-latest
+operation: messages
+source_kind: provider_rate_card
+currency: USD
+billing_period_key: "2026-05"
+rates_minor_per_metric:
+  input_tokens: 80
+  output_tokens: 400
+  cached_input_tokens: 8
+  cache_write_tokens: 100
+source_metadata:
+  source_url: https://www.anthropic.com/pricing
+retrieved_at: "2026-05-01T00:00:00Z"
+effective_from: "2026-05-01T00:00:00Z"

@@ -162,12 +162,15 @@ def _build_generation_launcher(
     config: RuntimeConfig,
 ) -> InProcessGenerationRunLauncher:
     """Build the no-QA generation-run launcher from configured runtime inputs."""
+    # Constructing the catalogue parses every card, so a malformed or ambiguous
+    # catalogue fails at startup rather than mid-run.
     pricing_catalogue = FilePricingCatalogue(config.pricing_snapshot_directory)
 
     def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
-        """Build a cost recorder over the unit of work's cost ledger."""
+        """Build a cost recorder over the unit of work's cost stores."""
         return CostRecorder(
             ledger=uow.cost_ledger,
+            snapshots=uow.pricing_snapshots,
             pricing_catalogue=pricing_catalogue,
             pricing_engine=PricingEngine(),
         )

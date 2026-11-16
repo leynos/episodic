@@ -16,16 +16,12 @@ import uuid
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import IntegrityError
 
-from episodic import observability
 from episodic.cost._time import parse_instant
 from episodic.cost.ports import (
     CostLedgerEntryId,
     LedgerScope,
     PricingModel,
-    PricingSnapshot,
-    PricingSnapshotCollisionError,
     PricingSnapshotId,
     ProviderCallLedgerEntry,
     RunPricingKey,
@@ -33,40 +29,10 @@ from episodic.cost.ports import (
     UsageSource,
 )
 
-from .models import (
-    CostLedgerEntryRecord,
-    PricingSnapshotRecord,
-    RunPricingPinRecord,
-)
-
-_PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT = "uq_pricing_snapshots_content_hash"
-
-
-def _is_pricing_snapshot_hash_collision(exc: IntegrityError) -> bool:
-    """Identify a duplicate pricing snapshot through its named constraint."""
-    # Keep driver inspection local: canonical storage's package initializer
-    # composes this adapter, so importing its helper would create an import cycle.
-    name: str | None = None
-    for candidate in (exc, exc.orig):
-        name = getattr(candidate, "constraint_name", None)
-        if name is None:
-            diagnostic = getattr(candidate, "diag", None)
-            name = getattr(diagnostic, "constraint_name", None)
-        if name is not None:
-            break
-    if name is not None:
-        return name == _PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT
-    # Some DB-API wrappers omit diagnostics; match only PostgreSQL's exact
-    # duplicate-constraint form so unrelated content_hash errors stay visible.
-    return (
-        f'violates unique constraint "{_PRICING_SNAPSHOT_CONTENT_HASH_CONSTRAINT}"'
-        in str(exc.orig)
-    )
-
+from .models import CostLedgerEntryRecord, RunPricingPinRecord
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.sql.dml import Insert
 
 
 def _new_id() -> uuid.UUID:
@@ -135,164 +101,18 @@ def _task_rollup_values(rollup: TaskRollupLedgerEntry) -> dict[str, object]:
     }
 
 
-def _snapshot_insert_statement(snapshot: PricingSnapshot) -> Insert:
-    """Build the idempotent insert statement for one pricing snapshot."""
-    return (
-        insert(PricingSnapshotRecord)
-        .values(
-            id=uuid.UUID(str(snapshot.pricing_snapshot_id)),
-            provider_name=snapshot.provider_name,
-            model=snapshot.model,
-            operation=snapshot.operation,
-            source_kind=str(snapshot.source_kind),
-            currency=str(snapshot.currency),
-            billing_period_key=str(snapshot.billing_period_key),
-            rates_minor_per_metric=dict(snapshot.rates_minor_per_metric),
-            source_metadata=dict(snapshot.source_metadata),
-            content_hash=snapshot.content_hash,
-            retrieved_at=parse_instant(
-                snapshot.retrieved_at,
-                error_message="timestamp must include timezone information.",
-            ),
-            effective_from=snapshot.effective_from,
-        )
-        .on_conflict_do_nothing(index_elements=["id"])
-        .returning(PricingSnapshotRecord.id)
-    )
-
-
 class SqlAlchemyCostLedgerStore:
     """SQLAlchemy implementation of `CostLedgerPort`."""
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        metrics: observability.MetricsPort | None = None,
-        tracer: observability.TracerPort | None = None,
-        clock: observability.MonotonicClockPort | None = None,
-    ) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         """Create a ledger store bound to one session.
 
         Parameters
         ----------
         session : AsyncSession
             Session that owns the transaction boundary; the caller commits.
-        metrics : MetricsPort | None, optional
-            Bounded metrics sink. Defaults to ``NoopMetrics``.
-        tracer : TracerPort | None, optional
-            Span sink for storage operations. Defaults to ``NoopTracer``.
-        clock : MonotonicClockPort | None, optional
-            Latency measurement clock. Defaults to ``PerfCounterClock``.
         """
         self._session = session
-        self._metrics: observability.MetricsPort = (
-            metrics if metrics is not None else observability.NoopMetrics()
-        )
-        self._tracer: observability.TracerPort = (
-            tracer if tracer is not None else observability.NoopTracer()
-        )
-        self._clock: observability.MonotonicClockPort = (
-            clock if clock is not None else observability.PerfCounterClock()
-        )
-
-    def _record_ensure_outcome(
-        self,
-        started: float,
-        outcome: str,
-        failure_category: str | None,
-    ) -> None:
-        """Emit the bounded ensure-snapshot counter and latency metrics."""
-        labels = {"operation": "ensure_snapshot", "outcome": outcome}
-        if failure_category is not None:
-            labels["failure_category"] = failure_category
-        self._metrics.increment_counter("pricing_snapshot.ensure", labels=labels)
-        self._metrics.observe_latency_ms(
-            "pricing_snapshot.ensure.duration_ms",
-            (self._clock.monotonic_seconds() - started) * 1000.0,
-            labels={"operation": "ensure_snapshot", "outcome": outcome},
-        )
-
-    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Persist immutable snapshot values; reuse an existing ``id`` unchanged.
-
-        Uses ``ON CONFLICT DO NOTHING`` to preserve all stored values.
-
-        Raises
-        ------
-        PricingSnapshotCollisionError
-            If ``snapshot.content_hash`` is stored under a different identifier.
-        sqlalchemy.exc.IntegrityError
-            If a constraint other than identifier or content-hash uniqueness fails.
-        ValueError
-            If ``snapshot.retrieved_at`` lacks a timezone; ``parse_instant`` raises
-            ``"timestamp must include timezone information."``.
-        """  # ruff: ignore[docstring-extraneous-exception]  # parse_instant raises on the adapter's behalf.
-        try:
-            statement = _snapshot_insert_statement(snapshot)
-        except ValueError:
-            labels = {
-                "operation": "ensure_snapshot",
-                "outcome": "error",
-                "failure_category": "pricing_snapshot.input_invalid",
-            }
-            with self._tracer.start_span(
-                "pricing_snapshot.input_validation", attributes=labels
-            ):
-                self._metrics.increment_counter(
-                    "pricing_snapshot.input_validation", labels=labels
-                )
-                raise
-        await self._record_snapshot_insert(snapshot, statement)
-
-    async def _record_snapshot_insert(
-        self,
-        snapshot: PricingSnapshot,
-        statement: Insert,
-    ) -> None:
-        """Instrument snapshot persistence while preserving its outcome."""
-        started = self._clock.monotonic_seconds()
-        outcome = "error"
-        failure_category: str | None = None
-        with self._tracer.start_span(
-            "pricing_snapshot.ensure_snapshot",
-            attributes={"operation": "ensure_snapshot"},
-        ) as span:
-            try:
-                outcome = await self._persist_snapshot(snapshot, statement)
-            except PricingSnapshotCollisionError:
-                outcome = "collision"
-                failure_category = "pricing_snapshot.collision"
-                raise
-            except IntegrityError:
-                failure_category = "pricing_snapshot.integrity"
-                raise
-            finally:
-                span.set_attribute("outcome", outcome)
-                if failure_category is not None:
-                    span.set_attribute("failure_category", failure_category)
-                self._record_ensure_outcome(started, outcome, failure_category)
-
-    async def _persist_snapshot(
-        self,
-        snapshot: PricingSnapshot,
-        statement: Insert,
-    ) -> str:
-        """Insert or reuse a row, translating content-hash collisions."""
-        try:
-            result = await self._session.execute(statement)
-        except IntegrityError as exc:
-            # The id conflict target excludes unique content hashes: a duplicate
-            # hash under another ID is a catalogue defect.
-            if not _is_pricing_snapshot_hash_collision(exc):
-                raise
-            msg = (
-                "pricing snapshot content hash "
-                f"{snapshot.content_hash!r} is already stored under a "
-                "different snapshot identifier"
-            )
-            raise PricingSnapshotCollisionError(msg) from exc
-        return "persisted" if result.scalar_one_or_none() is not None else "reused"
 
     async def pin_run_pricing(
         self,

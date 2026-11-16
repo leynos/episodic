@@ -24,6 +24,7 @@ Accepted decision records:
 - [ADR 022: Orchestration architecture enforcement](adrs/adr-0022-orchestration-architecture-enforcement.md)
 - [ADR 018: Explicit repository-written versioning and history strategy](adrs/adr-0018-explicit-versioning-and-history-strategy.md)
 - [ADR 019: Retrievable episode TEI revision history](adrs/adr-0019-episode-tei-revision-history.md)
+- [ADR 028: Content-addressed pricing snapshots](adrs/adr-0028-content-addressed-pricing-snapshots.md)
 - [ADR 025: Central logging port](adrs/adr-0025-central-logging-port.md)
 - [ADR 026: QA artefact persistence contract](adrs/adr-0026-qa-artefact-persistence-contract.md)
 - [ADR 027: CLI client boundary](adrs/adr-0027-cli-client-boundary.md)
@@ -860,9 +861,12 @@ adapter implementations.
   loads pinned provider rate cards for internal LangGraph nodes, whilst the
   same port can later discover evaluator OpenAPI and SLA4OAI documents if those
   evaluators are externalized.
+- `PricingSnapshotRepository` persists and reads immutable, content-addressed
+  `PricingSnapshot` values. A pinned call is priced from the stored row, so
+  editing or deleting a rate card does not change a historical cost.
 - `run_pricing_pins` records the pricing snapshot selected for a workflow run,
-  provider, and billing period so suspended workflows continue to use the same
-  rate card after resume.
+  provider, model, operation, and billing period so suspended workflows
+  continue to use the same rate card after resume.
 - `MeteringPort` provides atomic, concurrency-safe metric consumption counters
   used by pricing logic when quotas, allowances, or overages apply.
 - `CheckpointPort` saves and restores StateGraph checkpoints.
@@ -1538,27 +1542,33 @@ snapshot pinning strategy, and deterministic pricing rules for this design.
 
 #### Internal evaluator metering and deterministic pricing
 
-- `PricingCataloguePort` abstracts where pricing inputs come from. Today it can
-  read pinned provider rate cards for internal evaluator and generation calls;
-  later it can ingest helper-service pricing documents without changing the
-  ledger model.
+- `PricingCataloguePort` abstracts where pricing inputs come from. Today it
+  reads schema-version-1 provider rate cards for internal evaluator and
+  generation calls; later it can ingest helper-service pricing documents
+  without changing the ledger model.
 - Evaluator nodes return typed findings plus normalized usage metadata from the
   underlying `LLMPort` call.
 - Chrono records estimator name, estimator version, input character count,
   spoken word count, words-per-minute setting, and predicted spoken runtime so
   its decisions remain explainable even though it does not create an
   external-call charge in the initial design.
-- Immutable `pricing_snapshots` capture the provider rate cards used to compute
-  Large Language Model (LLM) cost for a run. The initial implementation leaves
-  Text-to-Speech (TTS) tracking reserved for a later slice. Snapshots are
-  pinned through `run_pricing_pins` and referenced from cost ledger entries so
-  historical pricing stays reproducible. `CostRecorder` persists a snapshot
-  before creating its run pin or recording an unpinned provider call, so those
-  foreign keys reference an existing row; a call with an existing pin relies on
-  the pin's foreign key.
+- Immutable `pricing_snapshots` capture the pricing inputs used to compute
+  Large Language Model (LLM) and Text-to-Speech (TTS) cost for a run. Each
+  snapshot is identified by the SHA-256 hash of its canonical content, so an
+  edited rate card becomes a new version rather than changing an existing one.
+  Rates are exact integer fractions with an explicit unit, which represents 7.5
+  cents per million tokens and per-character or per-minute TTS prices without
+  rounding. A snapshot may also carry a verbatim helper-service document, such
+  as an SLA4OAI plan. Snapshots are pinned through `run_pricing_pins` and
+  referenced from cost ledger entries, and a pinned call is priced from the
+  stored row, so historical pricing stays reproducible after a card is edited
+  or deleted. `CostRecorder` persists a snapshot before creating its run pin or
+  recording an unpinned provider call, so those foreign keys reference an
+  existing row; a call with an existing pin relies on the pin's foreign key.
 - `PricingEngine` computes the cost of an individual call deterministically
-  from provider, model, operation, usage metrics, billing period,
-  `pricing_snapshot_id`, and organization identifier.
+  from the pricing snapshot's provider, model, operation, and exact rates, plus
+  the call's usage metrics and operation. The billing period is not an input:
+  it lives on run pins and ledger rows, not on the snapshot.
 - When quotas and overage pricing apply, `PricingEngine` relies on a
   concurrency-safe `MeteringPort` to atomically consume per-metric usage within
   the relevant billing period. This avoids parallel tasks randomly
@@ -1578,8 +1588,10 @@ move behind their own network boundary, the preferred contract remains:
 
 In that model, `PricingCataloguePort` fetches and pins immutable pricing
 snapshots from those documents exactly as it pins provider rate cards today.
-The current internal LangGraph implementation simply uses the same abstraction
-with a local pricing source instead of a remote service hop.
+The fetched document is stored verbatim in the snapshot, so a later change to
+the remote plan does not alter a historical cost. The current internal
+LangGraph implementation simply uses the same abstraction with a local pricing
+source instead of a remote service hop.
 
 #### Hierarchical cost ledger entries
 
@@ -1727,10 +1739,10 @@ Agentic workflow behaviour is configurable per series profile:
   billable provider interactions, including pinned pricing snapshot IDs,
   workflow node metadata, usage metrics, computed cost in minor units, and
   idempotency keys.
-- `pricing_snapshots` stores immutable provider rate cards (snapshot ID,
-  content hash, source identifier, retrieval timestamp) used to price LLM and
-  TTS calls, with room for future helper-service SLA documents if evaluator
-  architecture changes.
+- `pricing_snapshots` stores immutable, content-addressed pricing inputs
+  (surrogate identifier, canonical content hash, service kind, subject, exact
+  rates with units, retrieval timestamp, and an optional verbatim source
+  document) used to price LLM, TTS, and helper-service calls.
 - `metering_counters` stores per-organization metric consumption keyed by
   service, billing period, and metric name to support quota and overage pricing.
 - `run_pricing_pins` stores the pricing snapshot chosen for a workflow run,

@@ -22,7 +22,11 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
-from episodic.cost.storage import SqlAlchemyCostLedgerStore
+from episodic.cost.storage import (
+    InstrumentedPricingSnapshotRepository,
+    SqlAlchemyCostLedgerStore,
+    SqlAlchemyPricingSnapshotStore,
+)
 from episodic.logging import get_logger
 from episodic.logging import log_event as _log_event
 
@@ -148,6 +152,9 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for durable QA artefacts linked to canonical episodes.
     cost_ledger : SqlAlchemyCostLedgerStore
         Cost ledger adapter bound to the same session.
+    pricing_snapshots : InstrumentedPricingSnapshotRepository
+        Snapshot repository bound to the same session, reporting bounded
+        telemetry.
     """
 
     def __init__(
@@ -232,8 +239,9 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
                 monotonic_clock=self._runtime.monotonic_clock,
             ),
         )
-        self.cost_ledger = SqlAlchemyCostLedgerStore(
-            session,
+        self.cost_ledger = SqlAlchemyCostLedgerStore(session)
+        self.pricing_snapshots = InstrumentedPricingSnapshotRepository(
+            SqlAlchemyPricingSnapshotStore(session),
             metrics=self._runtime.metrics,
             tracer=self._runtime.tracer,
             clock=self._runtime.monotonic_clock,

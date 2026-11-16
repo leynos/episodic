@@ -8,7 +8,12 @@ from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
 from episodic.cost.ports import LedgerScope
+from episodic.cost.pricing_snapshot import PricedService
+from episodic.cost.primitives import PricingSourceKind
 from episodic.sqlalchemy_base import Base
+
+_SERVICE_KINDS = tuple(kind.value for kind in PricedService)
+_SOURCE_KINDS = tuple(kind.value for kind in PricingSourceKind)
 
 
 class PricingSnapshotRecord(Base):
@@ -20,28 +25,45 @@ class PricingSnapshotRecord(Base):
             "content_hash",
             name="uq_pricing_snapshots_content_hash",
         ),
+        sa.CheckConstraint(
+            "schema_version = 1",
+            name="ck_pricing_snapshots_schema_version",
+        ),
+        sa.CheckConstraint(
+            sa.column("service_kind").in_(_SERVICE_KINDS),
+            name="ck_pricing_snapshots_service_kind",
+        ),
+        sa.CheckConstraint(
+            sa.column("source_kind").in_(_SOURCE_KINDS),
+            name="ck_pricing_snapshots_source_kind",
+        ),
+        sa.CheckConstraint(
+            "(source_document_media_type IS NULL) = (source_document_content IS NULL)",
+            name="ck_pricing_snapshots_source_document_pair",
+        ),
+        sa.CheckConstraint(
+            "source_kind <> 'sla4oai_plan' OR source_document_content IS NOT NULL",
+            name="ck_pricing_snapshots_source_document_required",
+        ),
     )
 
     id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
         primary_key=True,
     )
+    schema_version: orm.Mapped[int] = orm.mapped_column(sa.Integer, nullable=False)
+    service_kind: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     provider_name: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     model: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     operation: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     source_kind: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     currency: orm.Mapped[str] = orm.mapped_column(sa.String(3), nullable=False)
-    billing_period_key: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
-    rates_minor_per_metric: orm.Mapped[dict[str, object]] = orm.mapped_column(
+    rates: orm.Mapped[dict[str, object]] = orm.mapped_column(
         postgresql.JSONB,
         nullable=False,
     )
     source_metadata: orm.Mapped[dict[str, object]] = orm.mapped_column(
         postgresql.JSONB,
-        nullable=False,
-    )
-    content_hash: orm.Mapped[str] = orm.mapped_column(
-        sa.Text,
         nullable=False,
     )
     retrieved_at: orm.Mapped[dt.datetime] = orm.mapped_column(
@@ -51,6 +73,23 @@ class PricingSnapshotRecord(Base):
     effective_from: orm.Mapped[dt.datetime | None] = orm.mapped_column(
         sa.DateTime(timezone=True),
         nullable=True,
+    )
+    source_document_media_type: orm.Mapped[str | None] = orm.mapped_column(
+        sa.Text,
+        nullable=True,
+    )
+    source_document_content: orm.Mapped[str | None] = orm.mapped_column(
+        sa.Text,
+        nullable=True,
+    )
+    content_hash: orm.Mapped[str] = orm.mapped_column(
+        sa.Text,
+        nullable=False,
+    )
+    recorded_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
     )
 
 

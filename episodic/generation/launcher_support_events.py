@@ -23,6 +23,7 @@ from episodic.cost.ports import (
     PricingModel,
     UsageSource,
 )
+from episodic.cost.pricing_snapshot_ports import PricingSnapshotError
 from episodic.cost.recorder import ProviderCallRecord
 from episodic.generation.draft_script import (
     DraftScriptGenerationError,
@@ -126,6 +127,7 @@ _FAILURE_CATEGORIES: tuple[
     (DraftScriptTokenBudgetError, "provider.token_budget", False),
     (DraftScriptResponseFormatError, "draft.response_format", False),
     (DraftScriptGenerationError, "draft.generation", False),
+    (PricingSnapshotError, "cost.pricing_snapshot", False),
 )
 
 

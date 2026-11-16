@@ -1,15 +1,27 @@
-pricing_snapshot_id: 019e9331-49d3-74c7-9e76-567256af0298
+schema_version: 1
+service_kind: llm
 provider_name: anthropic
 model: claude-3-5-haiku-latest
 operation: messages
 source_kind: provider_rate_card
 currency: USD
-billing_period_key: "2026-05"
-rates_minor_per_metric:
-  input_tokens: 80
-  output_tokens: 400
-  cached_input_tokens: 8
-  cache_write_tokens: 100
+rates:
+  input_tokens:
+    amount_minor: 1
+    per_units: 12500
+    unit: token
+  output_tokens:
+    amount_minor: 1
+    per_units: 2500
+    unit: token
+  cached_input_tokens:
+    amount_minor: 1
+    per_units: 125000
+    unit: token
+  cache_write_tokens:
+    amount_minor: 1
+    per_units: 10000
+    unit: token
 source_metadata:
   source_url: https://www.anthropic.com/pricing
 retrieved_at: "2026-05-01T00:00:00Z"

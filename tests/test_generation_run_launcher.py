@@ -9,18 +9,13 @@ import uuid
 import pytest
 
 from episodic.canonical.domain import (
-    GenerationEvent,
-    GenerationRun,
     GenerationRunStatus,
     SourceDocument,
 )
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptTransientProviderError
-from episodic.generation.launcher import (
-    GenerationRunAdmissionError,
-    InProcessGenerationRunLauncher,
-)
+from episodic.generation.launcher import GenerationRunAdmissionError
 from episodic.generation.launcher_support import source_from_document
 from episodic.observability import RecordingTracer
 from tests.generation_run_launcher_support import (
@@ -30,6 +25,7 @@ from tests.generation_run_launcher_support import (
     RecordingCostRecorder,
     RecordingDraftGenerator,
     draft_result,
+    launch_and_load_run,
     launcher,
     prepare_pending_run,
     valid_tei,
@@ -79,21 +75,6 @@ class _RecordingMetrics:
     ) -> None:
         """Capture a scalar observation."""
         self.values.append((name, value, dict(labels)))
-
-
-async def _launch_and_load_run(
-    factory: async_sessionmaker[AsyncSession],
-    run_id: uuid.UUID,
-    run_launcher: InProcessGenerationRunLauncher,
-) -> tuple[GenerationRun, tuple[GenerationEvent, ...]]:
-    """Launch a run and return its persisted terminal state and events."""
-    await run_launcher.launch(run_id)
-    await run_launcher.drain()
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        run = await uow.generation_runs.get_run(run_id)
-        events = await uow.generation_runs.list_events(run_id)
-    assert run is not None, f"run {run_id} was not persisted; events={events!r}"
-    return run, events
 
 
 @pytest.mark.asyncio
@@ -196,7 +177,7 @@ async def test_launcher_records_provider_failure(
     tracer = RecordingTracer()
     run_launcher.tracer = tracer
 
-    run, events = await _launch_and_load_run(factory, run_id, run_launcher)
+    run, events = await launch_and_load_run(factory, run_id, run_launcher)
 
     assert run.status is GenerationRunStatus.FAILED, (
         f"run {run_id} status={run.status}; events={events!r}"
@@ -229,7 +210,7 @@ async def test_launcher_records_invalid_tei_failure(
         factory, RecordingDraftGenerator(draft_result("<TEI>broken"))
     )
 
-    run, events = await _launch_and_load_run(factory, run_id, run_launcher)
+    run, events = await launch_and_load_run(factory, run_id, run_launcher)
 
     assert run.status is GenerationRunStatus.FAILED, (
         f"run {run_id} status={run.status}; events={events!r}"

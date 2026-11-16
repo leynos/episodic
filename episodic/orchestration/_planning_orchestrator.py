@@ -6,6 +6,7 @@ import time
 import typing as typ
 
 from episodic.cost.ports import BillingPeriodKey, IdempotencyKey, PricingModel
+from episodic.cost.pricing_snapshot import PricedService
 from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
 from episodic.llm.ports import LLMError
 from episodic.logging import log_event as _log_event
@@ -293,6 +294,7 @@ def _cost_provider_operations(
     """Return provider operations that must be priced for the run."""
     operations = {
         CostProviderOperation(
+            service_kind=PricedService.LLM,
             provider_name=_DEFAULT_PROVIDER_NAME,
             model=planner_result.model,
             operation=str(planner_result.provider_operation),
@@ -300,6 +302,7 @@ def _cost_provider_operations(
     }
     for step in planner_result.plan.steps:
         operation = CostProviderOperation(
+            service_kind=PricedService.LLM,
             provider_name=_DEFAULT_PROVIDER_NAME,
             model=planner_result.plan.selected_execution_model,
             operation=str(step.action_kind),
@@ -309,6 +312,7 @@ def _cost_provider_operations(
             ActionKind.GENERATE_GUEST_BIOS,
         }:
             operation = CostProviderOperation(
+                service_kind=PricedService.LLM,
                 provider_name=_DEFAULT_PROVIDER_NAME,
                 model=planner_result.plan.selected_execution_model,
                 operation="chat_completions",

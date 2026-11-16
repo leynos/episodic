@@ -283,7 +283,7 @@ Implement price snapshots, discovery, metering, and budget reservation for
 LangGraph nodes. Completion enables current internal metering and preserves the
 future path to standalone evaluator services with explicit pricing contracts.
 
-- [ ] 2.5.1. Add immutable pricing snapshots for provider and helper pricing
+- [x] 2.5.1. Add immutable pricing snapshots for provider and helper pricing
   inputs.
   - Persist model pricing inputs used for LLM and Text-to-Speech (TTS)
     billing.
@@ -297,10 +297,14 @@ future path to standalone evaluator services with explicit pricing contracts.
 - [ ] 2.5.3. Add `PricingEngine` with concurrency-safe metering.
   - Implement `MeteringPort` for usage recording.
   - Price individual calls deterministically with quota and overage handling.
+  - Record the rounding rule and expose exact cost, since the truncating
+    policy inherited from 2.5.1 records small calls as zero.
 - [ ] 2.5.4. Extend `CostLedgerPort` storage for evaluator-node and provider
   calls.
   - Record workflow node names, operation identifiers, and usage metrics.
   - Record pricing snapshot identifiers and model metadata.
+  - Store the rounding rule per ledger row, so a cost stays reproducible when
+    the engine's policy changes.
 - [ ] 2.5.5. Extend `BudgetPort` APIs for reservation workflow.
   - Reserve estimated spend for generation and evaluator calls before
     invocation.
