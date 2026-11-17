@@ -105,7 +105,7 @@ jobs:
       - name: Install mdtablefix
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@7d751eded578e48dacf43ab173d5820e6437c474
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@1123a35f1cc7810f65bfffa5ea4c8b981d6c0090
         with:
           version: "0.6.1"
 
@@ -126,10 +126,10 @@ jobs:
         run: make lint
 
       - name: Dead-code gate
-        uses: leynos/shared-actions/.github/actions/df12-skylos@88ac795de687eda016db24983f87a25d6db49fdb
+        uses: leynos/shared-actions/.github/actions/df12-skylos@1123a35f1cc7810f65bfffa5ea4c8b981d6c0090
 
       - name: Duplication gate
-        uses: leynos/shared-actions/.github/actions/df12-duplication@88ac795de687eda016db24983f87a25d6db49fdb
+        uses: leynos/shared-actions/.github/actions/df12-duplication@1123a35f1cc7810f65bfffa5ea4c8b981d6c0090
 
       - name: Check spelling
         run: make spelling
@@ -165,7 +165,7 @@ jobs:
       # default-branch cache baseline. They do not contact CodeScene.
       - name: Generate coverage
         if: github.event_name == 'pull_request'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@1123a35f1cc7810f65bfffa5ea4c8b981d6c0090
         with:
           language: python
           format: cobertura
