@@ -614,6 +614,8 @@ full_name = [
     "episodic.canonical.generation_graph_ports._validate_evaluator_set",
     "episodic.canonical.generation_graph_ports._validate_evaluator_names",
     "episodic.api.dependencies._validate_accepted_quality_modes",
+    "episodic.api.dependencies._validate_health_observer",
+    "episodic.api.dependencies._normalize_and_validate_hooks",
 ]
 reason = "dataclasses invokes __post_init__ when QualityEvaluatorSet or ApiDependencies is constructed, and those hooks call these validators."
 
