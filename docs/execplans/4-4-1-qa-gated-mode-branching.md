@@ -1958,7 +1958,7 @@ Record the following here as each milestone completes:
   - INV-5: `observed_nodes` records node entry through the debug stream, so a
     faulting node is still checked for ownership.
   - INV-9: `tests/test_generation_run_launcher_quality_matrix.py` covers all
-    eleven plan cells, and
+    ten plan cells, and
     `tests/test_generation_run_launcher_quality_ownership.py` covers the
     competing-launcher cases.
   - Evidence: this section now holds the milestone transcripts, Hypothesis
@@ -2015,7 +2015,7 @@ Reproducible non-vacuity evidence, measured on this tree:
   - the policy-free store (`test_policy_free_store_fails_the_property`);
   - an append from a foreign task
     (`assert_off_task_append_is_rejected`, called by the matrix);
-  - the eleven-cell INV-9 matrix, where each cell has its own terminal,
+  - the ten-cell INV-9 matrix, where each cell has its own terminal,
     category, QA status, cost and metric expectations.
 - Coverage counters: `make lint`'s interrogate stage reports 100% docstring
   coverage over 7,364 definitions; pytest reports 2,448 passed, 1 skipped and
