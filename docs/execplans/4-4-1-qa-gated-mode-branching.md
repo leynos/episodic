@@ -1458,7 +1458,7 @@ Production changes:
 
 1. **New migration
    `alembic/versions/20261122_000018_add_qa_gated_quality_mode.py`**, with
-   `down_revision="20261010_000013"`.
+   `down_revision="20261110_000017"`.
    - Upgrade: `ALTER TYPE quality_mode ADD VALUE IF NOT EXISTS 'qa_gated'`,
      then the same statement on `qa_status` for `pending`, `passed` and
      `failed`.

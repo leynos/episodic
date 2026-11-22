@@ -1,12 +1,12 @@
 """The ``run_idempotent`` precondition runs only when a replay is ruled out."""
 
 import asyncio
-import contextlib
 import dataclasses as dc
 import types
 import typing as typ
 import uuid
 
+import falcon
 import pytest
 
 from episodic.api.source_idempotency import (
@@ -14,12 +14,7 @@ from episodic.api.source_idempotency import (
     IdempotentResponse,
     run_idempotent,
 )
-from episodic.canonical.idempotency import (
-    Acquired,
-    Conflict,
-    InFlight,
-    Replay,
-)
+from episodic.canonical.idempotency import Acquired, Conflict, InFlight, Replay
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -29,7 +24,7 @@ class _Request:
     """Minimal request carrying the headers idempotency needs."""
 
     def __init__(self, key: str | None) -> None:
-        """Store the idempotency key."""
+        """Store the idempotency key and principal context."""
         self.context = types.SimpleNamespace(principal_id="principal-a")
         self._key = key
 
@@ -95,6 +90,18 @@ class _Precondition:
         self.calls += 1
 
 
+class _BodyRejected(falcon.HTTPBadRequest):
+    """The 400 a rejected body would produce in production."""
+
+
+class _RejectingPrecondition:
+    """Precondition that rejects the request like a body rule would."""
+
+    def __call__(self) -> None:
+        """Raise the 400 the resource's precondition raises."""
+        raise _BodyRejected(description="budget_hints must be a JSON object.")
+
+
 def _factory(store: _IdempotencyStore) -> cabc.Callable[[], _UnitOfWork]:
     """Return a factory for a unit of work over the given store."""
     return lambda: _UnitOfWork(store)
@@ -106,42 +113,78 @@ async def _work() -> IdempotentResponse:
     return IdempotentResponse(status="202", media={"id": "run"})
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("outcome", "expected_calls"),
-    [
-        (Acquired(uuid.uuid4()), 0),
-        (
-            Replay(
-                b'{"status": "202", "media": {}, "location": null, "retry_after": null}'
-            ),
-            0,
-        ),
-        (Conflict(uuid.uuid4()), 1),
-        (InFlight(uuid.uuid4()), 1),
-    ],
-    ids=["acquired", "replay", "conflict", "in-flight"],
-)
-async def test_precondition_runs_only_without_a_replay(
-    outcome: object,
-    *,
-    expected_calls: int,
-) -> None:
-    """A replay rules out validation; a conflict does not."""
-    precondition = _Precondition()
-    store = _IdempotencyStore(outcome)
-    context = IdempotencyContext(
+def _context() -> IdempotencyContext:
+    """Build the idempotency context the tests pass in."""
+    return IdempotencyContext(
         req=typ.cast("typ.Any", _Request("run-key")),
         operation="generation_run.command",
         body_hash="hash",
     )
 
-    with contextlib.suppress(Exception):
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        Acquired(uuid.uuid4()),
+        Replay(
+            b'{"status": "202", "media": {}, "location": null, "retry_after": null}'
+        ),
+    ],
+    ids=["acquired", "replay"],
+)
+async def test_precondition_is_skipped_when_work_or_replay_decides(
+    outcome: object,
+) -> None:
+    """An acquired record and a stored replay both bypass the precondition."""
+    precondition = _Precondition()
+
+    response = await run_idempotent(
+        typ.cast("typ.Any", _factory(_IdempotencyStore(outcome))),
+        context=_context(),
+        work=_work,
+        precondition=precondition,
+    )
+
+    assert response.status == "202", response.status
+    assert precondition.calls == 0, precondition.calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "outcome",
+    [Conflict(uuid.uuid4()), InFlight(uuid.uuid4())],
+    ids=["conflict", "in-flight"],
+)
+async def test_precondition_runs_before_a_conflict_is_reported(
+    outcome: object,
+) -> None:
+    """A conflict or in-flight outcome validates the body first."""
+    precondition = _Precondition()
+
+    with pytest.raises(falcon.HTTPConflict):
         await run_idempotent(
-            typ.cast("typ.Any", _factory(store)),
-            context=context,
+            typ.cast("typ.Any", _factory(_IdempotencyStore(outcome))),
+            context=_context(),
             work=_work,
             precondition=precondition,
         )
 
-    assert precondition.calls == expected_calls, precondition.calls
+    assert precondition.calls == 1, precondition.calls
+
+
+@pytest.mark.asyncio
+async def test_a_rejecting_precondition_outranks_the_conflict() -> None:
+    """A precondition error is the response, not the conflict."""
+    precondition = _RejectingPrecondition()
+
+    with pytest.raises(falcon.HTTPBadRequest):
+        await run_idempotent(
+            typ.cast(
+                "typ.Any",
+                _factory(_IdempotencyStore(Conflict(uuid.uuid4()))),
+            ),
+            context=_context(),
+            work=_work,
+            precondition=precondition,
+        )

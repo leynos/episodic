@@ -42,10 +42,20 @@ def test_accepted_modes_are_frozen() -> None:
         )
 
 
+def test_the_default_capability_set_is_no_qa_only() -> None:
+    """A default ApiDependencies accepts only draft_without_qa."""
+    dependencies = ApiDependencies(uow_factory=typ.cast("typ.Any", lambda: None))
+    assert dependencies.accepted_quality_modes == frozenset({
+        QualityMode.DRAFT_WITHOUT_QA
+    }), dependencies.accepted_quality_modes
+
+
 def test_dataclass_replace_keeps_the_default_no_qa_mode() -> None:
     """Replacing unrelated fields keeps the default capability set."""
-    dependencies = _dependencies()
-    replaced = dc.replace(dependencies, upload_max_bytes=1024)
+    replaced = dc.replace(
+        ApiDependencies(uow_factory=typ.cast("typ.Any", lambda: None)),
+        upload_max_bytes=1024,
+    )
     assert replaced.accepted_quality_modes == frozenset({
         QualityMode.DRAFT_WITHOUT_QA
     }), replaced.accepted_quality_modes
