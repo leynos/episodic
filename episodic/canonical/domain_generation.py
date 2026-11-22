@@ -8,9 +8,9 @@ from .domain_enums import CheckpointAction, CheckpointStatus, GenerationRunStatu
 from .domain_validation import (
     _copy_json_mapping,
     _is_blank,
-    _validate_draft_without_qa_metadata,
     _validate_non_empty_text,
     _validate_optional_text,
+    _validate_quality_metadata,
 )
 from .generation_quality import QaStatus, QualityMode
 from .generation_run_errors import CheckpointAlreadyTerminal
@@ -100,8 +100,9 @@ class GenerationRun:
         _validate_optional_text(self.current_node, "current_node")
         _validate_optional_text(self.error_message, "error_message")
         _validate_optional_text(self.error_category, "error_category")
-        _validate_draft_without_qa_metadata(
+        _validate_quality_metadata(
             quality_mode=self.quality_mode,
+            status=self.status,
             qa_status=self.qa_status,
             skip_qa_rationale=self.skip_qa_rationale,
         )

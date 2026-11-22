@@ -9,13 +9,13 @@ from .domain_validation import (
     _validate_non_empty_text,
     _validate_optional_text,
 )
+from .generation_quality import QaStatus
 
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
 
     from .domain_enums import ApprovalState, EpisodeStatus, JsonMapping
-    from .generation_quality import QaStatus
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -46,6 +46,12 @@ class CanonicalEpisode:
         )
 
 
+_PERSISTABLE_QA_STATUSES: frozenset[QaStatus] = frozenset({
+    QaStatus.SKIPPED,
+    QaStatus.PASSED,
+})
+
+
 @dc.dataclass(frozen=True, slots=True)
 class EpisodeTeiUpdate:
     """Optimistic TEI update request for a canonical episode."""
@@ -57,9 +63,25 @@ class EpisodeTeiUpdate:
     updated_at: dt.datetime
 
     def __post_init__(self) -> None:
-        """Validate optimistic TEI update invariants."""
+        """Validate optimistic TEI update invariants.
+
+        Only a persisted draft may be recorded: ``skipped`` for a no-QA draft
+        and ``passed`` for a QA-gated one. ``pending`` and ``failed`` describe
+        runs that never wrote TEI.
+
+        Raises
+        ------
+        ValueError
+            If ``qa_status`` is not a persisted-draft status.
+        """
         _validate_non_empty_text(self.tei_xml, "tei_xml")
         _require_value(self.qa_status, "qa_status")
+        if self.qa_status not in _PERSISTABLE_QA_STATUSES:
+            msg = (
+                "qa_status must be skipped or passed when persisting episode TEI; "
+                f"got {self.qa_status.value!r}."
+            )
+            raise ValueError(msg)
         _require_value(self.last_generation_run_id, "last_generation_run_id")
         _require_positive_integer(self.expected_revision, "expected_revision")
 

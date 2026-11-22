@@ -263,7 +263,10 @@ inference budget on a branch that cannot pass.
   recommendation (D1 to D13) accepted as written.
 - [x] (2026-11-22) EP-M0: no-QA characterization baseline. All seven cases are
   green on the unmodified launcher code; see `Artefacts and notes`.
-- [ ] EP-M1: domain quality policy, routing and validation.
+- [ ] EP-M1: domain quality policy and validation. The pure routing policy and
+  graph ports moved to EP-M3 under D14, because the blocking Skylos dead-code
+  gate runs on every commit and those symbols have no production caller until
+  the graph exists.
 - [ ] EP-M2: persistence, migration and lifecycle updates.
 - [ ] EP-M3: content-generation graph in orchestration.
 - [ ] EP-M4: launcher executes runs through the graph.
@@ -644,6 +647,20 @@ accepted in EP-M6. D13 records the review itself.
     - One shared persist node with a branch-tagged terminal: ownership would
       be visible only from history.
   - Date/Author: 2026-10-17, Logisphere panel via the planning agent.
+
+- **Decision D14: land each new domain symbol in the commit that gives it a
+  production caller.**
+  - The Skylos dead-code gate is blocking and runs on every commit.
+  - `generation_routing` and `generation_graph_ports` therefore move from
+    EP-M1 to EP-M3, where the graph builder, the graph runner and the evaluate
+    node call them.
+  - `terminal_outcome` moves to EP-M4, where the launcher session records it.
+  - `apply_status_update` moves to EP-M2 with both store adapters.
+  - Rationale: adding entry-point allow-list rules for symbols with no caller
+    yet would record an unverified runtime caller, which the repository's
+    Skylos policy explicitly forbids.
+  - Date/Author: 2026-11-22, implementation agent. The gate evidence is the
+    EP-M1 Skylos run recorded in `Artefacts and notes`.
 
 ## Outcomes & retrospective
 
@@ -1173,14 +1190,19 @@ These are trusted, not verified.
    these that are missing.
 2. Generate the snapshot on the unmodified code and commit it on its own.
 
-### EP-M1: domain quality policy, routing and validation
+### EP-M1: domain quality policy and validation
+
+Under D14, items 4 and 5 of the original plan (the pure routing policy and the
+graph ports) move to EP-M3, and `apply_status_update` moves to EP-M2, so every
+new symbol lands with a production caller.
 
 Red tests:
 
-- `tests/test_generation_quality_policy.py` (INV-1).
-- `tests/test_generation_routing_policy.py` (INV-3, INV-4, and the
+- `tests/test_generation_quality_policy.py` (INV-1, and the
   `EpisodeTeiUpdate` part of INV-13).
-- New `qa_gated` rows in `tests/test_generation_run_domain.py`.
+- `tests/test_generation_routing_policy.py` (INV-3 and INV-4), which lands in
+  EP-M3 with the graph.
+- New `qa_gated` rows in `tests/test_generation_run_qa_lifecycle.py`.
 
 Production changes:
 
@@ -1202,33 +1224,11 @@ Production changes:
    - Pass `status` to the validator.
    - Keep the defaults `quality_mode=DRAFT_WITHOUT_QA` and
      `qa_status=None`.
-   - Add the pure helper `apply_status_update(run, update) -> GenerationRun`.
-     It resolves the `UNCHANGED` sentinel and returns `dc.replace(...)`, so
-     `__post_init__` re-validates.
-   - If importing `GenerationRunStatusUpdate` here would create a cycle,
-     define the helper in `generation_run_ports.py` instead, and add
-     `episodic.canonical.generation_run_ports` to the `domain_ports`
-     prefixes (it is ungrouped today).
-4. **New `episodic/canonical/generation_routing.py`** (`domain_ports`, pure
-   policy only), containing:
-   - the enums `QualityBranch`, `QualityVerdict`, `EvaluationRoute`
-     (`PASS`, `ESCALATE`) and `GenerationTerminal`;
-   - the functions `route_quality_mode`, `branch_for_terminal`,
-     `aggregate_verdicts` and `route_after_evaluation`;
-   - `TerminalOutcome` and `terminal_outcome`.
-5. **New `episodic/canonical/generation_graph_ports.py`** (`domain_ports`:
-   protocols, value objects and domain errors), containing:
-   - `EvaluationSubject` and `QualityEvaluation`;
-   - `QualityEvaluatorPort`;
-   - `QualityEvaluatorSet`, with `evaluator_timeout_seconds: float = 120.0`;
-   - `ContentGenerationRequest`, `ContentGenerationSteps` and
-     `ContentGenerationGraphPort`;
-   - `QualityEvaluationUnavailableError` and `ContentGenerationGraphError`;
-   - the `Unchanged` sentinel, unless it is placed beside
-     `GenerationRunStatusUpdate`.
-6. **`pyproject.toml`.** Add the new modules to the `domain_ports` prefixes.
-   Confirm that no new prefix is a string prefix of a module in another group.
-7. **ADR 024.** Write
+   - `apply_status_update` moves to EP-M2 under D14.
+4. **`episodic/canonical/domain_episodes.py`.** `EpisodeTeiUpdate` rejects any
+   `qa_status` other than `skipped` or `passed` (moved here from EP-M2 under
+   D14 so the INV-13 test is green in this milestone).
+5. **ADR 024.** Write
    `docs/adr/adr-024-qa-gated-mode-branching-and-content-generation-graph.md`
    with status `Proposed`, recording D1 to D12.
 
@@ -1753,7 +1753,7 @@ Record the following here as each milestone completes:
   `make nixie` all passed on this tree. The `make markdownlint` spelling
   prerequisite regenerated `typos.toml`; the generated bytes are committed
   separately as a base change.
-- Surprise: the materialised episode already carries a placeholder TEI hash,
+- Surprise: the materialized episode already carries a placeholder TEI hash,
   so the "missing episode" case has to inject the fault by replacing the
   episode repository rather than by storing a dangling run: both
   `generation_runs.episode_id` and `source_bundle_id` are foreign keys with
