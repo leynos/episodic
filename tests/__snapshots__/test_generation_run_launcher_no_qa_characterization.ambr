@@ -1,0 +1,680 @@
+# serializer version: 1
+# name: test_no_qa_run_characterization[generator_cancelled]
+  dict({
+    'episode': dict({
+      'has_generated_draft': False,
+      'qa_status': None,
+      'tei_content_hash': '<sha256>',
+      'tei_revision': 1,
+    }),
+    'events': list([
+      dict({
+        'kind': 'run.started',
+        'payload': dict({
+          'current_node': 'draft',
+        }),
+      }),
+      dict({
+        'kind': 'run.failed',
+        'payload': dict({
+          'error_category': 'launcher.shutdown',
+          'error_message': 'Generation task cancelled during shutdown.',
+        }),
+      }),
+    ]),
+    'metrics': list([
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'latency_ms',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_draft_latency_ms',
+        'value': '<elapsed_ms>',
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'launcher.shutdown',
+          'status': 'failed',
+        }),
+        'name': 'generation_run_terminal_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'launcher.shutdown',
+        }),
+        'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+    ]),
+    'run': dict({
+      'current_node': None,
+      'error_category': 'launcher.shutdown',
+      'error_message': 'Generation task cancelled during shutdown.',
+      'has_ended_at': True,
+      'has_started_at': True,
+      'qa_status': 'skipped',
+      'quality_mode': 'draft_without_qa',
+      'skip_qa_rationale': 'Vertical slice draft.',
+      'status': 'failed',
+    }),
+    'spans': list([
+      dict({
+        'attributes': dict({
+          'failure_category': 'launcher.shutdown',
+          'operation': 'generation_run.execute',
+          'outcome': 'cancelled',
+          'run_id': '<uuid>',
+        }),
+        'is_completed': True,
+        'name': 'generation_run.execute',
+      }),
+    ]),
+  })
+# ---
+# name: test_no_qa_run_characterization[invalid_tei]
+  dict({
+    'episode': dict({
+      'has_generated_draft': False,
+      'qa_status': None,
+      'tei_content_hash': '<sha256>',
+      'tei_revision': 1,
+    }),
+    'events': list([
+      dict({
+        'kind': 'run.started',
+        'payload': dict({
+          'current_node': 'draft',
+        }),
+      }),
+      dict({
+        'kind': 'draft.generated',
+        'payload': dict({
+          'content_hash': '<sha256>',
+          'finish_reason': 'stop',
+          'model': 'gpt-4o-mini',
+          'provider_response_id': 'resp-draft-1',
+          'usage': dict({
+            'input_tokens': 10,
+            'output_tokens': 20,
+            'total_tokens': 30,
+          }),
+        }),
+      }),
+      dict({
+        'kind': 'tei.invalid',
+        'payload': dict({
+          'error_category': 'tei.invalid',
+        }),
+      }),
+      dict({
+        'kind': 'run.failed',
+        'payload': dict({
+          'error_category': 'tei.invalid',
+          'error_message': 'XML processing error: ill-formed document: start tag not closed: `</TEI>` not found before end of input',
+        }),
+      }),
+    ]),
+    'metrics': list([
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'latency_ms',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_draft_latency_ms',
+        'value': '<elapsed_ms>',
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'tei.invalid',
+          'status': 'failed',
+        }),
+        'name': 'generation_run_terminal_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'tei.invalid',
+        }),
+        'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+    ]),
+    'run': dict({
+      'current_node': None,
+      'error_category': 'tei.invalid',
+      'error_message': 'XML processing error: ill-formed document: start tag not closed: `</TEI>` not found before end of input',
+      'has_ended_at': True,
+      'has_started_at': True,
+      'qa_status': 'skipped',
+      'quality_mode': 'draft_without_qa',
+      'skip_qa_rationale': 'Vertical slice draft.',
+      'status': 'failed',
+    }),
+    'spans': list([
+      dict({
+        'attributes': dict({
+          'failure_category': 'tei.invalid',
+          'operation': 'generation_run.execute',
+          'outcome': 'failed',
+          'run_id': '<uuid>',
+        }),
+        'is_completed': True,
+        'name': 'generation_run.execute',
+      }),
+    ]),
+  })
+# ---
+# name: test_no_qa_run_characterization[missing_episode]
+  dict({
+    'episode': dict({
+      'has_generated_draft': False,
+      'qa_status': None,
+      'tei_content_hash': '<sha256>',
+      'tei_revision': 1,
+    }),
+    'events': list([
+      dict({
+        'kind': 'run.started',
+        'payload': dict({
+          'current_node': 'draft',
+        }),
+      }),
+      dict({
+        'kind': 'run.failed',
+        'payload': dict({
+          'error_category': 'episode.not_found',
+          'error_message': 'Episode <uuid> was not found.',
+        }),
+      }),
+    ]),
+    'metrics': list([
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'episode.not_found',
+          'status': 'failed',
+        }),
+        'name': 'generation_run_terminal_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'episode.not_found',
+        }),
+        'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+    ]),
+    'run': dict({
+      'current_node': None,
+      'error_category': 'episode.not_found',
+      'error_message': 'Episode <uuid> was not found.',
+      'has_ended_at': True,
+      'has_started_at': True,
+      'qa_status': 'skipped',
+      'quality_mode': 'draft_without_qa',
+      'skip_qa_rationale': 'Vertical slice draft.',
+      'status': 'failed',
+    }),
+    'spans': list([
+      dict({
+        'attributes': dict({
+          'failure_category': 'episode.not_found',
+          'operation': 'generation_run.execute',
+          'outcome': 'failed',
+          'run_id': '<uuid>',
+        }),
+        'is_completed': True,
+        'name': 'generation_run.execute',
+      }),
+    ]),
+  })
+# ---
+# name: test_no_qa_run_characterization[provider_failure]
+  dict({
+    'episode': dict({
+      'has_generated_draft': False,
+      'qa_status': None,
+      'tei_content_hash': '<sha256>',
+      'tei_revision': 1,
+    }),
+    'events': list([
+      dict({
+        'kind': 'run.started',
+        'payload': dict({
+          'current_node': 'draft',
+        }),
+      }),
+      dict({
+        'kind': 'run.failed',
+        'payload': dict({
+          'error_category': 'provider.transient',
+          'error_message': 'try again later',
+        }),
+      }),
+    ]),
+    'metrics': list([
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'latency_ms',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_draft_latency_ms',
+        'value': '<elapsed_ms>',
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'provider.transient',
+          'status': 'failed',
+        }),
+        'name': 'generation_run_terminal_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'provider.transient',
+        }),
+        'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+    ]),
+    'run': dict({
+      'current_node': None,
+      'error_category': 'provider.transient',
+      'error_message': 'try again later',
+      'has_ended_at': True,
+      'has_started_at': True,
+      'qa_status': 'skipped',
+      'quality_mode': 'draft_without_qa',
+      'skip_qa_rationale': 'Vertical slice draft.',
+      'status': 'failed',
+    }),
+    'spans': list([
+      dict({
+        'attributes': dict({
+          'failure_category': 'provider.transient',
+          'operation': 'generation_run.execute',
+          'outcome': 'failed',
+          'run_id': '<uuid>',
+        }),
+        'is_completed': True,
+        'name': 'generation_run.execute',
+      }),
+    ]),
+  })
+# ---
+# name: test_no_qa_run_characterization[shutdown_during_generation]
+  dict({
+    'episode': dict({
+      'has_generated_draft': False,
+      'qa_status': None,
+      'tei_content_hash': '<sha256>',
+      'tei_revision': 1,
+    }),
+    'events': list([
+      dict({
+        'kind': 'run.started',
+        'payload': dict({
+          'current_node': 'draft',
+        }),
+      }),
+      dict({
+        'kind': 'run.failed',
+        'payload': dict({
+          'error_category': 'launcher.shutdown',
+          'error_message': 'Generation task cancelled during shutdown.',
+        }),
+      }),
+    ]),
+    'metrics': list([
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'latency_ms',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_draft_latency_ms',
+        'value': '<elapsed_ms>',
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'launcher.shutdown',
+          'status': 'failed',
+        }),
+        'name': 'generation_run_terminal_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'launcher.shutdown',
+        }),
+        'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+    ]),
+    'run': dict({
+      'current_node': None,
+      'error_category': 'launcher.shutdown',
+      'error_message': 'Generation task cancelled during shutdown.',
+      'has_ended_at': True,
+      'has_started_at': True,
+      'qa_status': 'skipped',
+      'quality_mode': 'draft_without_qa',
+      'skip_qa_rationale': 'Vertical slice draft.',
+      'status': 'failed',
+    }),
+    'spans': list([
+      dict({
+        'attributes': dict({
+          'failure_category': 'launcher.shutdown',
+          'operation': 'generation_run.execute',
+          'outcome': 'cancelled',
+          'run_id': '<uuid>',
+        }),
+        'is_completed': True,
+        'name': 'generation_run.execute',
+      }),
+    ]),
+  })
+# ---
+# name: test_no_qa_run_characterization[source_limit]
+  dict({
+    'episode': dict({
+      'has_generated_draft': False,
+      'qa_status': None,
+      'tei_content_hash': '<sha256>',
+      'tei_revision': 1,
+    }),
+    'events': list([
+      dict({
+        'kind': 'run.started',
+        'payload': dict({
+          'current_node': 'draft',
+        }),
+      }),
+      dict({
+        'kind': 'run.failed',
+        'payload': dict({
+          'error_category': 'generation.source_limit',
+          'error_message': 'Generation source exceeds byte limit.',
+        }),
+      }),
+    ]),
+    'metrics': list([
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'generation.source_limit',
+          'status': 'failed',
+        }),
+        'name': 'generation_run_terminal_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'generation.source_limit',
+        }),
+        'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+    ]),
+    'run': dict({
+      'current_node': None,
+      'error_category': 'generation.source_limit',
+      'error_message': 'Generation source exceeds byte limit.',
+      'has_ended_at': True,
+      'has_started_at': True,
+      'qa_status': 'skipped',
+      'quality_mode': 'draft_without_qa',
+      'skip_qa_rationale': 'Vertical slice draft.',
+      'status': 'failed',
+    }),
+    'spans': list([
+      dict({
+        'attributes': dict({
+          'failure_category': 'generation.source_limit',
+          'operation': 'generation_run.execute',
+          'outcome': 'failed',
+          'run_id': '<uuid>',
+        }),
+        'is_completed': True,
+        'name': 'generation_run.execute',
+      }),
+    ]),
+  })
+# ---
+# name: test_no_qa_run_characterization[success]
+  dict({
+    'episode': dict({
+      'has_generated_draft': True,
+      'qa_status': 'skipped',
+      'tei_content_hash': '<sha256>',
+      'tei_revision': 2,
+    }),
+    'events': list([
+      dict({
+        'kind': 'run.started',
+        'payload': dict({
+          'current_node': 'draft',
+        }),
+      }),
+      dict({
+        'kind': 'draft.generated',
+        'payload': dict({
+          'content_hash': '<sha256>',
+          'finish_reason': 'stop',
+          'model': 'gpt-4o-mini',
+          'provider_response_id': 'resp-draft-1',
+          'usage': dict({
+            'input_tokens': 10,
+            'output_tokens': 20,
+            'total_tokens': 30,
+          }),
+        }),
+      }),
+      dict({
+        'kind': 'tei.persisted',
+        'payload': dict({
+          'content_hash': '<sha256>',
+          'qa_status': 'skipped',
+          'tei_revision': 2,
+        }),
+      }),
+      dict({
+        'kind': 'run.succeeded',
+        'payload': dict({
+          'current_node': 'complete',
+        }),
+      }),
+    ]),
+    'metrics': list([
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'latency_ms',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_draft_latency_ms',
+        'value': '<elapsed_ms>',
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'error_category': 'none',
+          'status': 'succeeded',
+        }),
+        'name': 'generation_run_terminal_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'value',
+        'labels': dict({
+        }),
+        'name': 'generation_run_pending_depth',
+        'value': 0.0,
+      }),
+    ]),
+    'run': dict({
+      'current_node': None,
+      'error_category': None,
+      'error_message': None,
+      'has_ended_at': True,
+      'has_started_at': True,
+      'qa_status': 'skipped',
+      'quality_mode': 'draft_without_qa',
+      'skip_qa_rationale': 'Vertical slice draft.',
+      'status': 'succeeded',
+    }),
+    'spans': list([
+      dict({
+        'attributes': dict({
+          'operation': 'generation_run.execute',
+          'outcome': 'completed',
+          'run_id': '<uuid>',
+        }),
+        'is_completed': True,
+        'name': 'generation_run.execute',
+      }),
+    ]),
+  })
+# ---

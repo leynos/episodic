@@ -111,6 +111,19 @@ class ReleasableDraftGenerator:
         return self.result
 
 
+class CancelledDraftGenerator:
+    """Draft generator fake that raises ``CancelledError`` from inside itself."""
+
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+
+    async def generate(self, request: DraftScriptRequest) -> DraftScriptResult:
+        """Raise cancellation without any external cancellation request."""
+        _ = request
+        self.started.set()
+        raise asyncio.CancelledError
+
+
 @dc.dataclass(slots=True)
 class RecordingCostRecorder:
     """Cost recorder fake that captures provider calls and roll-ups."""
