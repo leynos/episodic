@@ -168,4 +168,3 @@ class ApiDependencies:
         return ProbeHealthObserver.from_checks(
             (probe.name, probe.check) for probe in self.readiness_probes
         )
-# weave: run 'weave explain episodic/api/dependencies.py' for per-hunk detail, 'weave check' to verify your resolution

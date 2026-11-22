@@ -1003,7 +1003,7 @@ persistence land in later roadmap items.
 The content generation workflow is a compiled LangGraph `StateGraph`. Roadmap
 item `4.4.1` implements its first slice: a quality branch immediately after
 `initialize` that either persists a no-QA draft directly or evaluates a
-QA-gated candidate before persistence or escalation. ADR 024 records the
+QA-gated candidate before persistence or escalation. ADR 0029 records the
 decisions.
 
 The implemented topology gives each branch its own nodes and terminal; only

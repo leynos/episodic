@@ -65,22 +65,6 @@ _GENERATION_RUN_OPERATION = "generation_run.create"
 _DEFAULT_MAX_SOURCE_COUNT = 32
 
 
-import datetime as dt
-import uuid
-
-"""Falcon resources for no-QA generation-run creation and polling."""
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-    import uuid
-    from episodic.api.types import UowFactory
-    from episodic.generation.launcher import GenerationRunLauncher
-    from episodic.observability import SpanHandle, TracerPort
-__all__ = [
-]
-_GENERATION_RUN_OPERATION = "generation_run.create"
-_DEFAULT_MAX_SOURCE_COUNT = 32
-
-
 @dc.dataclass(frozen=True, slots=True)
 class GenerationRunsResourceConfig:
     """Ports and deterministic seams for generation-run resource creation.
@@ -97,6 +81,9 @@ class GenerationRunsResourceConfig:
         Optional limit for source materialisation.
     tracer : TracerPort | None
         Optional tracing port used by the resource.
+    accepted_quality_modes : frozenset[QualityMode]
+        Quality modes this deployment can execute. ``draft_without_qa`` must
+        always be present; ``qa_gated`` is added only when evaluators exist.
     """
 
     launcher: GenerationRunLauncher | None
@@ -104,6 +91,9 @@ class GenerationRunsResourceConfig:
     uuid_factory: UuidFactory = uuid7
     max_source_count: int | None = None
     tracer: TracerPort | None = None
+    accepted_quality_modes: frozenset[QualityMode] = frozenset({
+        QualityMode.DRAFT_WITHOUT_QA
+    })
 
 
 class GenerationRunsResource:
@@ -354,4 +344,3 @@ class GenerationRunsResource:
                 await uow.rollback()
             else:
                 await uow.commit()
-# weave: run 'weave explain episodic/api/resources/generation_runs.py' for per-hunk detail, 'weave check' to verify your resolution

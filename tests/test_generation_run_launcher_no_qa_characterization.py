@@ -33,13 +33,13 @@ from tests.generation_run_launcher_observation_support import RecordingMetrics
 from tests.generation_run_launcher_support import (
     NOW,
     BlockingDraftGenerator,
-    CancelledDraftGenerator,
     FailingDraftGenerator,
     RecordingDraftGenerator,
     draft_result,
     prepare_pending_run,
     valid_tei,
 )
+from tests.generation_run_quality_support import CancelledDraftGenerator
 from tests.no_qa_characterization_support import Findings, payload
 
 if typ.TYPE_CHECKING:

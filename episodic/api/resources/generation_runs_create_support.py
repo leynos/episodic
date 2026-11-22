@@ -24,6 +24,7 @@ _GATED_RATIONALE_MESSAGE = (
 
 class _CreateGenerationRun(typ.NamedTuple):
     """Parsed fields of a no-QA generation-run creation request."""
+
     quality_mode: QualityMode
 
     skip_qa_rationale: str | None

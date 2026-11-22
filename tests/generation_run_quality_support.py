@@ -1,4 +1,4 @@
-"""Deterministic evaluator doubles for launcher quality-mode tests."""
+"""Deterministic evaluator doubles and QA-run fixtures for launcher tests."""
 
 import asyncio
 import dataclasses as dc
@@ -8,16 +8,33 @@ from episodic.canonical.generation_graph_ports import (
     EvaluationSubject,
     QualityEvaluation,
 )
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_routing import QualityVerdict
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from tests.generation_run_launcher_support import (
+    _prepare_pending_run,
+    _run,
+)
 
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
 
-    from episodic.canonical.domain import GenerationEvent, JsonMapping
-    from episodic.canonical.generation_run_ports import GenerationRunEventStore
-    from episodic.canonical.storage.generation_runs import SqlAlchemyGenerationRunStore
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from episodic.canonical.domain import (
+        GenerationEvent,
+        GenerationRun,
+        JsonMapping,
+    )
+    from episodic.canonical.generation_run_ports import (
+        GenerationRunEventStore,
+        GenerationRunPort,
+    )
+    from episodic.generation.draft_script import (
+        DraftScriptRequest,
+        DraftScriptResult,
+    )
 
 
 @dc.dataclass(slots=True)
@@ -124,7 +141,7 @@ class TaskNameAssertingUnitOfWork(SqlAlchemyUnitOfWork):
         """Open the real unit of work and wrap its run store."""
         uow = await super().__aenter__()
         uow.generation_runs = typ.cast(
-            "SqlAlchemyGenerationRunStore",
+            "GenerationRunPort",
             _TaskNameAssertingRunStore(uow.generation_runs),
         )
         return uow
@@ -134,6 +151,7 @@ class _TaskNameAssertingRunStore:
     """Run store proxy that asserts the appending task's name."""
 
     def __init__(self, inner: GenerationRunEventStore) -> None:
+        """Wrap the store whose appends are checked."""
         self._inner = inner
 
     def __getattr__(self, name: str) -> object:
@@ -172,6 +190,7 @@ async def assert_off_task_append_is_rejected(
     """Prove the task-name wrapper rejects an append from another task."""
 
     async def _append_from_foreign_task() -> None:
+        """Append from a task that is not named for the run."""
         await _TaskNameAssertingRunStore(store).append_event(
             run_id,
             kind="foreign",
@@ -185,3 +204,37 @@ async def assert_off_task_append_is_rejected(
         return
     msg = "the task-name wrapper accepted an append from a foreign task"
     raise AssertionError(msg)
+
+
+class CancelledDraftGenerator:
+    """Draft generator fake that raises ``CancelledError`` from inside itself."""
+
+    def __init__(self) -> None:
+        """Create the generator and its start signal."""
+        self.started = asyncio.Event()
+
+    async def generate(self, request: DraftScriptRequest) -> DraftScriptResult:
+        """Raise cancellation without any external cancellation request."""
+        _ = request
+        self.started.set()
+        raise asyncio.CancelledError
+
+
+def _qa_gated_run(
+    episode_id: uuid.UUID,
+    source_bundle_id: uuid.UUID,
+) -> GenerationRun:
+    """Return a pending QA-gated generation run."""
+    return dc.replace(
+        _run(episode_id, source_bundle_id),
+        quality_mode=QualityMode.QA_GATED,
+        qa_status=QaStatus.PENDING,
+        skip_qa_rationale=None,
+    )
+
+
+async def prepare_pending_qa_gated_run(
+    factory: async_sessionmaker[AsyncSession],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """Persist a ready episode and a pending QA-gated generation run."""
+    return await _prepare_pending_run(factory, _qa_gated_run)

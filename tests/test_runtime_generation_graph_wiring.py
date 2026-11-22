@@ -117,6 +117,7 @@ def test_composition_root_advertises_the_graph_capability(
     captured: dict[str, ApiDependencies] = {}
 
     def _capture(dependencies: ApiDependencies) -> object:
+        """Record the dependencies the composition root built."""
         captured["dependencies"] = dependencies
         return object()
 
@@ -135,8 +136,11 @@ def test_composition_root_advertises_the_graph_capability(
         lambda *args, **kwargs: _UnusedLLMPort(),
     )
     monkeypatch.setattr(runtime_module, "FilesystemObjectStore", _unused_object_store)
-    monkeypatch.setattr(runtime_module, "StructuredLogMetrics", _unused_metrics)
-    monkeypatch.setattr(runtime_module, "StructuredLogTracer", _unused_tracer)
+    monkeypatch.setattr(
+        runtime_module,
+        "configure_structured_observability",
+        lambda level: (_unused_metrics(), _unused_tracer()),
+    )
 
     runtime_module.create_app_from_env()
 

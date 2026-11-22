@@ -66,8 +66,6 @@ def inference_server_returns_non_tei(
     select_malformed_completion(generation_slice_context)
 
 
-
-
 @when("I create a draft-without-qa run twice with the same idempotency key and body")
 def create_draft_without_qa_run_twice(
     generation_slice_context: NoQaGenerationSliceContext,
@@ -158,4 +156,3 @@ def second_response_is_conflict(
     no_qa_generation_slice_assertions.second_response_is_conflict(
         generation_slice_context
     )
-# weave: run 'weave explain tests/steps/test_no_qa_generation_slice.py' for per-hunk detail, 'weave check' to verify your resolution

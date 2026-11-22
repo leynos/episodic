@@ -6,7 +6,7 @@ import typing as typ
 
 import falcon
 
-from episodic.api.episode_access import read_owned_episode
+from episodic.api.episode_access import read_owned_episode_and_run
 from episodic.api.errors import http_error
 from episodic.api.helpers import parse_uuid
 from episodic.api.serializers import serialize_tei_envelope
@@ -17,7 +17,7 @@ if typ.TYPE_CHECKING:
     import uuid
 
     from episodic.api.types import UowFactory
-    from episodic.canonical.domain import CanonicalEpisode, GenerationRun
+    from episodic.canonical.domain import CanonicalEpisode
     from episodic.canonical.generation_quality import QualityMode
     from episodic.observability import TracerPort
 
@@ -88,11 +88,14 @@ class EpisodeTeiResource:
                 raise
             actor = principal_id(req)
             async with self._uow_factory() as uow:
-                episode = await read_owned_episode(uow, parsed_episode_id, actor)
-            if episode is None or not _has_generated_draft(episode):
+                resolved = await read_owned_episode_and_run(
+                    uow, parsed_episode_id, actor
+                )
+            if resolved is None or not _has_generated_draft(resolved[0]):
                 span.set_attribute("outcome", "not_found")
                 span.set_attribute("failure_category", "episode.not_found")
                 raise _tei_not_found(parsed_episode_id)
+            episode, run = resolved
             try:
                 media_type = negotiate_tei_media_type(req.accept)
             except falcon.HTTPNotAcceptable:
@@ -100,7 +103,6 @@ class EpisodeTeiResource:
                 span.set_attribute("failure_category", "not_acceptable")
                 raise
             span.set_attribute("representation", media_type)
-            run = typ.cast("GenerationRun", run)
             if media_type == _TEI_MEDIA_TYPE:
                 _apply_tei_attachment(req, resp, episode)
             else:
@@ -222,4 +224,3 @@ def _tei_not_found(episode_id: uuid.UUID) -> falcon.HTTPNotFound:
             details={"episode_id": str(episode_id)},
         ),
     )
-# weave: run 'weave explain episodic/api/resources/episode_tei.py' for per-hunk detail, 'weave check' to verify your resolution

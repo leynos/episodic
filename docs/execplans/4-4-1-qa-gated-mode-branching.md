@@ -93,11 +93,11 @@ inference budget on a branch that cannot pass.
   - A `qa_gated` run's `qa_status` stays at `pending`, unless a terminal had
     already committed.
 - **Respect the hexagonal boundaries enforced by Hecate.** These are
-  configured under `[tool.hecate]` in `pyproject.toml` and described in ADR 014
-  and ADR 022.
+  configured under `[tool.hecate]` in `pyproject.toml` and described in ADR
+  0014 and ADR 0022.
   - Domain policy and port protocols live in `domain_ports`.
   - Graph node functions and graph state live in `orchestration_nodes`. They
-    must not import `langgraph`, because ADR 022 says to "keep LangGraph
+    must not import `langgraph`, because ADR 0022 says to "keep LangGraph
     framework mechanics out of node functions". Hecate does not check
     third-party imports, so code review must enforce this.
   - The graph builder and the graph runner live in `orchestration`.
@@ -201,7 +201,7 @@ inference budget on a branch that cannot pass.
   - Severity: medium. Likelihood: high.
   - Mitigation:
     - The project is pre-1.0.
-    - ADR 024 and the users' guide state that the `qa.escalated` event is the
+    - ADR 0029 and the users' guide state that the `qa.escalated` event is the
       stable signal, and that `qa.escalation_required` is specific to 4.4.1.
     - They also state that `paused` is a reachable status meaning "action
       needed".
@@ -324,7 +324,7 @@ inference budget on a branch that cannot pass.
     cleanly (D7).
 - **Observation: the design diagram and the prose disagree about no-QA
   drafts.** The diagram sends both modes through one shared `Persist Draft`
-  node and on into `Prepare for Approval`. The prose and ADR 017 say no-QA
+  node and on into `Prepare for Approval`. The prose and ADR 0017 say no-QA
   drafts have no approval flow. In any case, the approval state machine (4.2.1)
   is not built.
   - Impact: D3 and D4.
@@ -370,7 +370,7 @@ inference budget on a branch that cannot pass.
 ## Decision log
 
 Decisions D1 to D12 were proposed in the first draft (`5814b812`) and revised
-after the expert-panel review. ADR 024 records them during EP-M1 and is
+after the expert-panel review. ADR 0029 records them during EP-M1 and is
 accepted in EP-M6. D13 records the review itself.
 
 - **Decision D1: compile the content-generation graph once and inject it
@@ -388,7 +388,7 @@ accepted in EP-M6. D13 records the review itself.
     never import `langgraph`.
   - Rationale:
     - Hecate forbids `application` from importing `orchestration`.
-    - ADR 017 anticipated this replacement.
+    - ADR 0017 anticipated this replacement.
     - `launch(run_id)` is unchanged.
     - Roadmap items 4.4.2 and 4.4.3 need a real cyclic graph.
     - The runtime context keeps the compiled graph stateless and shareable.
@@ -401,7 +401,7 @@ accepted in EP-M6. D13 records the review itself.
   - Application objects (`ClaimedRun`, `DraftScriptResult`) stay inside a
     per-run *run session*. The launcher owns the session, and the session
     implements `ContentGenerationSteps`.
-  - Rationale: this satisfies ADR 022, gives each run a single writer, and
+  - Rationale: this satisfies ADR 0022, gives each run a single writer, and
     keeps checkpoint payloads to orchestration metadata only.
   - Date/Author: 2026-10-17, planning agent.
 - **Decision D3: fork before generation, and give each branch its own
@@ -697,7 +697,7 @@ What was delivered:
 
 - Domain policy: `qa_gated`, the four QA statuses, one exhaustive
   quality-metadata rule, and a persisted-draft-only `EpisodeTeiUpdate`.
-- Persistence: additive enum labels in revision `20261017_000014`, the
+- Persistence: additive enum labels in revision `20261122_000018`, the
   `UNCHANGED` QA sentinel with one shared status-update helper in both
   adapters, and a TEI envelope that reports the producing run's mode.
 - Orchestration: pure routing policy, graph ports, node functions that import
@@ -710,7 +710,7 @@ What was delivered:
 - REST and composition root: the capability gate, the gated-rationale rule,
   idempotency-key release, and one graph whose accepted modes are advertised to
   the API.
-- Documentation: ADR 024 accepted, ADR 017 annotated, and the system design,
+- Documentation: ADR 0029 accepted, ADR 0017 annotated, and the system design,
   TUI API design, users' guide, developers' guide, contents index, and roadmap
   updated.
 
@@ -849,7 +849,7 @@ Documentation to read before each milestone:
 - `docs/episodic-tui-api-design.md`: "Generation runs", the event catalogue
   (about lines 636–647), and the source-to-script vertical slice.
 - ADRs 009, 014, 015 (generation-run port split), 017 and 022, in
-  `docs/adr/`.
+  `docs/adrs/`.
 - `docs/langgraph-and-celery-in-hexagonal-architecture.md` (conditional
   routing as application policy) and
   `docs/agentic-systems-with-langgraph-and-celery.md`.
@@ -886,10 +886,10 @@ Upstream artefacts:
 - **Technical design:** `docs/episodic-podcast-generation-system-design.md`
   at `468923ed`, section "Content Generation Graph" (SD-CGG).
 - **ADRs:**
-  - ADR 009, the source-to-script slice (ADR-009).
-  - ADR 014, hexagonal enforcement (ADR-014).
-  - ADR 017, no-QA execution and the launcher port (ADR-017).
-  - ADR 022, orchestration architecture enforcement (ADR-022).
+  - ADR 0009, the source-to-script slice (ADR-0009).
+  - ADR 0014, hexagonal enforcement (ADR-0014).
+  - ADR 0017, no-QA execution and the launcher port (ADR-0017).
+  - ADR 0022, orchestration architecture enforcement (ADR-0022).
 - **Governing standards:** `AGENTS.md`, `docs/documentation-style-guide.md`,
   and `.rules/python-*.md`.
 
@@ -914,11 +914,11 @@ RM-441-B -> SD-CGG.QualityBranch -> D3, D9, D11, D12 -> EP-M0, EP-M3, EP-M4 -> I
 RM-441-C -> SD-CGG.Evaluate -> D1, D4, D8, D10 -> EP-M3, EP-M4 -> INV-4, INV-5, INV-9
 RM-441-D -> SD-CGG -> D3 -> EP-M1, EP-M3 -> INV-3, INV-5, INV-7
 RM-441-S -> SD-CGG -> D1-D12 -> EP-M5 -> tests/features/qa_gated_generation_routing.feature
-RM-44-CONC -> ADR-017 -> D2, D5, D12 -> EP-M4 -> INV-9, INV-10
-ADR-022 -> D1, D2 -> EP-M3 -> make lint (Hecate), tests/test_production_hecate_orchestration_config.py
+RM-44-CONC -> ADR-0017 -> D2, D5, D12 -> EP-M4 -> INV-9, INV-10
+ADR-0022 -> D1, D2 -> EP-M3 -> make lint (Hecate), tests/test_production_hecate_orchestration_config.py
 ```
 
-Deviations from SD-CGG, all recorded in ADR 024 and reconciled in EP-M6:
+Deviations from SD-CGG, all recorded in ADR 0029 and reconciled in EP-M6:
 
 1. The fork comes before generation, with one generate node per branch (D3).
 2. Persist Draft is split into one node per branch (D3).
@@ -1314,8 +1314,8 @@ Production changes:
 4. **`episodic/canonical/domain_episodes.py`.** `EpisodeTeiUpdate` rejects any
    `qa_status` other than `skipped` or `passed` (moved here from EP-M2 under
    D14 so the INV-13 test is green in this milestone).
-5. **ADR 024.** Write
-   `docs/adr/adr-024-qa-gated-mode-branching-and-content-generation-graph.md`
+5. **ADR 0029.** Write
+   `docs/adrs/adr-0029-qa-gated-mode-branching-and-content-generation-graph.md`
    with status `Proposed`, recording D1 to D12.
 
 ### EP-M2: persistence, migration and lifecycle updates
@@ -1331,7 +1331,7 @@ Red tests:
 Production changes:
 
 1. **New migration
-   `alembic/versions/20261017_000014_add_qa_gated_quality_mode.py`**, with
+   `alembic/versions/20261122_000018_add_qa_gated_quality_mode.py`**, with
    `down_revision="20261010_000013"`.
    - Upgrade: `ALTER TYPE quality_mode ADD VALUE IF NOT EXISTS 'qa_gated'`,
      then the same statement on `qa_status` for `pending`, `passed` and
@@ -1547,12 +1547,12 @@ Production and test-support changes:
 
 ### EP-M6: documentation, ADR acceptance and roadmap
 
-1. **ADR 024.**
+1. **ADR 0029.**
    - Set the status to `Accepted (YYYY-MM-DD)` with a summary.
    - Reconcile it with what was built.
    - Link it from the design document's "Content Generation Graph" and
      "Source-to-script vertical slice" sections.
-   - Add a "superseded in part by ADR 024" note to ADR 017's 422 rule.
+   - Add a "superseded in part by ADR 0029" note to ADR 0017's 422 rule.
 2. **`docs/episodic-podcast-generation-system-design.md`.**
    - Update the graph prose and the Mermaid diagram for D3 and D4.
    - Keep the "For screen readers" description in step with the diagram.
@@ -1585,7 +1585,7 @@ Production and test-support changes:
      coverage, literal truth tables and seeded faults.
 
    Update "No-QA launcher and TEI retrieval" to match.
-6. **`docs/contents.md`.** Index ADR 024.
+6. **`docs/contents.md`.** Index ADR 0029.
 7. **`docs/roadmap.md`.** Mark 4.4.1 `[x]` with a one-line summary.
 8. **Gates.** Run `make fmt`, `make markdownlint` and `make nixie`, then the
    full gates.
@@ -1630,7 +1630,7 @@ Production and test-support changes:
   - Requirements: RM-441-B, RM-441-C and RM-441-D at the graph level.
   - Acceptance: INV-5, INV-7 and Hecate pass.
   - Conformance check:
-    - ADR 022 is respected.
+    - ADR 0022 is respected.
     - No `allowed` list changes.
     - No `langgraph` import in `orchestration_nodes`.
     - The only deviations from SD-CGG are D3 and D4.
@@ -1661,7 +1661,7 @@ Production and test-support changes:
   - Recovery: revert the EP-M5 commits.
   - Compatibility: existing `draft_without_qa` clients are unaffected.
 - **EP-M6.**
-  - Outcome: the documentation matches the behaviour, ADR 024 is accepted,
+  - Outcome: the documentation matches the behaviour, ADR 0029 is accepted,
     and the roadmap is marked done.
   - Acceptance: `make markdownlint`, `make nixie` and the full gates pass.
   - Conformance: every deviation is reconciled upstream.
@@ -2025,7 +2025,7 @@ Dependencies: no new packages.
 - 2026-11-22: implementation completed across EP-M0 to EP-M6. D14 resequenced
   symbol landing for the dead-code gate, D15 recorded the only INV-0 snapshot
   change, and D16 corrected the inline-execution axiom after INV-9 exposed the
-  child-task behaviour. ADR 024 was accepted.
+  child-task behaviour. ADR 0029 was accepted.
 - 2026-10-17: revised after the expert-panel design review (D13). The
   changes are:
   - Moved the fork before generation (D3).

@@ -1286,6 +1286,18 @@ reason = "The same shared validator called on different fields."
 [[tool.duplication_gate.allow]]
 members = ["episodic/runtime_providers.py::utc_now", "episodic/cost/pricing_catalogue/file_loader.py::_default_now"]
 reason = "Two one-line clock defaults at different layers: the service-runtime providers expose the production clock for injected collaborators, and the file catalogue keeps a local default so it can be constructed without a runtime composition root."
+[[tool.duplication_gate.allow]]
+members = ["episodic/generation/launcher_support.py", "episodic/api/episode_access.py"]
+reason = "Both modules end with a TYPE_CHECKING import block of the same two annotation-only names; an import list cannot be factored into a helper."
+[[tool.duplication_gate.allow]]
+members = ["episodic/orchestration/_content_graph_nodes.py::generate_draft_without_qa", "episodic/orchestration/_content_graph_nodes.py::generate_qa_candidate"]
+reason = "Each branch must own its generate node so the topology states branch ownership; both delegate to the same run-session step, which is the whole point."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/generation_quality.py", "episodic/canonical/generation_routing.py"]
+reason = "A one-line docstring terminator coincidence in two pure policy modules; their contents are unrelated."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/unit_of_work_protocols.py", "episodic/generation/launcher_host.py", "episodic/api/serializers.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/upload_protocols.py", "episodic/api/handlers.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/operation_observation.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/profile_templates/types.py", "episodic/cost/storage/metering.py", "episodic/api/resources/episode_tei.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/uow.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/orchestration/langgraph_costs.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/profile_templates/helpers.py", "episodic/generation/launcher_quality.py"]
+reason = "Annotation-only TYPE_CHECKING import blocks: each module imports the domain, port and observability names its own signatures use. An import list cannot be factored into a helper, and a re-export facade would add a hop every reader must follow."
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"

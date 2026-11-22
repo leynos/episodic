@@ -12,7 +12,7 @@ import typing as typ
 if typ.TYPE_CHECKING:
     import uuid
 
-    from episodic.canonical.domain import CanonicalEpisode
+    from episodic.canonical.domain import CanonicalEpisode, GenerationRun
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
@@ -46,6 +46,33 @@ async def read_owned_episode(
     failure against a request that never wrote it. The repositories keep that
     boundary themselves, so this function reads without managing autoflush.
     """
+    resolved = await read_owned_episode_and_run(uow, episode_id, actor)
+    return None if resolved is None else resolved[0]
+
+
+async def read_owned_episode_and_run(
+    uow: CanonicalUnitOfWork,
+    episode_id: uuid.UUID,
+    actor: str | None,
+) -> tuple[CanonicalEpisode, GenerationRun] | None:
+    """Return an owned episode with the launcher run that produced it.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit of work used to read the episode and its launcher run.
+    episode_id : uuid.UUID
+        Episode to resolve.
+    actor : str | None
+        Authenticated principal, or ``None`` when the request carries no
+        credential.
+
+    Returns
+    -------
+    tuple[CanonicalEpisode, GenerationRun] | None
+        The episode and its producing run when both exist and the run's actor
+        equals ``actor``; otherwise ``None``.
+    """
     if actor is None:
         return None
     episode = await uow.episodes.get(episode_id)
@@ -54,4 +81,4 @@ async def read_owned_episode(
     run = await uow.generation_runs.get_run(episode.last_generation_run_id)
     if run is None or run.actor != actor:
         return None
-    return episode
+    return episode, run

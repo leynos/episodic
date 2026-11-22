@@ -36,7 +36,6 @@ from .generation_run_lease_reclamation import (
 type TimeProvider = cabc.Callable[[], dt.datetime]
 
 
-
 """Ephemeral in-memory generation-run adapter for tests and local development."""
 type TimeProvider = cabc.Callable[[], dt.datetime]
 

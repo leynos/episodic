@@ -44,17 +44,6 @@ if typ.TYPE_CHECKING:
     )
 
 
-
-"""SQLAlchemy adapter for durable generation runs and event logs."""
-if typ.TYPE_CHECKING:
-    import datetime as dt
-    import uuid
-    from sqlalchemy.engine import CursorResult
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from episodic.canonical.generation_run_ports import (
-    from episodic.canonical.storage.generation_run_storage_runtime import (
-
-
 class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
     """Durable generation-run repository and event-log adapter.
 

@@ -31,8 +31,8 @@ Three forces shape the design:
 - LangGraph must execute nodes inline in the launcher task. The launcher is the
   single writer of a run's events and status, and ordered publication depends
   on nodes running in that task.
-- Hecate (ADR-0014, ADR-0022) keeps LangGraph mechanics out of node functions and
-  keeps the application layer independent of orchestration. The composition
+- Hecate (ADR-0014, ADR-0022) keeps LangGraph mechanics out of node functions
+  and keeps the application layer independent of orchestration. The composition
   root injects the graph.
 
 Roadmap items `4.4.2` to `4.4.4` will add Chrono evaluators, refinement, and a

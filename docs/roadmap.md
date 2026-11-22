@@ -807,7 +807,7 @@ and iteration-cap invariants across generated run states.
   - Done (2026-11-22): every run executes through a compiled content-generation
     graph; `qa_gated` is accepted only where evaluators are configured, and it
     either persists a QA-passed draft or fails with `qa.escalation_required`
-    without writing TEI. ADR 024 records the decisions.
+    without writing TEI. ADR 0029 records the decisions.
 
 - [ ] 4.4.2. Invoke Chrono in-loop and emit duration-based QA findings.
   - Requires 2.2.6 and 4.4.1.

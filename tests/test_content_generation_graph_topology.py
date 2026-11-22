@@ -176,6 +176,7 @@ def test_reachability_reports_a_shared_node(shared_name: str) -> None:
         state: ContentGenerationGraphState,
         context: ContentGenerationContext,
     ) -> dict[str, object]:
+        """Return an empty state delta."""
         _ = (state, context)
         await asyncio.sleep(0)
         return {}

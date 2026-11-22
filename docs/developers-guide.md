@@ -2668,8 +2668,8 @@ unbounded run identifiers in metric labels.
 ### Content-generation graph and quality branch
 
 Every launcher run executes through the content-generation graph introduced in
-roadmap item `4.4.1`. ADR 024 records the decisions and the deviations from the
-system design.
+roadmap item `4.4.1`. ADR 0029 records the decisions and the deviations from
+the system design.
 
 The layers are strict:
 

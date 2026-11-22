@@ -112,6 +112,7 @@ class ScriptedEvaluator:
     """Evaluator that returns, raises, hangs, or cancels as scripted."""
 
     def __init__(self, name: str, behaviour: str) -> None:
+        """Store the evaluator slug and its scripted behaviour."""
         self._name = name
         self._behaviour = behaviour
         self.call_count = 0
@@ -203,6 +204,7 @@ def wrap_node(node: NodeFn) -> GraphNode:
         state: ContentGenerationGraphState,
         runtime: Runtime[ContentGenerationContext],
     ) -> dict[str, object]:
+        """Execute the wrapped node with the run's context."""
         return await node(state, runtime.context)
 
     return run

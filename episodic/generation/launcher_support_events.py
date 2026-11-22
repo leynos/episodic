@@ -16,7 +16,17 @@ from episodic.canonical.episode_errors import (
     EpisodeNotFoundError,
     EpisodeRevisionConflictError,
 )
+from episodic.canonical.generation_graph_ports import (
+    ContentGenerationGraphError,
+    QualityEvaluation,
+    QualityEvaluationUnavailableError,
+)
 from episodic.canonical.generation_persistence import InvalidDraftTeiError
+from episodic.canonical.generation_quality import QaStatus
+from episodic.canonical.generation_routing import (
+    QualityVerdict,  # ruff: ignore[typing-only-first-party-import]  # EscalationEvent annotations are evaluated at construction.
+)
+from episodic.canonical.generation_run_ports import UNCHANGED, Unchanged
 from episodic.cost.ports import (
     BillingPeriodKey,
     IdempotencyKey,
@@ -40,33 +50,6 @@ if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
 
-    from episodic.canonical.domain import JsonMapping
-
-
-from episodic.canonical.generation_graph_ports import (
-    ContentGenerationGraphError,
-    QualityEvaluation,
-    QualityEvaluationUnavailableError,
-)
-from episodic.canonical.generation_quality import QaStatus
-from episodic.canonical.generation_routing import (
-    QualityVerdict,  # ruff: ignore[typing-only-first-party-import]  # EscalationEvent annotations are evaluated at construction.
-)
-from episodic.canonical.generation_run_ports import UNCHANGED, Unchanged
-
-"""Map draft-script results and failures onto events, cost, and error records.
-The event-payload and provider-record helpers translate ``DraftScriptResult``
-usage, provider metadata, and content hashes into generation event payloads
-and the ``CostRecorderPort`` contract's ``ProviderCallRecord``.
-``classify_failure`` preserves stable terminal failure categories for the API
-and metrics. These helpers accept the canonical unit of work and outbound
-ports supplied by the launcher; they do not open, commit, or dispose
-persistence sessions themselves.
-"""
-    QualityVerdict,  # ruff: ignore[typing-only-first-party-import]  # EscalationEvent annotations are evaluated at construction.
-if typ.TYPE_CHECKING:
-    import datetime as dt
-    import uuid
     from episodic.canonical.domain import JsonMapping
 
 

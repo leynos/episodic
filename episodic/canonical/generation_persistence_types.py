@@ -250,4 +250,3 @@ class _SourceDocumentProjection:
     episode_id: uuid.UUID
     document_id: uuid.UUID
     now: dt.datetime
-# weave: run 'weave explain episodic/canonical/generation_persistence_types.py' for per-hunk detail, 'weave check' to verify your resolution
