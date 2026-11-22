@@ -94,9 +94,11 @@ included quota, a flat fee, custom pricing, a sub-cent per-request price) is
 refused at start-up with an error naming the card, the plan, and the metric,
 rather than mispricing calls later.
 
-Third, every card the catalogue loads, used or not, is persisted to
-`pricing_snapshots` when the API process starts, so the database keeps a
-complete history of the prices that were in force.
+Third, every card the running catalogue loaded, used or not, is persisted to
+`pricing_snapshots` shortly after the API process starts, so the database keeps
+a complete history of the prices that were in force. The API builds a pricing
+catalogue only when an LLM is configured, exactly as today, so archival runs
+only in those deployments (D7).
 
 No production code records evaluator (`helper_service`) calls yet; evaluators
 still run in-process and their model calls are billed as LLM calls. This item
@@ -201,10 +203,15 @@ and start-up hook 140, discovery tool 300 split across a script and a support
 package) and about 2,700 net lines of tests, so 4,200 lines. The budget adds 20
 percent contingency for review hardening.
 
-- Files: if the cumulative change touches more than 50 non-ExecPlan files,
-  stop and escalate with a proposed split.
-- Code: if code exceeds 5,000 net lines cumulatively, or any single milestone
-  exceeds 1,800 net lines, stop and escalate.
+- Files: if the cumulative change touches more than 65 non-ExecPlan files,
+  stop and escalate with a proposed split. (A count of the files this plan
+  names comes to about 54: 13 production, 6 tool, 3 tool-test, about 16
+  main-suite test and behavioural, about 7 configuration and fixture, and 9
+  documentation files.)
+- Code: if code exceeds 5,000 net lines cumulatively, if EP-M2 exceeds 2,200
+  net lines (it lands the decoders, model, parser, pricing, and card loader
+  together, because each is the others' only production caller), or if any
+  other milestone exceeds 1,500 net lines, stop and escalate.
 - Configuration: if configuration exceeds 450 net lines (most of it SLA4OAI
   test fixtures), stop and escalate.
 - Documentation: if documentation exceeds 900 net lines, stop and escalate.
@@ -308,6 +315,9 @@ percent contingency for review hardening.
   and contracts; failure modes and scale with a pre-mortem; alternatives and
   viability; protocol, security, and verification). All four returned "Revise".
   Findings applied; see `Decision log` D1 to D11 and the revision note.
+- [x] (2026-11-22 21:45Z) Closing confirmation review: "Proceed with
+  conditions"; all conditions applied to D4, D7, D8, OB-1, OB-2, OB-4, OB-6,
+  the tolerances, and EP-M1 to EP-M6.
 - [ ] Plan approved by the user, including D1 and the follow-up roadmap item.
 - [ ] `EP-M1` Exact amount helpers extracted, behaviour preserved.
 - [ ] `EP-M2` Vendored SLA4OAI plans priced through the catalogue.
@@ -371,19 +381,22 @@ percent contingency for review hardening.
   Add runtime OpenAPI `info.x-sla` discovery for externalized evaluator
   services", whose prerequisite is an item that externalizes an evaluator and
   records `helper_service` usage. Adding that item to `docs/roadmap.md`
-  requires the user's approval of this plan. Rationale: the roadmap says
-  "support **future** … discovery", and the design document conditions it on
-  evaluators being externalized; no evaluator is, and nothing records evaluator
-  calls. All four reviewers found that the first draft's runtime discovery
-  (lazy refresh inside `resolve`, a history transaction, fail-soft fallback,
-  first-seen deduplication) would run network and database work inside the
-  caller's row-locked transaction, could hang py-pglite tests and self-deadlock
-  in production, dated first revisions after the calls they had to price, raced
-  across processes, and could not pass the Skylos gate because its code had no
-  production caller. Vendoring makes every price change a reviewed pull
-  request, keeps `retrieved_at` and `effective_from` fixed in Git (so
-  content-hash deduplication is free), keeps `resolve` pure, and needs no new
-  settings, port, migration, or deployment change. It honours the design
+  requires the user's approval of this plan. No roadmap item externalizes an
+  evaluator today, so the proposed `2.5.6` states that prerequisite in prose
+  rather than as a `Requires` link; the user may prefer to add an
+  externalization item as well (open question for approval). Rationale: the
+  roadmap says "support **future** … discovery", and the design document
+  conditions it on evaluators being externalized; no evaluator is, and nothing
+  records evaluator calls. All four reviewers found that the first draft's
+  runtime discovery (lazy refresh inside `resolve`, a history transaction,
+  fail-soft fallback, first-seen deduplication) would run network and database
+  work inside the caller's row-locked transaction, could hang py-pglite tests
+  and self-deadlock in production, dated first revisions after the calls they
+  had to price, raced across processes, and could not pass the Skylos gate
+  because its code had no production caller. Vendoring makes every price change
+  a reviewed pull request, keeps `retrieved_at` and `effective_from` fixed in
+  Git (so content-hash deduplication is free), keeps `resolve` pure, and needs
+  no new settings, port, migration, or deployment change. It honours the design
   document's "pins immutable pricing snapshots … exactly as it pins provider
   rate cards today" and "the fetched document is stored verbatim". Trade-off
   accepted: a published price change is picked up only when an operator re-runs
@@ -439,27 +452,42 @@ percent contingency for review hardening.
   old rows keep wrong derived values. Alternative rejected: a schema-version-2
   snapshot with quota fields; it changes the canonical form and every vector,
   and the quota semantics belong to `2.5.3`.
-- D4. Decision: the catalogue accepts a plan only if every metric limit that
+- D4. Decision: the catalogue accepts a plan only if every quota limit that
   applies to the bound operation can be priced exactly, per call, by today's
-  engine; otherwise the card is refused at start-up with `Sla4OaiPricingError`
-  naming the card, plan, operation, metric, and reason. A metric limit is
+  engine; otherwise the card is refused at start-up. The only metric this item
+  prices is `requests` (unit `request`): evaluators bill per request, and
+  nothing produces any other helper-service metric. The `requests` limit is
   priceable when, after merging (D5): exactly one limit object applies;
   `custom` is absent or false; `max` is `0`; it carries `cost.overage` with a
-  positive integer `overage` and a finite, non-negative `cost`; the metric name
-  has a fixed unit in the snapshot vocabulary (`required_unit_for`, today
-  `requests` and the token, character, and millisecond metrics); and, for a
-  request-denominated metric, the reduced rate has `per_units == 1` (at least
-  one whole minor unit per request). The plan's `pricing` must not be `custom`
-  (either `custom: true` or `cost: "custom"`) and its `cost` must be absent or
-  zero. A throughput limit (`rates`) on the bound operation that carries any
-  `cost` is refused; one without a cost is ignored. A plan that prices no
-  metric is refused. `{overage: N, cost: C}` is read as `C` major units per `N`
-  units, pro rata, which becomes `MeteredRate.reduced(C * 10**exponent, N)`.
-  Rationale: the engine raises nothing for a metric it can price, so the only
-  safe refusal point is load time; failing at record time would roll back an
-  already-paid draft (ADR-028 known risk) as an `unexpected` failure. Included
-  quotas, flat fees, sub-cent request prices, and per-period settlement all need
-  `2.5.3` metering or later settlement work.
+  positive integer `overage` and a finite, non-negative `cost`; and the reduced
+  rate has `per_units == 1`, so every request costs a whole number of minor
+  units and the engine's per-call truncation never loses money. A zero `cost`
+  is a valid, exact price (free requests). Any quota limit on the bound
+  operation for another metric, with or without a cost, refuses the plan,
+  because usage beyond it could not be priced. The plan's `pricing` must not be
+  `custom` (either `custom: true` or `cost: "custom"`) and its `cost` must be
+  absent or zero. A throughput limit (`rates`) on the bound operation that
+  carries any `cost` is refused; one without a cost is ignored. A plan with no
+  `requests` quota for the bound operation is refused. `{overage: N, cost: C}`
+  is read as `C` major units per `N` requests, pro rata: with
+  `(p, q) = decimal_fraction(C * 10**exponent)`, the rate is
+  `MeteredRate.reduced(p, q * N)`, as `_parse_rate` in `_document.py` already
+  builds card rates. Checks run in a fixed order (dialect, plan existence, plan
+  pricing, path and method matching, metric set, limit shape, rate
+  granularity), so each refused document reports one deterministic reason.
+  Error ownership: the domain raises `Sla4OaiPricingError` naming the plan,
+  operation, metric, JSON pointer, and reason, but never a file path;
+  `_sla4oai_card.py` re-raises it as
+  `PricingCatalogueError(f"{path}: …") from exc`, keeping
+  `FilePricingCatalogue`'s documented error contract. Rationale: the engine
+  raises nothing for a metric it can price, so the only safe refusal point is
+  load time; failing at record time would roll back an already-paid draft
+  (ADR-028 known risk) as an `unexpected` failure. Token, character, and
+  millisecond rates would reintroduce per-call truncation (0.002 USD per 1,000
+  tokens becomes `MeteredRate(1, 5000)`, and a 3,000-token call floors to 0);
+  they wait for `2.5.3`'s rounding decision. Included quotas, flat fees,
+  sub-cent request prices, and per-period settlement all need `2.5.3` metering
+  or later settlement work.
 - D5. Decision: ingest only the research dialect (SLA4OAI 0.10.0), identified
   by a `context` object carrying `version` or `sla` (number or string,
   normalized to a string) and `type: plans`. A document with a root `sla` or
@@ -491,21 +519,37 @@ percent contingency for review hardening.
   strict UTF-8 without a byte-order mark. Parsers check types strictly
   (`type(value) is bool`; numbers are `int` or `Decimal`, never `str`).
   Rationale: exact prices and unambiguous keys; no alias bombs.
-- D7. Decision: the API archives every snapshot the catalogue loaded when the
-  process starts. A new application service, `archive_pricing_snapshots` in
-  `episodic/cost/pricing_archive.py`, calls `PricingSnapshotRepository.ensure`
-  for each snapshot in its own short unit of work, commits, logs one summary
-  line (persisted and reused counts), and on any failure logs the snapshot's
-  subject and content hash with the error category, increments a counter, and
-  continues with the next snapshot. `FilePricingCatalogue` gains a query,
-  `loaded_snapshots() -> tuple[PricingSnapshot, ...]`. The composition root
-  registers the archival as a start-up hook, run by a new
-  `_StartupHooksMiddleware.process_startup` in `episodic/api/app.py`, symmetric
-  with the existing `_ShutdownHooksMiddleware`. Rationale: delivers "persist
-  pricing snapshots for historical reference" for cards no call has used,
-  without touching `resolve` or the request path. Archival is idempotent by
-  content hash, so many processes starting at once only reuse rows. Best-effort
-  is correct because the recorder still persists every snapshot it prices.
+- D7. Decision: the API archives every snapshot the running catalogue loaded,
+  in the background, shortly after the process starts. A new application
+  service, `archive_pricing_snapshots` in `episodic/cost/pricing_archive.py`,
+  calls `PricingSnapshotRepository.ensure` for each snapshot in its own short
+  unit of work, commits, logs one summary line (persisted and reused counts),
+  and on a snapshot-level failure (for example a tampered stored row) logs the
+  snapshot's subject and content hash with the error category, increments a
+  counter, and continues with the next snapshot. It stops at the first
+  connection-class failure, because every later snapshot would wait out the
+  same outage. `FilePricingCatalogue` gains a query,
+  `loaded_snapshots() -> tuple[PricingSnapshot, ...]`. Lifecycle:
+  `create_app_from_env` builds the catalogue in its LLM-configured branch,
+  passes it into `_build_generation_launcher` (which today builds it
+  internally), and only in that branch registers a start-up hook and a matching
+  shutdown hook. The start-up hook, run by a new
+  `_StartupHooksMiddleware.process_startup` in `episodic/api/app.py` (symmetric
+  with the existing `_ShutdownHooksMiddleware`), only launches archival as a
+  tracked background task wrapped in one `asyncio.timeout` (30 seconds), so
+  start-up completes immediately even when the database is unreachable, and
+  readiness keeps reporting the database as it does today. The shutdown hook
+  cancels and awaits that task, and is ordered before `engine.dispose`.
+  `ApiDependencies` (in `episodic/api/dependencies.py`) gains `startup_hooks`,
+  validated in `__post_init__` exactly as `shutdown_hooks` is. Deployments
+  without an LLM build no catalogue today and archive nothing; building a
+  catalogue there would add a new start-up failure mode on a malformed card,
+  which the Constraints forbid. Rationale: delivers "persist pricing snapshots
+  for historical reference" for cards no call has used, without touching
+  `resolve`, the request path, or start-up latency. Archival is idempotent by
+  content hash (`ensure` inserts with `ON CONFLICT DO NOTHING` and re-reads by
+  hash), so many processes starting at once only reuse rows. Best-effort is
+  correct because the recorder still persists every snapshot it prices.
 - D8. Decision: the discovery tool is `scripts/vendor_sla4oai_plan.py` (a
   Cyclopts command) with its logic in `scripts/sla4oai_vendoring/` and tests in
   `scripts/tests/`. It runs in the project environment and imports the
@@ -527,15 +571,26 @@ percent contingency for review hardening.
   `$self` base is refused. Relative references resolve against the final
   retrieval URI of the OpenAPI document (RFC 3986 §5.1.3), after rejecting
   references that `urljoin`'s non-strict parsing would misread (for example
-  `https:evil/p`). The tool writes to temporary files, validates the card
-  through the real loader, then renames; it never overwrites an existing file.
-  When a card for the same subject already exists, `--effective-from` is
-  required, so a new revision never silently replaces the old one for past
-  instants. Rationale: `info.x-sla` discovery is executable and tested end to
-  end now, while network code stays outside the service, outside the Skylos
-  roots, and under operator review. A CLI subcommand was rejected because the
-  `cli` Hecate group may not import the catalogue adapter (a new allowed edge,
-  out of tolerance).
+  `https:evil/p`). The tool stages its output in a temporary copy of the output
+  directory and validates the whole staged directory with
+  `FilePricingCatalogue`, so duplicate subject and `effective_from` pairs are
+  caught as well as malformed cards; only then does it rename the new files
+  into place, and it never overwrites an existing file. When a card for the
+  same subject already exists, `--effective-from` is required and must be later
+  than that subject's latest existing card and not in the past, so a new
+  revision never silently replaces the old one for past instants. The Cyclopts
+  options are a frozen dataclass (as `ClusterOpts` in `scripts/local_k8s.py`),
+  so Ruff's argument-count rules do not fire. Deviation from
+  `docs/scripting-standards.md`, recorded: the standard asks for a PEP 723
+  inline-metadata block and a `uv run --script` shebang, which a tool that
+  imports `episodic` cannot meet; like `scripts/local_k8s.py`, it runs in the
+  project environment with `uv run python`. `scripts/` is inside Ruff, `ty`,
+  and pytest scope, and the editable install puts the repository root on
+  `sys.path`, so `scripts.sla4oai_vendoring` imports resolve. Rationale:
+  `info.x-sla` discovery is executable and tested end to end now, while network
+  code stays outside the service, outside the Skylos roots, and under operator
+  review. A CLI subcommand was rejected because the `cli` Hecate group may not
+  import the catalogue adapter (a new allowed edge, out of tolerance).
 - D9. Decision: retire the handwritten `sla4oai_plan` card form. A card with
   `source_kind: sla4oai_plan` must carry an `sla4oai` block and no `rates` or
   `currency`; the old form fails with a `PricingCatalogueError` that names the
@@ -583,8 +638,8 @@ matches, so every new module must be registered under a prefix explicitly.
 
 Modules this plan touches, with their sizes at the comparison base:
 
-- `episodic/cost/pricing_snapshot.py` (262 lines): `PricingSnapshot`, its
-  validators, and the private `_METRIC_UNITS` table. Domain.
+- `episodic/cost/pricing_snapshot.py` (262 lines): `PricingSnapshot` and its
+  validators. Domain. Not modified.
 - `episodic/cost/pricing_snapshot_values.py` (246 lines): `MeteredRate`,
   `SourceDocument` (at most 262,144 UTF-8 bytes), `PricingSubject`,
   `PricedService`, `UsageUnit`. Domain. Not modified.
@@ -597,8 +652,10 @@ Modules this plan touches, with their sizes at the comparison base:
   card adapter. Outbound adapter (`episodic.cost.pricing_catalogue`).
 - `episodic/api/app.py`: Falcon ASGI app and `_ShutdownHooksMiddleware`.
   Inbound adapter.
-- `episodic/api/runtime.py`, `episodic/api/types.py`: the API composition root
-  and `ApiDependencies`.
+- `episodic/api/runtime.py`: the API composition root
+  (`create_app_from_env`, `_build_generation_launcher`).
+- `episodic/api/dependencies.py`: `ApiDependencies`, including the validated
+  `shutdown_hooks` tuple.
 - `pyproject.toml`: Hecate groups, Skylos entry points
   (`[[tool.skylos.dead_code.entrypoints]]`), and the duplication allow-list
   (`[tool.duplication_gate]`).
@@ -759,27 +816,31 @@ the deviation, and the design document is updated in EP-M6.
   (`0.0001`, `1e-4`, `1.0E-4`, `5`, `0`) within range and every supported
   currency, decoding `s` through either strict decoder and then
   `major_amount_rate(value, n, unit, currency)` yields a rate equal to
-  `Fraction(s) * 10**exponent / n` in lowest terms; out-of-range values raise
-  `Sla4OaiDocumentError`, never a bare `ValueError`. Method: Hypothesis
-  property with the independent oracle `fractions.Fraction(text)`, generating
-  both notations and both media types, plus named examples. Non-vacuity:
-  `hypothesis.event` classifies zero, integral, fractional, exponent-form, and
-  out-of-range inputs, and the test asserts each class occurred; a seeded fault
-  that decodes YAML with plain `SafeLoader` fails the property on `0.1` and on
-  `1e-4`. Artefact: `tests/test_cost_pricing_amounts_properties.py`.
+  `Fraction(s) * 10**exponent / n` in lowest terms. Out-of-range values make
+  the domain helper raise `AmountRangeError` (a `ValueError` subclass in
+  `pricing_amounts.py`), which the SLA4OAI parser turns into
+  `Sla4OaiDocumentError` and `_document.py` turns into its existing rate-card
+  message, byte for byte. Method: Hypothesis property with the independent
+  oracle `fractions.Fraction(text)`, generating both notations and both media
+  types, plus named examples. Non-vacuity: `hypothesis.event` classifies zero,
+  integral, fractional, exponent-form, and out-of-range inputs, and the test
+  asserts each class occurred; a seeded fault that decodes YAML with plain
+  `SafeLoader` fails the property on `0.1` and on `1e-4`. Artefact:
+  `tests/test_cost_pricing_amounts_properties.py`.
 - OB-2 (strict decoding). The YAML decoder resolves exactly the YAML 1.2 core
   subset in D6 and refuses every other construct named there; the JSON decoder
   refuses duplicates and non-finite constants. Method: a parameterized truth
   table, one row per construct with its expected value or error (`0.0001`,
   `1e-4`, `017`, `0x1A`, `1:30`, `on`, `yes`, `2016-01-12`, `.inf`, `.nan`,
   `~`, an alias, `<<`, `!!binary`, a non-string key, a NUL, a byte-order mark,
-  duplicate keys); plus a round-trip property: any generated JSON-compatible
-  value (recursive strategy over string-keyed dictionaries, lists, strings,
-  integers, finite decimals, booleans, and `None`) rendered with `json.dumps`
-  decodes to an equal value through both decoders. Non-vacuity: the strategy
-  classifies nesting depth and leaf types, and each class must occur; removing
-  the alias-rejection override must fail the alias row. Artefacts:
-  `tests/test_cost_pricing_decoding.py` and
+  duplicate keys, and a JSON integer longer than 4,300 digits, which makes
+  `json.loads` raise a bare `ValueError` that the decoder must wrap); plus a
+  round-trip property: any generated JSON-compatible value (recursive strategy
+  over string-keyed dictionaries, lists, strings, integers, finite decimals,
+  booleans, and `None`) rendered with `json.dumps` decodes to an equal value
+  through both decoders. Non-vacuity: the strategy classifies nesting depth and
+  leaf types, and each class must occur; removing the alias-rejection override
+  must fail the alias row. Artefacts: `tests/test_cost_pricing_decoding.py` and
   `tests/test_cost_pricing_decoding_properties.py`.
 - OB-3 (merge precedence and ambiguity). For generated global defaults and
   plans, the effective limit for each `(path, method, metric)` is the plan's if
@@ -791,15 +852,19 @@ the deviation, and the design document is updated in EP-M6.
   specification's `petstore-plans.yml` sample (corrected) as a named case that
   must be refused as ambiguous. Non-vacuity: classify which level wins and
   which refusal fires; every class must occur.
-- OB-4 (fail-closed pricing). For any plan, `plan_rates` returns a rate for a
-  metric if and only if every D4 condition holds, and otherwise refuses the
-  card. Method: Hypothesis property over generated limits with an oracle that
-  checks the D4 conditions directly; seeded-fault named cases, each of which
-  must be refused: `max: 20` with overage, a throughput limit carrying a cost,
-  two limits for one metric, `0.0001` per request, `pricing.cost: "custom"`,
-  `custom: true`, `pricing.cost: 50`, `max: "unlimited"`, an unknown metric
-  such as `animalTypes`, and a globbed path matching the bound path.
-  Non-vacuity: both outcomes and every refusal reason must occur across the run.
+- OB-4 (fail-closed pricing). For any plan, `plan_rates` returns a `requests`
+  rate if and only if every D4 condition holds, and otherwise refuses with the
+  first failing reason in D4's fixed check order. Method: Hypothesis property
+  over generated limits with an oracle that checks the D4 conditions directly,
+  in the same order; seeded-fault named cases, each of which must be refused
+  for its own reason: `max: 20` with a 0.01 overage, a throughput limit
+  carrying a cost, two limits for `requests`, `0.0001` per request, `0.05` per
+  10 requests, `pricing.cost: "custom"`, `custom: true`, `pricing.cost: 50`,
+  `max: "unlimited"`, a second metric such as `animalTypes` or `input_tokens`
+  on the bound operation, a free cap (`max: 5`, no cost) on another metric, no
+  `requests` quota at all, and a globbed path matching the bound path. A zero
+  `cost` must be accepted as a free, exact price. Non-vacuity: both outcomes
+  and every refusal reason must occur across the run.
 - OB-5 (verbatim, stable documents). Loading a vendored document stores its
   text byte for byte, including CRLF line endings, non-ASCII text, and no
   trailing newline; a byte-order mark is refused; loading the same card twice
@@ -809,14 +874,23 @@ the deviation, and the design document is updated in EP-M6.
   snapshot. Non-vacuity: the fixture must contain `\r\n` and a non-ASCII
   character (asserted before loading).
 - OB-6 (archival). Archiving the same loaded snapshots any number of times
-  leaves exactly one row per distinct content hash; a failure on one snapshot
+  leaves exactly one row per distinct content hash; a snapshot-level failure
   (for example a tampered stored row) is logged and counted, and the remaining
-  snapshots are still archived; archival never opens a unit of work while
-  another is open. Method: py-pglite tests through `session_factory`, reusing
-  the `_tamper_stored_rates` helper, each wrapped in `asyncio.timeout(10)` so a
-  nested-session hang fails fast; a Falcon lifespan test that the start-up hook
-  runs once before the first request. Non-vacuity: the tamper case must show a
-  logged failure and a persisted sibling.
+  snapshots are still archived; a connection-class failure stops archival after
+  one attempt; archival never opens a unit of work while another is open;
+  start-up completes within one second even when the unit-of-work factory
+  blocks forever; and shutdown cancels an unfinished archival task before the
+  engine is disposed. Method: py-pglite tests through `session_factory`,
+  reusing the `_tamper_stored_rates` helper, each wrapped in
+  `asyncio.timeout(10)` so a nested-session hang fails fast; a Falcon lifespan
+  test with a fake factory that blocks forever, asserting that start-up
+  completes and that shutdown cancels the task. Non-vacuity: the tamper case
+  must show a logged failure and a persisted sibling, and the blocking-factory
+  case must show the factory was entered. The existing
+  `tests/test_lifespan_hooks.py::test_runtime_lifespan_shuts_down_generation_before_database`
+  patches `_build_generation_launcher` with a bare `object()` unit-of-work
+  factory; it is updated for the new catalogue argument and hook ordering in
+  the same commit.
 - OB-7 (discovery tool URI and fetch policy). A finite truth table over
   reference forms (string, `{"$ref"}`, `./`, `../`, absolute, protocol-relative,
   `https:evil/p`, leading whitespace, backslash) and refusal classes
@@ -834,8 +908,8 @@ the deviation, and the design document is updated in EP-M6.
   exactly one.
 - OB-8 (unchanged rate-card behaviour). Every existing pricing test passes
   unchanged except `test_crlf_plan_document_is_stored_verbatim`, rewritten per
-  D9, and the pinned hash vectors are byte-for-byte unchanged. Method: the
-  existing suites plus
+  D9, and the lifespan-ordering test updated per OB-6; the pinned hash vectors
+  are byte-for-byte unchanged. Method: the existing suites plus
   `git diff d0bdabe3 -- tests/__snapshots__/test_cost_pricing_snapshot_hash.ambr`.
 
 The change introduces no lemma that needs a formal prover: the arithmetic in
@@ -861,14 +935,18 @@ passes at each plateau. After each milestone run, sequentially, `make fmt`,
 Assigned: RM-1 (no behaviour change). Plateau: rate cards parse through the
 shared amount helper; nothing else changes.
 
-1. Create `episodic/cost/pricing_amounts.py` with `decimal_fraction` (from
-   `_is_representable_amount`, `_decimal_amount`, and `_amount_fraction` in
-   `_document.py`). `_document.py` imports it and shrinks.
+1. Create `episodic/cost/pricing_amounts.py` with `decimal_fraction` and
+   `AmountRangeError(ValueError)` (from `_is_representable_amount`,
+   `_decimal_amount`, and `_amount_fraction` in `_document.py`). The helper
+   raises `AmountRangeError` without a file path; `_document.py` catches it and
+   calls `_fail(path, <existing message>)`, so every rate-card error message
+   stays byte-identical. `_document.py` imports the helper and shrinks.
    `MINOR_UNIT_EXPONENTS` and `major_amount_rate` land in EP-M2 with their
    caller, so Skylos never sees them unused.
 2. Register the module in Hecate `domain_ports`.
-3. Tests: point the existing decimal tests at the helper; add OB-1's named
-   examples for the extracted function.
+3. Tests: leave the existing rate-card tests untouched (they are the
+   behaviour-preservation evidence) and add new tests for the extracted
+   function, including OB-1's named examples and the `AmountRangeError` cases.
 
 Acceptance: existing card tests pass unchanged; gates pass. Recovery: revert
 the commit. Remaining gaps: no SLA4OAI ingestion.
@@ -877,14 +955,17 @@ the commit. Remaining gaps: no SLA4OAI ingestion.
 
 Assigned: RM-2. Plateau: a card with an `sla4oai` block loads a vendored
 research-dialect plan and prices it; anything outside the narrow accepted
-subset is refused with a generic `Sla4OaiPricingError` ("unsupported …") naming
-the card. Nothing misprices.
+subset is refused with a generic `Sla4OaiPricingError` ("unsupported …"), which
+the card loader re-raises as a `PricingCatalogueError` naming the card (D4).
+Nothing misprices.
 
 1. Add `_decoding.py` (D6), `sla4oai_document.py`, `sla4oai_parsing.py`,
    `sla4oai_pricing.py` (D3, D4, D5, D11), and `_sla4oai_card.py` (D2), and
-   dispatch from `_document.load_snapshot` on `source_kind` (a few lines). Make
-   `_METRIC_UNITS` reachable through a public
-   `required_unit_for(metric) -> UsageUnit | None` in `pricing_snapshot.py`.
+   dispatch from `_document.load_snapshot` on `source_kind` (a few lines).
+   `PlanTerms` holds only what `plan_rates` reads; quota and fee fields that
+   only `2.5.3` would use are not modelled now (AGENTS.md, deferred
+   implementation). Tests assert that each `PricingCatalogueError` raised for
+   an SLA card has the domain error as its `__cause__`.
 2. Retire the handwritten form (D9) and rewrite the one dependent test.
 3. Register the domain modules in Hecate `domain_ports`. Move `pyyaml` into
    `[project].dependencies` and run `uv lock`.
@@ -915,35 +996,49 @@ Recovery: revert. Remaining gaps: archival and discovery.
 ### EP-M4: Loaded snapshots archived at start-up
 
 Assigned: RM-3 (and RM-1: rate cards are most of the archived content).
-Plateau: the API persists every loaded card at start-up.
+Plateau: an API with an LLM configured persists every loaded card in the
+background shortly after start-up.
 
 1. Add `FilePricingCatalogue.loaded_snapshots()`.
 2. Add `episodic/cost/pricing_archive.py` (D7), registered in Hecate
    `application`. Logging uses `episodic.logging`; the failure counter uses the
-   existing metrics port.
-3. Add `startup_hooks` to `ApiDependencies` and
-   `_StartupHooksMiddleware.process_startup` in `episodic/api/app.py`; register
-   the archival hook in `episodic/api/runtime.py` using the existing
-   `UowFactory`.
-4. Tests (red first): OB-6, plus a lifespan test through Falcon's ASGI test
-   client.
+   existing metrics port. It distinguishes connection-class failures (stop)
+   from snapshot-level failures (log, count, continue).
+3. Add `startup_hooks` to `ApiDependencies` in `episodic/api/dependencies.py`,
+   validated in `__post_init__` as `shutdown_hooks` is, and
+   `_StartupHooksMiddleware.process_startup` in `episodic/api/app.py`. Move
+   catalogue construction from `_build_generation_launcher` into the
+   LLM-configured branch of `create_app_from_env`, pass the catalogue in, and
+   register there the start-up hook (launch the bounded background task) and a
+   shutdown hook (cancel and await it) ordered before `engine.dispose`. Update
+   `tests/test_lifespan_hooks.py` for the new argument and ordering.
+4. Add Skylos entry-point rules for `_StartupHooksMiddleware.process_startup`
+   and its `scope` and `event` parameters, mirroring the existing
+   `process_shutdown` entries in `pyproject.toml`.
+5. Tests (red first): OB-6, including the blocking-factory lifespan test
+   through Falcon's ASGI test client.
 
 Acceptance: starting the app against py-pglite stores every card in a temporary
-card directory, and a second start stores nothing new. Recovery: revert; the
-hook is additive. Remaining gaps: discovery tool.
+card directory, a second start stores nothing new, and start-up completes
+within one second when the database never answers. Recovery: revert; the hooks
+are additive. Remaining gaps: discovery tool.
 
 ### EP-M5: Operator discovery tool vendors plans through `info.x-sla`
 
 Assigned: RM-2. Plateau: an operator can vendor a plan end to end.
 
 1. Read `docs/scripting-standards.md`. Add `scripts/vendor_sla4oai_plan.py`
-   (Cyclopts entry point) and `scripts/sla4oai_vendoring/` (reference
-   resolution, origin policy, fetcher, writer) under the D8 rules.
-2. Tests (red first) in `scripts/tests/`: OB-7 truth table with
-   `httpx.MockTransport`; loopback end-to-end tests over real sockets; a writer
-   test that refuses to overwrite and requires `--effective-from` when a card
-   for the subject exists; and a test that the written card loads through
-   `FilePricingCatalogue`.
+   (Cyclopts entry point with a frozen options dataclass) and
+   `scripts/sla4oai_vendoring/` (reference resolution, origin policy, fetcher,
+   writer) under the D8 rules, recording the PEP 723 deviation in the module
+   docstring.
+2. Tests (red first) in `scripts/tests/test_vendor_sla4oai_plan.py` and
+   sibling modules: OB-7 truth table with `httpx.MockTransport`; loopback
+   end-to-end tests over real sockets; writer tests that refuse to overwrite,
+   require `--effective-from` when a card for the subject exists, refuse an
+   `--effective-from` that is in the past or not later than the subject's
+   latest card, and reject a staged directory that `FilePricingCatalogue`
+   refuses as ambiguous; and a test that the written card loads and prices.
 
 Acceptance: the loopback test vendors a plan whose card loads and prices.
 Recovery: revert; the tool is standalone. Remaining gaps: behavioural scenarios
@@ -959,7 +1054,13 @@ Assigned: all. Plateau: the item is complete.
    `tests/conftest.py`, and support in
    `tests/steps/pricing_source_discovery_support.py`. The Vidai Mock scenario
    reuses the provider configuration in
-   `tests/steps/pricing_snapshots_vidaimock.py`.
+   `tests/steps/pricing_snapshots_vidaimock.py`. Because
+   `tests.steps.pricing_snapshots_step_definitions` is registered as a global
+   plugin (`tests/conftest.py`), steps whose text already exists there (the
+   8-minor-unit card, the Vidai Mock server, "the run's ledger entry costs N
+   minor units") bind to those existing definitions and their `pricing_context`
+   fixture; the new module defines only step texts that are unique, so
+   `tests/features/pricing_snapshots.feature` keeps its bindings.
 2. Write `docs/adrs/adr-0029-pricing-source-discovery-and-sla4oai-ingestion.md`
    recording D1 to D11 and the DES-SLA deviation (check the next free number
    first; renumber if upstream took it). Add amendment banners and
@@ -970,10 +1071,15 @@ Assigned: all. Plateau: the item is complete.
    catalogue: vendored SLA4OAI plans, the accepted subset, archival, the
    deferred runtime discovery, and a reference to ADR-0029),
    `docs/users-guide.md` (SLA card format, the discovery tool, what is and is
-   not priced and why, the retired handwritten form),
+   not priced and why, the retired handwritten form, and archival behaviour:
+   database writes shortly after start-up, the summary log line, the failure
+   counter's name, and what happens when the database is down),
    `docs/developers-guide.md` (module map, Hecate registrations, decoder rules,
-   test fixtures, why Vidai Mock does not serve documents), and
-   `docs/repository-layout.md`.
+   `startup_hooks` and `_StartupHooksMiddleware` alongside the shutdown hooks,
+   the new Skylos entry points, the scripting-standards deviation, test
+   fixtures, and why Vidai Mock does not serve documents), and
+   `docs/repository-layout.md` (`config/pricing-snapshots/sla4oai/`,
+   `scripts/sla4oai_vendoring/`).
 4. Mark `2.5.2` done in `docs/roadmap.md` and, if the user approved it, add
    the follow-up item `2.5.6` with `mapsplice`.
 5. Run `make fmt`, `make markdownlint`, and `make nixie` as well as the code
@@ -1016,7 +1122,7 @@ Feature: Pricing-source discovery
     And a new run after the effective date prices one request at 2 minor units
 
   Scenario: A plan with an included quota is refused at start-up
-    Given a vendored plan "pro" including 20 requests per second with overage at 0.0001 USD per request
+    Given a vendored plan "pro" including 20 requests per second with overage at 0.01 USD per request
     When the pricing catalogue loads
     Then loading fails naming the card, plan "pro", metric "requests", and an included quota
 
@@ -1103,8 +1209,8 @@ The item is accepted when all of the following hold:
 2. The eight scenarios in `tests/features/pricing_source_discovery.feature`
    pass, including the Vidai Mock-backed completion.
 3. The discovery tool's loopback tests pass over real sockets.
-4. Existing pricing suites pass unchanged except the one test rewritten under
-   D9, and
+4. Existing suites pass unchanged except the test rewritten under D9 and the
+   lifespan-ordering test updated under OB-6, and
    `git diff d0bdabe3 -- tests/__snapshots__/test_cost_pricing_snapshot_hash.ambr`
    prints nothing.
 5. `resolve` performs no input/output: a test resolving through a catalogue
@@ -1213,12 +1319,6 @@ def plan_rates(
 ) -> tuple[CurrencyCode, cabc.Mapping[str, MeteredRate]]: ...
 ```
 
-Domain (`episodic/cost/pricing_snapshot.py`, added query):
-
-```python
-def required_unit_for(metric: str) -> UsageUnit | None: ...
-```
-
 Application (`episodic/cost/pricing_archive.py`):
 
 ```python
@@ -1236,9 +1336,11 @@ Adapter (`episodic/cost/pricing_catalogue/file_loader.py`, added query):
 def loaded_snapshots(self) -> tuple[PricingSnapshot, ...]: ...
 ```
 
-Inbound adapter (`episodic/api/app.py`): `ApiDependencies.startup_hooks`, a
-tuple of async callables run in order by
-`_StartupHooksMiddleware.process_startup`.
+Inbound adapter (`episodic/api/app.py` and `episodic/api/dependencies.py`):
+`ApiDependencies.startup_hooks`, a validated tuple of async callables run in
+order by `_StartupHooksMiddleware.process_startup`. The archival start-up hook
+only launches a bounded background task; a matching shutdown hook cancels it
+before `engine.dispose`.
 
 `PricingCataloguePort`, `PricingSnapshotRepository`, `CostRecorder`, and
 `PricingEngine` are unchanged.
@@ -1269,4 +1371,16 @@ at implementation time.
   research-dialect-only ingestion (D5), the retirement of the handwritten card
   form (D9), and an honest use of Vidai Mock (D10). Tolerances shrank, and
   milestones became vertical slices so the Skylos gate passes at every plateau.
-  Remaining work: user approval, then EP-M1.
+- 2026-11-22 (closing review): a fifth reviewer confirmed the rewrite and
+  returned "Proceed with conditions". Applied: archival runs as a bounded
+  background task launched from a start-up hook and cancelled on shutdown,
+  built only where an LLM is configured (D7); SLA4OAI pricing is limited to the
+  `requests` metric, so per-call truncation cannot lose money, and
+  `required_unit_for` is dropped (D4); domain errors carry no file path and the
+  card loader re-raises them (D4); `AmountRangeError` keeps rate-card messages
+  byte-identical (EP-M1); the discovery tool validates the whole staged
+  directory and records its scripting-standards deviation (D8); the file budget
+  rose to 65 and EP-M2's line budget to 2,200 after a recount; behavioural
+  steps reuse the existing global definitions; documentation obligations gained
+  the start-up hook and archival behaviour. Remaining work: user approval
+  (including D1 and the follow-up item), then EP-M1.
