@@ -44,11 +44,27 @@ _GATED_QA_STATUSES: frozenset[QaStatus] = frozenset({
 })
 
 
+def is_blank_text(value: str | None) -> bool:
+    """Return whether a text field is absent or whitespace-only.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``None`` or a whitespace-only string.
+
+    Examples
+    --------
+    >>> is_blank_text("  "), is_blank_text("Vertical slice."), is_blank_text(None)
+    (True, False, True)
+    """
+    return value is None or not value.strip()
+
+
 def _no_qa_violation(qa_status: QaStatus | None, rationale: str | None) -> str | None:
     """Return the first no-QA policy violation, if any."""
     if qa_status is not QaStatus.SKIPPED:
         return "qa_status must be skipped for draft_without_qa runs."
-    if rationale is None or not rationale.strip():
+    if is_blank_text(rationale):
         return "skip_qa_rationale must be a non-empty string."
     return None
 

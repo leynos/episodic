@@ -764,10 +764,12 @@ accepted in EP-M6. D13 records the review itself.
     `test_claim_exit_fault_still_records_the_failure` (close error and
     cancelled close), `test_reused_key_still_reports_the_body_error`, and
     `test_no_qa_missing_launcher_outranks_idempotency` (replay and conflict).
-  - An accepted mode is validated and launcher-resolved before idempotency,
-    matching the base: a removed launcher is a 503 for a no-QA request rather
-    than a replay or a 409. An unaccepted mode still resolves inside the work,
-    so a stored gated 202 replays after the capability is withdrawn.
+  - A no-QA request is validated and launcher-resolved before idempotency,
+    matching the base: a removed launcher is a 503 rather than a replay or a
+    409. A QA-gated request, accepted or not, keeps D7's ordering: its checks
+    run in the work (or in the precondition for a conflict), so a rejection
+    releases the key and a stored 202 still replays after the capability is
+    withdrawn.
   - Date/Author: 2026-11-22, implementation agent.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it

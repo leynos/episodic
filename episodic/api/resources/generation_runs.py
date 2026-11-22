@@ -10,6 +10,8 @@ from episodic.api.helpers import parse_uuid, require_payload_dict
 from episodic.api.resources.generation_runs_create_support import (
     _CreateGenerationRun,
     _parse_create_request,
+    _prevalidates_before_idempotency,
+    _quality_precondition,
     _Submission,
     _validate_quality_request,
 )
@@ -189,28 +191,13 @@ class GenerationRunsResource:
         # must still replay after the deployment withdraws the capability, and
         # a rejection must release the key.
         launcher: GenerationRunLauncher | None = None
-        has_key = idempotency_key is not None and bool(idempotency_key.strip())
-        accepted_here = request.quality_mode in self._accepted_quality_modes
-        if not has_key or accepted_here:
-            # Base order: request errors are reported before a missing
-            # launcher, so the 503 never masks a 400 or 422, and an accepted
-            # mode's 503 precedes its idempotency outcomes. An unaccepted mode
-            # is left to the work (or the replay it finds), so a stored gated
-            # 202 still replays after the capability is withdrawn.
+        if _prevalidates_before_idempotency(request, idempotency_key):
             request = _validate_quality_request(
                 request,
                 payload,
                 self._accepted_quality_modes,
             )
             launcher = self._require_launcher()
-
-        def _precondition() -> None:
-            """Apply the body rules before a conflict is reported."""
-            _validate_quality_request(
-                request,
-                payload,
-                self._accepted_quality_modes,
-            )
 
         with self._tracer.start_span(
             "generation_run.command",
@@ -247,7 +234,11 @@ class GenerationRunsResource:
                     body_hash=json_body_hash(payload),
                 ),
                 work=work,
-                precondition=_precondition,
+                precondition=_quality_precondition(
+                    request,
+                    payload,
+                    self._accepted_quality_modes,
+                ),
             )
             span.set_attribute("outcome", "accepted")
         return result
