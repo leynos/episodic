@@ -2539,18 +2539,26 @@ documents. It commits that request-scoped unit of work before calling
 serves the persisted episode TEI as JSON by default or raw
 `application/tei+xml` with content negotiation.
 
-`InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is one
-dataclass composed from three mixins: `launcher_scheduling.py` owns bounded
-task admission, draining and cancellation; `launcher_claim.py` claims a run and
-drives draft generation; and `launcher_persistence.py` records events, TEI,
-costs and terminal status. The mixins read the launcher's fields through
-`self`, so `launcher_host.py` declares that shared surface as the
-`LauncherHost` protocol. The mixins inherit from it only while type checking;
-at runtime their base is `object`, and the launcher's MRO and slots are
-unchanged. Construct the launcher, never a mixin on its own. `_load_sources`
-stays on the launcher because tests patch `source_from_document` in
-`launcher.py`. Replacing the mixins with injected scheduling, claim and
-persistence components is tracked in
+`InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is the
+orchestration boundary over three purpose-shaped components.
+`GenerationRunScheduler` (`launcher_scheduling.py`) owns the task set,
+admission limits, execution semaphore, cancellation bookkeeping, and the
+pending-depth and admission metrics. `GenerationRunClaimer`
+(`launcher_claim.py`) takes the unit-of-work factory, source loader, source
+limits, clock, draft generator, and metrics, and owns claim, hydration and
+draft generation. `GenerationRunPersistence` (`launcher_persistence.py`) takes
+the unit-of-work factory, clock, cost-recorder factory, provider metadata and
+metrics, and owns draft events, TEI persistence, costs and terminal status.
+Each component is a dataclass with explicit constructor collaborators, so unit
+tests construct it with fakes rather than a launcher. The launcher composes
+the three in `__post_init__`, delegates `launch`, `drain`, `shutdown` and
+`scheduled_run_count` to the scheduler, and keeps the claim-generate-persist
+sequence plus failure classification in `_execute_run`.
+`BoundedSourceLoader` implements the `GenerationSourceLoader` seam and applies
+the source count and byte limits; constructing a launcher with a patched
+`launcher.py`-level `source_from_document` still overrides the default
+document loader. Replacing the mixins with injected scheduling, claim and
+persistence components was tracked in
 [#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common

@@ -1,14 +1,14 @@
 """Persist generation-run outcomes: draft events, TEI, costs, and status.
 
-:class:`_PersistenceMixin` supplies :class:`InProcessGenerationRunLauncher`
-with the write side of a generation run: recording that a draft was
-generated, persisting the TEI and its success-side events, recording
-provider costs when a cost recorder is configured, and applying the
-immutable ``GenerationRunStatusUpdate`` command for both terminal success and
-terminal failure. Terminal-state and pending-depth metrics are recorded here
-too, alongside the runs they describe.
+:class:`GenerationRunPersistence` owns the write side of a generation run:
+recording that a draft was generated, persisting the TEI and its success-side
+events, recording provider costs when a cost recorder is configured, and
+applying the immutable ``GenerationRunStatusUpdate`` command for both terminal
+success and terminal failure. Its collaborators are explicit fields, so the
+component can be constructed with fakes instead of a launcher's shared state.
 """
 
+import dataclasses as dc
 import typing as typ
 
 from episodic.canonical.domain import GenerationRunStatus
@@ -23,6 +23,8 @@ from episodic.cost.ports import BillingPeriodKey
 from episodic.cost.pricing_snapshot import PricedService
 from episodic.cost.recorder import CostProviderOperation
 from episodic.generation.launcher_support import (
+    Clock,
+    CostRecorderFactory,
     Failure,
     PersistedTei,
     ProviderCallRecordRequest,
@@ -30,8 +32,10 @@ from episodic.generation.launcher_support import (
     provider_call_record,
 )
 from episodic.logging import get_logger, log_error, log_info
+from episodic.observability import NoopValueMetrics, ValueMetricsPort
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
@@ -40,23 +44,39 @@ if typ.TYPE_CHECKING:
 
 _METRIC_TERMINAL_STATES = "generation_run_terminal_total"
 _METRIC_DRAFT_ERRORS = "generation_run_draft_errors_total"
-_METRIC_PENDING_DEPTH = "generation_run_pending_depth"
 
 logger = get_logger(__name__)
 
 
-if typ.TYPE_CHECKING:
-    from episodic.generation.launcher_host import LauncherHost as _MixinBase
-else:
-    _MixinBase = object
+@dc.dataclass(slots=True)
+class GenerationRunPersistence:
+    """Persist draft, success, cost, and failure outcomes for a run.
 
+    Attributes
+    ----------
+    uow_factory : cabc.Callable[[], CanonicalUnitOfWork]
+        Factory for the detached units of work used by each write.
+    clock : Clock
+        Clock for event timestamps and terminal transitions.
+    cost_recorder_factory : CostRecorderFactory | None
+        Factory that binds a cost recorder to a unit of work, or ``None`` to
+        disable cost recording.
+    provider_name : str
+        Provider name recorded in pinned pricing and provider-call costs.
+    provider_operation : str
+        Provider operation recorded in pinned pricing and provider-call costs.
+    metrics : ValueMetricsPort
+        Sink for terminal-state and draft-error metrics.
+    """
 
-class _PersistenceMixin(_MixinBase):
-    """Persist draft, success, cost, and failure outcomes for a run."""
+    uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
+    clock: Clock
+    cost_recorder_factory: CostRecorderFactory | None = None
+    provider_name: str = "openai"
+    provider_operation: str = "chat_completions"
+    metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
 
-    __slots__ = ()
-
-    async def _record_draft_generated(
+    async def record_draft_generated(
         self,
         run_id: uuid.UUID,
         result: DraftScriptResult,
@@ -71,7 +91,7 @@ class _PersistenceMixin(_MixinBase):
             )
             await uow.commit()
 
-    async def _persist_success(
+    async def persist_success(
         self,
         claimed: ClaimedRun,
         result: DraftScriptResult,
@@ -103,6 +123,37 @@ class _PersistenceMixin(_MixinBase):
             logger,
             "generation_run_launcher.succeeded run_id=%s",
             claimed.run.id,
+        )
+
+    async def record_failure(self, run_id: uuid.UUID, failure: Failure) -> None:
+        """Record a terminal failed run state."""
+        async with self.uow_factory() as uow:
+            try:
+                await self._append_failure_events(uow, run_id, failure)
+                await uow.generation_runs.update_run_status(
+                    run_id,
+                    update=GenerationRunStatusUpdate(
+                        status=GenerationRunStatus.FAILED,
+                        current_node=None,
+                        ended_at=self.clock(),
+                        error_message=failure.message,
+                        error_category=failure.category,
+                    ),
+                )
+                await uow.commit()
+            except RunAlreadyTerminal, RunNotFound:
+                await uow.rollback()
+                return
+        self._record_terminal_metric(GenerationRunStatus.FAILED, failure.category)
+        self.metrics.increment_counter(
+            _METRIC_DRAFT_ERRORS,
+            labels={"error_category": failure.category},
+        )
+        log_error(
+            logger,
+            "generation_run_launcher.failed run_id=%s category=%s",
+            run_id,
+            failure.category,
         )
 
     async def _record_success_transition(
@@ -178,37 +229,6 @@ class _PersistenceMixin(_MixinBase):
         )
         await recorder.finalize_run(str(run_id), "draft")
 
-    async def _record_failure(self, run_id: uuid.UUID, failure: Failure) -> None:
-        """Record a terminal failed run state."""
-        async with self.uow_factory() as uow:
-            try:
-                await self._append_failure_events(uow, run_id, failure)
-                await uow.generation_runs.update_run_status(
-                    run_id,
-                    update=GenerationRunStatusUpdate(
-                        status=GenerationRunStatus.FAILED,
-                        current_node=None,
-                        ended_at=self.clock(),
-                        error_message=failure.message,
-                        error_category=failure.category,
-                    ),
-                )
-                await uow.commit()
-            except RunAlreadyTerminal, RunNotFound:
-                await uow.rollback()
-                return
-        self._record_terminal_metric(GenerationRunStatus.FAILED, failure.category)
-        self.metrics.increment_counter(
-            _METRIC_DRAFT_ERRORS,
-            labels={"error_category": failure.category},
-        )
-        log_error(
-            logger,
-            "generation_run_launcher.failed run_id=%s category=%s",
-            run_id,
-            failure.category,
-        )
-
     async def _append_failure_events(
         self,
         uow: CanonicalUnitOfWork,
@@ -244,11 +264,5 @@ class _PersistenceMixin(_MixinBase):
             labels={"status": status.value, "error_category": error_category},
         )
 
-    def _record_pending_depth(self) -> None:
-        """Report bounded work waiting beyond the execution capacity."""
-        pending_depth = max(0, self._admitted_run_count - self.max_concurrency)
-        self.metrics.observe_value(
-            _METRIC_PENDING_DEPTH,
-            float(pending_depth),
-            labels={},
-        )
+
+__all__ = ["GenerationRunPersistence"]

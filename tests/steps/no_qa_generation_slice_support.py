@@ -244,9 +244,17 @@ def select_malformed_completion(context: NoQaGenerationSliceContext) -> None:
     """Select the deterministic malformed provider response."""
     adapter = require(context.llm_adapter, "LLM adapter")
     launcher = require(context.launcher, "generation launcher")
-    launcher.draft_generator = LLMDraftScriptGenerator(
-        llm=adapter,
-        config=LLMDraftScriptGeneratorConfig(model="malformed-draft"),
+    malformed_launcher = dc.replace(
+        launcher,
+        draft_generator=LLMDraftScriptGenerator(
+            llm=adapter,
+            config=LLMDraftScriptGeneratorConfig(model="malformed-draft"),
+        ),
+    )
+    context.launcher = malformed_launcher
+    context.dependencies = dc.replace(
+        require(context.dependencies, "API dependencies"),
+        launcher=malformed_launcher,
     )
 
 

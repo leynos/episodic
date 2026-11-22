@@ -7,60 +7,62 @@ import typing as typ
 
 import pytest
 
-import episodic.generation.launcher as launcher_module
 from episodic.canonical.domain import GenerationRunStatus, SourceDocument
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.generation.launcher_claim import GenerationRunClaimer
+from episodic.generation.launcher_support import (
+    BoundedSourceLoader,
+    GenerationSourceLimits,
+)
 from tests.generation_run_launcher_support import (
     RecordingDraftGenerator,
     draft_result,
-    launcher,
     prepare_pending_run,
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    from episodic.canonical.object_store import ObjectStorePort
-    from episodic.generation.launcher_support import GenerationSourceLimits
+    from episodic.generation.draft_script import DraftScriptSource
+
+
+class _BlockingSourceLoader:
+    """Source loader seam that blocks hydration after the claim commits."""
+
+    def __init__(self) -> None:
+        """Create the events that coordinate the blocked hydration."""
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def load(
+        self,
+        documents: cabc.Sequence[SourceDocument],
+        limits: GenerationSourceLimits,
+    ) -> tuple[DraftScriptSource, ...]:
+        """Block until the test releases hydration, then load normally."""
+        self.started.set()
+        await self.release.wait()
+        return await BoundedSourceLoader().load(documents, limits)
 
 
 @pytest.mark.asyncio
 async def test_claim_commits_before_blocked_hydration(
     session_factory: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Allow another unit of work to mutate a claimed run during hydration."""
     run_id, _ = await prepare_pending_run(session_factory)
-    hydration_started = asyncio.Event()
-    release_hydration = asyncio.Event()
-
-    original_source_from_document = launcher_module.source_from_document
-
-    async def block_source_loading(
-        document: SourceDocument,
-        object_store: object,
-        limits: object = None,
-        *,
-        remaining_aggregate_bytes: int | None = None,
-    ) -> object:
-        """Block source hydration after canonical reads have released their UOW."""
-        hydration_started.set()
-        await release_hydration.wait()
-        return await original_source_from_document(
-            document,
-            typ.cast("ObjectStorePort | None", object_store),
-            typ.cast("GenerationSourceLimits | None", limits),
-            remaining_aggregate_bytes=remaining_aggregate_bytes,
-        )
-
-    monkeypatch.setattr(launcher_module, "source_from_document", block_source_loading)
-    run_launcher = launcher(
-        session_factory,
-        RecordingDraftGenerator(draft_result("<TEI/>")),
+    source_loader = _BlockingSourceLoader()
+    claimer = GenerationRunClaimer(
+        uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
+        draft_generator=RecordingDraftGenerator(draft_result("<TEI/>")),
+        source_loader=source_loader,
     )
-    claim_task = asyncio.create_task(run_launcher._claim(run_id))
+
+    claim_task = asyncio.create_task(claimer.claim(run_id))
     try:
-        await asyncio.wait_for(hydration_started.wait(), timeout=1)
+        await asyncio.wait_for(source_loader.started.wait(), timeout=1)
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             claimed_run = await uow.generation_runs.get_run(run_id)
@@ -77,11 +79,11 @@ async def test_claim_commits_before_blocked_hydration(
             )
             await uow.commit()
 
-        release_hydration.set()
+        source_loader.release.set()
         claimed = await claim_task
     finally:
-        if not release_hydration.is_set():
-            release_hydration.set()
+        if not source_loader.release.is_set():
+            source_loader.release.set()
         if not claim_task.done():
             claim_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

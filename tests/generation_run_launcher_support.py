@@ -37,11 +37,13 @@ from episodic.generation.draft_script import (
 )
 from episodic.generation.launcher import InProcessGenerationRunLauncher
 from episodic.llm import LLMUsage, ProviderCallUsage
+from episodic.observability import NoopTracer, NoopValueMetrics
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
+    from episodic.observability import TracerPort, ValueMetricsPort
 
 NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
 
@@ -356,12 +358,15 @@ async def prepare_pending_run(
     return run.id, episode.id
 
 
-def launcher(
+# pylint: disable-next=too-many-arguments  # Test wiring names each port it replaces.
+def launcher(  # ruff: ignore[too-many-arguments]  # Test wiring names each port it replaces.
     factory: async_sessionmaker[AsyncSession],
     generator: DraftScriptGenerator,
     cost_recorder: RecordingCostRecorder | None = None,
     *,
     options: LauncherOptions | None = None,
+    tracer: TracerPort | None = None,
+    metrics: ValueMetricsPort | None = None,
 ) -> InProcessGenerationRunLauncher:
     """Build a launcher for tests."""
     effective_options = LauncherOptions() if options is None else options
@@ -374,4 +379,6 @@ def launcher(
         clock=_clock,
         max_concurrency=effective_options.max_concurrency,
         max_pending_runs=effective_options.max_pending_runs,
+        tracer=NoopTracer() if tracer is None else tracer,
+        metrics=NoopValueMetrics() if metrics is None else metrics,
     )

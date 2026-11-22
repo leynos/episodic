@@ -686,13 +686,6 @@ reason = "Canonical value objects call these validation methods from dataclass p
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
 full_name = [
-    "episodic.generation.launcher.InProcessGenerationRunLauncher._load_sources",
-]
-reason = "The claim mixin in launcher_claim calls self._load_sources; it stays on the launcher so tests can patch source_from_document in this module."
-
-[[tool.skylos.dead_code.entrypoints]]
-type = "method"
-full_name = [
     "episodic.concurrent_interpreters._PerfCounterCpuTaskExecutorClock.monotonic_seconds",
     "episodic.observability._ports.NoopMetrics.increment_counter",
     "episodic.observability._ports.NoopMetrics.observe_latency_ms",
@@ -991,7 +984,7 @@ members = ["episodic/canonical/storage/qa_artefact_storage_runtime.py", "episodi
 reason = "The observability port and default-adapter import block is a port surface, not logic: the QA storage runtime, the CLI client, and the OpenAI adapter each bind the no-op and production adapters their own runtime composes. Re-exporting the same names through an indirection module would add a hop every reader must follow without removing behaviour."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/api/dependencies.py", "episodic/api/handlers.py", "episodic/api/serializers.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/ingestion_service.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/canonical/profile_templates/helpers.py", "episodic/canonical/profile_templates/types.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/canonical/storage/uow.py", "episodic/canonical/unit_of_work_protocols.py", "episodic/canonical/upload_protocols.py", "episodic/cost/storage/metering.py", "episodic/generation/launcher_host.py", "episodic/operation_observation.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/orchestration/langgraph_costs.py"]
+members = ["episodic/api/dependencies.py", "episodic/api/handlers.py", "episodic/api/serializers.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/ingestion_service.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/canonical/profile_templates/helpers.py", "episodic/canonical/profile_templates/types.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/canonical/storage/uow.py", "episodic/canonical/unit_of_work_protocols.py", "episodic/canonical/upload_protocols.py", "episodic/cost/storage/metering.py", "episodic/operation_observation.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/orchestration/langgraph_costs.py"]
 reason = "Annotation-only TYPE_CHECKING import blocks: each module imports the domain, port and observability names its own signatures use. An import list cannot be factored into a helper, and a re-export facade would add a hop every reader must follow."
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/resources/episode_tei.py", "episodic/api/resources/generation_runs_events.py", "episodic/api/resources/qa_artefacts.py"]
@@ -1137,9 +1130,6 @@ reason = "Each adapter logs under its own event name and tests a different termi
 [[tool.duplication_gate.allow]]
 members = ["episodic/canonical/__init__.py", "episodic/canonical/unit_of_work_protocols.py"]
 reason = "The package surface and the unit-of-work protocols name the same repository protocols."
-[[tool.duplication_gate.allow]]
-members = ["episodic/generation/launcher.py", "episodic/generation/launcher_host.py"]
-reason = "Annotation-only imports of the same launcher support types."
 [[tool.duplication_gate.allow]]
 members = ["episodic/canonical/generation_persistence.py", "episodic/canonical/storage/review_checkpoints.py"]
 reason = "Annotation-only imports of different modules."

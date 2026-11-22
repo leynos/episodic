@@ -5,8 +5,10 @@ enforce the byte and count bounds applied while building one draft's source
 input. ``source_from_document`` reads source text from canonical
 :class:`~episodic.canonical.domain.SourceDocument` records or the
 object-store port, normalizes uploaded content, and returns the
-``DraftScriptSource`` consumed by ``DraftScriptGenerator``. These helpers do
-not open, commit, or dispose persistence sessions themselves.
+``DraftScriptSource`` consumed by ``DraftScriptGenerator``.
+:class:`BoundedSourceLoader` applies the same bounds to a whole document
+bundle through the :class:`GenerationSourceLoader` seam. These helpers do not
+open, commit, or dispose persistence sessions themselves.
 """
 
 import dataclasses as dc
@@ -18,6 +20,8 @@ from episodic.generation.draft_script import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from episodic.canonical.domain import SourceDocument
     from episodic.canonical.object_store import ObjectStorePort
 
@@ -124,6 +128,80 @@ async def source_from_document(
         content=content,
         weight=document.weight,
     )
+
+
+class SourceDocumentLoader(typ.Protocol):
+    """Load one canonical source document into generator source input."""
+
+    async def __call__(
+        self,
+        document: SourceDocument,
+        object_store: ObjectStorePort | None,
+        limits: GenerationSourceLimits | None = None,
+        *,
+        remaining_aggregate_bytes: int | None = None,
+    ) -> DraftScriptSource:
+        """Return bounded source text for one canonical document."""
+        ...
+
+
+class GenerationSourceLoader(typ.Protocol):
+    """Load bounded generator source input from canonical source documents."""
+
+    async def load(
+        self,
+        documents: cabc.Sequence[SourceDocument],
+        limits: GenerationSourceLimits,
+    ) -> tuple[DraftScriptSource, ...]:
+        """Return source text for every document within the configured limits.
+
+        Raises
+        ------
+        GenerationSourceLimitError
+            If the bundle exceeds a count, byte, aggregate, or normalized
+            limit.
+        """
+        ...
+
+
+@dc.dataclass(frozen=True, slots=True)
+class BoundedSourceLoader:
+    """Load a source bundle within the configured count and byte limits.
+
+    Attributes
+    ----------
+    object_store : ObjectStorePort | None
+        Store used to read uploaded source content, or ``None`` when every
+        source is inline or URI-backed.
+    load_document : SourceDocumentLoader
+        Seam that converts one canonical document into bounded source text.
+    """
+
+    object_store: ObjectStorePort | None = None
+    load_document: SourceDocumentLoader = source_from_document
+
+    async def load(
+        self,
+        documents: cabc.Sequence[SourceDocument],
+        limits: GenerationSourceLimits,
+    ) -> tuple[DraftScriptSource, ...]:
+        """Load bounded source text and reject an aggregate-size overflow."""
+        if len(documents) > limits.max_source_count:
+            raise GenerationSourceLimitError.source_count()
+        aggregate_bytes = 0
+        sources: list[DraftScriptSource] = []
+        for document in documents:
+            source = await self.load_document(
+                document,
+                self.object_store,
+                limits,
+                remaining_aggregate_bytes=(
+                    limits.max_aggregate_source_bytes - aggregate_bytes
+                ),
+            )
+            aggregate_bytes += len(source.content.encode())
+            sources.append(source)
+        return tuple(sources)
 
 
 async def _read_uploaded_source(
