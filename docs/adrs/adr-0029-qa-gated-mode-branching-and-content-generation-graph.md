@@ -2,8 +2,10 @@
 
 ## Status
 
-Proposed for roadmap item `4.4.1`. Accepted during that item's documentation
-milestone once the implementation and its verification are complete.
+Accepted, 2026-11-22. Roadmap item `4.4.1` routes every generation run through
+a compiled content-generation graph whose quality branch either persists a
+no-QA draft directly or evaluates a QA-gated candidate before persistence or
+escalation.
 
 ## Date
 
@@ -129,6 +131,40 @@ Deviations from the system-design diagram, all deliberate:
 - Persist Draft is split into one node per branch.
 - Aggregate as a separate node, Refine, Prepare for Approval, and a
   checkpointed Escalate are deferred.
+
+## Implementation notes
+
+The implemented slice matches the topology above. Three findings refined the
+detail without changing the decision:
+
+- LangChain wraps every node call in a task of its own, so nodes never run in
+  the launcher's task. The runner owns the graph task, names it
+  `generation-run-{run_id}`, renames each node task to the same convention, and
+  cancels and drains in-flight node tasks on shutdown. This keeps event appends
+  attributable to their run and stops a cancelled run from writing after
+  teardown.
+- `quality_branch` and `terminal` span attributes are recorded for no-QA runs
+  as well as gated ones, because the quality branch is the decision worth
+  observing. This is the only change the no-QA characterization baseline
+  records.
+- The gated-rationale rejection is a `400 validation_error` with
+  `details.constraint="exclusive_with_quality_mode"` and
+  `details.quality_mode="qa_gated"`.
+
+## Verification
+
+- A Hypothesis property drives the production runner over generated quality
+  modes, evaluator outcomes, and injected faults, and proves branch ownership
+  and determinism. A graph with the two branches exchanged proves the ownership
+  checker rejects a foreign terminal.
+- Static topology assertions and a Mermaid snapshot pin the compiled graph.
+- A migration test compares PostgreSQL enum labels with the Python enums in
+  staged transactions, because Alembic metadata comparison ignores labels.
+- REST tests cover the capability gate, the gated-rationale rejection, the
+  unchanged 422, replay after capability withdrawal, and key release after a
+  rejected retry.
+- Launcher tests cover every QA-gated cell, including cancellation while an
+  evaluator awaits and inside either terminal transaction.
 
 ## Consequences
 

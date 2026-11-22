@@ -794,7 +794,7 @@ duplicate-event handling, and resume replay must be deterministic.
 Property-testing guidance: use Hypothesis to exercise routing, duration-class,
 and iteration-cap invariants across generated run states.
 
-- [ ] 4.4.1. Add QA-gated mode branching and Graph route plumbing.
+- [x] 4.4.1. Add QA-gated mode branching and Graph route plumbing.
   - Requires 2.1.1, 2.2.6, 2.4.2, and 4.3.2.
   - Extend run creation and run state validation for `quality_mode=qa_gated`.
   - Preserve `draft_without_qa` as a direct route to draft persistence.
@@ -804,6 +804,10 @@ and iteration-cap invariants across generated run states.
     distinct terminal states without ambiguous branch ownership.
   - Success: `draft_without_qa` and `qa_gated` requests reach deterministic,
     distinct graph branches with clear terminal states.
+  - Done (2026-11-22): every run executes through a compiled content-generation
+    graph; `qa_gated` is accepted only where evaluators are configured, and it
+    either persists a QA-passed draft or fails with `qa.escalation_required`
+    without writing TEI. ADR 024 records the decisions.
 
 - [ ] 4.4.2. Invoke Chrono in-loop and emit duration-based QA findings.
   - Requires 2.2.6 and 4.4.1.

@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: APPROVED
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -271,6 +271,8 @@ inference budget on a branch that cannot pass.
 - [x] (2026-11-22) EP-M3: content-generation graph in orchestration.
 - [x] (2026-11-22) EP-M4: launcher executes runs through the graph.
 - [x] (2026-11-22) EP-M5: REST and composition-root acceptance of `qa_gated`.
+- [x] (2026-11-22) EP-M6: documentation, ADR acceptance, roadmap update and
+  final gates.
 - [ ] EP-M6: documentation, ADR acceptance, roadmap update and final gates.
 
 ## Surprises & discoveries
@@ -686,9 +688,67 @@ accepted in EP-M6. D13 records the review itself.
 
 ## Outcomes & retrospective
 
-Not started. Complete this section at each milestone and at the end. Before
-marking the plan `COMPLETE`, reconcile what was learned with ADR 017, ADR 022,
-ADR 024, the system design and the TUI API design.
+Roadmap item `4.4.1` is implemented. Every generation run executes through a
+compiled content-generation graph; `draft_without_qa` keeps its direct route
+and its entire observable contract, and `qa_gated` is accepted only where the
+deployment has evaluators.
+
+What was delivered:
+
+- Domain policy: `qa_gated`, the four QA statuses, one exhaustive
+  quality-metadata rule, and a persisted-draft-only `EpisodeTeiUpdate`.
+- Persistence: additive enum labels in revision `20261017_000014`, the
+  `UNCHANGED` QA sentinel with one shared status-update helper in both
+  adapters, and a TEI envelope that reports the producing run's mode.
+- Orchestration: pure routing policy, graph ports, node functions that import
+  no framework, a compiled graph with per-branch nodes and terminals, and a
+  runner that owns its graph task and translates LangGraph's cancellation
+  wrapper.
+- Application: a per-run session as the only path from node to run state, QA
+  event payloads and metrics, escalation through the existing failure path with
+  costs preserved, and fail-closed `qa.unavailable`.
+- REST and composition root: the capability gate, the gated-rationale rule,
+  idempotency-key release, and one graph whose accepted modes are advertised to
+  the API.
+- Documentation: ADR 024 accepted, ADR 017 annotated, and the system design,
+  TUI API design, users' guide, developers' guide, contents index, and roadmap
+  updated.
+
+What changed against the plan, and why:
+
+- D14 moved the routing policy and graph ports from EP-M1 to EP-M3, and
+  `apply_status_update` to EP-M2, so the blocking Skylos gate never sees a
+  symbol without a production caller.
+- D15 kept D9's span attributes and added exactly two lines to the INV-0
+  success snapshot. Every other INV-0 case is byte-identical, and the
+  invariant's `outcome` value is unchanged.
+- D16 corrected AXM-1: LangChain always wraps a node call in a task. The
+  runner owns and names the graph task, renames node tasks, and cancels and
+  drains them at shutdown.
+- `EpisodeTeiUpdate`'s persisted-draft rule landed in EP-M1 rather than EP-M2
+  so that milestone stayed green.
+- The runtime composition root injects the graph in EP-M4 rather than EP-M5,
+  because the constructor field became required in EP-M4.
+
+Verification summary:
+
+- INV-0 to INV-13 are discharged as described in the verification plan, with
+  the literal tables, Hypothesis witnesses, counters, and seeded faults
+  recorded in `Artefacts and notes`.
+- The final gate run passed `make check-fmt`, `make typecheck`, `make lint`,
+  `make test`, `make check-migrations`, `make markdownlint`, and `make nixie`.
+  `make test` reported 2006 passed, 1 skipped (Docker-conditional), and 63
+  snapshots.
+
+Remaining gaps, unchanged from the plan:
+
+- Roadmap items `4.4.2` to `4.4.4` own real evaluators, parallel evaluation,
+  refinement, `recursion_limit` sizing, resume replay, a durable draft
+  artefact, and the paused escalation terminal.
+- `2.6.2` must not reclaim a run on a stale lease while
+  `current_node="evaluate"`.
+- `accepted_quality_modes` always contains `draft_without_qa`; a deployment
+  that forbids it awaits the approval workflow.
 
 ## Context and orientation
 
@@ -1962,6 +2022,10 @@ Dependencies: no new packages.
 
 - 2026-10-17: initial draft (commit `5814b812`), written from Wyvern
   reconnaissance and primary-source reading.
+- 2026-11-22: implementation completed across EP-M0 to EP-M6. D14 resequenced
+  symbol landing for the dead-code gate, D15 recorded the only INV-0 snapshot
+  change, and D16 corrected the inline-execution axiom after INV-9 exposed the
+  child-task behaviour. ADR 024 was accepted.
 - 2026-10-17: revised after the expert-panel design review (D13). The
   changes are:
   - Moved the fork before generation (D3).

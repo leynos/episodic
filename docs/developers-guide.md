@@ -2541,16 +2541,18 @@ serves the persisted episode TEI as JSON by default or raw
 
 `InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is one
 dataclass composed from three mixins: `launcher_scheduling.py` owns bounded
-task admission, draining and cancellation; `launcher_claim.py` claims a run and
-drives draft generation; and `launcher_persistence.py` records events, TEI,
-costs and terminal status. The mixins read the launcher's fields through
-`self`, so `launcher_host.py` declares that shared surface as the
-`LauncherHost` protocol. The mixins inherit from it only while type checking;
-at runtime their base is `object`, and the launcher's MRO and slots are
-unchanged. Construct the launcher, never a mixin on its own. `_load_sources`
-stays on the launcher because tests patch `source_from_document` in
-`launcher.py`. Replacing the mixins with injected scheduling, claim and
-persistence components is tracked in
+task admission, draining and cancellation and executes each run through the
+injected content-generation graph; `launcher_claim.py` hydrates a claimed run
+and generates drafts; and `launcher_persistence.py` records events, TEI, costs
+and terminal status. `launcher_session.py` implements the graph's step port for
+one run, and `launcher_quality.py` owns the QA event payload and metric
+helpers. The mixins read the launcher's fields through `self`, so
+`launcher_host.py` declares that shared surface as the `LauncherHost` protocol.
+The mixins inherit from it only while type checking; at runtime their base is
+`object`, and the launcher's MRO and slots are unchanged. Construct the
+launcher, never a mixin on its own. `_load_sources` stays on the launcher
+because tests patch `source_from_document` in `launcher.py`. Replacing the
+mixins with injected scheduling, claim and persistence components is tracked in
 [#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
@@ -2569,7 +2571,9 @@ immutable command.
 
 `persist_draft_script` is the persistence boundary. It validates the generated
 TEI, applies the expected `tei_revision` check, and updates the episode with
-the TEI, content hash, generation-run identifier, and `QaStatus.SKIPPED`. The
+the TEI, content hash, generation-run identifier, and the caller's QA status:
+`skipped` for a no-QA draft or `passed` for a QA-gated draft that cleared
+evaluation. `EpisodeTeiUpdate` rejects every other status. The
 `EpisodeTeiUpdate` command carries that TEI, QA status, generation-run
 provenance, timestamp, and expected revision as one immutable update. The SQL
 episode repository updates only when the stored revision equals
@@ -2660,6 +2664,89 @@ launcher emits a `generation_run.execute` span and bounded terminal,
 draft-error, QA-bypass, and latency metrics; the API command span and stable
 failure categories provide the corresponding request and outcome trace without
 unbounded run identifiers in metric labels.
+
+### Content-generation graph and quality branch
+
+Every launcher run executes through the content-generation graph introduced in
+roadmap item `4.4.1`. ADR 024 records the decisions and the deviations from the
+system design.
+
+The layers are strict:
+
+- `episodic.canonical.generation_routing` holds pure policy: the branch a
+  quality mode selects, the branch that owns each terminal, verdict
+  aggregation, the evaluation route, and the run and QA status a terminal
+  records.
+- `episodic.canonical.generation_graph_ports` holds the graph's protocols and
+  value objects: `ContentGenerationGraphPort`, `ContentGenerationSteps`,
+  `ContentGenerationRequest`, `QualityEvaluatorPort`, `QualityEvaluatorSet`,
+  `EvaluationSubject`, `QualityEvaluation`, and the two graph errors.
+- `episodic.orchestration._content_graph_state` and
+  `episodic.orchestration._content_graph_nodes` hold the graph state, the
+  per-run context, the node ownership table, and plain async node functions.
+  Node functions must not import `langgraph`; Hecate cannot check third-party
+  imports, so review enforces it.
+- `episodic.orchestration.content_generation` builds and compiles the graph and
+  implements the port. The composition root injects it into
+  `InProcessGenerationRunLauncher.content_graph`; the application layer never
+  imports orchestration.
+
+The builder wraps each node in a closure that supplies `runtime.context`, so
+nodes see only `ContentGenerationContext` and never a LangGraph type. LangChain
+creates a task for every node call, so the closure also renames that task to
+`generation-run-{run_id}`; the runner names its own graph task the same way
+and, on cancellation, cancels and drains every in-flight task with that name.
+Without that drain, a cancelled run's evaluator or terminal transaction could
+keep running after shutdown.
+
+The single-writer rule is absolute. A run session implements
+`ContentGenerationSteps`, and it is the only path from a node to run state.
+Nodes never open a unit of work; each session method opens one short detached
+unit of work, commits it, and returns. No unit of work is held across an
+evaluator `await`. The launcher task that claimed the run remains the only code
+that appends that run's events or changes its status.
+
+Branch ownership is data, not convention: `NODE_OWNERSHIP` assigns every node
+except `initialize` to exactly one quality branch. Property tests in
+`tests/test_content_generation_graph_properties.py` drive the production runner
+over generated modes, evaluator outcomes, and injected faults and assert that
+only the run's branch runs and exactly one owned terminal is reached.
+`tests/test_content_generation_graph_topology.py` pins the compiled topology.
+
+To add an evaluator:
+
+1. Implement `QualityEvaluatorPort` with a stable slug as `name`. The slug is
+   an event field and a metric label, so never derive it from a model or a
+   per-run value.
+2. Keep `evaluate` free of persistence. It receives an `EvaluationSubject` and
+   returns a `QualityEvaluation`.
+3. Register it in the `QualityEvaluatorSet` the composition root builds. The
+   set validates unique, non-blank names and a positive timeout.
+4. Rely on the node-level timeout and error isolation rather than catching
+   inside the adapter. An exception, timeout, or self-raised `CancelledError`
+   becomes an inconclusive result with an error classification; a genuine
+   cancellation is re-raised.
+
+Alert on `generation_run_qa_evaluator_errors_total` and the `qa.result` event's
+`errored` fields, not on the escalation rate. A broken adapter otherwise looks
+like QA rejecting good drafts. `generation_run_qa_gate_total` counts aggregate
+verdicts, and an escalation deliberately does not increment
+`generation_run_draft_errors_total` because the draft did generate.
+
+Graph-state tests follow three conventions:
+
+- Every property has `@example` witnesses for each documented class; a plain
+  test drives the same matrix and asserts the `Counter` of reached classes, so
+  coverage is checked even under `pytest-xdist`.
+- Expected outcomes come from literal tables or snapshots, not from a second
+  implementation of the rule inside the test.
+- A seeded fault proves the check can fail: for example, the swapped-target
+  test builds a graph from the same public node functions with the branches
+  exchanged and asserts the ownership checker rejects it. Production code has
+  no test-only switch.
+
+The migration test compares `pg_enum` labels with the Python enums after a
+staged upgrade, because Alembic metadata comparison ignores enum labels.
 
 ### Manual recovery of expired generation-run leases
 
