@@ -37,6 +37,7 @@ from tests.generation_run_quality_support import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -89,46 +90,32 @@ def _loser_launcher(
 
 
 @pytest.mark.asyncio
-async def test_read_fault_in_a_losing_launcher_cannot_fail_the_run(
+@pytest.mark.parametrize(
+    ("make_fault", "blocks"),
+    [(ReadFault, False), (blocking_read_fault, True)],
+    ids=["read-fault", "shutdown-before-claim"],
+)
+async def test_losing_launcher_cannot_fail_the_run(
     session_factory: async_sessionmaker[AsyncSession],
+    make_fault: cabc.Callable[[], ReadFault],
+    *,
+    blocks: bool,
 ) -> None:
-    """A pre-claim read fault must not fail a run another launcher owns."""
+    """A read fault or a pre-claim shutdown must not fail another's run."""
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     generator = ReleasableDraftGenerator(draft_result(valid_tei()))
     owner = _owner_launcher(session_factory, generator)
-    loser = _loser_launcher(session_factory, ReadFault())
-
-    await owner.launch(run_id)
-    await asyncio.wait_for(generator.started.wait(), timeout=5)
-    await loser.launch(run_id)
-    await loser.drain()
-
-    run, kinds = await _load(session_factory, run_id)
-    assert run.status is GenerationRunStatus.RUNNING, kinds
-    assert "run.failed" not in kinds, kinds
-
-    generator.release.set()
-    await owner.drain()
-    run, kinds = await _load(session_factory, run_id)
-    assert run.status is GenerationRunStatus.SUCCEEDED, kinds
-
-
-@pytest.mark.asyncio
-async def test_shutdown_before_a_claim_cannot_fail_the_run(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Cancelling a losing launcher before it claims must not fail the run."""
-    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
-    generator = ReleasableDraftGenerator(draft_result(valid_tei()))
-    owner = _owner_launcher(session_factory, generator)
-    fault = blocking_read_fault()
+    fault = make_fault()
     loser = _loser_launcher(session_factory, fault)
 
     await owner.launch(run_id)
     await asyncio.wait_for(generator.started.wait(), timeout=5)
     await loser.launch(run_id)
-    await asyncio.wait_for(fault.started.wait(), timeout=5)
-    await loser.shutdown()
+    if blocks:
+        await asyncio.wait_for(fault.started.wait(), timeout=5)
+        await loser.shutdown()
+    else:
+        await loser.drain()
 
     run, kinds = await _load(session_factory, run_id)
     assert run.status is GenerationRunStatus.RUNNING, kinds
