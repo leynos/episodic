@@ -79,6 +79,17 @@ class QualityEvaluatorPort(typ.Protocol):
         """Judge the subject and return a verdict."""
 
 
+def _validate_evaluator_names(evaluators: tuple[QualityEvaluatorPort, ...]) -> None:
+    """Reject blank or duplicated evaluator slugs."""
+    names = [evaluator.name for evaluator in evaluators]
+    if any(not name.strip() for name in names):
+        msg = "every evaluator name must be a non-empty slug."
+        raise ValueError(msg)
+    if len(set(names)) != len(names):
+        msg = "evaluator names must be unique."
+        raise ValueError(msg)
+
+
 def _validate_evaluator_set(
     evaluators: tuple[QualityEvaluatorPort, ...],
     timeout_seconds: float,
@@ -87,13 +98,7 @@ def _validate_evaluator_set(
     if timeout_seconds <= 0:
         msg = "evaluator_timeout_seconds must be positive."
         raise ValueError(msg)
-    names = [evaluator.name for evaluator in evaluators]
-    if any(not name.strip() for name in names):
-        msg = "every evaluator name must be a non-empty slug."
-        raise ValueError(msg)
-    if len(set(names)) != len(names):
-        msg = "evaluator names must be unique."
-        raise ValueError(msg)
+    _validate_evaluator_names(evaluators)
 
 
 @dc.dataclass(frozen=True, slots=True)

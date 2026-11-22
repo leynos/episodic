@@ -182,16 +182,23 @@ def poll_generation_run_until_terminal(
     )
 
 
+def _fetch_episode_tei(
+    context: NoQaGenerationSliceContext,
+    headers: dict[str, str] | None = None,
+) -> None:
+    """Fetch the generated episode TEI and store the response."""
+    episode_id = context.responses[0].json()["episode_id"]
+    context.tei_response = context.runner.run(
+        context.request("GET", f"/v1/episodes/{episode_id}/tei", headers=headers)
+    )
+
+
 @when("I fetch the episode TEI as JSON")
 def fetch_episode_tei_as_json(
     generation_slice_context: NoQaGenerationSliceContext,
 ) -> None:
     """Fetch the generated episode envelope as JSON."""
-    context = generation_slice_context
-    episode_id = context.responses[0].json()["episode_id"]
-    context.tei_response = context.runner.run(
-        context.request("GET", f"/v1/episodes/{episode_id}/tei")
-    )
+    _fetch_episode_tei(generation_slice_context)
 
 
 @when("I fetch the episode TEI as application/tei+xml")
@@ -199,14 +206,9 @@ def fetch_episode_tei_as_xml(
     generation_slice_context: NoQaGenerationSliceContext,
 ) -> None:
     """Fetch the generated episode as a TEI attachment."""
-    context = generation_slice_context
-    episode_id = context.responses[0].json()["episode_id"]
-    context.tei_response = context.runner.run(
-        context.request(
-            "GET",
-            f"/v1/episodes/{episode_id}/tei",
-            headers={"Accept": "application/tei+xml"},
-        )
+    _fetch_episode_tei(
+        generation_slice_context,
+        {"Accept": "application/tei+xml"},
     )
 
 

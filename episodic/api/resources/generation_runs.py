@@ -96,6 +96,16 @@ class GenerationRunsResourceConfig:
     })
 
 
+def _accepted_response(run: GenerationRun) -> IdempotentResponse:
+    """Build the 202 response for a scheduled generation run."""
+    return IdempotentResponse(
+        falcon.HTTP_202,
+        serialize_generation_run(run),
+        location=f"/v1/generation-runs/{run.id}",
+        retry_after=_RETRY_AFTER,
+    )
+
+
 class GenerationRunsResource:
     """Create no-QA generation runs for authenticated ingestion-job owners.
 
@@ -174,13 +184,7 @@ class GenerationRunsResource:
                 launcher,
                 span,
             )
-            location = f"/v1/generation-runs/{run.id}"
-            return IdempotentResponse(
-                falcon.HTTP_202,
-                serialize_generation_run(run),
-                location=location,
-                retry_after=_RETRY_AFTER,
-            )
+            return _accepted_response(run)
 
         with self._tracer.start_span(
             "generation_run.command",

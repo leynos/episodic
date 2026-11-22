@@ -134,16 +134,8 @@ def _expected_terminal(
     return GenerationTerminal.QA_ESCALATED
 
 
-def assert_branch_ownership(
-    mode: QualityMode,
-    step_names: cabc.Sequence[str],
-    terminal: GenerationTerminal | None,
-) -> None:
-    """Reject a trace that visits a node its quality branch does not own."""
-    branch = route_quality_mode(mode)
-    if mode is QualityMode.DRAFT_WITHOUT_QA:
-        assert "begin_evaluation" not in step_names, "no-QA runs never evaluate"
-        assert "escalate" not in step_names, "no-QA runs never escalate"
+def _visited_nodes(mode: QualityMode, step_names: cabc.Sequence[str]) -> set[str]:
+    """Return the graph nodes a step log proves the run visited."""
     visited: set[str] = {"initialize"}
     if "generate_draft" in step_names:
         visited.add(
@@ -161,7 +153,20 @@ def assert_branch_ownership(
         )
     if "escalate" in step_names:
         visited.add("escalate")
-    for node in visited:
+    return visited
+
+
+def assert_branch_ownership(
+    mode: QualityMode,
+    step_names: cabc.Sequence[str],
+    terminal: GenerationTerminal | None,
+) -> None:
+    """Reject a trace that visits a node its quality branch does not own."""
+    branch = route_quality_mode(mode)
+    if mode is QualityMode.DRAFT_WITHOUT_QA:
+        assert "begin_evaluation" not in step_names, "no-QA runs never evaluate"
+        assert "escalate" not in step_names, "no-QA runs never escalate"
+    for node in _visited_nodes(mode, step_names):
         owner = NODE_OWNERSHIP[node]
         assert owner in {None, branch}, f"{node} belongs to {owner}, not {branch}"
     if terminal is not None:
@@ -193,16 +198,22 @@ def _classify(
     elif mode is QualityMode.DRAFT_WITHOUT_QA:
         label = "no_qa_persisted"
     else:
-        aggregate = expected_aggregate(behaviours)
-        if aggregate is QualityVerdict.PASSED:
-            label = "qa_passed"
-        elif aggregate is QualityVerdict.FAILED:
-            label = "qa_escalated_failed"
-        elif "timeout" in behaviours:
-            label = "qa_escalated_timeout"
-        else:
-            label = "qa_escalated_inconclusive"
+        label = _aggregate_label(expected_aggregate(behaviours), behaviours)
     return label
+
+
+def _aggregate_label(
+    aggregate: QualityVerdict,
+    behaviours: cabc.Sequence[str],
+) -> str:
+    """Name the escalation class an aggregate verdict reached."""
+    if aggregate is QualityVerdict.PASSED:
+        return "qa_passed"
+    if aggregate is QualityVerdict.FAILED:
+        return "qa_escalated_failed"
+    if "timeout" in behaviours:
+        return "qa_escalated_timeout"
+    return "qa_escalated_inconclusive"
 
 
 async def _check_case(
@@ -236,7 +247,18 @@ async def _check_case(
         assert replay_outcome.terminal == outcome.terminal, (
             "terminal must be deterministic"
         )
-    if outcome.terminal is GenerationTerminal.QA_PASSED_DRAFT_PERSISTED:
+    _assert_terminal_details(outcome.terminal, steps, behaviours)
+    if reached is not None:
+        reached[_classify(mode, behaviours, fault, outcome)] += 1
+
+
+def _assert_terminal_details(
+    terminal: GenerationTerminal | None,
+    steps: RecordingSteps,
+    behaviours: cabc.Sequence[str],
+) -> None:
+    """Assert the QA status and evaluations a terminal recorded."""
+    if terminal is GenerationTerminal.QA_PASSED_DRAFT_PERSISTED:
         qa_status, evaluations = typ.cast(
             "tuple[QaStatus, tuple[QualityEvaluation, ...]]",
             steps.detail_for("complete_with_draft"),
@@ -245,7 +267,7 @@ async def _check_case(
         assert all(item.verdict is QualityVerdict.PASSED for item in evaluations), (
             "every evaluation on the pass route must have passed"
         )
-    if outcome.terminal is GenerationTerminal.QA_ESCALATED:
+    if terminal is GenerationTerminal.QA_ESCALATED:
         verdict, evaluations = typ.cast(
             "tuple[QualityVerdict, tuple[QualityEvaluation, ...]]",
             steps.detail_for("escalate"),
@@ -255,8 +277,6 @@ async def _check_case(
             f"escalation verdict {verdict!r} != aggregate {expected!r}"
         )
         assert evaluations, "escalation carries the evaluator results"
-    if reached is not None:
-        reached[_classify(mode, behaviours, fault, outcome)] += 1
 
 
 @pytest.mark.asyncio

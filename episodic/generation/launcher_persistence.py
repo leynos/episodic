@@ -9,6 +9,7 @@ terminal failure. Terminal-state and pending-depth metrics are recorded here
 too, alongside the runs they describe.
 """
 
+import dataclasses as dc
 import typing as typ
 
 from episodic.canonical.domain import GenerationRunStatus
@@ -45,6 +46,15 @@ _METRIC_DRAFT_ERRORS = "generation_run_draft_errors_total"
 _METRIC_PENDING_DEPTH = "generation_run_pending_depth"
 
 logger = get_logger(__name__)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _SuccessRecord:
+    """Persisted artefacts a successful transition records."""
+
+    claimed: ClaimedRun
+    result: DraftScriptResult
+    persisted_tei: PersistedTei
 
 
 if typ.TYPE_CHECKING:
@@ -95,11 +105,13 @@ class _PersistenceMixin(_MixinBase):
             )
             await self._record_success_transition(
                 uow,
-                claimed,
-                result,
-                PersistedTei(
-                    revision=updated_episode.tei_revision,
-                    content_hash=updated_episode.tei_content_hash,
+                _SuccessRecord(
+                    claimed=claimed,
+                    result=result,
+                    persisted_tei=PersistedTei(
+                        revision=updated_episode.tei_revision,
+                        content_hash=updated_episode.tei_content_hash,
+                    ),
                 ),
                 qa,
             )
@@ -111,17 +123,14 @@ class _PersistenceMixin(_MixinBase):
             claimed.run.id,
         )
 
-    # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # One transaction records the run, result, persisted TEI, and QA outcome.
-    async def _record_success_transition(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # One transaction records the run, result, persisted TEI, and QA outcome.
+    async def _record_success_transition(
         self,
         uow: CanonicalUnitOfWork,
-        claimed: ClaimedRun,
-        result: DraftScriptResult,
-        persisted_tei: PersistedTei,
+        record: _SuccessRecord,
         qa: QaOutcome,
     ) -> None:
         """Record success-side events, costs, and terminal status."""
-        run_id = claimed.run.id
+        run_id = record.claimed.run.id
         if qa.status is QaStatus.PASSED:
             await uow.generation_runs.append_event(
                 run_id,
@@ -133,13 +142,13 @@ class _PersistenceMixin(_MixinBase):
             run_id,
             kind="tei.persisted",
             payload={
-                "tei_revision": persisted_tei.revision,
-                "content_hash": persisted_tei.content_hash,
+                "tei_revision": record.persisted_tei.revision,
+                "content_hash": record.persisted_tei.content_hash,
                 "qa_status": qa.status.value,
             },
             occurred_at=self.clock(),
         )
-        await self._record_costs(uow, run_id, result)
+        await self._record_costs(uow, run_id, record.result)
         await uow.generation_runs.append_event(
             run_id,
             kind="run.succeeded",

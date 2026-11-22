@@ -26,27 +26,53 @@ from episodic.canonical.generation_run_ports import (
 NOW = dt.datetime(2026, 6, 4, 8, 0, tzinfo=dt.UTC)
 
 
-def _no_qa_run(
-    status: GenerationRunStatus = GenerationRunStatus.RUNNING,
-) -> GenerationRun:
-    """Build a running no-QA run."""
+@dc.dataclass(frozen=True, slots=True)
+class _RunSpec:
+    """Lifecycle and quality fields for a generated run."""
+
+    status: GenerationRunStatus
+    quality_mode: QualityMode
+    qa_status: QaStatus
+    skip_qa_rationale: str | None
+    current_node: str | None
+    ended_at: dt.datetime | None
+
+
+def _run(spec: _RunSpec) -> GenerationRun:
+    """Build a run in the requested lifecycle and quality state."""
     return GenerationRun(
         id=uuid.UUID("018fdcf0-0000-7000-8000-000000000001"),
         episode_id=uuid.UUID("018fdcf0-0000-7000-8000-000000000002"),
         source_bundle_id=uuid.UUID("018fdcf0-0000-7000-8000-000000000003"),
         actor="editor@example.com",
-        status=status,
-        current_node="draft",
+        status=spec.status,
+        current_node=spec.current_node,
         budget_snapshot={},
         configuration={},
         created_at=NOW,
         updated_at=NOW,
         started_at=NOW,
-        ended_at=None,
+        ended_at=spec.ended_at,
         error_message=None,
-        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
-        qa_status=QaStatus.SKIPPED,
-        skip_qa_rationale="No-QA vertical-slice draft.",
+        quality_mode=spec.quality_mode,
+        qa_status=spec.qa_status,
+        skip_qa_rationale=spec.skip_qa_rationale,
+    )
+
+
+def _no_qa_run(
+    status: GenerationRunStatus = GenerationRunStatus.RUNNING,
+) -> GenerationRun:
+    """Build a running no-QA run."""
+    return _run(
+        _RunSpec(
+            status=status,
+            quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+            qa_status=QaStatus.SKIPPED,
+            skip_qa_rationale="No-QA vertical-slice draft.",
+            current_node="draft",
+            ended_at=None,
+        )
     )
 
 
@@ -56,23 +82,15 @@ def _gated_run(
 ) -> GenerationRun:
     """Build a QA-gated run in the given lifecycle and QA state."""
     terminal = status.is_terminal()
-    return GenerationRun(
-        id=uuid.UUID("018fdcf0-0000-7000-8000-000000000004"),
-        episode_id=uuid.UUID("018fdcf0-0000-7000-8000-000000000005"),
-        source_bundle_id=uuid.UUID("018fdcf0-0000-7000-8000-000000000006"),
-        actor="editor@example.com",
-        status=status,
-        current_node=None if terminal else "evaluate",
-        budget_snapshot={},
-        configuration={},
-        created_at=NOW,
-        updated_at=NOW,
-        started_at=NOW,
-        ended_at=NOW if terminal else None,
-        error_message=None,
-        quality_mode=QualityMode.QA_GATED,
-        qa_status=qa_status,
-        skip_qa_rationale=None,
+    return _run(
+        _RunSpec(
+            status=status,
+            quality_mode=QualityMode.QA_GATED,
+            qa_status=qa_status,
+            skip_qa_rationale=None,
+            current_node=None if terminal else "evaluate",
+            ended_at=NOW if terminal else None,
+        )
     )
 
 

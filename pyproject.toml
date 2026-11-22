@@ -577,8 +577,9 @@ reason = "Alembic invokes these downgrade helpers and their rendering helpers wh
 type = "class"
 full_name = [
     "episodic.canonical.storage.review_checkpoints.SqlAlchemyReviewCheckpointStore",
+    "episodic.generation.launcher_persistence._SuccessRecord",
 ]
-reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer."
+reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer. _SuccessRecord is constructed by _persist_success and consumed by _record_success_transition in the same transaction."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "parameter"
@@ -611,8 +612,10 @@ reason = "episodic.cli.entrypoint.main calls CliApplication.run to dispatch the 
 type = "function"
 full_name = [
     "episodic.canonical.generation_graph_ports._validate_evaluator_set",
+    "episodic.canonical.generation_graph_ports._validate_evaluator_names",
+    "episodic.api.dependencies._validate_accepted_quality_modes",
 ]
-reason = "dataclasses invokes __post_init__ when QualityEvaluatorSet is constructed, and that hook calls this validator."
+reason = "dataclasses invokes __post_init__ when QualityEvaluatorSet or ApiDependencies is constructed, and those hooks call these validators."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"

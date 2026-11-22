@@ -83,6 +83,15 @@ class ReadinessProbe:
         validate_async_callable(self.check, "ReadinessProbe.check")
 
 
+def _validate_accepted_quality_modes(dependencies: ApiDependencies) -> None:
+    """Normalize and validate the accepted quality-mode capability set."""
+    modes = frozenset(dependencies.accepted_quality_modes)
+    object.__setattr__(dependencies, "accepted_quality_modes", modes)
+    if QualityMode.DRAFT_WITHOUT_QA not in modes:
+        msg = "ApiDependencies.accepted_quality_modes must include draft_without_qa."
+        raise ValueError(msg)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class ApiDependencies:
     """Group the ports and probes required by the Falcon API adapter.
