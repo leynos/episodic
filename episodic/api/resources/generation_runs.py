@@ -10,6 +10,8 @@ from episodic.api.helpers import parse_uuid, require_payload_dict
 from episodic.api.resources.generation_runs_create_support import (
     _CreateGenerationRun,
     _parse_create_request,
+    _require_accepted_mode,
+    _require_no_gated_rationale,
 )
 from episodic.api.resources.generation_runs_errors import (
     _RETRY_AFTER,
@@ -63,6 +65,22 @@ _GENERATION_RUN_OPERATION = "generation_run.create"
 _DEFAULT_MAX_SOURCE_COUNT = 32
 
 
+import datetime as dt
+import uuid
+
+"""Falcon resources for no-QA generation-run creation and polling."""
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    import uuid
+    from episodic.api.types import UowFactory
+    from episodic.generation.launcher import GenerationRunLauncher
+    from episodic.observability import SpanHandle, TracerPort
+__all__ = [
+]
+_GENERATION_RUN_OPERATION = "generation_run.create"
+_DEFAULT_MAX_SOURCE_COUNT = 32
+
+
 @dc.dataclass(frozen=True, slots=True)
 class GenerationRunsResourceConfig:
     """Ports and deterministic seams for generation-run resource creation.
@@ -112,6 +130,7 @@ class GenerationRunsResource:
         self._uuid_factory = config.uuid_factory
         self._max_source_count = config.max_source_count
         self._tracer = NoopTracer() if config.tracer is None else config.tracer
+        self._accepted_quality_modes = frozenset(config.accepted_quality_modes)
 
     async def on_post(
         self,
@@ -153,6 +172,8 @@ class GenerationRunsResource:
 
         async def work() -> IdempotentResponse:
             """Create and schedule the run, then build its 202 response."""
+            _require_accepted_mode(request.quality_mode, self._accepted_quality_modes)
+            _require_no_gated_rationale(payload, request.quality_mode)
             run = await self._create_and_schedule_run(
                 self._create_run(
                     source_bundle_id,
@@ -292,8 +313,12 @@ class GenerationRunsResource:
                 started_at=None,
                 ended_at=None,
                 error_message=None,
-                quality_mode=QualityMode.DRAFT_WITHOUT_QA,
-                qa_status=QaStatus.SKIPPED,
+                quality_mode=request.quality_mode,
+                qa_status=(
+                    QaStatus.PENDING
+                    if request.quality_mode is QualityMode.QA_GATED
+                    else QaStatus.SKIPPED
+                ),
                 skip_qa_rationale=request.skip_qa_rationale,
             )
             run = await uow.generation_runs.create_run(
@@ -329,3 +354,4 @@ class GenerationRunsResource:
                 await uow.rollback()
             else:
                 await uow.commit()
+# weave: run 'weave explain episodic/api/resources/generation_runs.py' for per-hunk detail, 'weave check' to verify your resolution

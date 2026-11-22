@@ -9,6 +9,7 @@ import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
+from episodic.canonical.generation_quality import QualityMode
 from episodic.canonical.validation import (
     validate_async_callable,
     validate_sync_callable,
@@ -116,6 +117,9 @@ class ApiDependencies:
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
+    accepted_quality_modes: frozenset[QualityMode] = frozenset({
+        QualityMode.DRAFT_WITHOUT_QA
+    })
     unmapped_error_emitter: UnmappedErrorEmitter | None = None
 
     def __post_init__(self) -> None:
@@ -129,6 +133,16 @@ class ApiDependencies:
             allow_none=True,
         )
         _validate_authorization_port(self.authorization)
+        object.__setattr__(
+            self,
+            "accepted_quality_modes",
+            frozenset(self.accepted_quality_modes),
+        )
+        if QualityMode.DRAFT_WITHOUT_QA not in self.accepted_quality_modes:
+            msg = (
+                "ApiDependencies.accepted_quality_modes must include draft_without_qa."
+            )
+            raise ValueError(msg)
         object.__setattr__(self, "readiness_probes", tuple(self.readiness_probes))
         object.__setattr__(self, "shutdown_hooks", tuple(self.shutdown_hooks))
         for probe in self.readiness_probes:
@@ -154,3 +168,4 @@ class ApiDependencies:
         return ProbeHealthObserver.from_checks(
             (probe.name, probe.check) for probe in self.readiness_probes
         )
+# weave: run 'weave explain episodic/api/dependencies.py' for per-hunk detail, 'weave check' to verify your resolution

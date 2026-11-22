@@ -25,6 +25,14 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
+from episodic.canonical.generation_quality import QualityMode
+
+"""Deterministic factory seams for generation-run HTTP resource creation."""
+if typ.TYPE_CHECKING:
+    from httpx._transports.asgi import _ASGIApp
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
 @pytest.mark.asyncio
 async def test_generation_run_resource_uses_injected_factories(
     session_factory: async_sessionmaker[AsyncSession],
@@ -59,6 +67,7 @@ async def test_generation_run_resource_uses_injected_factories(
     run = await resource._create_run(
         ingestion_job_id,
         _CreateGenerationRun(
+            quality_mode=QualityMode.DRAFT_WITHOUT_QA,
             skip_qa_rationale="Deterministic resource construction.",
             configuration={},
             budget_snapshot={},

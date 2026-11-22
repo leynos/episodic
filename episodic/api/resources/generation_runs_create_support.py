@@ -1,4 +1,10 @@
-"""Request-body parsing helpers for no-QA generation-run creation."""
+"""Request-body parsing and capability checks for generation-run creation.
+
+The parser enforces the body rules that hold for every quality mode before
+any idempotency work starts. The capability check and the gated-mode
+rationale rule run inside the idempotent work, so a rejected request releases
+its idempotency key and the ordering matches the published contract.
+"""
 
 import typing as typ
 
@@ -11,11 +17,16 @@ from episodic.canonical.generation_quality import QualityMode
 if typ.TYPE_CHECKING:
     from episodic.api.types import JsonPayload
 
+_GATED_RATIONALE_MESSAGE = (
+    "skip_qa_rationale is not accepted with quality_mode qa_gated."
+)
+
 
 class _CreateGenerationRun(typ.NamedTuple):
     """Parsed fields of a no-QA generation-run creation request."""
+    quality_mode: QualityMode
 
-    skip_qa_rationale: str
+    skip_qa_rationale: str | None
     configuration: JsonPayload
     budget_snapshot: JsonPayload
 
@@ -23,17 +34,6 @@ class _CreateGenerationRun(typ.NamedTuple):
 def _parse_create_request(payload: JsonPayload) -> _CreateGenerationRun:
     """Validate a no-QA create payload and return its parsed fields."""
     quality_mode = require_str(payload, "quality_mode")
-    if quality_mode == "qa_gated":
-        raise typ.cast(
-            "falcon.HTTPUnprocessableEntity",
-            http_error(
-                falcon.HTTPUnprocessableEntity(
-                    description=f"Unsupported quality_mode: {quality_mode}."
-                ),
-                code="quality_mode_unsupported",
-                details={"quality_mode": quality_mode},
-            ),
-        )
     try:
         parsed_mode = QualityMode(quality_mode)
     except ValueError as exc:
@@ -50,10 +50,69 @@ def _parse_create_request(payload: JsonPayload) -> _CreateGenerationRun:
         if key in payload
     }
     budget_snapshot = _optional_mapping(payload, "budget_hints")
+    rationale = (
+        require_str(payload, "skip_qa_rationale")
+        if parsed_mode is QualityMode.DRAFT_WITHOUT_QA
+        else None
+    )
     return _CreateGenerationRun(
-        skip_qa_rationale=require_str(payload, "skip_qa_rationale"),
+        quality_mode=parsed_mode,
+        skip_qa_rationale=rationale,
         configuration=configuration,
         budget_snapshot=budget_snapshot,
+    )
+
+
+def _require_accepted_mode(
+    quality_mode: QualityMode,
+    accepted_quality_modes: frozenset[QualityMode],
+) -> None:
+    """Reject a quality mode this deployment cannot execute.
+
+    Raises
+    ------
+    falcon.HTTPUnprocessableEntity
+        If the mode is not accepted. The envelope is unchanged from the
+        pre-capability 422.
+    """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # http_error returns the concrete Falcon exception.
+    if quality_mode in accepted_quality_modes:
+        return
+    raise typ.cast(
+        "falcon.HTTPUnprocessableEntity",
+        http_error(
+            falcon.HTTPUnprocessableEntity(
+                description=f"Unsupported quality_mode: {quality_mode.value}."
+            ),
+            code="quality_mode_unsupported",
+            details={"quality_mode": quality_mode.value},
+        ),
+    )
+
+
+def _require_no_gated_rationale(
+    payload: JsonPayload,
+    quality_mode: QualityMode,
+) -> None:
+    """Reject a gated request that carries a no-QA rationale.
+
+    Raises
+    ------
+    falcon.HTTPBadRequest
+        If a QA-gated body carries ``skip_qa_rationale``.
+    """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # http_error returns the concrete Falcon exception.
+    if quality_mode is not QualityMode.QA_GATED or "skip_qa_rationale" not in payload:
+        return
+    raise typ.cast(
+        "falcon.HTTPBadRequest",
+        http_error(
+            falcon.HTTPBadRequest(description=_GATED_RATIONALE_MESSAGE),
+            code="validation_error",
+            details={
+                "field": "skip_qa_rationale",
+                "constraint": "exclusive_with_quality_mode",
+                "quality_mode": quality_mode.value,
+            },
+        ),
     )
 
 

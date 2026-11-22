@@ -42,6 +42,7 @@ pytest_plugins: list[str] = [
     # under the 400-line limit; pytest-bdd registers step fixtures in the
     # defining module, so the module must be loaded as a plugin.
     "tests.steps.pricing_snapshots_step_definitions",
+    "tests.steps.generation_slice_shared_steps",
 ]
 
 
@@ -220,3 +221,4 @@ async def create_episode_template_for_binding_tests(
     )
 
     return await _create_episode_template(uow, series_id, now)
+# weave: run 'weave explain tests/conftest.py' for per-hunk detail, 'weave check' to verify your resolution

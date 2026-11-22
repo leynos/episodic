@@ -101,6 +101,7 @@ async def test_build_generation_launcher_wires_cost_recorder(
         _build_generation_launcher,
         _GenerationLauncherRuntime,
     )
+    from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
     from episodic.canonical.storage import SqlAlchemyUnitOfWork
     from episodic.cost.recorder import CostRecorder
     from episodic.generation import (
@@ -108,6 +109,7 @@ async def test_build_generation_launcher_wires_cost_recorder(
         InProcessGenerationRunLauncher,
     )
     from episodic.observability import StructuredLogMetrics, StructuredLogTracer
+    from episodic.orchestration import LangGraphContentGenerationGraph
 
     launcher = _build_generation_launcher(
         lambda: SqlAlchemyUnitOfWork(session_factory),
@@ -115,6 +117,7 @@ async def test_build_generation_launcher_wires_cost_recorder(
         _GenerationLauncherRuntime(
             metrics=StructuredLogMetrics(),
             tracer=StructuredLogTracer(),
+            content_graph=LangGraphContentGenerationGraph(QualityEvaluatorSet(())),
         ),
         config=RuntimeConfig(
             database_url="postgresql+psycopg://unused",

@@ -154,6 +154,8 @@ class _ShutdownHooksMiddleware:
             raise first_failure
 
 
+
+
 def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
@@ -178,3 +180,4 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     _register_api_routes(app, dependencies)
 
     return app
+# weave: run 'weave explain episodic/api/app.py' for per-hunk detail, 'weave check' to verify your resolution
