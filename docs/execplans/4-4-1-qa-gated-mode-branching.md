@@ -268,7 +268,7 @@ inference budget on a branch that cannot pass.
   gate runs on every commit and those symbols have no production caller until
   the graph exists.
 - [x] (2026-11-22) EP-M2: persistence, migration and lifecycle updates.
-- [ ] EP-M3: content-generation graph in orchestration.
+- [x] (2026-11-22) EP-M3: content-generation graph in orchestration.
 - [ ] EP-M4: launcher executes runs through the graph.
 - [ ] EP-M5: REST and composition-root acceptance of `qa_gated`.
 - [ ] EP-M6: documentation, ADR acceptance, roadmap update and final gates.

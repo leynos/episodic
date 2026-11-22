@@ -610,6 +610,13 @@ reason = "episodic.cli.entrypoint.main calls CliApplication.run to dispatch the 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
+    "episodic.canonical.generation_graph_ports._validate_evaluator_set",
+]
+reason = "dataclasses invokes __post_init__ when QualityEvaluatorSet is constructed, and that hook calls this validator."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
     "episodic.api.authorization._authorization_result",
     "episodic.api.dependencies._validate_async_callable",
     "episodic.api.dependencies._validate_readiness_probe",
@@ -1369,10 +1376,12 @@ prefixes = [
     "episodic.canonical.ingestion_ports",
     "episodic.canonical.entity_protocols",
     "episodic.canonical.episode_errors",
+    "episodic.canonical.generation_graph_ports",
     "episodic.canonical.generation_quality",
     "episodic.canonical.generation_run_errors",
     "episodic.canonical.generation_run_lease_ports",
     "episodic.canonical.generation_run_ports",
+    "episodic.canonical.generation_routing",
     "episodic.canonical.history_protocols",
     "episodic.canonical.health",
     "episodic.canonical.hashing",
@@ -1425,6 +1434,8 @@ allowed = [
 [[tool.hecate.groups]]
 name = "orchestration_nodes"
 prefixes = [
+    "episodic.orchestration._content_graph_nodes",
+    "episodic.orchestration._content_graph_state",
     "episodic.orchestration._graph_nodes",
     "episodic.orchestration._graph_protocols",
     "episodic.orchestration._graph_state",
