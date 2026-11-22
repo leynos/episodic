@@ -2550,16 +2550,15 @@ draft generation. `GenerationRunPersistence` (`launcher_persistence.py`) takes
 the unit-of-work factory, clock, cost-recorder factory, provider metadata and
 metrics, and owns draft events, TEI persistence, costs and terminal status.
 Each component is a dataclass with explicit constructor collaborators, so unit
-tests construct it with fakes rather than a launcher. The launcher composes
-the three in `__post_init__`, delegates `launch`, `drain`, `shutdown` and
+tests construct it with fakes rather than a launcher. The launcher composes the
+three in `__post_init__`, delegates `launch`, `drain`, `shutdown` and
 `scheduled_run_count` to the scheduler, and keeps the claim-generate-persist
-sequence plus failure classification in `_execute_run`.
-`BoundedSourceLoader` implements the `GenerationSourceLoader` seam and applies
-the source count and byte limits; constructing a launcher with a patched
-`launcher.py`-level `source_from_document` still overrides the default
-document loader. Replacing the mixins with injected scheduling, claim and
-persistence components was tracked in
-[#350](https://github.com/leynos/episodic/issues/350).
+sequence plus failure classification in `_execute_run`. `BoundedSourceLoader`
+implements the `GenerationSourceLoader` seam and applies the source count and
+byte limits; constructing a launcher with a patched `launcher.py`-level
+`source_from_document` still overrides the default document loader. Replacing
+the mixins with injected scheduling, claim and persistence components was
+tracked in [#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they

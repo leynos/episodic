@@ -686,6 +686,14 @@ reason = "Canonical value objects call these validation methods from dataclass p
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
 full_name = [
+    "episodic.generation.launcher.InProcessGenerationRunLauncher._execute_run",
+    "episodic.generation.launcher.InProcessGenerationRunLauncher._record_cancellation",
+]
+reason = "GenerationRunScheduler invokes both as injected callbacks (`execute_run` from _run_task and `record_cancellation` from the task runner and shutdown path)."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
     "episodic.concurrent_interpreters._PerfCounterCpuTaskExecutorClock.monotonic_seconds",
     "episodic.observability._ports.NoopMetrics.increment_counter",
     "episodic.observability._ports.NoopMetrics.observe_latency_ms",
@@ -996,7 +1004,7 @@ reason = "Protocol classes for different aggregates share only the async abstrac
 members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/adapters/generation_runs.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/review_checkpoints.py"]
 reason = "The in-memory adapters and the SQLAlchemy stores implement the same generation-run port twice. The matching signatures and validation preludes are the port contract, enforced by the shared contract scenarios; one side filters a list and the other builds a query."
 [[tool.duplication_gate.allow]]
-members = ["episodic/api/resources/qa_artefacts.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/generation/launcher.py", "episodic/orchestration/_planning_orchestrator.py"]
+members = ["episodic/api/resources/qa_artefacts.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/generation/launcher_support.py", "episodic/orchestration/_planning_orchestrator.py"]
 reason = "Annotation-only import blocks of five modules, each naming its own types; import lists cannot be shared."
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/resources/generation_runs_events.py", "episodic/api/resources/qa_artefacts.py"]
@@ -1131,8 +1139,8 @@ reason = "Each adapter logs under its own event name and tests a different termi
 members = ["episodic/canonical/__init__.py", "episodic/canonical/unit_of_work_protocols.py"]
 reason = "The package surface and the unit-of-work protocols name the same repository protocols."
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/generation_persistence.py", "episodic/canonical/storage/review_checkpoints.py"]
-reason = "Annotation-only imports of different modules."
+members = ["episodic/canonical/generation_persistence.py", "episodic/canonical/storage/review_checkpoints.py", "episodic/generation/launcher.py", "episodic/generation/launcher_persistence.py"]
+reason = "Annotation-only imports of different modules: the canonical persistence services, the SQLAlchemy checkpoint store, and the launcher plus its persistence component each import the domain, port and observability names their own signatures use."
 [[tool.duplication_gate.allow]]
 members = ["episodic/canonical/ingestion_service.py::_build_conflict_metadata", "episodic/canonical/ingestion_service.py::_build_ingestion_request"]
 reason = "Both build a dict from outcome and weighting data but with different keys and sources."

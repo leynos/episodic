@@ -278,7 +278,7 @@ def persistence(  # ruff: ignore[too-many-arguments]  # Test wiring names each p
     return GenerationRunPersistence(
         uow_factory=lambda: typ.cast("CanonicalUnitOfWork", uow),
         clock=clock,
-        cost_recorder_factory=(None if recorder is None else lambda _uow: recorder),
+        cost_recorder_factory=(None if recorder is None else lambda uow: recorder),
         provider_name=provider_name,
         provider_operation=provider_operation,
         metrics=RecordingMetrics() if metrics is None else metrics,

@@ -73,9 +73,9 @@ class _RecordingCancellation:
 
     run_ids: list[uuid.UUID] = dc.field(default_factory=list)
 
-    async def __call__(self, run_id: uuid.UUID) -> None:
+    async def record(self, run_id: uuid.UUID) -> None:
         """Record one cancellation."""
-        self.run_ids.append(run_id)
+        self.run_ids += [run_id]
 
 
 class _BlockingExecutor:
@@ -93,7 +93,8 @@ class _BlockingExecutor:
         raise AssertionError
 
 
-def _scheduler(  # pylint: disable-next=too-many-arguments  # Test wiring names each port it replaces.
+# pylint: disable-next=too-many-arguments  # Test wiring names each port it replaces.
+def _scheduler(
     executor: cabc.Callable[[uuid.UUID], cabc.Awaitable[ExecutionOutcome]],
     recorder: cabc.Callable[[uuid.UUID], cabc.Awaitable[None]],
     *,
@@ -118,7 +119,11 @@ async def test_scheduler_executes_admitted_run_and_records_trace() -> None:
     """An admitted run should execute, drain, and report its outcome."""
     executor = _RecordingExecutor()
     tracer = RecordingTracer()
-    scheduler = _scheduler(executor, _RecordingCancellation(), tracer=tracer)
+    scheduler = _scheduler(
+        executor,
+        _RecordingCancellation().record,
+        tracer=tracer,
+    )
     run_id = uuid.uuid7()
 
     await scheduler.launch(run_id)
@@ -142,7 +147,11 @@ async def test_scheduler_reports_failed_outcome_category() -> None:
         ExecutionOutcome(outcome="failed", failure_category="provider.transient")
     )
     tracer = RecordingTracer()
-    scheduler = _scheduler(executor, _RecordingCancellation(), tracer=tracer)
+    scheduler = _scheduler(
+        executor,
+        _RecordingCancellation().record,
+        tracer=tracer,
+    )
 
     await scheduler.launch(uuid.uuid7())
     await scheduler.drain()
@@ -160,7 +169,7 @@ async def test_scheduler_rejects_admission_beyond_capacity() -> None:
     metrics = _RecordingMetrics()
     scheduler = _scheduler(
         executor,
-        _RecordingCancellation(),
+        _RecordingCancellation().record,
         metrics=metrics,
         max_concurrency=1,
         max_pending_runs=1,
@@ -190,7 +199,7 @@ async def test_scheduler_closes_admission_during_shutdown() -> None:
     metrics = _RecordingMetrics()
     scheduler = _scheduler(
         _RecordingExecutor(),
-        _RecordingCancellation(),
+        _RecordingCancellation().record,
         metrics=metrics,
     )
 
@@ -210,7 +219,7 @@ async def test_scheduler_records_cancellation_once_for_blocked_run() -> None:
     executor = _BlockingExecutor()
     recorder = _RecordingCancellation()
     tracer = RecordingTracer()
-    scheduler = _scheduler(executor, recorder, tracer=tracer)
+    scheduler = _scheduler(executor, recorder.record, tracer=tracer)
     run_id = uuid.uuid7()
 
     await scheduler.launch(run_id)
@@ -228,7 +237,7 @@ async def test_scheduler_records_cancellation_once_for_blocked_run() -> None:
 async def test_scheduler_records_cancellation_for_task_cancelled_before_start() -> None:
     """A task cancelled before its first step should still be recorded."""
     recorder = _RecordingCancellation()
-    scheduler = _scheduler(_RecordingExecutor(), recorder)
+    scheduler = _scheduler(_RecordingExecutor(), recorder.record)
     run_id = uuid.uuid7()
 
     await scheduler.launch(run_id)
@@ -242,12 +251,12 @@ def test_scheduler_rejects_invalid_limits() -> None:
     with pytest.raises(ValueError, match="max_concurrency"):
         _scheduler(
             _RecordingExecutor(),
-            _RecordingCancellation(),
+            _RecordingCancellation().record,
             max_concurrency=0,
         )
     with pytest.raises(ValueError, match="max_pending_runs"):
         _scheduler(
             _RecordingExecutor(),
-            _RecordingCancellation(),
+            _RecordingCancellation().record,
             max_pending_runs=-1,
         )

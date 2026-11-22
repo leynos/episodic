@@ -40,14 +40,12 @@ async def test_claim_takes_a_lease_and_records_started_event() -> None:
     claimed = await run_claimer.claim(RUN_ID)
 
     assert claimed is not None, "expected the run to be claimed"
-    assert uow.generation_runs.claims == [
-        {
-            "run_id": RUN_ID,
-            "current_node": "draft",
-            "started_at": NOW,
-            "lease_expires_at": NOW + dt.timedelta(seconds=900),
-        }
-    ], uow.generation_runs.claims
+    assert len(uow.generation_runs.claims) == 1, uow.generation_runs.claims
+    claim = uow.generation_runs.claims[0]
+    assert claim["run_id"] == RUN_ID, claim
+    assert claim["current_node"] == "draft", claim
+    assert claim["started_at"] == NOW, claim
+    assert claim["lease_expires_at"] == NOW + dt.timedelta(seconds=900), claim
     assert uow.generation_runs.events == [
         (RUN_ID, "run.started", {"current_node": "draft"}, NOW)
     ], uow.generation_runs.events
@@ -103,7 +101,7 @@ async def test_claim_rejects_source_bundle_above_the_count_limit() -> None:
     with pytest.raises(GenerationSourceLimitError, match="count"):
         await run_claimer.claim(RUN_ID)
 
-    assert loader.calls == [], loader.calls
+    assert not loader.calls, loader.calls
 
 
 @pytest.mark.asyncio
@@ -117,11 +115,11 @@ async def test_claim_rolls_back_and_returns_none_when_the_claim_is_lost() -> Non
     claimed = await run_claimer.claim(RUN_ID)
 
     assert claimed is None, claimed
-    assert uow.generation_runs.events == [], uow.generation_runs.events
+    assert not uow.generation_runs.events, uow.generation_runs.events
     assert uow.rollbacks == 1, uow.rollbacks
     assert uow.commits == 0, uow.commits
-    assert uow.episodes.reads == [], uow.episodes.reads
-    assert loader.calls == [], loader.calls
+    assert not uow.episodes.reads, uow.episodes.reads
+    assert not loader.calls, loader.calls
 
 
 @pytest.mark.asyncio
