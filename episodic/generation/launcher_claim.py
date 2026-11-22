@@ -1,4 +1,4 @@
-"""Claim generation runs and hydrate them into a draft-generation request.
+"""Hydrate claimed generation runs into a draft-generation request.
 
 :class:`_ClaimMixin` supplies :class:`InProcessGenerationRunLauncher` with the
 claim-and-hydrate path: it durably marks a run started, loads its episode and
@@ -6,11 +6,16 @@ resolved presenter bindings through a fresh unit of work, and generates the
 draft script. Source loading stays with the launcher itself, because tests
 monkeypatch ``episodic.generation.launcher.source_from_document`` and the
 call must resolve in that module's namespace.
+
+The content-generation graph's ``initialize`` node claims through
+:meth:`_ClaimMixin._hydrate`; a run claimed elsewhere or already terminal
+hydrates to ``None``, and the session turns that into ``not_claimed``.
 """
 
 import datetime as dt
 import typing as typ
 
+from episodic.canonical.generation_quality import QualityMode
 from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
@@ -41,8 +46,21 @@ class _ClaimMixin(_MixinBase):
 
     __slots__ = ()
 
-    async def _claim(self, run_id: uuid.UUID) -> ClaimedRun | None:
-        """Claim a pending run, then load its input outside the claim transaction."""
+    async def _hydrate(self, run_id: uuid.UUID) -> ClaimedRun | None:
+        """Claim a pending run, then load its input outside the claim transaction.
+
+        Parameters
+        ----------
+        run_id : uuid.UUID
+            Run to claim.
+
+        Returns
+        -------
+        ClaimedRun | None
+            Hydrated run input, or ``None`` if another worker claimed the run
+            or it is already terminal.
+
+        """  # ruff: ignore[docstring-missing-exception]  # The limit error is raised by a helper.
         run = await self._claim_and_start(run_id)
         if run is None:
             return None
@@ -59,10 +77,11 @@ class _ClaimMixin(_MixinBase):
                 )
             )
         sources = await self._load_sources(documents)
-        self.metrics.increment_counter(
-            _METRIC_QA_BYPASS,
-            labels={"quality_mode": run.quality_mode.value},
-        )
+        if run.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
+            self.metrics.increment_counter(
+                _METRIC_QA_BYPASS,
+                labels={"quality_mode": run.quality_mode.value},
+            )
         return ClaimedRun(
             run=run,
             episode=episode,

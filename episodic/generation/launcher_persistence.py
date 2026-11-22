@@ -17,11 +17,13 @@ from episodic.canonical.generation_persistence import (
     persist_draft_script,
 )
 from episodic.canonical.generation_quality import QaStatus
+from episodic.canonical.generation_routing import QualityVerdict
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
+from episodic.canonical.generation_run_ports import UNCHANGED, GenerationRunStatusUpdate
 from episodic.cost.ports import BillingPeriodKey
 from episodic.cost.pricing_snapshot import PricedService
 from episodic.cost.recorder import CostProviderOperation
+from episodic.generation.launcher_quality import QaOutcome, qa_result_payload
 from episodic.generation.launcher_support import (
     Failure,
     PersistedTei,
@@ -75,6 +77,8 @@ class _PersistenceMixin(_MixinBase):
         self,
         claimed: ClaimedRun,
         result: DraftScriptResult,
+        *,
+        qa: QaOutcome,
     ) -> None:
         """Persist generated TEI, cost records, and terminal success."""
         async with self.uow_factory() as uow:
@@ -85,7 +89,7 @@ class _PersistenceMixin(_MixinBase):
                     generation_run_id=claimed.run.id,
                     result=result,
                     expected_revision=claimed.episode.tei_revision,
-                    qa_status=QaStatus.SKIPPED,
+                    qa_status=qa.status,
                     clock=self.clock,
                 ),
             )
@@ -97,6 +101,7 @@ class _PersistenceMixin(_MixinBase):
                     revision=updated_episode.tei_revision,
                     content_hash=updated_episode.tei_content_hash,
                 ),
+                qa,
             )
             await uow.commit()
         self._record_terminal_metric(GenerationRunStatus.SUCCEEDED, "none")
@@ -106,37 +111,48 @@ class _PersistenceMixin(_MixinBase):
             claimed.run.id,
         )
 
-    async def _record_success_transition(
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # One transaction records the run, result, persisted TEI, and QA outcome.
+    async def _record_success_transition(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # One transaction records the run, result, persisted TEI, and QA outcome.
         self,
         uow: CanonicalUnitOfWork,
         claimed: ClaimedRun,
         result: DraftScriptResult,
         persisted_tei: PersistedTei,
+        qa: QaOutcome,
     ) -> None:
         """Record success-side events, costs, and terminal status."""
+        run_id = claimed.run.id
+        if qa.status is QaStatus.PASSED:
+            await uow.generation_runs.append_event(
+                run_id,
+                kind="qa.result",
+                payload=qa_result_payload(QualityVerdict.PASSED, qa.evaluations),
+                occurred_at=self.clock(),
+            )
         await uow.generation_runs.append_event(
-            claimed.run.id,
+            run_id,
             kind="tei.persisted",
             payload={
                 "tei_revision": persisted_tei.revision,
                 "content_hash": persisted_tei.content_hash,
-                "qa_status": QaStatus.SKIPPED.value,
+                "qa_status": qa.status.value,
             },
             occurred_at=self.clock(),
         )
-        await self._record_costs(uow, claimed.run.id, result)
+        await self._record_costs(uow, run_id, result)
         await uow.generation_runs.append_event(
-            claimed.run.id,
+            run_id,
             kind="run.succeeded",
             payload={"current_node": "complete"},
             occurred_at=self.clock(),
         )
         await uow.generation_runs.update_run_status(
-            claimed.run.id,
+            run_id,
             update=GenerationRunStatusUpdate(
                 status=GenerationRunStatus.SUCCEEDED,
                 current_node=None,
                 ended_at=self.clock(),
+                qa_status=(UNCHANGED if qa.status is QaStatus.SKIPPED else qa.status),
             ),
         )
 
@@ -179,11 +195,30 @@ class _PersistenceMixin(_MixinBase):
         )
         await recorder.finalize_run(str(run_id), "draft")
 
-    async def _record_failure(self, run_id: uuid.UUID, failure: Failure) -> None:
-        """Record a terminal failed run state."""
+    async def _record_failure(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+        *,
+        draft: DraftScriptResult | None = None,
+    ) -> None:
+        """Record a terminal failed run state.
+
+        Parameters
+        ----------
+        run_id : uuid.UUID
+            Run to fail.
+        failure : Failure
+            Stable failure details, including an optional QA escalation.
+        draft : DraftScriptResult | None
+            Draft that consumed inference, when the failure is QA escalation.
+            Its provider cost is still recorded.
+        """
         async with self.uow_factory() as uow:
             try:
                 await self._append_failure_events(uow, run_id, failure)
+                if draft is not None:
+                    await self._record_costs(uow, run_id, draft)
                 await uow.generation_runs.update_run_status(
                     run_id,
                     update=GenerationRunStatusUpdate(
@@ -192,6 +227,7 @@ class _PersistenceMixin(_MixinBase):
                         ended_at=self.clock(),
                         error_message=failure.message,
                         error_category=failure.category,
+                        qa_status=failure.qa_status,
                     ),
                 )
                 await uow.commit()
@@ -199,11 +235,13 @@ class _PersistenceMixin(_MixinBase):
                 await uow.rollback()
                 return
         self._record_terminal_metric(GenerationRunStatus.FAILED, failure.category)
-        self.metrics.increment_counter(
-            _METRIC_DRAFT_ERRORS,
-            labels={"error_category": failure.category},
-        )
-        log_error(
+        if failure.is_draft_error:
+            self.metrics.increment_counter(
+                _METRIC_DRAFT_ERRORS,
+                labels={"error_category": failure.category},
+            )
+        log_failure = log_error if failure.is_draft_error else log_info
+        log_failure(
             logger,
             "generation_run_launcher.failed run_id=%s category=%s",
             run_id,
@@ -217,6 +255,25 @@ class _PersistenceMixin(_MixinBase):
         failure: Failure,
     ) -> None:
         """Append failure-related events before terminal status mutation."""
+        if failure.escalation is not None:
+            await uow.generation_runs.append_event(
+                run_id,
+                kind="qa.result",
+                payload=qa_result_payload(
+                    failure.escalation.verdict,
+                    failure.escalation.evaluations,
+                ),
+                occurred_at=self.clock(),
+            )
+            await uow.generation_runs.append_event(
+                run_id,
+                kind="qa.escalated",
+                payload={
+                    "reason": failure.escalation.verdict.value,
+                    "content_hash": failure.escalation.content_hash,
+                },
+                occurred_at=self.clock(),
+            )
         if failure.should_emit_invalid_tei:
             await uow.generation_runs.append_event(
                 run_id,

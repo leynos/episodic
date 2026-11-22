@@ -22,11 +22,13 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
 )
+from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptTransientProviderError
 from episodic.generation.launcher import InProcessGenerationRunLauncher
 from episodic.generation.launcher_support import GenerationSourceLimits
 from episodic.observability import RecordingTracer
+from episodic.orchestration import LangGraphContentGenerationGraph
 from tests.generation_run_launcher_observation_support import RecordingMetrics
 from tests.generation_run_launcher_support import (
     NOW,
@@ -133,6 +135,7 @@ def _launcher(
             _default_uow_factory(factory) if uow_factory is None else uow_factory
         ),
         draft_generator=typ.cast("DraftScriptGenerator", generator),
+        content_graph=LangGraphContentGenerationGraph(QualityEvaluatorSet(())),
         clock=_clock,
         source_limits=(
             GenerationSourceLimits() if source_limits is None else source_limits

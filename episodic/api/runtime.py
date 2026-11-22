@@ -55,6 +55,19 @@ if typ.TYPE_CHECKING:
     from .types import UowFactory
 
 
+from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
+from episodic.orchestration import LangGraphContentGenerationGraph
+
+"""Granian runtime composition root for the Falcon ASGI service."""
+if typ.TYPE_CHECKING:
+    from falcon import asgi
+    from episodic.canonical.object_store import ObjectStorePort
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+    from episodic.llm import LLMPort
+    from episodic.observability import MetricsPort, TracerPort, ValueMetricsPort
+    from .types import UowFactory
+
+
 @dc.dataclass(frozen=True, slots=True)
 class _GenerationLauncherRuntime:
     """Composition inputs for the in-process generation launcher."""
@@ -177,6 +190,7 @@ def _build_generation_launcher(
 
     return InProcessGenerationRunLauncher(
         uow_factory=uow_factory,
+        content_graph=LangGraphContentGenerationGraph(QualityEvaluatorSet(())),
         draft_generator=LLMDraftScriptGenerator(
             llm=llm_port,
             config=LLMDraftScriptGeneratorConfig(

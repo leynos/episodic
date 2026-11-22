@@ -670,7 +670,9 @@
         'attributes': dict({
           'operation': 'generation_run.execute',
           'outcome': 'completed',
+          'quality_branch': 'draft_without_qa',
           'run_id': '<uuid>',
+          'terminal': 'draft_persisted_without_qa',
         }),
         'is_completed': True,
         'name': 'generation_run.execute',

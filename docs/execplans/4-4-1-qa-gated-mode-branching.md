@@ -269,7 +269,7 @@ inference budget on a branch that cannot pass.
   the graph exists.
 - [x] (2026-11-22) EP-M2: persistence, migration and lifecycle updates.
 - [x] (2026-11-22) EP-M3: content-generation graph in orchestration.
-- [ ] EP-M4: launcher executes runs through the graph.
+- [x] (2026-11-22) EP-M4: launcher executes runs through the graph.
 - [ ] EP-M5: REST and composition-root acceptance of `qa_gated`.
 - [ ] EP-M6: documentation, ADR acceptance, roadmap update and final gates.
 
@@ -648,6 +648,28 @@ accepted in EP-M6. D13 records the review itself.
       be visible only from history.
   - Date/Author: 2026-10-17, Logisphere panel via the planning agent.
 
+- **Decision D16: own the graph task and name every node task.**
+  - The runner creates the `ainvoke` task itself, names it
+    `generation-run-{run_id}`, and on cancellation cancels and drains it and
+    every in-flight task carrying that name before re-raising.
+  - The builder's wrapper renames the task LangChain creates for each node to
+    the same convention, so every `append_event` still happens on a task
+    named for its run, as INV-9 requires.
+  - Rationale: LangChain's `coro_with_context` always creates a task for a
+    node, so cancelling the launcher task alone would leave an in-flight
+    evaluator or terminal unit of work running after shutdown.
+  - Date/Author: 2026-11-22, implementation agent. Found by INV-9's task-name
+    assertion on the first QA-gated launcher test.
+- **Decision D15: keep D9's span attributes and record the one deliberate
+  INV-0 snapshot change.**
+  - INV-0 captures span attributes. D9 mandates `quality_branch` and
+    `terminal` span attributes on no-QA runs. The two requirements collide.
+  - D9 is the more specific, later decision, so the success-case snapshot now
+    includes those two attributes. The `outcome` value, events, metrics, and
+    persisted rows are unchanged, and every other INV-0 case is byte-identical.
+  - This is the only snapshot change; the snapshot was not regenerated, only
+    those two lines were added.
+  - Date/Author: 2026-11-22, implementation agent.
 - **Decision D14: land each new domain symbol in the commit that gives it a
   production caller.**
   - The Skylos dead-code gate is blocking and runs on every commit.
@@ -869,14 +891,18 @@ These are trusted, not verified.
   `main.py:3395-3400`):
   - Explicit `path_map` conditional edges call the router with the post-node
     state and follow only the mapped targets.
-  - `ainvoke` on a graph without parallel branches runs nodes inline in the
-    caller's task.
+  - Nodes run sequentially in one task per run, but **not inline in the
+    caller's task**: `langchain_core.runnables.utils.coro_with_context`
+    always wraps a node call in `asyncio.create_task`, even on the runner's
+    single-task fast path (verified against the pinned LangGraph 1.2.11 and
+    its langchain-core).
   - `context=` delivers the runtime context to `Runtime[...]` node
     parameters.
   - Exceptions raised in a node propagate unwrapped.
 
-  The LangGraph Graph API documentation and the planning probes support this.
-  INV-9 re-checks the inline-task assumption on every run.
+  The LangGraph Graph API documentation and the planning probes support the
+  remaining points. D16 compensates for the child-task behaviour so INV-9's
+  task attribution and shutdown safety still hold.
 - **AXM-2: graph introspection.** `CompiledStateGraph.get_graph()` reports
   the declared edges. With a `path_map`, its conditional edges list exactly the
   mapped targets (LangGraph reference for `add_conditional_edges`, and the

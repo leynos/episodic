@@ -58,7 +58,7 @@ async def test_claim_commits_before_blocked_hydration(
         session_factory,
         RecordingDraftGenerator(draft_result("<TEI/>")),
     )
-    claim_task = asyncio.create_task(run_launcher._claim(run_id))
+    claim_task = asyncio.create_task(run_launcher._hydrate(run_id))
     try:
         await asyncio.wait_for(hydration_started.wait(), timeout=1)
 

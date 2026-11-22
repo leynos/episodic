@@ -10,6 +10,7 @@ import uuid
 import pytest
 
 from episodic.canonical.domain import SourceDocument
+from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.storage.filesystem_object_store import FilesystemObjectStore
 from episodic.generation.draft_script import DraftScriptGenerationError
 from episodic.generation.launcher import InProcessGenerationRunLauncher
@@ -18,6 +19,7 @@ from episodic.generation.launcher_support import (
     GenerationSourceLimits,
     source_from_document,
 )
+from episodic.orchestration import LangGraphContentGenerationGraph
 from tests.generation_run_launcher_support import RecordingDraftGenerator, draft_result
 
 if typ.TYPE_CHECKING:
@@ -76,6 +78,7 @@ def _launcher(*, limits: GenerationSourceLimits) -> InProcessGenerationRunLaunch
     return InProcessGenerationRunLauncher(
         uow_factory=lambda: typ.cast("CanonicalUnitOfWork", object()),
         draft_generator=RecordingDraftGenerator(draft_result("<TEI/>")),
+        content_graph=LangGraphContentGenerationGraph(QualityEvaluatorSet(())),
         source_limits=limits,
     )
 

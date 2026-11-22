@@ -7,10 +7,12 @@ builders, graph runners and the launcher can all depend on it without
 depending on each other.
 """
 
+import dataclasses as dc
 import enum
 import typing as typ
 
-from .generation_quality import QualityMode
+from .domain_enums import GenerationRunStatus
+from .generation_quality import QaStatus, QualityMode
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -122,3 +124,46 @@ def route_after_evaluation(verdict: QualityVerdict) -> EvaluationRoute:
         if verdict is QualityVerdict.PASSED
         else EvaluationRoute.ESCALATE
     )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class TerminalOutcome:
+    """Run status and QA status a terminal records.
+
+    Attributes
+    ----------
+    status : GenerationRunStatus
+        Terminal lifecycle status.
+    qa_status : QaStatus
+        QA status recorded with it.
+    error_category : str | None
+        Stable failure category, or ``None`` for a successful terminal.
+    """
+
+    status: GenerationRunStatus
+    qa_status: QaStatus
+    error_category: str | None
+
+
+_TERMINAL_OUTCOMES: dict[GenerationTerminal, TerminalOutcome] = {
+    GenerationTerminal.DRAFT_PERSISTED_WITHOUT_QA: TerminalOutcome(
+        status=GenerationRunStatus.SUCCEEDED,
+        qa_status=QaStatus.SKIPPED,
+        error_category=None,
+    ),
+    GenerationTerminal.QA_PASSED_DRAFT_PERSISTED: TerminalOutcome(
+        status=GenerationRunStatus.SUCCEEDED,
+        qa_status=QaStatus.PASSED,
+        error_category=None,
+    ),
+    GenerationTerminal.QA_ESCALATED: TerminalOutcome(
+        status=GenerationRunStatus.FAILED,
+        qa_status=QaStatus.FAILED,
+        error_category="qa.escalation_required",
+    ),
+}
+
+
+def terminal_outcome(terminal: GenerationTerminal) -> TerminalOutcome:
+    """Return the run and QA status a terminal records."""
+    return _TERMINAL_OUTCOMES[terminal]

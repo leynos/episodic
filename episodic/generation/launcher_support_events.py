@@ -43,6 +43,52 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import JsonMapping
 
 
+from episodic.canonical.generation_graph_ports import (
+    ContentGenerationGraphError,
+    QualityEvaluation,
+    QualityEvaluationUnavailableError,
+)
+from episodic.canonical.generation_quality import QaStatus
+from episodic.canonical.generation_routing import (
+    QualityVerdict,  # ruff: ignore[typing-only-first-party-import]  # EscalationEvent annotations are evaluated at construction.
+)
+from episodic.canonical.generation_run_ports import UNCHANGED, Unchanged
+
+"""Map draft-script results and failures onto events, cost, and error records.
+The event-payload and provider-record helpers translate ``DraftScriptResult``
+usage, provider metadata, and content hashes into generation event payloads
+and the ``CostRecorderPort`` contract's ``ProviderCallRecord``.
+``classify_failure`` preserves stable terminal failure categories for the API
+and metrics. These helpers accept the canonical unit of work and outbound
+ports supplied by the launcher; they do not open, commit, or dispose
+persistence sessions themselves.
+"""
+    QualityVerdict,  # ruff: ignore[typing-only-first-party-import]  # EscalationEvent annotations are evaluated at construction.
+if typ.TYPE_CHECKING:
+    import datetime as dt
+    import uuid
+    from episodic.canonical.domain import JsonMapping
+
+
+@dc.dataclass(frozen=True, slots=True)
+class EscalationEvent:
+    """QA escalation details recorded alongside a failed terminal.
+
+    Attributes
+    ----------
+    verdict : QualityVerdict
+        Aggregate verdict that ended the run.
+    evaluations : tuple[QualityEvaluation, ...]
+        Per-evaluator results.
+    content_hash : str
+        Content hash of the escalated candidate draft.
+    """
+
+    verdict: QualityVerdict
+    evaluations: tuple[QualityEvaluation, ...]
+    content_hash: str
+
+
 @dc.dataclass(frozen=True, slots=True)
 class Failure:
     """Stable failure details recorded on a terminal run."""
@@ -50,6 +96,32 @@ class Failure:
     message: str
     category: str
     should_emit_invalid_tei: bool = False
+    qa_status: QaStatus | Unchanged = UNCHANGED
+    is_draft_error: bool = True
+    escalation: EscalationEvent | None = None
+
+    @classmethod
+    def escalation_failure(
+        cls,
+        *,
+        verdict: QualityVerdict,
+        evaluations: tuple[QualityEvaluation, ...],
+        content_hash: str,
+    ) -> Failure:
+        """Build the terminal failure an escalated QA-gated run records."""
+        return cls(
+            message=(
+                "QA evaluation did not pass; the candidate draft was not persisted."
+            ),
+            category="qa.escalation_required",
+            qa_status=QaStatus.FAILED,
+            is_draft_error=False,
+            escalation=EscalationEvent(
+                verdict=verdict,
+                evaluations=evaluations,
+                content_hash=content_hash,
+            ),
+        )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -118,6 +190,8 @@ _FAILURE_CATEGORIES: tuple[
     tuple[type[Exception] | tuple[type[Exception], ...], str, bool],
     ...,
 ] = (
+    (QualityEvaluationUnavailableError, "qa.unavailable", False),
+    (ContentGenerationGraphError, "orchestration.incomplete", False),
     (EpisodeRevisionConflictError, "episode.persistence_conflict", False),
     (EpisodeNotFoundError, "episode.not_found", False),
     (GenerationSourceLimitError, "generation.source_limit", False),

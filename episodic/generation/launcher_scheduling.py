@@ -12,15 +12,33 @@ import asyncio
 import dataclasses as dc
 import typing as typ
 
+from episodic.canonical.generation_graph_ports import ContentGenerationRequest
+from episodic.canonical.generation_routing import (
+    GenerationTerminal,
+    route_quality_mode,
+    terminal_outcome,
+)
+from episodic.generation.launcher_session import (
+    RunNotClaimedError,
+    _LauncherRunSession,
+)
 from episodic.generation.launcher_support import Failure, classify_failure
 from episodic.logging import get_logger, log_info
 
 if typ.TYPE_CHECKING:
     import uuid
 
+    from episodic.canonical.generation_quality import QualityMode
+
 _METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
 
 logger = get_logger(__name__)
+
+
+def _terminal_outcome_name(terminal: GenerationTerminal) -> str:
+    """Name the span outcome a terminal records."""
+    outcome = terminal_outcome(terminal)
+    return "escalated" if outcome.error_category is not None else "completed"
 
 
 class GenerationRunAdmissionError(RuntimeError):
@@ -33,6 +51,8 @@ class _ExecutionOutcome:
 
     outcome: str
     failure_category: str | None = None
+    quality_branch: str | None = None
+    terminal: str | None = None
 
 
 if typ.TYPE_CHECKING:
@@ -132,17 +152,33 @@ class _SchedulingMixin(_MixinBase):
             span.set_attribute("outcome", outcome.outcome)
             if outcome.failure_category is not None:
                 span.set_attribute("failure_category", outcome.failure_category)
+            if outcome.quality_branch is not None:
+                span.set_attribute("quality_branch", outcome.quality_branch)
+            if outcome.terminal is not None:
+                span.set_attribute("terminal", outcome.terminal)
+
+    async def _read_quality_mode(self, run_id: uuid.UUID) -> QualityMode | None:
+        """Read a run's requested quality mode before the graph forks on it."""
+        async with self.uow_factory() as uow:
+            run = await uow.generation_runs.get_run(run_id)
+        return None if run is None else run.quality_mode
 
     async def _execute_run(self, run_id: uuid.UUID) -> _ExecutionOutcome:
-        """Execute one generation run while its concurrency permit is held."""
+        """Execute one generation run through the content-generation graph."""
+        quality_mode = await self._read_quality_mode(run_id)
+        if quality_mode is None:
+            return _ExecutionOutcome(outcome="not_claimed")
+        session = _LauncherRunSession(launcher=self, run_id=run_id)
         try:
-            claimed = await self._claim(run_id)
-            if claimed is None:
-                return _ExecutionOutcome(outcome="not_claimed")
-            result = await self._generate(claimed)
-            await self._record_draft_generated(claimed.run.id, result)
-            await self._persist_success(claimed, result)
-            return _ExecutionOutcome(outcome="completed")
+            terminal = await self.content_graph.run(
+                ContentGenerationRequest(
+                    run_id=run_id,
+                    quality_mode=quality_mode,
+                ),
+                steps=session,
+            )
+        except RunNotClaimedError:
+            return _ExecutionOutcome(outcome="not_claimed")
         except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
             failure = classify_failure(exc)
             await self._record_failure(run_id, failure)
@@ -150,6 +186,18 @@ class _SchedulingMixin(_MixinBase):
                 outcome="failed",
                 failure_category=failure.category,
             )
+        branch = route_quality_mode(quality_mode)
+        log_info(
+            logger,
+            "generation_run.quality_branch run_id=%s branch=%s",
+            run_id,
+            branch.value,
+        )
+        return _ExecutionOutcome(
+            outcome=_terminal_outcome_name(terminal),
+            quality_branch=branch.value,
+            terminal=terminal.value,
+        )
 
     async def _record_cancellation(self, run_id: uuid.UUID) -> None:
         """Record cancellation consistently before or during execution."""

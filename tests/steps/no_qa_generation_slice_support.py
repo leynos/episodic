@@ -8,6 +8,7 @@ import httpx
 
 from episodic.api import create_app
 from episodic.api.authorization import StaticBearerTokenAuthorization
+from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.generation import InProcessGenerationRunLauncher
 from episodic.generation.draft_script import (
     LLMDraftScriptGenerator,
@@ -17,6 +18,7 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
+from episodic.orchestration import LangGraphContentGenerationGraph
 from tests.fixtures.api import build_api_dependencies
 from tests.steps.vidaimock_harness import (
     start_vidaimock_process,
@@ -236,6 +238,7 @@ def configure_vidaimock(context: NoQaGenerationSliceContext, tmp_path: Path) -> 
             llm=context.llm_adapter,
             config=LLMDraftScriptGeneratorConfig(model="valid-draft"),
         ),
+        content_graph=LangGraphContentGenerationGraph(QualityEvaluatorSet(())),
     )
     context.dependencies = dc.replace(dependencies, launcher=context.launcher)
 

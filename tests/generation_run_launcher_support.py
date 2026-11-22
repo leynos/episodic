@@ -46,12 +46,37 @@ if typ.TYPE_CHECKING:
 NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
 
 
+from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
+from episodic.orchestration import LangGraphContentGenerationGraph
+
+"""Support fixtures for generation-run launcher tests."""
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
+NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class LauncherOptions:
-    """Execution and admission capacities for a test launcher."""
+    """Construction options for a test launcher.
+
+    Attributes
+    ----------
+    max_concurrency : int
+        Execution permits.
+    max_pending_runs : int
+        Additional admitted runs beyond the execution permits.
+    evaluator_set : QualityEvaluatorSet
+        Evaluators the injected content-generation graph uses. The default
+        empty set accepts only no-QA runs, like production until 4.4.2.
+    """
 
     max_concurrency: int = 4
     max_pending_runs: int = 16
+    evaluator_set: QualityEvaluatorSet = dc.field(
+        default_factory=lambda: QualityEvaluatorSet(())
+    )
 
 
 @dc.dataclass(slots=True)
@@ -302,6 +327,50 @@ def _run(episode_id: uuid.UUID, source_bundle_id: uuid.UUID) -> GenerationRun:
     )
 
 
+def _qa_gated_run(
+    episode_id: uuid.UUID,
+    source_bundle_id: uuid.UUID,
+) -> GenerationRun:
+    """Return a pending QA-gated generation run."""
+    return dc.replace(
+        _run(episode_id, source_bundle_id),
+        quality_mode=QualityMode.QA_GATED,
+        qa_status=QaStatus.PENDING,
+        skip_qa_rationale=None,
+    )
+
+
+async def _prepare_pending_run(
+    factory: async_sessionmaker[AsyncSession],
+    build_run: cabc.Callable[[uuid.UUID, uuid.UUID], GenerationRun],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """Persist a ready episode and a pending run built by ``build_run``."""
+    series = _series_profile()
+    job = _ingestion_job(series.id)
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.flush()
+        await uow.ingestion_jobs.add(job)
+        await uow.ingestion_job_sources.add(_source(job.id))
+        for document, revision, binding in _presenter_sets(series.id):
+            await uow.reference_documents.add(document)
+            await uow.reference_document_revisions.add(revision)
+            await uow.flush()
+            await uow.reference_bindings.add(binding)
+        episode = await materialise_episode_from_ingestion(
+            uow,
+            EpisodeMaterialisationRequest(
+                ingestion_job_id=job.id,
+                title="Bridgewater Futures",
+                clock=_clock,
+            ),
+        )
+        run = build_run(episode.id, job.id)
+        await uow.generation_runs.create_run(run)
+        await uow.commit()
+    return run.id, episode.id
+
+
 async def launch_and_load_run(
     factory: async_sessionmaker[AsyncSession],
     run_id: uuid.UUID,
@@ -339,34 +408,20 @@ async def launch_and_load_run(
     return run, events
 
 
+
+
 async def prepare_pending_run(
     factory: async_sessionmaker[AsyncSession],
 ) -> tuple[uuid.UUID, uuid.UUID]:
-    """Persist a ready episode and pending generation run."""
-    series = _series_profile()
-    job = _ingestion_job(series.id)
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        await uow.series_profiles.add(series)
-        await uow.flush()
-        await uow.ingestion_jobs.add(job)
-        await uow.ingestion_job_sources.add(_source(job.id))
-        for document, revision, binding in _presenter_sets(series.id):
-            await uow.reference_documents.add(document)
-            await uow.reference_document_revisions.add(revision)
-            await uow.flush()
-            await uow.reference_bindings.add(binding)
-        episode = await materialise_episode_from_ingestion(
-            uow,
-            EpisodeMaterialisationRequest(
-                ingestion_job_id=job.id,
-                title="Bridgewater Futures",
-                clock=_clock,
-            ),
-        )
-        run = _run(episode.id, job.id)
-        await uow.generation_runs.create_run(run)
-        await uow.commit()
-    return run.id, episode.id
+    """Persist a ready episode and a pending no-QA generation run."""
+    return await _prepare_pending_run(factory, _run)
+
+
+async def prepare_pending_qa_gated_run(
+    factory: async_sessionmaker[AsyncSession],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """Persist a ready episode and a pending QA-gated generation run."""
+    return await _prepare_pending_run(factory, _qa_gated_run)
 
 
 def launcher(
@@ -378,9 +433,11 @@ def launcher(
 ) -> InProcessGenerationRunLauncher:
     """Build a launcher for tests."""
     effective_options = LauncherOptions() if options is None else options
+    graph = LangGraphContentGenerationGraph(effective_options.evaluator_set)
     return InProcessGenerationRunLauncher(
         uow_factory=lambda: SqlAlchemyUnitOfWork(factory),
         draft_generator=generator,
+        content_graph=graph,
         cost_recorder_factory=(
             None if cost_recorder is None else lambda uow: cost_recorder
         ),

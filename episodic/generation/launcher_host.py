@@ -16,6 +16,9 @@ if typ.TYPE_CHECKING:
     import uuid
 
     from episodic.canonical.domain import SourceDocument
+    from episodic.canonical.generation_graph_ports import (
+        ContentGenerationGraphPort,
+    )
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import (
@@ -23,6 +26,7 @@ if typ.TYPE_CHECKING:
         DraftScriptResult,
         DraftScriptSource,
     )
+    from episodic.generation.launcher_quality import QaOutcome
     from episodic.generation.launcher_support import (
         ClaimedRun,
         Clock,
@@ -43,6 +47,7 @@ class LauncherHost(typ.Protocol):
 
     uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
     draft_generator: DraftScriptGenerator
+    content_graph: ContentGenerationGraphPort
     object_store: ObjectStorePort | None
     cost_recorder_factory: CostRecorderFactory | None
     clock: Clock
@@ -70,7 +75,7 @@ class LauncherHost(typ.Protocol):
         """Load bounded source text for a claimed run."""
         ...
 
-    async def _claim(self, run_id: uuid.UUID) -> ClaimedRun | None:
+    async def _hydrate(self, run_id: uuid.UUID) -> ClaimedRun | None:
         """Claim a pending run and hydrate its input."""
         ...
 
@@ -90,11 +95,19 @@ class LauncherHost(typ.Protocol):
         self,
         claimed: ClaimedRun,
         result: DraftScriptResult,
+        *,
+        qa: QaOutcome,
     ) -> None:
         """Persist a successful run's TEI, costs, and terminal status."""
         ...
 
-    async def _record_failure(self, run_id: uuid.UUID, failure: Failure) -> None:
+    async def _record_failure(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+        *,
+        draft: DraftScriptResult | None = None,
+    ) -> None:
         """Record a terminal failed run state."""
         ...
 

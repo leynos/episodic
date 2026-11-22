@@ -60,6 +60,9 @@ if typ.TYPE_CHECKING:
     import uuid
 
     from episodic.canonical.domain import SourceDocument
+    from episodic.canonical.generation_graph_ports import (
+        ContentGenerationGraphPort,
+    )
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import DraftScriptGenerator, DraftScriptSource
@@ -89,6 +92,7 @@ class InProcessGenerationRunLauncher(
 
     uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
     draft_generator: DraftScriptGenerator
+    content_graph: ContentGenerationGraphPort
     object_store: ObjectStorePort | None = None
     cost_recorder_factory: CostRecorderFactory | None = None
     clock: Clock = lambda: dt.datetime.now(dt.UTC)

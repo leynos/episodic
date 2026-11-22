@@ -92,7 +92,20 @@ def _wrap(node: ContentGenerationNode) -> _WrappedNode:
         state: ContentGenerationGraphState,
         runtime: Runtime[ContentGenerationContext],
     ) -> dict[str, object]:
-        """Execute the wrapped node with the run's context."""
+        """Execute the wrapped node with the run's context.
+
+        LangChain runs each node inside a task it creates. Renaming that task
+        to the run's convention keeps every event append attributable to the
+        run and lets the runner find in-flight node tasks at shutdown.
+
+        Returns
+        -------
+        dict[str, object]
+            The node's state delta.
+        """
+        task = asyncio.current_task()
+        if task is not None:
+            task.set_name(f"generation-run-{state.request.run_id}")
         return await node(state, runtime.context)
 
     return run
@@ -211,14 +224,27 @@ class LangGraphContentGenerationGraph:
             :class:`~langgraph.errors.NodeCancelledError`; the runner restores
             the cancellation so shutdown classification is unchanged.
         """
-        try:
-            result = await self._compiled.ainvoke(
+        graph_task = asyncio.create_task(
+            self._compiled.ainvoke(
                 ContentGenerationGraphState(request=request),
                 context=ContentGenerationContext(
                     steps=steps,
                     evaluator_set=self.evaluator_set,
                 ),
-            )
+            ),
+            name=f"generation-run-{request.run_id}",
+        )
+        try:
+            result = await graph_task
+        except asyncio.CancelledError:
+            # LangGraph runs nodes on tasks it creates, so cancelling the
+            # launcher task does not reach them. Cancel and drain the graph
+            # task and every in-flight node task before re-raising, or a node
+            # could keep writing after shutdown.
+            graph_task.cancel()
+            await asyncio.gather(graph_task, return_exceptions=True)
+            await _cancel_run_tasks(request.run_id)
+            raise
         except NodeCancelledError as exc:
             raise asyncio.CancelledError from exc
         terminal = _require_terminal(result)
@@ -230,6 +256,21 @@ class LangGraphContentGenerationGraph:
             )
             raise ContentGenerationGraphError(msg)
         return terminal
+
+
+async def _cancel_run_tasks(run_id: object) -> None:
+    """Cancel and drain in-flight node tasks belonging to one run."""
+    current = asyncio.current_task()
+    task_name = f"generation-run-{run_id}"
+    pending = [
+        task
+        for task in asyncio.all_tasks()
+        if task is not current and task.get_name() == task_name and not task.done()
+    ]
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 def _require_terminal(state: dict[str, object]) -> GenerationTerminal:
