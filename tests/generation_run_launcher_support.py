@@ -50,10 +50,12 @@ NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
 
 @dc.dataclass(frozen=True, slots=True)
 class LauncherOptions:
-    """Execution and admission capacities for a test launcher."""
+    """Execution, admission, and observability options for a test launcher."""
 
     max_concurrency: int = 4
     max_pending_runs: int = 16
+    tracer: TracerPort | None = None
+    metrics: ValueMetricsPort | None = None
 
 
 @dc.dataclass(slots=True)
@@ -358,15 +360,12 @@ async def prepare_pending_run(
     return run.id, episode.id
 
 
-# pylint: disable-next=too-many-arguments  # Test wiring names each port it replaces.
-def launcher(  # ruff: ignore[too-many-arguments]  # Test wiring names each port it replaces.
+def launcher(
     factory: async_sessionmaker[AsyncSession],
     generator: DraftScriptGenerator,
     cost_recorder: RecordingCostRecorder | None = None,
     *,
     options: LauncherOptions | None = None,
-    tracer: TracerPort | None = None,
-    metrics: ValueMetricsPort | None = None,
 ) -> InProcessGenerationRunLauncher:
     """Build a launcher for tests."""
     effective_options = LauncherOptions() if options is None else options
@@ -379,6 +378,14 @@ def launcher(  # ruff: ignore[too-many-arguments]  # Test wiring names each port
         clock=_clock,
         max_concurrency=effective_options.max_concurrency,
         max_pending_runs=effective_options.max_pending_runs,
-        tracer=NoopTracer() if tracer is None else tracer,
-        metrics=NoopValueMetrics() if metrics is None else metrics,
+        tracer=(
+            NoopTracer()
+            if effective_options.tracer is None
+            else effective_options.tracer
+        ),
+        metrics=(
+            NoopValueMetrics()
+            if effective_options.metrics is None
+            else effective_options.metrics
+        ),
     )

@@ -26,7 +26,6 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
-    from episodic.observability import ValueMetricsPort
 
 NOW = dt.datetime(2026, 9, 1, 9, 30, tzinfo=dt.UTC)
 RUN_ID = uuid.UUID("00000000-0000-0000-0000-000000000901")
@@ -321,28 +320,26 @@ class SteppingMonotonicClock:
         return next(self._stamps)
 
 
-# pylint: disable-next=too-many-arguments  # Test wiring names each port it replaces.
-def claimer(  # ruff: ignore[too-many-arguments]  # Test wiring names each port it replaces.
-    *,
+def claimer(
     uow: RecordingUnitOfWork,
     loader: RecordingSourceLoader,
-    generator: RecordingDraftGenerator | None = None,
-    metrics: ValueMetricsPort | None = None,
-    limits: GenerationSourceLimits | None = None,
-    lease_seconds: int = 900,
 ) -> GenerationRunClaimer:
-    """Build a claimer around explicit fakes."""
+    """Build a claimer around explicit unit-of-work and source-loader fakes.
+
+    Tests that need other collaborators replace the returned dataclass with
+    ``dataclasses.replace``, so this seam stays small.
+
+    Returns
+    -------
+    GenerationRunClaimer
+        Claimer wired to the supplied fakes and the deterministic clocks.
+    """
     return GenerationRunClaimer(
         uow_factory=lambda: typ.cast("CanonicalUnitOfWork", uow),
-        draft_generator=(
-            RecordingDraftGenerator(draft_result()) if generator is None else generator
-        ),
+        draft_generator=RecordingDraftGenerator(draft_result()),
         source_loader=loader,
         clock=clock,
-        source_limits=GenerationSourceLimits() if limits is None else limits,
-        metrics=RecordingMetrics() if metrics is None else metrics,
         monotonic_clock=SteppingMonotonicClock(iter((100.0, 100.25))),
-        lease_seconds=lease_seconds,
     )
 
 

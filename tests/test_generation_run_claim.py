@@ -1,5 +1,6 @@
 """Unit tests for the generation-run claim component."""
 
+import dataclasses as dc
 import datetime as dt
 
 import pytest
@@ -35,7 +36,7 @@ from tests.generation_run_claim_support import (
 async def test_claim_takes_a_lease_and_records_started_event() -> None:
     """A claim should record the lease and make the started event durable."""
     uow = unit_of_work()
-    run_claimer = claimer(uow=uow, loader=RecordingSourceLoader(sources=(source(),)))
+    run_claimer = claimer(uow, RecordingSourceLoader(sources=(source(),)))
 
     claimed = await run_claimer.claim(RUN_ID)
 
@@ -60,7 +61,11 @@ async def test_claim_hydrates_episode_and_sources() -> None:
     limits = GenerationSourceLimits(max_source_count=4)
     loader = RecordingSourceLoader(sources=(source(),))
     metrics = RecordingMetrics()
-    run_claimer = claimer(uow=uow, loader=loader, metrics=metrics, limits=limits)
+    run_claimer = dc.replace(
+        claimer(uow, loader),
+        metrics=metrics,
+        source_limits=limits,
+    )
 
     claimed = await run_claimer.claim(RUN_ID)
 
@@ -92,10 +97,9 @@ async def test_claim_rejects_source_bundle_above_the_count_limit() -> None:
         source_document(),
     ])
     loader = RecordingSourceLoader()
-    run_claimer = claimer(
-        uow=uow,
-        loader=loader,
-        limits=GenerationSourceLimits(max_source_count=1),
+    run_claimer = dc.replace(
+        claimer(uow, loader),
+        source_limits=GenerationSourceLimits(max_source_count=1),
     )
 
     with pytest.raises(GenerationSourceLimitError, match="count"):
@@ -110,7 +114,7 @@ async def test_claim_rolls_back_and_returns_none_when_the_claim_is_lost() -> Non
     uow = unit_of_work()
     uow.generation_runs = RecordingGenerationRuns(None)
     loader = RecordingSourceLoader()
-    run_claimer = claimer(uow=uow, loader=loader)
+    run_claimer = claimer(uow, loader)
 
     claimed = await run_claimer.claim(RUN_ID)
 
@@ -128,10 +132,9 @@ async def test_generate_records_draft_latency_from_the_monotonic_clock() -> None
     uow = unit_of_work()
     generator = RecordingDraftGenerator(draft_result())
     metrics = RecordingMetrics()
-    run_claimer = claimer(
-        uow=uow,
-        loader=RecordingSourceLoader(),
-        generator=generator,
+    run_claimer = dc.replace(
+        claimer(uow, RecordingSourceLoader()),
+        draft_generator=generator,
         metrics=metrics,
     )
 

@@ -12,6 +12,7 @@ from episodic.cost import (
 from episodic.observability import RecordingTracer
 from tests.generation_run_launcher_support import (
     FailingDraftGenerator,
+    LauncherOptions,
     launch_and_load_run,
     launcher,
     prepare_pending_run,
@@ -41,7 +42,7 @@ async def test_launcher_records_pricing_snapshot_failure(
     run_launcher = launcher(
         factory,
         FailingDraftGenerator(failure),
-        tracer=tracer,
+        options=LauncherOptions(tracer=tracer),
     )
 
     run, events = await launch_and_load_run(factory, run_id, run_launcher)

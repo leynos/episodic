@@ -12,12 +12,10 @@ from episodic.generation.launcher_scheduling import (
     GenerationRunAdmissionError,
     GenerationRunScheduler,
 )
-from episodic.observability import NoopValueMetrics, RecordingTracer
+from episodic.observability import RecordingTracer
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-    from episodic.observability import TracerPort, ValueMetricsPort
 
 
 @dc.dataclass(slots=True)
@@ -93,24 +91,23 @@ class _BlockingExecutor:
         raise AssertionError
 
 
-# pylint: disable-next=too-many-arguments  # Test wiring names each port it replaces.
 def _scheduler(
     executor: cabc.Callable[[uuid.UUID], cabc.Awaitable[ExecutionOutcome]],
     recorder: cabc.Callable[[uuid.UUID], cabc.Awaitable[None]],
-    *,
-    tracer: TracerPort | None = None,
-    metrics: ValueMetricsPort | None = None,
-    max_concurrency: int = 4,
-    max_pending_runs: int = 16,
 ) -> GenerationRunScheduler:
-    """Build a scheduler around explicit executor and recorder seams."""
+    """Build a scheduler around explicit executor and recorder seams.
+
+    Tests that need a recording tracer or metrics sink, or different limits,
+    replace the returned dataclass with ``dataclasses.replace``.
+
+    Returns
+    -------
+    GenerationRunScheduler
+        Scheduler wired to the supplied executor and cancellation recorder.
+    """
     return GenerationRunScheduler(
         execute_run=executor,
         record_cancellation=recorder,
-        tracer=RecordingTracer() if tracer is None else tracer,
-        metrics=NoopValueMetrics() if metrics is None else metrics,
-        max_concurrency=max_concurrency,
-        max_pending_runs=max_pending_runs,
     )
 
 
@@ -119,9 +116,8 @@ async def test_scheduler_executes_admitted_run_and_records_trace() -> None:
     """An admitted run should execute, drain, and report its outcome."""
     executor = _RecordingExecutor()
     tracer = RecordingTracer()
-    scheduler = _scheduler(
-        executor,
-        _RecordingCancellation().record,
+    scheduler = dc.replace(
+        _scheduler(executor, _RecordingCancellation().record),
         tracer=tracer,
     )
     run_id = uuid.uuid7()
@@ -147,9 +143,8 @@ async def test_scheduler_reports_failed_outcome_category() -> None:
         ExecutionOutcome(outcome="failed", failure_category="provider.transient")
     )
     tracer = RecordingTracer()
-    scheduler = _scheduler(
-        executor,
-        _RecordingCancellation().record,
+    scheduler = dc.replace(
+        _scheduler(executor, _RecordingCancellation().record),
         tracer=tracer,
     )
 
@@ -167,9 +162,8 @@ async def test_scheduler_rejects_admission_beyond_capacity() -> None:
     """Capacity admission should reject work before a task is allocated."""
     executor = _BlockingExecutor()
     metrics = _RecordingMetrics()
-    scheduler = _scheduler(
-        executor,
-        _RecordingCancellation().record,
+    scheduler = dc.replace(
+        _scheduler(executor, _RecordingCancellation().record),
         metrics=metrics,
         max_concurrency=1,
         max_pending_runs=1,
@@ -197,9 +191,8 @@ async def test_scheduler_rejects_admission_beyond_capacity() -> None:
 async def test_scheduler_closes_admission_during_shutdown() -> None:
     """Shutdown should reject new work before it cancels outstanding tasks."""
     metrics = _RecordingMetrics()
-    scheduler = _scheduler(
-        _RecordingExecutor(),
-        _RecordingCancellation().record,
+    scheduler = dc.replace(
+        _scheduler(_RecordingExecutor(), _RecordingCancellation().record),
         metrics=metrics,
     )
 
@@ -219,7 +212,7 @@ async def test_scheduler_records_cancellation_once_for_blocked_run() -> None:
     executor = _BlockingExecutor()
     recorder = _RecordingCancellation()
     tracer = RecordingTracer()
-    scheduler = _scheduler(executor, recorder.record, tracer=tracer)
+    scheduler = dc.replace(_scheduler(executor, recorder.record), tracer=tracer)
     run_id = uuid.uuid7()
 
     await scheduler.launch(run_id)
@@ -249,14 +242,12 @@ async def test_scheduler_records_cancellation_for_task_cancelled_before_start() 
 def test_scheduler_rejects_invalid_limits() -> None:
     """Scheduling limits should be validated at construction time."""
     with pytest.raises(ValueError, match="max_concurrency"):
-        _scheduler(
-            _RecordingExecutor(),
-            _RecordingCancellation().record,
+        dc.replace(
+            _scheduler(_RecordingExecutor(), _RecordingCancellation().record),
             max_concurrency=0,
         )
     with pytest.raises(ValueError, match="max_pending_runs"):
-        _scheduler(
-            _RecordingExecutor(),
-            _RecordingCancellation().record,
+        dc.replace(
+            _scheduler(_RecordingExecutor(), _RecordingCancellation().record),
             max_pending_runs=-1,
         )

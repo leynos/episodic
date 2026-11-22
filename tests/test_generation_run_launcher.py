@@ -174,7 +174,7 @@ async def test_launcher_records_provider_failure(
     run_launcher = launcher(
         factory,
         FailingDraftGenerator(DraftScriptTransientProviderError("try again later")),
-        tracer=tracer,
+        options=LauncherOptions(tracer=tracer),
     )
 
     run, events = await launch_and_load_run(factory, run_id, run_launcher)
@@ -331,8 +331,11 @@ async def test_launcher_returns_while_concurrency_slot_is_busy(
     run_launcher = launcher(
         session_factory,
         generator,
-        options=LauncherOptions(max_concurrency=1, max_pending_runs=1),
-        metrics=metrics,
+        options=LauncherOptions(
+            max_concurrency=1,
+            max_pending_runs=1,
+            metrics=metrics,
+        ),
     )
 
     await run_launcher.launch(run_id)

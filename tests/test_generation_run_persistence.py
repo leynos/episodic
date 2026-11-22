@@ -1,5 +1,6 @@
 """Unit tests for the generation-run persistence component."""
 
+import dataclasses as dc
 import typing as typ
 
 import pytest
@@ -95,7 +96,11 @@ async def test_persist_success_records_costs_and_terminal_metric() -> None:
     uow = unit_of_work()
     recorder = RecordingCostRecorder()
     metrics = RecordingMetrics()
-    run_persistence = persistence(uow, recorder=recorder, metrics=metrics)
+    run_persistence = dc.replace(
+        persistence(uow),
+        cost_recorder_factory=lambda uow: recorder,
+        metrics=metrics,
+    )
 
     await run_persistence.persist_success(claimed_run_value(), result())
 
@@ -162,7 +167,7 @@ async def test_record_failure_writes_failure_events_and_terminal_status() -> Non
     """An invalid-TEI failure should record both events and a failed status."""
     uow = unit_of_work()
     metrics = RecordingMetrics()
-    run_persistence = persistence(uow, metrics=metrics)
+    run_persistence = dc.replace(persistence(uow), metrics=metrics)
     failure = Failure(
         message="Invalid TEI.",
         category="tei.invalid",
@@ -208,7 +213,7 @@ async def test_record_failure_ignores_runs_that_are_not_writable(
     """A terminal or missing run should roll back without recording metrics."""
     uow = unit_of_work(status_error=error)
     metrics = RecordingMetrics()
-    run_persistence = persistence(uow, metrics=metrics)
+    run_persistence = dc.replace(persistence(uow), metrics=metrics)
 
     await run_persistence.record_failure(
         RUN_ID,

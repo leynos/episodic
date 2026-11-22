@@ -25,7 +25,6 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
     from episodic.generation.draft_script import DraftScriptResult
-    from episodic.observability import ValueMetricsPort
 
 NOW = dt.datetime(2026, 9, 1, 9, 30, tzinfo=dt.UTC)
 RUN_ID = uuid.UUID("00000000-0000-0000-0000-000000000911")
@@ -265,21 +264,18 @@ def unit_of_work(
     )
 
 
-# pylint: disable-next=too-many-arguments  # Test wiring names each port it replaces.
-def persistence(  # ruff: ignore[too-many-arguments]  # Test wiring names each port it replaces.
-    uow: RecordingUnitOfWork,
-    *,
-    recorder: RecordingCostRecorder | None = None,
-    metrics: ValueMetricsPort | None = None,
-    provider_name: str = "openai",
-    provider_operation: str = "chat_completions",
-) -> GenerationRunPersistence:
-    """Build a persistence component around explicit fakes."""
+def persistence(uow: RecordingUnitOfWork) -> GenerationRunPersistence:
+    """Build a persistence component around an explicit unit-of-work fake.
+
+    Tests that need a cost recorder or a recording metrics sink replace the
+    returned dataclass with ``dataclasses.replace``, so this seam stays small.
+
+    Returns
+    -------
+    GenerationRunPersistence
+        Persistence component bound to the supplied unit-of-work fake.
+    """
     return GenerationRunPersistence(
         uow_factory=lambda: typ.cast("CanonicalUnitOfWork", uow),
         clock=clock,
-        cost_recorder_factory=(None if recorder is None else lambda uow: recorder),
-        provider_name=provider_name,
-        provider_operation=provider_operation,
-        metrics=RecordingMetrics() if metrics is None else metrics,
     )
