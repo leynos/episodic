@@ -15,7 +15,10 @@ import pytest
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
 from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.generation.launcher_support import RunOwnership
 from tests.generation_run_launcher_read_fault_support import (
+    ClaimExitFault,
+    ClaimExitFaultUnitOfWork,
     ReadFault,
     RunReadFaultUnitOfWork,
     blocking_read_fault,
@@ -136,3 +139,63 @@ async def test_shutdown_before_a_claim_cannot_fail_the_run(
     await owner.drain()
     run, kinds = await _load(session_factory, run_id)
     assert run.status is GenerationRunStatus.SUCCEEDED, kinds
+
+
+@pytest.mark.asyncio
+async def test_refused_cancellation_does_not_suppress_the_owner(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A refused cancellation must not mark the run cancelled for its owner.
+
+    The losing invocation finishes first here, which is the interleaving a
+    name-based or unconditional dedup would get wrong: its write is refused,
+    and if that refusal still recorded the run as cancelled, the owner's
+    shutdown write would be skipped and the run would stay running.
+    """
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    generator = ReleasableDraftGenerator(draft_result(valid_tei()))
+    run_launcher = _owner_launcher(session_factory, generator)
+
+    await run_launcher.launch(run_id)
+    await asyncio.wait_for(generator.started.wait(), timeout=5)
+    await run_launcher._record_cancellation_owned(run_id, RunOwnership())
+    run, kinds = await _load(session_factory, run_id)
+    assert run.status is GenerationRunStatus.RUNNING, kinds
+    assert "run.failed" not in kinds, kinds
+
+    await run_launcher.shutdown()
+    run, kinds = await _load(session_factory, run_id)
+    assert kinds.count("run.failed") == 1, kinds
+    assert run.status is GenerationRunStatus.FAILED, kinds
+    assert run.error_category == "launcher.shutdown", run.error_category
+
+
+@pytest.mark.asyncio
+async def test_claim_survives_a_session_close_fault(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A close fault after the claim commits must still record the failure."""
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    fault = ClaimExitFault()
+    run_launcher = dc.replace(
+        launcher(
+            session_factory,
+            RecordingDraftGenerator(draft_result(valid_tei())),
+            options=LauncherOptions(
+                evaluator_set=QualityEvaluatorSet(
+                    (passing_evaluator(),),
+                    evaluator_timeout_seconds=5.0,
+                )
+            ),
+        ),
+        uow_factory=lambda: ClaimExitFaultUnitOfWork(session_factory, fault),
+    )
+
+    await run_launcher.launch(run_id)
+    await run_launcher.drain()
+
+    run, kinds = await _load(session_factory, run_id)
+    assert fault.failed, "the exit fault must have fired"
+    assert run.status is GenerationRunStatus.FAILED, kinds
+    assert run.error_message == "session close fault", run.error_message
+    assert kinds == ["run.started", "run.failed"], kinds

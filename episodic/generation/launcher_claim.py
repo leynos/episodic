@@ -70,10 +70,9 @@ class _ClaimMixin(_MixinBase):
             or it is already terminal.
 
         """  # ruff: ignore[docstring-missing-exception]  # The limit error is raised by a helper.
-        run = await self._claim_and_start(run_id)
+        run = await self._claim_and_start(run_id, ownership)
         if run is None:
             return None
-        ownership.claimed = True
         async with self.uow_factory() as uow:
             episode = await require_episode(uow, run.episode_id)
             documents = await uow.source_documents.list_for_job(run.source_bundle_id)
@@ -124,8 +123,23 @@ class _ClaimMixin(_MixinBase):
         )
         return claimed is not None
 
-    async def _claim_and_start(self, run_id: uuid.UUID) -> GenerationRun | None:
-        """Linearize a claim and make its started event durable before hydration."""
+    async def _claim_and_start(
+        self,
+        run_id: uuid.UUID,
+        ownership: RunOwnership,
+    ) -> GenerationRun | None:
+        """Linearize a claim and make its started event durable before hydration.
+
+        Ownership is recorded as soon as the commit returns, inside the unit
+        of work, so a failure during session close cannot lose a claim that is
+        already durable. Without that ordering the run would stay running with
+        no writer entitled to fail it.
+
+        Returns
+        -------
+        GenerationRun | None
+            The claimed run, or ``None`` when another invocation owns it.
+        """
         async with self.uow_factory() as uow:
             started_at = self.clock()
             run = await uow.generation_runs.claim_run_for_execution(
@@ -144,6 +158,7 @@ class _ClaimMixin(_MixinBase):
                 occurred_at=started_at,
             )
             await uow.commit()
+            ownership.claimed = True
         return run
 
     async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:

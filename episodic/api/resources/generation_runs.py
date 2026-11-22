@@ -64,7 +64,6 @@ class _Submission:
     request: _CreateGenerationRun
     source_bundle_id: uuid.UUID
     actor: str
-    launcher: GenerationRunLauncher
 
 
 __all__ = [
@@ -176,7 +175,6 @@ class GenerationRunsResource:
         source_bundle_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         payload = require_payload_dict(await req.get_media())
         request = _parse_create_request(payload)
-        launcher = self._require_launcher()
         actor = principal_id(req)
         if actor is None:
             raise _ingestion_job_not_found(source_bundle_id)
@@ -186,7 +184,6 @@ class GenerationRunsResource:
             request=request,
             source_bundle_id=source_bundle_id,
             actor=actor,
-            launcher=launcher,
         )
         apply_response(resp, await self._submit(submission))
 
@@ -201,12 +198,16 @@ class GenerationRunsResource:
         # item. With a key they run inside the idempotent work: a stored 202
         # must still replay after the deployment withdraws the capability, and
         # a rejection must release the key.
+        launcher: GenerationRunLauncher | None = None
         if idempotency_key is None or not idempotency_key.strip():
             request = _validate_quality_request(
                 request,
                 payload,
                 self._accepted_quality_modes,
             )
+            # Base order: request errors are reported before a missing
+            # launcher, so the 503 never masks a 400 or 422.
+            launcher = self._require_launcher()
 
         with self._tracer.start_span(
             "generation_run.command",
@@ -220,6 +221,9 @@ class GenerationRunsResource:
                     payload,
                     self._accepted_quality_modes,
                 )
+                resolved_launcher = (
+                    self._require_launcher() if launcher is None else launcher
+                )
                 run = await self._create_and_schedule_run(
                     self._create_run(
                         submission.source_bundle_id,
@@ -227,7 +231,7 @@ class GenerationRunsResource:
                         actor=submission.actor,
                         idempotency_key=idempotency_key,
                     ),
-                    submission.launcher,
+                    resolved_launcher,
                     span,
                 )
                 return _accepted_response(run)

@@ -732,6 +732,22 @@ accepted in EP-M6. D13 records the review itself.
     `test_unaccepted_mode_outranks_other_validation` (with and without a key),
     and `test_missing_key_with_an_accepted_mode_is_reported`.
   - Date/Author: 2026-11-22, implementation agent.
+- **Decision D21: harden the ownership boundary at its three edges.**
+  - A refused cancellation no longer marks the run cancelled: the run id is
+    added to the dedup set only when the write was actually recorded, so a
+    losing invocation cannot suppress its owner's terminal write.
+  - `ownership.claimed` is set inside the claim's unit of work, immediately
+    after `commit()`, not after the session closes. A close fault now keeps
+    the ownership its committed claim earned and records the failure instead
+    of leaving the run running with no entitled writer.
+  - Request validation runs before the missing-launcher 503, restoring the
+    base precedence: an unsupported mode is 422 and a malformed budget is 400
+    even when no launcher is configured. With a key the validation still runs
+    inside the idempotent work, after replay detection.
+  - Tests: `test_refused_cancellation_does_not_suppress_the_owner`,
+    `test_claim_survives_a_session_close_fault`, and
+    `test_request_errors_outrank_a_missing_launcher` (three cases).
+  - Date/Author: 2026-11-22, implementation agent.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it
     `generation-run-{run_id}`, and on cancellation cancels and drains it and
@@ -1963,6 +1979,9 @@ Record the following here as each milestone completes:
     competing-launcher cases.
   - Evidence: this section now holds the milestone transcripts, Hypothesis
     counters, seeded-fault outcomes and the INV-8 comparison.
+- A third assessment round raised three correctness items, repaired under
+  D21: conditional cancellation dedup, ownership across the claim session's
+  close, and request-error precedence when no launcher is configured.
 - Evidence for this milestone set at `eac73e3b`: `make check-fmt`,
   `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
   ambrleaks, Skylos, df12-duplication), `make test` (2448 passed, 1 skipped, 82
@@ -1998,7 +2017,46 @@ commits, in order, are:
 - EP-M6, `e85118dd`: ADR 0029 and the design and users' guide updates.
 
 Rebase, review and repair commits after EP-M6 are `c240f579`, `8e316dce`,
-`dca6c479`, `eac73e3b` and the evidence commit that carries this record.
+`dca6c479`, `eac73e3b`, `873ce747`, `9951571e` and the evidence commit that
+carries this record.
+
+Transcripts, re-run for this record:
+
+- EP-M0 at `e4e0fd8f`:
+  `tests/test_generation_run_launcher_no_qa_characterization.py` and
+  `tests/test_generation_run_launcher.py`, 16 passed.
+- EP-M1 at `9159f52b`: `tests/test_generation_quality_policy.py` and
+  `tests/test_generation_run_qa_lifecycle.py`, 193 passed.
+- EP-M0 INV-0 at the current head: 7 passed.
+- EP-M2, EP-M3, EP-M4 and EP-M5 are re-run at the current head, not at their
+  original commits, because the rebase that produced `c240f579` left
+  `episodic/canonical/storage/generation_runs.py` unparsable in the
+  intermediate commits `a3b52653` through `0e97c196`. Those commits cannot be
+  collected, so their own transcripts cannot be reproduced. The current head's
+  tree is clean, and `c240f579` is the commit that restored it.
+  - EP-M2 paths, 25 passed: `test_generation_run_status_update_policy.py`,
+    `canonical_storage/test_generation_run_quality_updates.py`,
+    `test_qa_gated_quality_mode_migration.py`,
+    `test_generation_run_qa_lifecycle.py`.
+  - EP-M3 paths, 31 passed: `test_content_generation_graph_properties.py`,
+    `test_content_generation_graph_miswiring.py`,
+    `test_content_generation_graph_topology.py`,
+    `test_generation_routing_policy.py`.
+  - EP-M4 paths, 39 passed: `test_generation_run_launcher.py`,
+    `test_generation_run_launcher_no_qa_characterization.py`,
+    `test_generation_run_launcher_quality_modes.py`,
+    `test_generation_run_launcher_quality_matrix.py`,
+    `test_generation_run_launcher_quality_ownership.py`.
+  - EP-M5 paths, 110 passed and 1 skipped: `test_generation_run_api.py`,
+    `test_generation_run_api_quality_modes.py` and `tests/steps`.
+  - Red evidence: EP-M1's policy table could not construct `qa_gated` before
+    `9159f52b`; EP-M4's INV-9 assertion observed LangChain's unnamed
+    `Task-9` before D16; the D18 and D19/D20 repairs were each written as a
+    failing test first, and the policy-free-store control still fails the
+    INV-2 property by construction.
+  - Known defect in history: a reviewer bisecting `a3b52653` to `0e97c196`
+    will find a non-parsing file. It is repaired at `c240f579`, and the
+    published head is clean; the branch was not force-rewritten to hide it.
 
 Reproducible non-vacuity evidence, measured on this tree:
 

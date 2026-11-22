@@ -13,7 +13,9 @@ import typing as typ
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
+    from types import TracebackType
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -83,3 +85,71 @@ class RunReadFaultUnitOfWork(SqlAlchemyUnitOfWork):
 def blocking_read_fault() -> ReadFault:
     """Return a fault that stalls a run read until released."""
     return ReadFault(mode=_BLOCK)
+
+
+class ClaimExitFault:
+    """Fail the unit of work's exit once, after a successful claim."""
+
+    claimed: bool = False
+    failed: bool = False
+
+
+class ClaimExitFaultStore:
+    """Run-store proxy that flags a successful claim."""
+
+    def __init__(self, inner: GenerationRunPort, fault: ClaimExitFault) -> None:
+        """Wrap the store whose claim is observed."""
+        self._inner = inner
+        self._fault = fault
+
+    def __getattr__(self, name: str) -> object:
+        """Delegate every other attribute to the inner store."""
+        return getattr(self._inner, name)
+
+    async def claim_run_for_execution(
+        self, run_id: uuid.UUID, **kwargs: object
+    ) -> object:
+        """Delegate the claim and record that it succeeded."""
+        claim = typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[object]]",
+            self._inner.claim_run_for_execution,
+        )
+        run = await claim(run_id, **kwargs)
+        if run is not None:
+            self._fault.claimed = True
+        return run
+
+
+class ClaimExitFaultUnitOfWork(SqlAlchemyUnitOfWork):
+    """Unit of work that raises while closing a session that claimed a run."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        fault: ClaimExitFault,
+    ) -> None:
+        """Open the real unit of work with the supplied exit fault."""
+        super().__init__(session_factory)
+        self._fault = fault
+
+    async def __aenter__(self) -> SqlAlchemyUnitOfWork:
+        """Open the real unit of work and wrap only the claim call."""
+        uow = await super().__aenter__()
+        uow.generation_runs = typ.cast(
+            "GenerationRunPort",
+            ClaimExitFaultStore(uow.generation_runs, self._fault),
+        )
+        return uow
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Raise once while closing, after the claim has already committed."""
+        await super().__aexit__(exc_type, exc, traceback)
+        if self._fault.claimed and not self._fault.failed:
+            self._fault.failed = True
+            msg = "session close fault"
+            raise RuntimeError(msg)

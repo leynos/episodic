@@ -127,8 +127,9 @@ class _SchedulingMixin(_MixinBase):
             self._record_cancellation(run_id, ownership),
             name=f"generation-run-{run_id}",
         )
-        await asyncio.shield(write)
-        self._cancelled_run_ids.add(run_id)
+        recorded = await asyncio.shield(write)
+        if recorded:
+            self._cancelled_run_ids.add(run_id)
 
     def _discard_task(self, task: asyncio.Task[None]) -> None:
         """Remove finished tasks from the strong-reference registry."""
@@ -250,9 +251,17 @@ class _SchedulingMixin(_MixinBase):
         self,
         run_id: uuid.UUID,
         ownership: RunOwnership,
-    ) -> None:
-        """Record cancellation consistently before or during execution."""
-        await self._record_failure(
+    ) -> bool:
+        """Record cancellation consistently before or during execution.
+
+        Returns
+        -------
+        bool
+            ``True`` when this invocation wrote the terminal state. A refused
+            write must not mark the run cancelled, or a losing invocation
+            would suppress the owner's cancellation write.
+        """
+        return await self._record_failure(
             run_id,
             Failure(
                 message="Generation task cancelled during shutdown.",

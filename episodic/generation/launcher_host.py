@@ -15,7 +15,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from episodic.canonical.domain import SourceDocument
+    from episodic.canonical.domain import GenerationRun, SourceDocument
     from episodic.canonical.generation_graph_ports import (
         ContentGenerationGraphPort,
     )
@@ -104,6 +104,14 @@ class LauncherHost(typ.Protocol):
         qa: QaOutcome,
     ) -> None:
         """Persist a successful run's TEI, costs, and terminal status."""
+        ...
+
+    async def _claim_and_start(
+        self,
+        run_id: uuid.UUID,
+        ownership: RunOwnership,
+    ) -> GenerationRun | None:
+        """Claim a pending run and record ownership before the session closes."""
         ...
 
     async def _claim_for_failure(

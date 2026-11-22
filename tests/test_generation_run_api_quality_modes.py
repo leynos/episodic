@@ -299,3 +299,76 @@ async def test_missing_key_with_an_accepted_mode_is_reported(
             details={"field": "Idempotency-Key", "constraint": "required"},
         ),
     )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _RequestCase:
+    """One request-error precedence case."""
+
+    headers: dict[str, str]
+    payload: dict[str, object]
+    expected: _ExpectedError
+
+
+_REQUEST_CASES: dict[str, _RequestCase] = {
+    "unaccepted-mode-without-launcher": _RequestCase(
+        headers=_HEADERS,
+        payload=_gated_payload(),
+        expected=_ExpectedError(
+            status=422,
+            code="quality_mode_unsupported",
+            message="Unsupported quality_mode: qa_gated.",
+            details={"quality_mode": "qa_gated"},
+        ),
+    ),
+    "malformed-budget-without-launcher": _RequestCase(
+        headers=_HEADERS,
+        payload={
+            "quality_mode": "draft_without_qa",
+            "skip_qa_rationale": "Vertical slice.",
+            "budget_hints": ["not", "an", "object"],
+        },
+        expected=_ExpectedError(
+            status=400,
+            code="validation_error",
+            message="budget_hints must be a JSON object.",
+            details={"field": "budget_hints", "constraint": "object"},
+        ),
+    ),
+    "keyed-unaccepted-mode-without-launcher": _RequestCase(
+        headers={**_HEADERS, "Idempotency-Key": "no-launcher-precedence"},
+        payload=_gated_payload(),
+        expected=_ExpectedError(
+            status=422,
+            code="quality_mode_unsupported",
+            message="Unsupported quality_mode: qa_gated.",
+            details={"quality_mode": "qa_gated"},
+        ),
+    ),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "case",
+    _REQUEST_CASES.values(),
+    ids=tuple(_REQUEST_CASES),
+)
+async def test_request_errors_outrank_a_missing_launcher(
+    session_factory: async_sessionmaker[AsyncSession],
+    case: _RequestCase,
+) -> None:
+    """A request error is reported before the missing-launcher 503."""
+    dependencies = dc.replace(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA})),
+        launcher=None,
+    )
+    async with _client(dependencies) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers=case.headers,
+            json=case.payload,
+        )
+
+    _assert_error_envelope(response, case.expected)
