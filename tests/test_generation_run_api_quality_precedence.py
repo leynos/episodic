@@ -137,3 +137,48 @@ async def test_reused_key_still_reports_the_body_error(
             details={"field": "budget_hints", "constraint": "object"},
         ),
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed_body", [False, True], ids=["replay", "conflict"])
+async def test_no_qa_missing_launcher_outranks_idempotency(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    changed_body: bool,
+) -> None:
+    """A removed launcher is a 503 before replay or conflict, as in the base."""
+    headers = {**_HEADERS, "Idempotency-Key": "launcher-removed"}
+    body: dict[str, object] = {
+        "quality_mode": "draft_without_qa",
+        "skip_qa_rationale": "First attempt.",
+    }
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        endpoint = _GATED_ENDPOINT.format(job=job)
+        first = await client.post(endpoint, headers=headers, json=body)
+    assert first.status_code == 202, first.text
+
+    without_launcher = dc.replace(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA})),
+        launcher=None,
+    )
+    if changed_body:
+        body = {**body, "skip_qa_rationale": "Second attempt."}
+    async with _client(without_launcher) as client:
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers=headers,
+            json=body,
+        )
+
+    _assert_error_envelope(
+        response,
+        _ExpectedError(
+            status=503,
+            code="service_unavailable",
+            message="Generation launcher is not configured.",
+            details={},
+        ),
+    )

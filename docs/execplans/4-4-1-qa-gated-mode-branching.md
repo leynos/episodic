@@ -762,15 +762,25 @@ accepted in EP-M6. D13 records the review itself.
     rejection releases the key.
   - Tests: `test_rolled_back_failure_claim_is_not_reused`,
     `test_claim_exit_fault_still_records_the_failure` (close error and
-    cancelled close), and `test_reused_key_still_reports_the_body_error`.
+    cancelled close), `test_reused_key_still_reports_the_body_error`, and
+    `test_no_qa_missing_launcher_outranks_idempotency` (replay and conflict).
+  - An accepted mode is validated and launcher-resolved before idempotency,
+    matching the base: a removed launcher is a 503 for a no-QA request rather
+    than a replay or a 409. An unaccepted mode still resolves inside the work,
+    so a stored gated 202 replays after the capability is withdrawn.
   - Date/Author: 2026-11-22, implementation agent.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it
     `generation-run-{run_id}`, and on cancellation cancels and drains it and
-    every in-flight task carrying that name before re-raising.
+    then every task in that invocation's `RunTaskRegistry` before
+    re-raising.
+  - Ownership is per invocation, not per name. Two graph invocations for the
+    same run id use the same task name, so cancelling by name would reach
+    into another invocation's nodes; D18 replaced an earlier name-based sweep
+    with the registry for exactly that reason.
   - The builder's wrapper renames the task LangChain creates for each node to
-    the same convention, so every `append_event` still happens on a task
-    named for its run, as INV-9 requires.
+    the same convention and registers it, so every `append_event` happens on
+    a task named for its run, as INV-9 requires.
   - Rationale: LangChain's `coro_with_context` always creates a task for a
     node, so cancelling the launcher task alone would leave an in-flight
     evaluator or terminal unit of work running after shutdown.

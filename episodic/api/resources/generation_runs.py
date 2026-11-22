@@ -189,14 +189,19 @@ class GenerationRunsResource:
         # must still replay after the deployment withdraws the capability, and
         # a rejection must release the key.
         launcher: GenerationRunLauncher | None = None
-        if idempotency_key is None or not idempotency_key.strip():
+        has_key = idempotency_key is not None and bool(idempotency_key.strip())
+        accepted_here = request.quality_mode in self._accepted_quality_modes
+        if not has_key or accepted_here:
+            # Base order: request errors are reported before a missing
+            # launcher, so the 503 never masks a 400 or 422, and an accepted
+            # mode's 503 precedes its idempotency outcomes. An unaccepted mode
+            # is left to the work (or the replay it finds), so a stored gated
+            # 202 still replays after the capability is withdrawn.
             request = _validate_quality_request(
                 request,
                 payload,
                 self._accepted_quality_modes,
             )
-            # Base order: request errors are reported before a missing
-            # launcher, so the 503 never masks a 400 or 422.
             launcher = self._require_launcher()
 
         def _precondition() -> None:
