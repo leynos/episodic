@@ -2014,10 +2014,12 @@ Record the following here as each milestone completes:
 
 ### Milestone evidence record
 
-Every milestone was committed only after the repository's full gate sequence
-passed on its tree: `make check-fmt`, `make typecheck`, `make lint`,
-`make test`, `make check-migrations`, `make markdownlint` and `make nixie`. The
-commits, in order, are:
+Each milestone was developed and gated on its working tree with the full
+sequence: `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+`make check-migrations`, `make markdownlint` and `make nixie`. That claim holds
+for the tree as built. It does not hold for every *committed* tree: the rebase
+that produced `c240f579` corrupted three files in the replayed commits, as
+recorded under the transcripts below. The commits, in order, are:
 
 - EP-M0, `e4e0fd8f`: the no-QA characterization snapshot and its payload and
   recording-metrics doubles. Green on unchanged launcher code.
