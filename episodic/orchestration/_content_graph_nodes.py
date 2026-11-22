@@ -107,6 +107,41 @@ def _is_external_cancellation() -> bool:
     return task is not None and task.cancelling() > 0
 
 
+def _timeout_after_late_result(
+    evaluator: QualityEvaluatorPort,
+) -> QualityEvaluation:
+    """Return the inconclusive result a deadline-expired evaluation records."""
+    log_error(
+        logger,
+        "content_generation.evaluator_timeout evaluator=%s late_result=true",
+        evaluator.name,
+    )
+    return QualityEvaluation(
+        evaluator=evaluator.name,
+        verdict=QualityVerdict.INCONCLUSIVE,
+        error_type=_TIMEOUT_ERROR,
+    )
+
+
+def _inconsistent_evaluation(
+    evaluator: QualityEvaluatorPort,
+    evaluation: QualityEvaluation,
+) -> QualityEvaluation:
+    """Normalize an error-tagged verdict to inconclusive."""
+    log_error(
+        logger,
+        "content_generation.evaluator_inconsistent evaluator=%s error_type=%s",
+        evaluator.name,
+        evaluation.error_type,
+    )
+    return QualityEvaluation(
+        evaluator=evaluator.name,
+        verdict=QualityVerdict.INCONCLUSIVE,
+        summary=evaluation.summary,
+        error_type=evaluation.error_type,
+    )
+
+
 async def _evaluate_one(
     evaluator: QualityEvaluatorPort,
     subject: EvaluationSubject,
@@ -114,7 +149,7 @@ async def _evaluate_one(
 ) -> QualityEvaluation:
     """Run one evaluator, converting every failure into an inconclusive verdict."""
     try:
-        async with asyncio.timeout(timeout_seconds):
+        async with asyncio.timeout(timeout_seconds) as scope:
             evaluation = await evaluator.evaluate(subject)
     except TimeoutError as exc:
         log_error(
@@ -155,19 +190,12 @@ async def _evaluate_one(
             verdict=QualityVerdict.INCONCLUSIVE,
             error_type=type(exc).__name__,
         )
+    if scope.expired():
+        # An adapter can swallow the cancellation and return a verdict. The
+        # deadline still governs, so a late result never counts as a pass.
+        return _timeout_after_late_result(evaluator)
     if evaluation.error_type is not None:
-        log_error(
-            logger,
-            "content_generation.evaluator_inconsistent evaluator=%s error_type=%s",
-            evaluator.name,
-            evaluation.error_type,
-        )
-        return QualityEvaluation(
-            evaluator=evaluator.name,
-            verdict=QualityVerdict.INCONCLUSIVE,
-            summary=evaluation.summary,
-            error_type=evaluation.error_type,
-        )
+        return _inconsistent_evaluation(evaluator, evaluation)
     return QualityEvaluation(
         evaluator=evaluator.name,
         verdict=evaluation.verdict,

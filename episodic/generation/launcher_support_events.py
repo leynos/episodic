@@ -170,31 +170,32 @@ def provider_call_record(request: ProviderCallRecordRequest) -> ProviderCallReco
 
 
 _FAILURE_CATEGORIES: tuple[
-    tuple[type[Exception] | tuple[type[Exception], ...], str, bool],
+    tuple[type[Exception] | tuple[type[Exception], ...], str, bool, bool],
     ...,
 ] = (
-    (QualityEvaluationUnavailableError, "qa.unavailable", False),
-    (ContentGenerationGraphError, "orchestration.incomplete", False),
-    (EpisodeRevisionConflictError, "episode.persistence_conflict", False),
-    (EpisodeNotFoundError, "episode.not_found", False),
-    (GenerationSourceLimitError, "generation.source_limit", False),
-    ((InvalidDraftTeiError, DraftScriptTeiError), "tei.invalid", True),
-    (DraftScriptTransientProviderError, "provider.transient", False),
-    (DraftScriptProviderResponseError, "provider.response", False),
-    (DraftScriptTokenBudgetError, "provider.token_budget", False),
-    (DraftScriptResponseFormatError, "draft.response_format", False),
-    (DraftScriptGenerationError, "draft.generation", False),
-    (PricingSnapshotError, "cost.pricing_snapshot", False),
+    (QualityEvaluationUnavailableError, "qa.unavailable", False, False),
+    (ContentGenerationGraphError, "orchestration.incomplete", False, False),
+    (EpisodeRevisionConflictError, "episode.persistence_conflict", False, True),
+    (EpisodeNotFoundError, "episode.not_found", False, True),
+    (GenerationSourceLimitError, "generation.source_limit", False, True),
+    ((InvalidDraftTeiError, DraftScriptTeiError), "tei.invalid", True, True),
+    (DraftScriptTransientProviderError, "provider.transient", False, True),
+    (DraftScriptProviderResponseError, "provider.response", False, True),
+    (DraftScriptTokenBudgetError, "provider.token_budget", False, True),
+    (DraftScriptResponseFormatError, "draft.response_format", False, True),
+    (DraftScriptGenerationError, "draft.generation", False, True),
+    (PricingSnapshotError, "cost.pricing_snapshot", False, True),
 )
 
 
 def classify_failure(exc: Exception) -> Failure:
     """Map launcher failures to stable public error categories."""
-    for error_type, category, should_emit_invalid_tei in _FAILURE_CATEGORIES:
+    for error_type, category, emit_tei, is_draft_error in _FAILURE_CATEGORIES:
         if isinstance(exc, error_type):
             return Failure(
                 str(exc),
                 category,
-                should_emit_invalid_tei=should_emit_invalid_tei,
+                should_emit_invalid_tei=emit_tei,
+                is_draft_error=is_draft_error,
             )
     return Failure(str(exc), "unexpected")

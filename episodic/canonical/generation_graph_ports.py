@@ -13,6 +13,7 @@ hold a launcher permit indefinitely.
 """
 
 import dataclasses as dc
+import math
 import typing as typ
 
 from .generation_quality import QaStatus, QualityMode
@@ -95,8 +96,8 @@ def _validate_evaluator_set(
     timeout_seconds: float,
 ) -> None:
     """Reject evaluator sets whose names or timeout would corrupt reporting."""
-    if timeout_seconds <= 0:
-        msg = "evaluator_timeout_seconds must be positive."
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        msg = "evaluator_timeout_seconds must be a finite positive number."
         raise ValueError(msg)
     _validate_evaluator_names(evaluators)
 
@@ -116,8 +117,8 @@ class QualityEvaluatorSet:
     Raises
     ------
     ValueError
-        If the timeout is not positive, or an evaluator name is blank or
-        duplicated.
+        If the timeout is not finite and positive, or an evaluator name is
+        blank or duplicated.
     """
 
     evaluators: tuple[QualityEvaluatorPort, ...]
@@ -169,7 +170,14 @@ class ContentGenerationSteps(typ.Protocol):
     """
 
     async def initialize(self) -> None:
-        """Claim and hydrate the run, or return unchanged if it was lost."""
+        """Claim and hydrate the run.
+
+        Raises
+        ------
+        RunNotClaimedError
+            If the run was claimed elsewhere or no longer exists. Claim loss
+            aborts initialization; there is no normal return for it.
+        """
 
     async def generate_draft(self) -> None:
         """Generate the draft and record its generation event."""

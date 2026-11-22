@@ -219,9 +219,11 @@ async def test_no_qa_run_records_no_qa_events_or_gate_metrics(
     await run_launcher.launch(run_id)
     await run_launcher.drain()
 
-    run, events, _revision = await _load(session_factory, run_id)
+    run, events, revision = await _load(session_factory, run_id)
     kinds = [kind for kind, _payload in events]
+    assert run.status is GenerationRunStatus.SUCCEEDED, run.status
     assert run.qa_status is QaStatus.SKIPPED, run.qa_status
+    assert revision == 2, "a persisted draft advances the TEI revision"
     assert "qa.evaluation_started" not in kinds, kinds
     assert _counter_sum(metrics, _METRIC_GATE) == 0, metrics.observations
 

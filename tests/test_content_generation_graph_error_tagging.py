@@ -6,6 +6,7 @@ evaluator actually approved, so the node normalizes it to an inconclusive
 result and the run escalates.
 """
 
+import asyncio
 import typing as typ
 import uuid
 
@@ -72,4 +73,54 @@ async def test_error_tagged_pass_escalates() -> None:
     )
     assert verdict is QualityVerdict.INCONCLUSIVE, verdict
     assert evaluations[0].verdict is QualityVerdict.INCONCLUSIVE, evaluations
+    assert evaluations[0].error_type == "timeout", evaluations
+
+
+class _CancellationSwallowingEvaluator:
+    """Evaluator that ignores its timeout cancellation and returns a pass."""
+
+    @property
+    def name(self) -> str:
+        """The evaluator's stable slug."""
+        return "swallows-cancellation"
+
+    async def evaluate(self, subject: EvaluationSubject) -> QualityEvaluation:
+        """Wait past the deadline, swallow the cancellation, and pass."""
+        _ = subject
+        try:
+            await asyncio.sleep(1.0)
+        except asyncio.CancelledError:
+            # A misbehaving adapter could do this; the deadline must win.
+            return QualityEvaluation(
+                self.name,
+                QualityVerdict.PASSED,
+            )
+        return QualityEvaluation(self.name, QualityVerdict.PASSED)
+
+
+@pytest.mark.asyncio
+async def test_timeout_cannot_be_escaped_by_swallowing_cancellation() -> None:
+    """A late result after the deadline must not be accepted as a pass."""
+    graph = LangGraphContentGenerationGraph(
+        QualityEvaluatorSet(
+            (_CancellationSwallowingEvaluator(),),
+            evaluator_timeout_seconds=0.01,
+        )
+    )
+    steps = RecordingSteps()
+    terminal = await graph.run(
+        ContentGenerationRequest(
+            run_id=uuid.UUID(_RUN_ID),
+            quality_mode=QualityMode.QA_GATED,
+        ),
+        steps=steps,
+    )
+
+    assert terminal is GenerationTerminal.QA_ESCALATED, terminal
+    assert "complete_with_draft" not in steps.step_names(), steps.step_names()
+    verdict, evaluations = typ.cast(
+        "tuple[QualityVerdict, tuple[QualityEvaluation, ...]]",
+        steps.detail_for("escalate"),
+    )
+    assert verdict is QualityVerdict.INCONCLUSIVE, verdict
     assert evaluations[0].error_type == "timeout", evaluations

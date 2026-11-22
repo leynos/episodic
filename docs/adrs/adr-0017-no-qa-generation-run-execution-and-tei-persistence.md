@@ -95,10 +95,6 @@ malformed or missing required fields return `400 Bad Request`. Episode TEI
 returns `404 Not Found` until a generated draft and its provenance metadata
 exist.
 
-ADR 0029 supersedes this rule in part: a deployment that configures QA
-evaluators accepts `qa_gated` as well, while a deployment without them keeps the
-`422`. The other rules in this section remain in force.
-
 `GET /v1/episodes/{episode_id}/tei` uses HTTP content negotiation rather than a
 separate export resource. The default representation is a JSON envelope.
 `Accept: application/tei+xml` returns raw XML with `Content-Disposition`,
@@ -134,3 +130,9 @@ Unsupported media types return `406 Not Acceptable`.
 - [ADR 009: Source-to-script REST vertical slice](adr-0009-source-to-script-rest-vertical-slice.md)
 - [ADR 015: Upload and idempotency ports](adr-0015-upload-and-idempotency-ports.md)
 - [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
+
+## Addendum: partial supersession by ADR 0029 (2026-11-22)
+
+ADR 0029 supersedes the `qa_gated` rejection rule in part: a deployment that
+configures QA evaluators accepts `qa_gated` as well, while a deployment without
+them keeps the `422`. The other rules in the Decision section remain in force.

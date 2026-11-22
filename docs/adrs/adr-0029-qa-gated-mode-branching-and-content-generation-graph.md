@@ -28,9 +28,10 @@ Three forces shape the design:
 - The `draft_without_qa` contract must not change. Its REST shape, event
   stream, metrics, span outcomes, persisted provenance, and cancellation
   behaviour are pinned by a characterization suite.
-- LangGraph must execute nodes inline in the launcher task. The launcher is the
-  single writer of a run's events and status, and ordered publication depends
-  on nodes running in that task.
+- The launcher must remain the single writer of a run's events and status, with
+  ordered publication. Which task executes a node is an implementation detail;
+  the runner owns and names its graph task and every node task so that rule
+  stays observable.
 - Hecate (ADR-0014, ADR-0022) keeps LangGraph mechanics out of node functions
   and keeps the application layer independent of orchestration. The composition
   root injects the graph.

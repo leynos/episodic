@@ -7,7 +7,6 @@ statuses that represent a persisted draft.
 """
 
 import datetime as dt
-import typing as typ
 import uuid
 
 import hypothesis.strategies as st
@@ -30,11 +29,23 @@ from episodic.canonical.generation_routing import (
 NOW = dt.datetime(2026, 6, 4, 8, 0, tzinfo=dt.UTC)
 
 
-@pytest.mark.parametrize("mode", tuple(QualityMode))
-def test_route_quality_mode_returns_a_branch(mode: QualityMode) -> None:
-    """Every quality mode routes to exactly one branch."""
-    branch = route_quality_mode(mode)
-    assert isinstance(branch, QualityBranch), f"branch={branch!r}"
+_ROUTES: dict[QualityMode, QualityBranch] = {
+    QualityMode.DRAFT_WITHOUT_QA: QualityBranch.DRAFT_WITHOUT_QA,
+    QualityMode.QA_GATED: QualityBranch.QA_GATED,
+}
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    _ROUTES.items(),
+    ids=tuple(mode.value for mode in _ROUTES),
+)
+def test_route_quality_mode_returns_its_branch(
+    mode: QualityMode,
+    expected: QualityBranch,
+) -> None:
+    """Every quality mode routes to its own branch."""
+    assert route_quality_mode(mode) is expected, mode
 
 
 def test_route_quality_mode_is_injective() -> None:
@@ -142,15 +153,3 @@ def test_episode_tei_update_records_only_persisted_drafts(
     else:
         with pytest.raises(ValueError, match="qa_status"):
             _tei_update(qa_status)
-
-
-def test_assert_never_covers_every_quality_mode() -> None:
-    """Routing is exhaustive over the enum the type checker already narrows."""
-    covered: set[QualityMode] = set()
-    for mode in QualityMode:
-        match mode:
-            case QualityMode.DRAFT_WITHOUT_QA | QualityMode.QA_GATED:
-                covered.add(mode)
-            case _:
-                typ.assert_never(mode)
-    assert covered == set(QualityMode), "every mode must be classified"

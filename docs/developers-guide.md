@@ -2694,10 +2694,13 @@ The layers are strict:
 The builder wraps each node in a closure that supplies `runtime.context`, so
 nodes see only `ContentGenerationContext` and never a LangGraph type. LangChain
 creates a task for every node call, so the closure also renames that task to
-`generation-run-{run_id}`; the runner names its own graph task the same way
-and, on cancellation, cancels and drains every in-flight task with that name.
-Without that drain, a cancelled run's evaluator or terminal transaction could
-keep running after shutdown.
+`generation-run-{run_id}` and registers it in the invocation's
+`RunTaskRegistry`. The runner names its own graph task the same way and, on
+cancellation, cancels and drains that task and then only the tasks in its own
+registry. The shared name labels a task for INV-9's assertion; it does not
+select tasks for cancellation, because two invocations for the same run id use
+the same name. Without that drain, a cancelled run's evaluator or terminal
+transaction could keep running after shutdown.
 
 The single-writer rule is absolute. A run session implements
 `ContentGenerationSteps`, and it is the only path from a node to run state.
@@ -2747,6 +2750,44 @@ Graph-state tests follow three conventions:
 
 The migration test compares `pg_enum` labels with the Python enums after a
 staged upgrade, because Alembic metadata comparison ignores enum labels.
+
+### Generation-run ownership and request ordering
+
+Four internally facing rules keep a run consistent when several launchers or
+retried requests touch it. Each is enforced in code and pinned by tests.
+
+- **Who may write a terminal state.** `RunOwnership` is created per launcher
+  task and raised when that invocation wins the pending-to-running claim. On
+  the success path the claim is recorded immediately after `commit()` inside
+  the claim's unit of work, so a failure while that session closes cannot lose
+  a durable claim. On the failure and cancellation paths, an invocation that
+  has not claimed may write only by winning the same compare-and-set; a refused
+  write records no event, no metric, and reports `not_claimed`. A cancelled
+  failure transaction rolls the flag back with it. A task name is not
+  authority: two invocations for one run id share `generation-run-{run_id}`.
+- **Status updates.** Both adapters resolve a `GenerationRunStatusUpdate`
+  through `apply_status_update`, which revalidates the immutable run with
+  `dataclasses.replace` and rejects a violation with `ValueError`. The
+  `UNCHANGED` sentinel means "keep the stored value" and is the default for
+  `qa_status`, so a caller that has no QA opinion cannot accidentally clear it.
+- **Idempotent request ordering.** `run_idempotent` accepts an optional
+  `precondition`. It runs after a stored replay is ruled out and before a
+  `Conflict` or `InFlight` outcome is reported, so a reused key cannot turn a
+  malformed body into a 409 while a completed replay still returns its stored
+  response. It is not applied to a freshly acquired record: the work validates,
+  so a rejection releases the key. A `draft_without_qa` request is the
+  exception to the exception: its body rules and the missing-launcher 503 are
+  checked before idempotency, matching the pre-4.4.1 contract, because it has
+  no replay-sensitive capability of its own.
+- **Capability advertisement.** `create_app_from_env` builds one
+  `QualityEvaluatorSet`, derives `accepted_quality_modes` from it through
+  `LangGraphContentGenerationGraph.accepted_quality_modes()`, and stores the
+  result on `ApiDependencies`. `ApiDependencies` freezes the set, requires
+  `draft_without_qa`, and `GenerationRunsResourceConfig` carries it to the
+  resource, which applies the REST `qa_gated` gate. Deployments without
+  evaluators therefore keep the `422` and never spend inference on a branch
+  that would escalate for lack of evaluators. The user-facing rules live in the
+  users' guide.
 
 ### Manual recovery of expired generation-run leases
 

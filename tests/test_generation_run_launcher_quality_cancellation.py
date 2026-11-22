@@ -42,9 +42,15 @@ async def _cancel_at(
     run_launcher: InProcessGenerationRunLauncher,
     started: asyncio.Event,
 ) -> None:
-    """Wait for a blocking fake to report entry, then shut the launcher down."""
-    await asyncio.wait_for(started.wait(), timeout=5)
-    await run_launcher.shutdown()
+    """Wait for a blocking fake to report entry, then shut the launcher down.
+
+    The shutdown is unconditional: if the entry wait times out, the launched
+    run must not be left blocked for a later test.
+    """
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
+    finally:
+        await run_launcher.shutdown()
 
 
 async def _assert_shutdown_state(

@@ -1746,9 +1746,9 @@ Production and test-support changes:
     pass.
   - Conformance: the additive migration is the only persisted-format change,
     and this plan approves it.
-  - Recovery: run `alembic downgrade 20261010_000013` on a database without
+  - Recovery: run `alembic downgrade 20261110_000017` on a database without
     new-label rows, then revert.
-  - Compatibility: deployed databases at `20261010_000013` upgrade in place.
+  - Compatibility: deployed databases at `20261110_000017` upgrade in place.
     A code rollback is safe while no new-label rows exist.
 - **EP-M3.**
   - Outcome: a compiled graph exists, with property-tested branch ownership.

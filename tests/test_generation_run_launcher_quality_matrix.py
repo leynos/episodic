@@ -167,7 +167,7 @@ _MATRIX: dict[str, _Cell] = {
         expected_qa=QaStatus.PENDING,
         expected_category="qa.unavailable",
         expects_costs=False,
-        expected_draft_errors=1,
+        expected_draft_errors=0,
         expected_evaluator_errors=0,
     ),
     "gated-generator-failure": _Cell(
