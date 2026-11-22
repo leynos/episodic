@@ -48,6 +48,31 @@ class ExecutionOutcome:
     failure_category: str | None = None
 
 
+class SchedulerObservability(typ.Protocol):
+    """Live observability ports consulted for each scheduling observation.
+
+    Attributes are properties rather than values so a scheduler that outlives
+    its composition root observes the caller's current sinks after the caller
+    replaces them.
+    """
+
+    @property
+    def metrics(self) -> ValueMetricsPort:
+        """Sink for admission and pending-depth metrics."""
+
+    @property
+    def tracer(self) -> TracerPort:
+        """Sink for the per-run execution span."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class NoopSchedulerObservability:
+    """Inert observability view used when the caller supplies none."""
+
+    metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
+    tracer: TracerPort = dc.field(default_factory=NoopTracer)
+
+
 @dc.dataclass(slots=True)
 class GenerationRunScheduler:
     """Bound task admission and drive scheduled generation-run tasks.
@@ -59,10 +84,8 @@ class GenerationRunScheduler:
         terminal outcome.
     record_cancellation : cabc.Callable[[uuid.UUID], cabc.Awaitable[None]]
         Persist cancellation as a terminal failure for one run.
-    metrics : ValueMetricsPort
-        Sink for admission and pending-depth metrics.
-    tracer : TracerPort
-        Sink for the per-run execution span.
+    observability : SchedulerObservability
+        Live view of the metrics and tracer sinks consulted at use time.
     max_concurrency : int
         Maximum runs allowed to execute concurrently.
     max_pending_runs : int
@@ -71,8 +94,9 @@ class GenerationRunScheduler:
 
     execute_run: cabc.Callable[[uuid.UUID], cabc.Awaitable[ExecutionOutcome]]
     record_cancellation: cabc.Callable[[uuid.UUID], cabc.Awaitable[None]]
-    metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
-    tracer: TracerPort = dc.field(default_factory=NoopTracer)
+    observability: SchedulerObservability = dc.field(
+        default_factory=NoopSchedulerObservability
+    )
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY
     max_pending_runs: int = DEFAULT_MAX_PENDING_RUNS
     _tasks: TaskSet = dc.field(default_factory=set, init=False)
@@ -146,7 +170,7 @@ class GenerationRunScheduler:
     def _admit(self) -> None:
         """Reserve bounded capacity before creating a background task."""
         if self._is_shutting_down:
-            self.metrics.increment_counter(
+            self.observability.metrics.increment_counter(
                 _METRIC_ADMISSION_REJECTED,
                 labels={"reason": "shutdown"},
             )
@@ -154,7 +178,7 @@ class GenerationRunScheduler:
             raise GenerationRunAdmissionError(msg)
         capacity = self.max_concurrency + self.max_pending_runs
         if self._admitted_run_count >= capacity:
-            self.metrics.increment_counter(
+            self.observability.metrics.increment_counter(
                 _METRIC_ADMISSION_REJECTED,
                 labels={"reason": "capacity"},
             )
@@ -165,7 +189,7 @@ class GenerationRunScheduler:
 
     async def _run_task(self, run_id: uuid.UUID) -> None:
         """Execute one scheduled generation run."""
-        with self.tracer.start_span(
+        with self.observability.tracer.start_span(
             "generation_run.execute",
             attributes={"operation": "generation_run.execute", "run_id": str(run_id)},
         ) as span:
@@ -185,7 +209,7 @@ class GenerationRunScheduler:
     def _record_pending_depth(self) -> None:
         """Report bounded work waiting beyond the execution capacity."""
         pending_depth = max(0, self._admitted_run_count - self.max_concurrency)
-        self.metrics.observe_value(
+        self.observability.metrics.observe_value(
             _METRIC_PENDING_DEPTH,
             float(pending_depth),
             labels={},

@@ -50,6 +50,14 @@ class _RecordingMetrics:
         self.values.append((name, value, dict(labels)))
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _Observability:
+    """Live observability view backed by recording fakes."""
+
+    metrics: _RecordingMetrics = dc.field(default_factory=_RecordingMetrics)
+    tracer: RecordingTracer = dc.field(default_factory=RecordingTracer)
+
+
 @dc.dataclass(slots=True)
 class _RecordingExecutor:
     """Executor fake that records admitted runs and returns one outcome."""
@@ -118,7 +126,7 @@ async def test_scheduler_executes_admitted_run_and_records_trace() -> None:
     tracer = RecordingTracer()
     scheduler = dc.replace(
         _scheduler(executor, _RecordingCancellation().record),
-        tracer=tracer,
+        observability=_Observability(tracer=tracer),
     )
     run_id = uuid.uuid7()
 
@@ -145,7 +153,7 @@ async def test_scheduler_reports_failed_outcome_category() -> None:
     tracer = RecordingTracer()
     scheduler = dc.replace(
         _scheduler(executor, _RecordingCancellation().record),
-        tracer=tracer,
+        observability=_Observability(tracer=tracer),
     )
 
     await scheduler.launch(uuid.uuid7())
@@ -164,7 +172,7 @@ async def test_scheduler_rejects_admission_beyond_capacity() -> None:
     metrics = _RecordingMetrics()
     scheduler = dc.replace(
         _scheduler(executor, _RecordingCancellation().record),
-        metrics=metrics,
+        observability=_Observability(metrics=metrics),
         max_concurrency=1,
         max_pending_runs=1,
     )
@@ -193,7 +201,7 @@ async def test_scheduler_closes_admission_during_shutdown() -> None:
     metrics = _RecordingMetrics()
     scheduler = dc.replace(
         _scheduler(_RecordingExecutor(), _RecordingCancellation().record),
-        metrics=metrics,
+        observability=_Observability(metrics=metrics),
     )
 
     await scheduler.shutdown()
@@ -212,7 +220,10 @@ async def test_scheduler_records_cancellation_once_for_blocked_run() -> None:
     executor = _BlockingExecutor()
     recorder = _RecordingCancellation()
     tracer = RecordingTracer()
-    scheduler = dc.replace(_scheduler(executor, recorder.record), tracer=tracer)
+    scheduler = dc.replace(
+        _scheduler(executor, recorder.record),
+        observability=_Observability(tracer=tracer),
+    )
     run_id = uuid.uuid7()
 
     await scheduler.launch(run_id)

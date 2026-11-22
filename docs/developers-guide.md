@@ -2550,15 +2550,23 @@ draft generation. `GenerationRunPersistence` (`launcher_persistence.py`) takes
 the unit-of-work factory, clock, cost-recorder factory, provider metadata and
 metrics, and owns draft events, TEI persistence, costs and terminal status.
 Each component is a dataclass with explicit constructor collaborators, so unit
-tests construct it with fakes rather than a launcher. The launcher composes the
-three in `__post_init__`, delegates `launch`, `drain`, `shutdown` and
-`scheduled_run_count` to the scheduler, and keeps the claim-generate-persist
-sequence plus failure classification in `_execute_run`. `BoundedSourceLoader`
-implements the `GenerationSourceLoader` seam and applies the source count and
-byte limits; constructing a launcher with a patched `launcher.py`-level
-`source_from_document` still overrides the default document loader. Replacing
-the mixins with injected scheduling, claim and persistence components was
-tracked in [#350](https://github.com/leynos/episodic/issues/350).
+tests construct it with fakes rather than a launcher. The launcher builds the
+long-lived scheduler in `__post_init__` and, for each run, builds the stateless
+claimer and persistence components from its current fields. It delegates
+`launch`, `drain`, `shutdown` and `scheduled_run_count` to the scheduler, and
+keeps the claim-generate-persist sequence plus failure classification in
+`_execute_run`.
+
+Per-run composition preserves the late binding the mixins had. Assigning
+`draft_generator`, `metrics`, `tracer`, `source_limits`, `clock` or another
+collaborator after construction still affects the next run, and patching
+`source_from_document` in `launcher.py` after construction still overrides the
+document loader when a run hydrates. `BoundedSourceLoader` implements the
+`GenerationSourceLoader` seam and applies the source count and byte limits. The
+scheduler reads `metrics` and `tracer` through a live view, so replacing them
+does not discard its task or cancellation state. Replacing the mixins with
+injected scheduling, claim and persistence components was tracked in
+[#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they

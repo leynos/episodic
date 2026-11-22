@@ -89,6 +89,28 @@ class GenerationRunLauncher(typ.Protocol):
         """Schedule generation for one run."""
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _LauncherObservability:
+    """Live view of a launcher's metrics and tracer sinks.
+
+    The scheduler owns the task registry and therefore outlives any single
+    run, so it cannot snapshot the launcher's observability fields the way the
+    per-run components do.
+    """
+
+    launcher: InProcessGenerationRunLauncher
+
+    @property
+    def metrics(self) -> ValueMetricsPort:
+        """The launcher's current metrics sink."""
+        return self.launcher.metrics
+
+    @property
+    def tracer(self) -> TracerPort:
+        """The launcher's current tracer."""
+        return self.launcher.tracer
+
+
 @dc.dataclass(slots=True)
 class InProcessGenerationRunLauncher(GenerationRunLauncher):
     """Schedule and execute no-QA draft generation in-process.
@@ -145,12 +167,20 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     _scheduler: GenerationRunScheduler = dc.field(init=False)
-    _claimer: GenerationRunClaimer = dc.field(init=False)
-    _persistence: GenerationRunPersistence = dc.field(init=False)
 
     def __post_init__(self) -> None:
-        """Compose the scheduling, claim, and persistence components."""
-        self._claimer = GenerationRunClaimer(
+        """Compose the long-lived scheduler over the launcher's ports."""
+        self._scheduler = GenerationRunScheduler(
+            execute_run=self._execute_run,
+            record_cancellation=self._record_cancellation,
+            observability=_LauncherObservability(self),
+            max_concurrency=self.max_concurrency,
+            max_pending_runs=self.max_pending_runs,
+        )
+
+    def _build_claimer(self) -> GenerationRunClaimer:
+        """Build the stateless claim component from the current launcher fields."""
+        return GenerationRunClaimer(
             uow_factory=self.uow_factory,
             draft_generator=self.draft_generator,
             source_loader=BoundedSourceLoader(self.object_store, source_from_document),
@@ -161,21 +191,16 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             draft_id_factory_factory=self.draft_id_factory_factory,
             lease_seconds=self.lease_seconds,
         )
-        self._persistence = GenerationRunPersistence(
+
+    def _build_persistence(self) -> GenerationRunPersistence:
+        """Build the stateless persistence component from the current fields."""
+        return GenerationRunPersistence(
             uow_factory=self.uow_factory,
             clock=self.clock,
             cost_recorder_factory=self.cost_recorder_factory,
             provider_name=self.provider_name,
             provider_operation=self.provider_operation,
             metrics=self.metrics,
-        )
-        self._scheduler = GenerationRunScheduler(
-            execute_run=self._execute_run,
-            record_cancellation=self._record_cancellation,
-            metrics=self.metrics,
-            tracer=self.tracer,
-            max_concurrency=self.max_concurrency,
-            max_pending_runs=self.max_pending_runs,
         )
 
     async def launch(self, run_id: uuid.UUID) -> None:
@@ -197,17 +222,19 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
 
     async def _execute_run(self, run_id: uuid.UUID) -> ExecutionOutcome:
         """Execute one generation run while its concurrency permit is held."""
+        claimer = self._build_claimer()
+        persistence = self._build_persistence()
         try:
-            claimed = await self._claimer.claim(run_id)
+            claimed = await claimer.claim(run_id)
             if claimed is None:
                 return ExecutionOutcome(outcome="not_claimed")
-            result = await self._claimer.generate(claimed)
-            await self._persistence.record_draft_generated(claimed.run.id, result)
-            await self._persistence.persist_success(claimed, result)
+            result = await claimer.generate(claimed)
+            await persistence.record_draft_generated(claimed.run.id, result)
+            await persistence.persist_success(claimed, result)
             return ExecutionOutcome(outcome="completed")
         except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
             failure = classify_failure(exc)
-            await self._persistence.record_failure(run_id, failure)
+            await persistence.record_failure(run_id, failure)
             return ExecutionOutcome(
                 outcome="failed",
                 failure_category=failure.category,
@@ -215,7 +242,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
 
     async def _record_cancellation(self, run_id: uuid.UUID) -> None:
         """Record cancellation consistently before or during execution."""
-        await self._persistence.record_failure(
+        await self._build_persistence().record_failure(
             run_id,
             Failure(
                 message="Generation task cancelled during shutdown.",

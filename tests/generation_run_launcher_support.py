@@ -37,25 +37,21 @@ from episodic.generation.draft_script import (
 )
 from episodic.generation.launcher import InProcessGenerationRunLauncher
 from episodic.llm import LLMUsage, ProviderCallUsage
-from episodic.observability import NoopTracer, NoopValueMetrics
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
-    from episodic.observability import TracerPort, ValueMetricsPort
 
 NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
 
 
 @dc.dataclass(frozen=True, slots=True)
 class LauncherOptions:
-    """Execution, admission, and observability options for a test launcher."""
+    """Execution and admission capacities for a test launcher."""
 
     max_concurrency: int = 4
     max_pending_runs: int = 16
-    tracer: TracerPort | None = None
-    metrics: ValueMetricsPort | None = None
 
 
 @dc.dataclass(slots=True)
@@ -378,14 +374,4 @@ def launcher(
         clock=_clock,
         max_concurrency=effective_options.max_concurrency,
         max_pending_runs=effective_options.max_pending_runs,
-        tracer=(
-            NoopTracer()
-            if effective_options.tracer is None
-            else effective_options.tracer
-        ),
-        metrics=(
-            NoopValueMetrics()
-            if effective_options.metrics is None
-            else effective_options.metrics
-        ),
     )
