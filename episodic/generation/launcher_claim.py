@@ -89,7 +89,29 @@ class GenerationRunClaimer:
     lease_seconds: int = DEFAULT_LEASE_SECONDS
 
     async def claim(self, run_id: uuid.UUID) -> ClaimedRun | None:
-        """Claim a pending run, then load its input outside the claim transaction."""
+        """Claim a pending run, then load its input outside the claim transaction.
+
+        The claim and its ``run.started`` event are committed before hydration
+        begins, so a later failure does not undo the claim. Hydration then runs
+        in a second, short unit of work, and bound source text is loaded after
+        that unit of work closes.
+
+        Parameters
+        ----------
+        run_id : uuid.UUID
+            Identifier of the pending generation run to claim.
+
+        Returns
+        -------
+        ClaimedRun | None
+            The claimed run with its episode, bounded sources, and presenter
+            profiles, or ``None`` when another worker won the claim.
+
+        Raises
+        ------
+        GenerationSourceLimitError.source_count
+            If the run's source bundle exceeds the configured source count.
+        """
         run = await self._claim_and_start(run_id)
         if run is None:
             return None
@@ -118,7 +140,24 @@ class GenerationRunClaimer:
         )
 
     async def generate(self, claimed: ClaimedRun) -> DraftScriptResult:
-        """Generate one draft and record latency metrics."""
+        """Generate one draft and record latency metrics.
+
+        Draft latency is observed from the injected monotonic clock on both
+        success and failure, because the observation runs in a ``finally``
+        block. Generator exceptions propagate unchanged for the caller to
+        classify.
+
+        Parameters
+        ----------
+        claimed : ClaimedRun
+            Claimed run, episode, sources, and presenter profiles to generate
+            from.
+
+        Returns
+        -------
+        DraftScriptResult
+            Generated TEI, content hash, usage, and provider metadata.
+        """
         start = self.monotonic_clock.monotonic_seconds()
         try:
             return await self.draft_generator.generate(
