@@ -238,16 +238,8 @@ class _PersistenceMixin(_MixinBase):
         """
         async with self.uow_factory() as uow:
             try:
-                if ownership is not None and not ownership.claimed:
-                    if not await self._claim_for_failure(uow, run_id):
-                        await uow.rollback()
-                        log_info(
-                            logger,
-                            "generation_run_launcher.failure_not_owned run_id=%s",
-                            run_id,
-                        )
-                        return False
-                    ownership.claimed = True
+                if not await self._prepare_failure_write(uow, run_id, ownership):
+                    return False
                 await self._append_failure_events(uow, run_id, failure)
                 if draft is not None:
                     await self._record_costs(uow, run_id, draft)
@@ -266,6 +258,42 @@ class _PersistenceMixin(_MixinBase):
             except RunAlreadyTerminal, RunNotFound:
                 await uow.rollback()
                 return False
+        self._record_failure_observation(run_id, failure)
+        return True
+
+    async def _prepare_failure_write(
+        self,
+        uow: CanonicalUnitOfWork,
+        run_id: uuid.UUID,
+        ownership: RunOwnership | None,
+    ) -> bool:
+        """Establish ownership before a failure write, or refuse to write.
+
+        Returns
+        -------
+        bool
+            ``True`` when the caller may write the failure, ``False`` when
+            another launcher owns the run.
+        """
+        if ownership is None or ownership.claimed:
+            return True
+        if await self._claim_for_failure(uow, run_id):
+            ownership.claimed = True
+            return True
+        await uow.rollback()
+        log_info(
+            logger,
+            "generation_run_launcher.failure_not_owned run_id=%s",
+            run_id,
+        )
+        return False
+
+    def _record_failure_observation(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+    ) -> None:
+        """Record the metrics and log line for a written failure."""
         self._record_terminal_metric(GenerationRunStatus.FAILED, failure.category)
         if failure.is_draft_error:
             self.metrics.increment_counter(
@@ -279,7 +307,6 @@ class _PersistenceMixin(_MixinBase):
             run_id,
             failure.category,
         )
-        return True
 
     async def _append_failure_events(
         self,

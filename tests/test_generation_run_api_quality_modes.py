@@ -213,17 +213,26 @@ async def test_unknown_mode_stays_a_400_enum_error(
 
 
 @pytest.mark.asyncio
-async def test_unaccepted_mode_outranks_budget_validation(
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {**_HEADERS, "Idempotency-Key": "gated-budget-precedence"},
+        _HEADERS,
+    ],
+    ids=["with-key", "without-key"],
+)
+async def test_unaccepted_mode_outranks_other_validation(
     session_factory: async_sessionmaker[AsyncSession],
+    headers: dict[str, str],
 ) -> None:
-    """An unaccepted mode keeps its 422 even with a malformed budget hint."""
+    """An unaccepted mode keeps its 422 with or without an idempotency key."""
     async with _client(
         _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
     ) as client:
         job = await create_ready_ingestion_job(client, _HEADERS)
         response = await client.post(
             _GATED_ENDPOINT.format(job=job),
-            headers={**_HEADERS, "Idempotency-Key": "gated-budget-precedence"},
+            headers=headers,
             json=_gated_payload(budget_hints=["not", "an", "object"]),
         )
 
@@ -264,32 +273,6 @@ async def test_no_qa_budget_error_outranks_the_missing_key(
             code="validation_error",
             message="budget_hints must be a JSON object.",
             details={"field": "budget_hints", "constraint": "object"},
-        ),
-    )
-
-
-@pytest.mark.asyncio
-async def test_unaccepted_mode_outranks_the_missing_key(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """An unaccepted mode keeps its 422 even when the key is absent."""
-    async with _client(
-        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
-    ) as client:
-        job = await create_ready_ingestion_job(client, _HEADERS)
-        response = await client.post(
-            _GATED_ENDPOINT.format(job=job),
-            headers=_HEADERS,
-            json=_gated_payload(),
-        )
-
-    _assert_error_envelope(
-        response,
-        _ExpectedError(
-            status=422,
-            code="quality_mode_unsupported",
-            message="Unsupported quality_mode: qa_gated.",
-            details={"quality_mode": "qa_gated"},
         ),
     )
 

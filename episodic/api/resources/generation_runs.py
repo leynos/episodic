@@ -50,9 +50,22 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from episodic.api.types import UowFactory
+    from episodic.api.types import JsonPayload, UowFactory
     from episodic.generation.launcher import GenerationRunLauncher
     from episodic.observability import SpanHandle, TracerPort
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _Submission:
+    """One parsed create request together with its request context."""
+
+    req: falcon.Request
+    payload: JsonPayload
+    request: _CreateGenerationRun
+    source_bundle_id: uuid.UUID
+    actor: str
+    launcher: GenerationRunLauncher
+
 
 __all__ = [
     "GenerationRunEventsResource",
@@ -164,11 +177,25 @@ class GenerationRunsResource:
         payload = require_payload_dict(await req.get_media())
         request = _parse_create_request(payload)
         launcher = self._require_launcher()
-        idempotency_key = req.get_header("Idempotency-Key")
         actor = principal_id(req)
         if actor is None:
             raise _ingestion_job_not_found(source_bundle_id)
+        submission = _Submission(
+            req=req,
+            payload=payload,
+            request=request,
+            source_bundle_id=source_bundle_id,
+            actor=actor,
+            launcher=launcher,
+        )
+        apply_response(resp, await self._submit(submission))
 
+    async def _submit(self, submission: _Submission) -> IdempotentResponse:
+        """Apply the request rules and run the idempotent creation work."""
+        req = submission.req
+        payload = submission.payload
+        request = submission.request
+        idempotency_key = req.get_header("Idempotency-Key")
         # Without a key no replay is possible, so the request rules are
         # reported before the missing-key error, as they were before this
         # item. With a key they run inside the idempotent work: a stored 202
@@ -181,29 +208,30 @@ class GenerationRunsResource:
                 self._accepted_quality_modes,
             )
 
-        async def work() -> IdempotentResponse:
-            """Create and schedule the run, then build its 202 response."""
-            validated = _validate_quality_request(
-                request,
-                payload,
-                self._accepted_quality_modes,
-            )
-            run = await self._create_and_schedule_run(
-                self._create_run(
-                    source_bundle_id,
-                    validated,
-                    actor=actor,
-                    idempotency_key=idempotency_key,
-                ),
-                launcher,
-                span,
-            )
-            return _accepted_response(run)
-
         with self._tracer.start_span(
             "generation_run.command",
             attributes={"operation": _GENERATION_RUN_OPERATION},
         ) as span:
+
+            async def work() -> IdempotentResponse:
+                """Create and schedule the run, then build its 202 response."""
+                validated = _validate_quality_request(
+                    request,
+                    payload,
+                    self._accepted_quality_modes,
+                )
+                run = await self._create_and_schedule_run(
+                    self._create_run(
+                        submission.source_bundle_id,
+                        validated,
+                        actor=submission.actor,
+                        idempotency_key=idempotency_key,
+                    ),
+                    submission.launcher,
+                    span,
+                )
+                return _accepted_response(run)
+
             result = await run_idempotent(
                 self._uow_factory,
                 context=IdempotencyContext(
@@ -214,7 +242,7 @@ class GenerationRunsResource:
                 work=work,
             )
             span.set_attribute("outcome", "accepted")
-        apply_response(resp, result)
+        return result
 
     async def _create_and_schedule_run(
         self,

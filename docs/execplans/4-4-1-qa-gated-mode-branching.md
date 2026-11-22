@@ -729,8 +729,8 @@ accepted in EP-M6. D13 records the review itself.
     a stored 202 replays after the capability is withdrawn and a rejection
     releases the key (INV-12).
   - Tests: `test_no_qa_budget_error_outranks_the_missing_key`,
-    `test_unaccepted_mode_outranks_the_missing_key`, and
-    `test_missing_key_with_an_accepted_mode_is_reported`.
+    `test_unaccepted_mode_outranks_other_validation` (with and without a key),
+    and `test_missing_key_with_an_accepted_mode_is_reported`.
   - Date/Author: 2026-11-22, implementation agent.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it
