@@ -81,7 +81,21 @@ class GenerationRunPersistence:
         run_id: uuid.UUID,
         result: DraftScriptResult,
     ) -> None:
-        """Record that draft generation returned a provider response."""
+        """Record that draft generation returned a provider response.
+
+        The method opens its own unit of work through ``uow_factory``, appends
+        the ``draft.generated`` event with the injected clock's timestamp, and
+        commits it. Unit-of-work, repository, or commit failures propagate to
+        the caller.
+
+        Parameters
+        ----------
+        run_id : uuid.UUID
+            Identifier of the run that produced the draft.
+        result : DraftScriptResult
+            Generated draft whose provider metadata and usage form the event
+            payload.
+        """
         async with self.uow_factory() as uow:
             await uow.generation_runs.append_event(
                 run_id,
@@ -96,7 +110,22 @@ class GenerationRunPersistence:
         claimed: ClaimedRun,
         result: DraftScriptResult,
     ) -> None:
-        """Persist generated TEI, cost records, and terminal success."""
+        """Persist generated TEI, cost records, and terminal success.
+
+        The method opens its own unit of work. After the revision-guarded TEI
+        update succeeds, it appends the success-side events, records costs,
+        applies the terminal status, and commits. Episode revision conflicts,
+        missing episodes, invalid draft TEI, cost-recording failures, and
+        commit failures propagate to the caller. The terminal-success metric
+        and success log are emitted only after the commit returns.
+
+        Parameters
+        ----------
+        claimed : ClaimedRun
+            Claimed run and the pre-persistence episode revision.
+        result : DraftScriptResult
+            Generated draft to persist and record as the run's outcome.
+        """
         async with self.uow_factory() as uow:
             updated_episode = await persist_draft_script(
                 uow,
@@ -126,7 +155,22 @@ class GenerationRunPersistence:
         )
 
     async def record_failure(self, run_id: uuid.UUID, failure: Failure) -> None:
-        """Record a terminal failed run state."""
+        """Record a terminal failed run state.
+
+        The method opens its own unit of work, appends the failure-side
+        events, applies the failed status, and commits. If the run is already
+        terminal or no longer exists, the unit of work is rolled back and the
+        method returns without recording a metric or logging a failure. Any
+        other unit-of-work, repository, or commit failure propagates to the
+        caller.
+
+        Parameters
+        ----------
+        run_id : uuid.UUID
+            Identifier of the run to mark failed.
+        failure : Failure
+            Stable failure message, category, and invalid-TEI flag.
+        """
         async with self.uow_factory() as uow:
             try:
                 await self._append_failure_events(uow, run_id, failure)
