@@ -10,6 +10,7 @@ from episodic.api.helpers import parse_uuid, require_payload_dict
 from episodic.api.resources.generation_runs_create_support import (
     _CreateGenerationRun,
     _parse_create_request,
+    _Submission,
     _validate_quality_request,
 )
 from episodic.api.resources.generation_runs_errors import (
@@ -50,20 +51,9 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from episodic.api.types import JsonPayload, UowFactory
+    from episodic.api.types import UowFactory
     from episodic.generation.launcher import GenerationRunLauncher
     from episodic.observability import SpanHandle, TracerPort
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _Submission:
-    """One parsed create request together with its request context."""
-
-    req: falcon.Request
-    payload: JsonPayload
-    request: _CreateGenerationRun
-    source_bundle_id: uuid.UUID
-    actor: str
 
 
 __all__ = [
@@ -209,6 +199,14 @@ class GenerationRunsResource:
             # launcher, so the 503 never masks a 400 or 422.
             launcher = self._require_launcher()
 
+        def _precondition() -> None:
+            """Apply the body rules before a conflict is reported."""
+            _validate_quality_request(
+                request,
+                payload,
+                self._accepted_quality_modes,
+            )
+
         with self._tracer.start_span(
             "generation_run.command",
             attributes={"operation": _GENERATION_RUN_OPERATION},
@@ -244,6 +242,7 @@ class GenerationRunsResource:
                     body_hash=json_body_hash(payload),
                 ),
                 work=work,
+                precondition=_precondition,
             )
             span.set_attribute("outcome", "accepted")
         return result

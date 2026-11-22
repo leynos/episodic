@@ -15,8 +15,10 @@ import pytest
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
 from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from episodic.generation.launcher_support import RunOwnership
+from episodic.generation.launcher_support import Failure, RunOwnership
 from tests.generation_run_launcher_read_fault_support import (
+    CancelCommitFault,
+    CancelCommitUnitOfWork,
     ClaimExitFault,
     ClaimExitFaultUnitOfWork,
     ReadFault,
@@ -158,12 +160,23 @@ async def test_refused_cancellation_does_not_suppress_the_owner(
 
 
 @pytest.mark.asyncio
-async def test_claim_survives_a_session_close_fault(
+@pytest.mark.parametrize(
+    ("mode", "category", "message"),
+    [
+        ("error", "unexpected", "session close fault"),
+        ("cancel", "launcher.shutdown", "cancelled during shutdown."),
+    ],
+    ids=["close-error", "cancelled-close"],
+)
+async def test_claim_exit_fault_still_records_the_failure(
     session_factory: async_sessionmaker[AsyncSession],
+    mode: str,
+    category: str,
+    message: str,
 ) -> None:
-    """A close fault after the claim commits must still record the failure."""
+    """A close fault or cancellation after the claim commits must still fail."""
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
-    fault = ClaimExitFault()
+    fault = ClaimExitFault(mode=mode)
     run_launcher = dc.replace(
         launcher(
             session_factory,
@@ -179,10 +192,57 @@ async def test_claim_survives_a_session_close_fault(
     )
 
     await run_launcher.launch(run_id)
-    await run_launcher.drain()
+    if mode == "cancel":
+        await asyncio.wait_for(fault.closing.wait(), timeout=5)
+        await run_launcher.shutdown()
+        fault.release.set()
+    else:
+        await run_launcher.drain()
 
     run, kinds = await _load(session_factory, run_id)
     assert fault.failed, "the exit fault must have fired"
     assert run.status is GenerationRunStatus.FAILED, kinds
-    assert run.error_message == "session close fault", run.error_message
+    assert run.error_category == category, run.error_category
+    assert message in (run.error_message or ""), run.error_message
     assert kinds == ["run.started", "run.failed"], kinds
+
+
+@pytest.mark.asyncio
+async def test_rolled_back_failure_claim_is_not_reused(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A cancelled failure write must not leave a stale ownership flag."""
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    fault = CancelCommitFault()
+    flaky = dc.replace(
+        launcher(
+            session_factory,
+            RecordingDraftGenerator(draft_result(valid_tei())),
+            options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
+        ),
+        uow_factory=lambda: CancelCommitUnitOfWork(session_factory, fault),
+    )
+    ownership = RunOwnership()
+
+    with pytest.raises(asyncio.CancelledError):
+        await flaky._record_failure(
+            run_id,
+            Failure("transient failure", "unexpected"),
+            ownership=ownership,
+        )
+    assert not ownership.claimed, "a rolled-back claim must not be retained"
+
+    generator = ReleasableDraftGenerator(draft_result(valid_tei()))
+    owner = _owner_launcher(session_factory, generator)
+    await owner.launch(run_id)
+    await asyncio.wait_for(generator.started.wait(), timeout=5)
+
+    await flaky._record_cancellation_owned(run_id, ownership)
+    run, kinds = await _load(session_factory, run_id)
+    assert run.status is GenerationRunStatus.RUNNING, kinds
+    assert "run.failed" not in kinds, kinds
+
+    generator.release.set()
+    await owner.drain()
+    run, kinds = await _load(session_factory, run_id)
+    assert run.status is GenerationRunStatus.SUCCEEDED, kinds

@@ -258,6 +258,11 @@ class _PersistenceMixin(_MixinBase):
             except RunAlreadyTerminal, RunNotFound:
                 await uow.rollback()
                 return False
+        if ownership is not None:
+            # The claim is durable only once this transaction commits; a
+            # rollback must leave the flag unset so a later cancellation
+            # retries the compare-and-set instead of trusting a lost claim.
+            ownership.claimed = True
         self._record_failure_observation(run_id, failure)
         return True
 
@@ -278,7 +283,6 @@ class _PersistenceMixin(_MixinBase):
         if ownership is None or ownership.claimed:
             return True
         if await self._claim_for_failure(uow, run_id):
-            ownership.claimed = True
             return True
         await uow.rollback()
         log_info(

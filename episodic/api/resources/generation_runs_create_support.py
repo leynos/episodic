@@ -6,6 +6,7 @@ rationale rule run inside the idempotent work, so a rejected request releases
 its idempotency key and the ordering matches the published contract.
 """
 
+import dataclasses as dc
 import typing as typ
 
 import falcon
@@ -15,11 +16,24 @@ from episodic.api.source_intake_support import require_str
 from episodic.canonical.generation_quality import QualityMode
 
 if typ.TYPE_CHECKING:
+    import uuid
+
     from episodic.api.types import JsonPayload
 
 _GATED_RATIONALE_MESSAGE = (
     "skip_qa_rationale is not accepted with quality_mode qa_gated."
 )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _Submission:
+    """One parsed create request together with its request context."""
+
+    req: falcon.Request
+    payload: JsonPayload
+    request: _CreateGenerationRun
+    source_bundle_id: uuid.UUID
+    actor: str
 
 
 class _CreateGenerationRun(typ.NamedTuple):

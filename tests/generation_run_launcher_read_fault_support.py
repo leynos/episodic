@@ -87,11 +87,15 @@ def blocking_read_fault() -> ReadFault:
     return ReadFault(mode=_BLOCK)
 
 
+@dc.dataclass(slots=True)
 class ClaimExitFault:
-    """Fail the unit of work's exit once, after a successful claim."""
+    """Fault the unit of work's exit once, after a successful claim."""
 
+    mode: str = "error"
     claimed: bool = False
     failed: bool = False
+    closing: asyncio.Event = dc.field(default_factory=asyncio.Event)
+    release: asyncio.Event = dc.field(default_factory=asyncio.Event)
 
 
 class ClaimExitFaultStore:
@@ -149,7 +153,39 @@ class ClaimExitFaultUnitOfWork(SqlAlchemyUnitOfWork):
     ) -> None:
         """Raise once while closing, after the claim has already committed."""
         await super().__aexit__(exc_type, exc, traceback)
-        if self._fault.claimed and not self._fault.failed:
-            self._fault.failed = True
-            msg = "session close fault"
-            raise RuntimeError(msg)
+        if not self._fault.claimed or self._fault.failed:
+            return
+        self._fault.failed = True
+        if self._fault.mode == "cancel":
+            self._fault.closing.set()
+            await self._fault.release.wait()
+            return
+        msg = "session close fault"
+        raise RuntimeError(msg)
+
+
+@dc.dataclass(slots=True)
+class CancelCommitFault:
+    """Cancel the next commit once, simulating shutdown mid-write."""
+
+    pending: bool = True
+
+
+class CancelCommitUnitOfWork(SqlAlchemyUnitOfWork):
+    """Unit of work whose next commit is cancelled before it lands."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        fault: CancelCommitFault,
+    ) -> None:
+        """Open the real unit of work with the supplied commit fault."""
+        super().__init__(session_factory)
+        self._fault = fault
+
+    async def commit(self) -> None:
+        """Cancel once, then commit normally."""
+        if self._fault.pending:
+            self._fault.pending = False
+            raise asyncio.CancelledError
+        await super().commit()

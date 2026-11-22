@@ -748,6 +748,22 @@ accepted in EP-M6. D13 records the review itself.
     `test_claim_survives_a_session_close_fault`, and
     `test_request_errors_outrank_a_missing_launcher` (three cases).
   - Date/Author: 2026-11-22, implementation agent.
+- **Decision D22: keep ownership and precedence correct across commit and
+  conflict boundaries.**
+  - A failure-path claim is recorded only after the failure transaction
+    commits. If that transaction rolls back, the flag stays unset and a later
+    cancellation retries the pending-to-running compare-and-set rather than
+    trusting a claim that no longer exists.
+  - `run_idempotent` accepts an optional `precondition` applied after a stored
+    replay is ruled out and before a conflict or in-flight outcome is
+    reported. A reused key can no longer turn a malformed body into a 409,
+    while a stored gated 202 still replays after capability withdrawal. A
+    freshly acquired record is not pre-checked: the work validates, so a
+    rejection releases the key.
+  - Tests: `test_rolled_back_failure_claim_is_not_reused`,
+    `test_claim_exit_fault_still_records_the_failure` (close error and
+    cancelled close), and `test_reused_key_still_reports_the_body_error`.
+  - Date/Author: 2026-11-22, implementation agent.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it
     `generation-run-{run_id}`, and on cancellation cancels and drains it and
@@ -1982,6 +1998,11 @@ Record the following here as each milestone completes:
 - A third assessment round raised three correctness items, repaired under
   D21: conditional cancellation dedup, ownership across the claim session's
   close, and request-error precedence when no launcher is configured.
+- A fourth round raised two items, repaired under D22: a rolled-back failure
+  claim must not be retained, and a reused idempotency key must not pre-empt a
+  body error. The round also asked for the cancellation case at the post-commit
+  close boundary, which
+  `test_cancellation_at_claim_exit_still_ records_the_failure` now covers.
 - Evidence for this milestone set at `eac73e3b`: `make check-fmt`,
   `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
   ambrleaks, Skylos, df12-duplication), `make test` (2448 passed, 1 skipped, 82
