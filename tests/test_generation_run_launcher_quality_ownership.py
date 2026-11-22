@@ -15,7 +15,7 @@ import pytest
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
 from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from episodic.generation.launcher_support import Failure, RunOwnership
+from episodic.generation.launcher_support import Failure, RunClaim
 from tests.generation_run_launcher_read_fault_support import (
     CancelCommitFault,
     CancelCommitUnitOfWork,
@@ -147,7 +147,7 @@ async def test_refused_cancellation_does_not_suppress_the_owner(
 
     await run_launcher.launch(run_id)
     await asyncio.wait_for(generator.started.wait(), timeout=5)
-    await run_launcher._record_cancellation_owned(run_id, RunOwnership())
+    await run_launcher._record_cancellation_owned(run_id, RunClaim())
     run, kinds = await _load(session_factory, run_id)
     assert run.status is GenerationRunStatus.RUNNING, kinds
     assert "run.failed" not in kinds, kinds
@@ -222,22 +222,22 @@ async def test_rolled_back_failure_claim_is_not_reused(
         ),
         uow_factory=lambda: CancelCommitUnitOfWork(session_factory, fault),
     )
-    ownership = RunOwnership()
+    claim = RunClaim()
 
     with pytest.raises(asyncio.CancelledError):
         await flaky._record_failure(
             run_id,
             Failure("transient failure", "unexpected"),
-            ownership=ownership,
+            claim=claim,
         )
-    assert not ownership.claimed, "a rolled-back claim must not be retained"
+    assert claim.token is None, "a rolled-back claim must not be retained"
 
     generator = ReleasableDraftGenerator(draft_result(valid_tei()))
     owner = _owner_launcher(session_factory, generator)
     await owner.launch(run_id)
     await asyncio.wait_for(generator.started.wait(), timeout=5)
 
-    await flaky._record_cancellation_owned(run_id, ownership)
+    await flaky._record_cancellation_owned(run_id, claim)
     run, kinds = await _load(session_factory, run_id)
     assert run.status is GenerationRunStatus.RUNNING, kinds
     assert "run.failed" not in kinds, kinds
@@ -246,3 +246,45 @@ async def test_rolled_back_failure_claim_is_not_reused(
     await owner.drain()
     run, kinds = await _load(session_factory, run_id)
     assert run.status is GenerationRunStatus.SUCCEEDED, kinds
+
+
+@pytest.mark.asyncio
+async def test_failure_write_authority_comes_from_the_claim(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A token, not shared state, is what lets a failure be written.
+
+    The same run is offered to two invocations: one holds the token its claim
+    produced and writes; the other holds an empty claim and is refused, and
+    the refused call must leave no trace.
+    """
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    run_launcher = launcher(
+        session_factory,
+        RecordingDraftGenerator(draft_result(valid_tei())),
+        options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
+    )
+
+    holder = RunClaim()
+    await run_launcher._claim_and_start(run_id, holder)
+    assert holder.token is not None, "a won claim must produce a token"
+
+    refused = await run_launcher._record_failure(
+        run_id,
+        Failure("not mine", "unexpected"),
+        claim=RunClaim(),
+    )
+    run, kinds = await _load(session_factory, run_id)
+    assert refused is False, "a claim without a token must not write"
+    assert kinds == ["run.started"], kinds
+    assert run.status is GenerationRunStatus.RUNNING, run.status
+
+    written = await run_launcher._record_failure(
+        run_id,
+        Failure("mine", "unexpected"),
+        claim=holder,
+    )
+    run, kinds = await _load(session_factory, run_id)
+    assert written is True, "the token holder must be able to write"
+    assert kinds == ["run.started", "run.failed"], kinds
+    assert run.error_message == "mine", run.error_message

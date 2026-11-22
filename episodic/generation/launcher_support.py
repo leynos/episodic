@@ -55,20 +55,23 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import CanonicalEpisode, GenerationRun
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.cost.recorder import CostRecorderPort
+    from episodic.generation.draft_script import DraftScriptResult
 
 type DraftIdFactoryFactory = cabc.Callable[[], cabc.Callable[[str], str]]
 
 __all__ = [
+    "ClaimToken",
     "ClaimedRun",
     "Clock",
     "CostRecorderFactory",
     "DraftIdFactoryFactory",
     "Failure",
+    "FailureWrite",
     "GenerationSourceLimitError",
     "GenerationSourceLimits",
     "PersistedTei",
     "ProviderCallRecordRequest",
-    "RunOwnership",
+    "RunClaim",
     "SequentialDraftIds",
     "classify_failure",
     "draft_generated_payload",
@@ -111,18 +114,37 @@ class ClaimedRun:
     presenter_profiles: tuple[DraftPresenterProfile, ...]
 
 
-@dc.dataclass(slots=True)
-class RunOwnership:
-    """Whether one launcher invocation has claimed the run it is driving.
+@dc.dataclass(frozen=True, slots=True)
+class ClaimToken:
+    """Proof that one invocation won a run's pending-to-running claim.
 
-    A claim, not a task name, is the authority to write a run's terminal
-    state: two launchers can target the same run id in one process, and only
-    the one whose atomic pending-to-running transition succeeded may record
-    its outcome. The flag is raised as soon as the claim commits, before
-    hydration, so a later hydration fault is still recorded by the owner.
+    The token, not a task name and not a boolean, is the authority to write a
+    run's terminal state: only the invocation whose compare-and-set returned
+    this value may record an outcome.
     """
 
-    claimed: bool = False
+    run_id: uuid.UUID
+
+
+@dc.dataclass(slots=True)
+class RunClaim:
+    """The claim token one launcher invocation holds for the run it drives.
+
+    ``token`` is ``None`` until this invocation wins the claim. It is written
+    only where the claim is made and after a failure write commits, so a
+    rolled-back transaction cannot leave a token that no durable write backs.
+    """
+
+    token: ClaimToken | None = None
+
+
+@dc.dataclass(frozen=True, slots=True)
+class FailureWrite:
+    """One authorized failure write: the run, its failure, and any draft."""
+
+    run_id: uuid.UUID
+    failure: Failure
+    draft: DraftScriptResult | None
 
 
 @dc.dataclass(frozen=True, slots=True)

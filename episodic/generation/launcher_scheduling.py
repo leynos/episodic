@@ -24,7 +24,7 @@ from episodic.generation.launcher_session import (
 )
 from episodic.generation.launcher_support import (
     Failure,
-    RunOwnership,
+    RunClaim,
     classify_failure,
 )
 from episodic.logging import get_logger, log_info
@@ -108,12 +108,12 @@ class _SchedulingMixin(_MixinBase):
         await self.drain()
         for task, run_id in cancelled_tasks:
             if task.cancelled():
-                await self._record_cancellation_owned(run_id, RunOwnership())
+                await self._record_cancellation_owned(run_id, RunClaim())
 
     async def _record_cancellation_owned(
         self,
         run_id: uuid.UUID,
-        ownership: RunOwnership,
+        claim: RunClaim,
     ) -> None:
         """Record a cancellation from a task named for the run (INV-9).
 
@@ -124,7 +124,7 @@ class _SchedulingMixin(_MixinBase):
         if run_id in self._cancelled_run_ids:
             return
         write = asyncio.create_task(
-            self._record_cancellation(run_id, ownership),
+            self._record_cancellation(run_id, claim),
             name=f"generation-run-{run_id}",
         )
         recorded = await asyncio.shield(write)
@@ -164,14 +164,14 @@ class _SchedulingMixin(_MixinBase):
             "generation_run.execute",
             attributes={"operation": "generation_run.execute", "run_id": str(run_id)},
         ) as span:
-            ownership = RunOwnership()
+            claim = RunClaim()
             try:
                 async with self._semaphore:
-                    outcome = await self._execute_run(run_id, ownership)
+                    outcome = await self._execute_run(run_id, claim)
             except asyncio.CancelledError:
                 span.set_attribute("outcome", "cancelled")
                 span.set_attribute("failure_category", "launcher.shutdown")
-                await self._record_cancellation_owned(run_id, ownership)
+                await self._record_cancellation_owned(run_id, claim)
                 raise
             span.set_attribute("outcome", outcome.outcome)
             if outcome.failure_category is not None:
@@ -190,11 +190,11 @@ class _SchedulingMixin(_MixinBase):
     async def _execute_run(
         self,
         run_id: uuid.UUID,
-        ownership: RunOwnership,
+        claim: RunClaim,
     ) -> _ExecutionOutcome:
         """Execute one generation run through the content-generation graph.
 
-        ``ownership`` is raised when this invocation's claim commits. Until
+        ``claim`` carries this invocation's token once its claim commits. Until
         then a failure is written only if the failure path can claim the run
         itself, so a launcher that lost the race cannot overwrite the winner.
 
@@ -216,7 +216,7 @@ class _SchedulingMixin(_MixinBase):
                 steps=_LauncherRunSession(
                     launcher=self,
                     run_id=run_id,
-                    ownership=ownership,
+                    claim=claim,
                 ),
             )
         except RunNotClaimedError:
@@ -226,7 +226,7 @@ class _SchedulingMixin(_MixinBase):
             recorded = await self._record_failure(
                 run_id,
                 failure,
-                ownership=ownership,
+                claim=claim,
             )
             if not recorded:
                 return _ExecutionOutcome(outcome="not_claimed")
@@ -250,7 +250,7 @@ class _SchedulingMixin(_MixinBase):
     async def _record_cancellation(
         self,
         run_id: uuid.UUID,
-        ownership: RunOwnership,
+        claim: RunClaim,
     ) -> bool:
         """Record cancellation consistently before or during execution.
 
@@ -267,5 +267,5 @@ class _SchedulingMixin(_MixinBase):
                 message="Generation task cancelled during shutdown.",
                 category="launcher.shutdown",
             ),
-            ownership=ownership,
+            claim=claim,
         )

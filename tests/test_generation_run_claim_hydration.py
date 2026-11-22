@@ -10,7 +10,7 @@ import pytest
 import episodic.generation.launcher as launcher_module
 from episodic.canonical.domain import GenerationRunStatus, SourceDocument
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from episodic.generation.launcher_support import RunOwnership
+from episodic.generation.launcher_support import RunClaim
 from tests.generation_run_launcher_support import (
     RecordingDraftGenerator,
     draft_result,
@@ -60,7 +60,7 @@ async def test_claim_commits_before_blocked_hydration(
         RecordingDraftGenerator(draft_result("<TEI/>")),
     )
     claim_task = asyncio.create_task(
-        run_launcher._hydrate(run_id, RunOwnership()),
+        run_launcher._claim_and_hydrate(run_id, RunClaim()),
     )
     try:
         await asyncio.wait_for(hydration_started.wait(), timeout=1)

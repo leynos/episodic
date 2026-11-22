@@ -15,12 +15,12 @@ hydrates to ``None``, and the session turns that into ``not_claimed``.
 import datetime as dt
 import typing as typ
 
-from episodic.canonical.generation_quality import QualityMode
 from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
+    ClaimToken,
     GenerationSourceLimitError,
-    RunOwnership,
+    RunClaim,
     draft_request,
     project_presenter_profiles,
     require_episode,
@@ -33,7 +33,6 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import DraftScriptResult
 
-_METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
 _METRIC_DRAFT_LATENCY = "generation_run_draft_latency_ms"
 
 
@@ -48,10 +47,10 @@ class _ClaimMixin(_MixinBase):
 
     __slots__ = ()
 
-    async def _hydrate(
+    async def _claim_and_hydrate(
         self,
         run_id: uuid.UUID,
-        ownership: RunOwnership,
+        claim: RunClaim,
     ) -> ClaimedRun | None:
         """Claim a pending run, then load its input outside the claim transaction.
 
@@ -59,9 +58,10 @@ class _ClaimMixin(_MixinBase):
         ----------
         run_id : uuid.UUID
             Run to claim.
-        ownership : RunOwnership
-            Per-invocation claim record, raised as soon as the claim commits
-            so a hydration fault is still written by the run's owner.
+        claim : RunClaim
+            Per-invocation claim record. Its token is set as soon as the claim
+            commits, before hydration, so a hydration fault is still written
+            by the run's owner.
 
         Returns
         -------
@@ -70,7 +70,7 @@ class _ClaimMixin(_MixinBase):
             or it is already terminal.
 
         """  # ruff: ignore[docstring-missing-exception]  # The limit error is raised by a helper.
-        run = await self._claim_and_start(run_id, ownership)
+        run = await self._claim_and_start(run_id, claim)
         if run is None:
             return None
         async with self.uow_factory() as uow:
@@ -86,11 +86,6 @@ class _ClaimMixin(_MixinBase):
                 )
             )
         sources = await self._load_sources(documents)
-        if run.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
-            self.metrics.increment_counter(
-                _METRIC_QA_BYPASS,
-                labels={"quality_mode": run.quality_mode.value},
-            )
         return ClaimedRun(
             run=run,
             episode=episode,
@@ -102,7 +97,7 @@ class _ClaimMixin(_MixinBase):
         self,
         uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
-    ) -> bool:
+    ) -> ClaimToken | None:
         """Claim a still-pending run so only its owner can fail it.
 
         A failure that arrives before this invocation claimed the run, such as
@@ -112,28 +107,29 @@ class _ClaimMixin(_MixinBase):
 
         Returns
         -------
-        bool
-            ``True`` when this invocation now owns the run.
+        ClaimToken | None
+            This invocation's token, or ``None`` when another launcher owns
+            the run.
         """
-        claimed = await uow.generation_runs.claim_run_for_execution(
+        run = await uow.generation_runs.claim_run_for_execution(
             run_id,
             current_node=None,
             started_at=self.clock(),
             lease_expires_at=None,
         )
-        return claimed is not None
+        return None if run is None else ClaimToken(run_id)
 
     async def _claim_and_start(
         self,
         run_id: uuid.UUID,
-        ownership: RunOwnership,
+        claim: RunClaim,
     ) -> GenerationRun | None:
         """Linearize a claim and make its started event durable before hydration.
 
-        Ownership is recorded as soon as the commit returns, inside the unit
-        of work, so a failure during session close cannot lose a claim that is
-        already durable. Without that ordering the run would stay running with
-        no writer entitled to fail it.
+        The claim's token is stored as soon as the commit returns, inside the
+        unit of work, so a failure during session close cannot lose a claim
+        that is already durable. Without that ordering the run would stay
+        running with no writer entitled to fail it.
 
         Returns
         -------
@@ -158,7 +154,7 @@ class _ClaimMixin(_MixinBase):
                 occurred_at=started_at,
             )
             await uow.commit()
-            ownership.claimed = True
+            claim.token = ClaimToken(run.id)
         return run
 
     async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:

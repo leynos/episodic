@@ -20,18 +20,78 @@ from episodic.canonical.generation_graph_ports import (
     QualityEvaluation,
 )
 from episodic.canonical.generation_persistence import InvalidDraftTeiError
-from episodic.canonical.generation_quality import QaStatus
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_routing import QualityVerdict
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.tei import parse_tei_header
 from episodic.generation.launcher_quality import QaOutcome, record_qa_metrics
-from episodic.generation.launcher_support import ClaimedRun, Failure, RunOwnership
+from episodic.generation.launcher_support import ClaimedRun, Failure, RunClaim
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import DraftScriptResult
-    from episodic.generation.launcher_host import LauncherHost
+    from episodic.observability import ValueMetricsPort
+    from episodic.runtime_providers import Clock
+
+
+_METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
+
+
+class SessionPorts(typ.Protocol):
+    """The launcher operations one run session may call.
+
+    The session deliberately sees only these six operations rather than the
+    whole launcher, so a node cannot reach scheduling, claims or admission
+    through the step port.
+    """
+
+    uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
+    clock: Clock
+    metrics: ValueMetricsPort
+
+    async def _claim_and_hydrate(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimedRun | None:
+        """Claim the run and load its input."""
+        ...
+
+    async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:
+        """Generate one draft."""
+        ...
+
+    async def _record_draft_generated(
+        self,
+        run_id: uuid.UUID,
+        result: DraftScriptResult,
+    ) -> None:
+        """Record that generation returned a draft."""
+        ...
+
+    async def _persist_success(
+        self,
+        claimed: ClaimedRun,
+        result: DraftScriptResult,
+        *,
+        qa: QaOutcome,
+    ) -> None:
+        """Persist a successful run."""
+        ...
+
+    async def _record_failure(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+        *,
+        claim: RunClaim | None = None,
+        draft: DraftScriptResult | None = None,
+    ) -> bool:
+        """Record a terminal failure."""
+        ...
 
 
 class RunNotClaimedError(Exception):
@@ -44,11 +104,11 @@ class _LauncherRunSession:
 
     Attributes
     ----------
-    launcher : LauncherHost
-        The launcher whose port methods perform the I/O.
+    launcher : SessionPorts
+        The narrow launcher surface whose port methods perform the I/O.
     run_id : uuid.UUID
         The run this session serves.
-    ownership : RunOwnership
+    claim : RunClaim
         Per-invocation claim record shared with the scheduling task.
     claimed : ClaimedRun | None
         Hydrated run input, set by :meth:`initialize`.
@@ -56,9 +116,9 @@ class _LauncherRunSession:
         Generated draft, set by :meth:`generate_draft`.
     """
 
-    launcher: LauncherHost
+    launcher: SessionPorts
     run_id: uuid.UUID
-    ownership: RunOwnership
+    claim: RunClaim
     claimed: ClaimedRun | None = None
     draft: DraftScriptResult | None = None
 
@@ -71,11 +131,16 @@ class _LauncherRunSession:
             If the run is absent or was claimed by another worker, so the
             graph must stop before spending inference.
         """
-        claimed = await self.launcher._hydrate(self.run_id, self.ownership)
+        claimed = await self.launcher._claim_and_hydrate(self.run_id, self.claim)
         if claimed is None:
             msg = f"generation run {self.run_id} was not claimed"
             raise RunNotClaimedError(msg)
         self.claimed = claimed
+        if claimed.run.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
+            self.launcher.metrics.increment_counter(
+                _METRIC_QA_BYPASS,
+                labels={"quality_mode": claimed.run.quality_mode.value},
+            )
 
     async def generate_draft(self) -> None:
         """Generate one draft, record it, and validate it as TEI.

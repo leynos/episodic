@@ -191,8 +191,9 @@ class GenerationRunsResource:
         # must still replay after the deployment withdraws the capability, and
         # a rejection must release the key.
         launcher: GenerationRunLauncher | None = None
+        prepared: _CreateGenerationRun | None = None
         if _prevalidates_before_idempotency(request, idempotency_key):
-            request = _validate_quality_request(
+            prepared = _validate_quality_request(
                 request,
                 payload,
                 self._accepted_quality_modes,
@@ -206,10 +207,14 @@ class GenerationRunsResource:
 
             async def work() -> IdempotentResponse:
                 """Create and schedule the run, then build its 202 response."""
-                validated = _validate_quality_request(
-                    request,
-                    payload,
-                    self._accepted_quality_modes,
+                validated = (
+                    prepared
+                    if prepared is not None
+                    else _validate_quality_request(
+                        request,
+                        payload,
+                        self._accepted_quality_modes,
+                    )
                 )
                 resolved_launcher = (
                     self._require_launcher() if launcher is None else launcher

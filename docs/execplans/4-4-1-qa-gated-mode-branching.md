@@ -701,10 +701,12 @@ accepted in EP-M6. D13 records the review itself.
   - A task name records which invocation wrote an event. It does not prove
     that invocation owns the run, because two launchers in one process can
     target the same run id.
-  - `RunOwnership` is created per launcher task, shared with the run session,
-    and raised when `_claim_and_start` commits the pending-to-running
-    transition or, for a failure that arrives first, when
-    `_claim_for_failure` wins the same compare-and-set.
+  - A frozen `ClaimToken` is the authority to write a terminal state.
+    `RunClaim` holds one per launcher invocation; `_claim_and_start` stores
+    the token inside its unit of work as soon as the pending-to-running
+    transition commits, and `_claim_for_failure` returns one for a failure
+    that arrives first. The token, not a boolean and not a task name, is what
+    `_record_failure` consults.
   - `_record_failure` returns whether it wrote. A failure on a run this
     invocation neither claimed nor can claim writes nothing, records nothing
     in metrics, and reports `not_claimed` on the span. The cancellation path

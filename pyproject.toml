@@ -578,9 +578,10 @@ reason = "Alembic invokes these downgrade helpers and their rendering helpers wh
 type = "class"
 full_name = [
     "episodic.canonical.storage.review_checkpoints.SqlAlchemyReviewCheckpointStore",
+    "episodic.generation.launcher_persistence._FailureWrite",
     "episodic.generation.launcher_persistence._SuccessRecord",
 ]
-reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer. _SuccessRecord is constructed by _persist_success and consumed by _record_success_transition in the same transaction."
+reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer. _SuccessRecord is constructed by _persist_success and consumed by _record_success_transition, and _FailureWrite is constructed by _record_failure and consumed by _write_failure, each within one transaction."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "parameter"
@@ -1020,8 +1021,8 @@ reason = "Protocol classes for different aggregates share only the async abstrac
 members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/adapters/generation_runs.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/review_checkpoints.py"]
 reason = "The in-memory adapters and the SQLAlchemy stores implement the same generation-run port twice. The matching signatures and validation preludes are the port contract, enforced by the shared contract scenarios; one side filters a list and the other builds a query."
 [[tool.duplication_gate.allow]]
-members = ["episodic/api/resources/qa_artefacts.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/generation/launcher.py", "episodic/orchestration/_planning_orchestrator.py"]
-reason = "Annotation-only import blocks of five modules, each naming its own types; import lists cannot be shared."
+members = ["episodic/api/resources/qa_artefacts.py", "episodic/canonical/qa_artefact_service.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/history_repositories.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/generation/launcher.py", "episodic/generation/launcher_session.py", "episodic/generation/launcher_support.py", "episodic/orchestration/_planning_orchestrator.py"]
+reason = "Annotation-only import blocks of nine modules, each naming its own types; import lists cannot be shared."
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/resources/generation_runs_events.py", "episodic/api/resources/qa_artefacts.py"]
 reason = "Constructor and span envelope as for the Falcon resource family; the QA evaluation resource reads one evaluation with its findings while the events resource pages a cursor, with different not-found categories."

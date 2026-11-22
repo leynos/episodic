@@ -5,6 +5,24 @@ This guide describes what a deployment must change when it moves from Episodic
 migration that must run before the service starts, the pricing snapshot
 conversion, and the new quality assurance (QA) retrieval interfaces.
 
+## Who should read this
+
+Existing `draft_without_qa` clients need no action: their request shape,
+events, metrics, and cancellation behaviour are unchanged. Read this guide if
+you operate the database, if you call the generation-run API, or if you consume
+episode TEI.
+
+## Impact at a glance
+
+| Priority           | Area               | What to do                                                                               |
+| ------------------ | ------------------ | ---------------------------------------------------------------------------------------- |
+| Required           | Database           | Apply `20261122_000018` with the other 0.2.0 migrations.                                 |
+| Required if called | Generation-run API | Handle the new `qa_gated` mode where it is advertised, and the new `400` rationale rule. |
+| Review if enabled  | Observability      | Alert on the new `qa.*` events and error categories.                                     |
+| Optional           | Clients            | Adopt QA-gated runs where the deployment configures evaluators.                          |
+
+*Table 1: Obligations when moving to 0.2.0.*
+
 ## Renamed command-line entry point
 
 Version 0.1.0 declared a `stilyagi` console script that pointed at a module
@@ -15,11 +33,39 @@ with `episodic`.
 | --------------------- | ---------- |
 | `stilyagi` (unusable) | `episodic` |
 
-*Table 1: The console-script change.*
+*Table 2: The console-script change.*
 
 Any wrapper, container entry point, or local documentation that invokes
 `stilyagi` must invoke `episodic` instead. The distribution name and the
 `episodic` import path are unchanged.
+
+## QA-gated generation
+
+QA-gated generation is capability-gated. A deployment accepts
+`quality_mode=qa_gated` only when it configures at least one QA evaluator;
+production keeps the existing `422 quality_mode_unsupported` until Chrono is
+bound in roadmap item 4.4.2. No client action is required unless you want to
+use it.
+
+Where the capability is advertised:
+
+- Send `quality_mode=qa_gated` with no `skip_qa_rationale`. A rationale is
+  rejected with `400 validation_error`, `details.field="skip_qa_rationale"` and
+  `details.constraint="exclusive_with_quality_mode"`.
+- The acceptance response reports `qa_status=pending`.
+- A passed run ends `succeeded` with `qa_status=passed` and writes TEI; an
+  escalated run ends `failed` with `qa_status=failed` and
+  `error_category=qa.escalation_required` and writes no TEI.
+- New event kinds are `qa.evaluation_started`, `qa.result`, and `qa.escalated`
+  alongside the existing run events. `qa.unavailable` is the category a gated
+  run records when no evaluator is configured at execution time.
+- The episode TEI envelope now reports the producing run's `quality_mode` and
+  `qa_status`.
+
+See [Generate a QA-gated draft](users-guide.md#generate-a-qa-gated-draft) for
+the caller-facing rules and
+[ADR 0029](adrs/adr-0029-qa-gated-mode-branching-and-content-generation-graph.md)
+for the design.
 
 ## Database migration
 
@@ -47,6 +93,12 @@ stop-the-world. Perform these steps in order:
 4. Roll out the new image, and keep writers stopped until the migration has
    committed and the new image is serving. A writer that resumes early either
    blocks behind the exclusive lock or races the conversion.
+
+Revision `20261122_000018` adds the `qa_gated` label to the `quality_mode` enum
+and `pending`, `passed` and `failed` to `qa_status`. The upgrade is additive.
+The downgrade refuses, raising `CommandError` when online, while any
+`generation_runs` or `episodes` row still uses a new label, because dropping an
+enum label would corrupt those rows.
 
 `make check-migrations` reports drift between the object-relational mapping
 (ORM) models and the migration history. A deployment that skips this step fails
@@ -209,7 +261,7 @@ unchanged.
 | `EPISODIC_API_URL`   | Base URL the CLI calls   | `http://127.0.0.1:8000` |
 | `EPISODIC_API_TOKEN` | Bearer token for the API | none                    |
 
-*Table 2: CLI configuration.*
+*Table 3: CLI configuration.*
 
 The API continues to read its existing database and authentication
 configuration. This release adds no new required server setting.

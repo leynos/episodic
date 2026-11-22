@@ -29,12 +29,13 @@ if typ.TYPE_CHECKING:
     from episodic.generation.launcher_quality import QaOutcome
     from episodic.generation.launcher_support import (
         ClaimedRun,
+        ClaimToken,
         Clock,
         CostRecorderFactory,
         DraftIdFactoryFactory,
         Failure,
         GenerationSourceLimits,
-        RunOwnership,
+        RunClaim,
     )
     from episodic.observability import (
         MonotonicClockPort,
@@ -76,10 +77,10 @@ class LauncherHost(typ.Protocol):
         """Load bounded source text for a claimed run."""
         ...
 
-    async def _hydrate(
+    async def _claim_and_hydrate(
         self,
         run_id: uuid.UUID,
-        ownership: RunOwnership,
+        claim: RunClaim,
     ) -> ClaimedRun | None:
         """Claim a pending run and hydrate its input."""
         ...
@@ -109,16 +110,16 @@ class LauncherHost(typ.Protocol):
     async def _claim_and_start(
         self,
         run_id: uuid.UUID,
-        ownership: RunOwnership,
+        claim: RunClaim,
     ) -> GenerationRun | None:
-        """Claim a pending run and record ownership before the session closes."""
+        """Claim a pending run and record its token in the claim."""
         ...
 
     async def _claim_for_failure(
         self,
         uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
-    ) -> bool:
+    ) -> ClaimToken | None:
         """Claim a still-pending run so only its owner can fail it."""
         ...
 
@@ -127,7 +128,7 @@ class LauncherHost(typ.Protocol):
         run_id: uuid.UUID,
         failure: Failure,
         *,
-        ownership: RunOwnership | None = None,
+        claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
     ) -> bool:
         """Record a terminal failed run state when this invocation owns it."""

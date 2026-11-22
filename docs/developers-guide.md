@@ -2756,15 +2756,16 @@ staged upgrade, because Alembic metadata comparison ignores enum labels.
 Four internally facing rules keep a run consistent when several launchers or
 retried requests touch it. Each is enforced in code and pinned by tests.
 
-- **Who may write a terminal state.** `RunOwnership` is created per launcher
-  task and raised when that invocation wins the pending-to-running claim. On
-  the success path the claim is recorded immediately after `commit()` inside
-  the claim's unit of work, so a failure while that session closes cannot lose
-  a durable claim. On the failure and cancellation paths, an invocation that
-  has not claimed may write only by winning the same compare-and-set; a refused
-  write records no event, no metric, and reports `not_claimed`. A cancelled
-  failure transaction rolls the flag back with it. A task name is not
-  authority: two invocations for one run id share `generation-run-{run_id}`.
+- **Who may write a terminal state.** `RunClaim` carries a frozen
+  `ClaimToken` per launcher task, set when that invocation wins the
+  pending-to-running claim. On the success path the claim is recorded
+  immediately after `commit()` inside the claim's unit of work, so a failure
+  while that session closes cannot lose a durable claim. On the failure and
+  cancellation paths, an invocation that has not claimed may write only by
+  winning the same compare-and-set; a refused write records no event, no
+  metric, and reports `not_claimed`. A cancelled failure transaction rolls the
+  flag back with it. A task name is not authority: two invocations for one run
+  id share `generation-run-{run_id}`.
 - **Status updates.** Both adapters resolve a `GenerationRunStatusUpdate`
   through `apply_status_update`, which revalidates the immutable run with
   `dataclasses.replace` and rejects a violation with `ValueError`. The

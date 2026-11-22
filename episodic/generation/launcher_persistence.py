@@ -26,10 +26,12 @@ from episodic.cost.pricing_snapshot import PricedService
 from episodic.cost.recorder import CostProviderOperation
 from episodic.generation.launcher_quality import QaOutcome, qa_result_payload
 from episodic.generation.launcher_support import (
+    ClaimToken,
     Failure,
+    FailureWrite,
     PersistedTei,
     ProviderCallRecordRequest,
-    RunOwnership,
+    RunClaim,
     draft_generated_payload,
     provider_call_record,
 )
@@ -210,7 +212,7 @@ class _PersistenceMixin(_MixinBase):
         run_id: uuid.UUID,
         failure: Failure,
         *,
-        ownership: RunOwnership | None = None,
+        claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
     ) -> bool:
         """Record a terminal failed run state.
@@ -221,11 +223,11 @@ class _PersistenceMixin(_MixinBase):
             Run to fail.
         failure : Failure
             Stable failure details, including an optional QA escalation.
-        ownership : RunOwnership | None
-            Claim record for this invocation. When supplied and still unset,
-            the failure is written only if this invocation can claim the
-            pending run, so a losing launcher cannot fail another's run.
-            ``None`` means the caller has already established ownership.
+        claim : RunClaim | None
+            This invocation's claim record. When supplied without a token, the
+            write proceeds only if the caller can win the pending-to-running
+            claim, so a losing launcher cannot fail another's run. ``None``
+            means the caller has already established authority.
         draft : DraftScriptResult | None
             Draft that consumed inference, when the failure is QA escalation.
             Its provider cost is still recorded.
@@ -238,59 +240,74 @@ class _PersistenceMixin(_MixinBase):
         """
         async with self.uow_factory() as uow:
             try:
-                if not await self._prepare_failure_write(uow, run_id, ownership):
+                token = await self._failure_authority(uow, run_id, claim)
+                if token is None:
                     return False
-                await self._append_failure_events(uow, run_id, failure)
-                if draft is not None:
-                    await self._record_costs(uow, run_id, draft)
-                await uow.generation_runs.update_run_status(
-                    run_id,
-                    update=GenerationRunStatusUpdate(
-                        status=GenerationRunStatus.FAILED,
-                        current_node=None,
-                        ended_at=self.clock(),
-                        error_message=failure.message,
-                        error_category=failure.category,
-                        qa_status=failure.qa_status,
+                await self._write_failure(
+                    uow,
+                    FailureWrite(
+                        run_id=run_id,
+                        failure=failure,
+                        draft=draft,
                     ),
                 )
                 await uow.commit()
             except RunAlreadyTerminal, RunNotFound:
                 await uow.rollback()
                 return False
-        if ownership is not None:
-            # The claim is durable only once this transaction commits; a
-            # rollback must leave the flag unset so a later cancellation
-            # retries the compare-and-set instead of trusting a lost claim.
-            ownership.claimed = True
+        if claim is not None:
+            claim.token = token
         self._record_failure_observation(run_id, failure)
         return True
 
-    async def _prepare_failure_write(
+    async def _failure_authority(
         self,
         uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
-        ownership: RunOwnership | None,
-    ) -> bool:
-        """Establish ownership before a failure write, or refuse to write.
+        claim: RunClaim | None,
+    ) -> ClaimToken | None:
+        """Return the token authorizing this failure write, if any.
 
         Returns
         -------
-        bool
-            ``True`` when the caller may write the failure, ``False`` when
-            another launcher owns the run.
+        ClaimToken | None
+            The existing token, a freshly won token, or ``None`` when another
+            launcher owns the run.
         """
-        if ownership is None or ownership.claimed:
-            return True
-        if await self._claim_for_failure(uow, run_id):
-            return True
-        await uow.rollback()
-        log_info(
-            logger,
-            "generation_run_launcher.failure_not_owned run_id=%s",
-            run_id,
+        if claim is None:
+            return ClaimToken(run_id)
+        if claim.token is not None:
+            return claim.token
+        token = await self._claim_for_failure(uow, run_id)
+        if token is None:
+            await uow.rollback()
+            log_info(
+                logger,
+                "generation_run_launcher.failure_not_owned run_id=%s",
+                run_id,
+            )
+        return token
+
+    async def _write_failure(
+        self,
+        uow: CanonicalUnitOfWork,
+        write: FailureWrite,
+    ) -> None:
+        """Write the failure events, costs and terminal status."""
+        await self._append_failure_events(uow, write.run_id, write.failure)
+        if write.draft is not None:
+            await self._record_costs(uow, write.run_id, write.draft)
+        await uow.generation_runs.update_run_status(
+            write.run_id,
+            update=GenerationRunStatusUpdate(
+                status=GenerationRunStatus.FAILED,
+                current_node=None,
+                ended_at=self.clock(),
+                error_message=write.failure.message,
+                error_category=write.failure.category,
+                qa_status=write.failure.qa_status,
+            ),
         )
-        return False
 
     def _record_failure_observation(
         self,
