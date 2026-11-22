@@ -1900,11 +1900,16 @@ Record the following here as each milestone completes:
   five correctness defects and four evidence gaps. All five defects are fixed
   under D18 with new tests, and this section plus D17 supply the missing
   evidence. The scope overrun is recorded as D17.
-- Evidence for this milestone set: `make check-fmt`, `make typecheck`,
-  `make lint` (Hecate, Ruff, Pylint, df12, interrogate, ambrleaks, Skylos,
-  df12-duplication), `make test` (2438 passed, 1 skipped, 82 snapshots),
-  `make check-migrations`, `make markdownlint` and `make nixie` all pass at the
-  final head. The INV-8 comparison is `git diff --stat` over the
+- The repair round for that assessment is commit `eac73e3b`, published as the
+  branch head. It adds the sixth repair (the shutdown write runs in a task
+  named for its run) and splits
+  `tests/test_content_generation_graph_properties.py` so every module stays
+  under the 400-line ceiling.
+- Evidence for this milestone set at `eac73e3b`: `make check-fmt`,
+  `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
+  ambrleaks, Skylos, df12-duplication), `make test` (2448 passed, 1 skipped, 82
+  snapshots), `make check-migrations`, `make markdownlint` and `make nixie` all
+  pass at the final head. The INV-8 comparison is `git diff --stat` over the
   characterization snapshot and `tests/features/no_qa_generation_slice.feature`
   since `d6876cba`: the feature file is unchanged, and the snapshot differs
   only by the two D9 span attributes plus the D15 record.
