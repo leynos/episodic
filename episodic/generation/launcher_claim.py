@@ -20,6 +20,7 @@ from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
     GenerationSourceLimitError,
+    RunOwnership,
     draft_request,
     project_presenter_profiles,
     require_episode,
@@ -29,6 +30,7 @@ if typ.TYPE_CHECKING:
     import uuid
 
     from episodic.canonical.domain import GenerationRun
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import DraftScriptResult
 
 _METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
@@ -46,13 +48,20 @@ class _ClaimMixin(_MixinBase):
 
     __slots__ = ()
 
-    async def _hydrate(self, run_id: uuid.UUID) -> ClaimedRun | None:
+    async def _hydrate(
+        self,
+        run_id: uuid.UUID,
+        ownership: RunOwnership,
+    ) -> ClaimedRun | None:
         """Claim a pending run, then load its input outside the claim transaction.
 
         Parameters
         ----------
         run_id : uuid.UUID
             Run to claim.
+        ownership : RunOwnership
+            Per-invocation claim record, raised as soon as the claim commits
+            so a hydration fault is still written by the run's owner.
 
         Returns
         -------
@@ -64,6 +73,7 @@ class _ClaimMixin(_MixinBase):
         run = await self._claim_and_start(run_id)
         if run is None:
             return None
+        ownership.claimed = True
         async with self.uow_factory() as uow:
             episode = await require_episode(uow, run.episode_id)
             documents = await uow.source_documents.list_for_job(run.source_bundle_id)
@@ -88,6 +98,31 @@ class _ClaimMixin(_MixinBase):
             sources=sources,
             presenter_profiles=presenter_profiles,
         )
+
+    async def _claim_for_failure(
+        self,
+        uow: CanonicalUnitOfWork,
+        run_id: uuid.UUID,
+    ) -> bool:
+        """Claim a still-pending run so only its owner can fail it.
+
+        A failure that arrives before this invocation claimed the run, such as
+        a failed initial read, may write only when the pending-to-running
+        transition succeeds: that compare-and-set is the proof that no other
+        launcher owns the run.
+
+        Returns
+        -------
+        bool
+            ``True`` when this invocation now owns the run.
+        """
+        claimed = await uow.generation_runs.claim_run_for_execution(
+            run_id,
+            current_node=None,
+            started_at=self.clock(),
+            lease_expires_at=None,
+        )
+        return claimed is not None
 
     async def _claim_and_start(self, run_id: uuid.UUID) -> GenerationRun | None:
         """Linearize a claim and make its started event durable before hydration."""

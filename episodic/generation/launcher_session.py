@@ -25,7 +25,7 @@ from episodic.canonical.generation_routing import QualityVerdict
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.tei import parse_tei_header
 from episodic.generation.launcher_quality import QaOutcome, record_qa_metrics
-from episodic.generation.launcher_support import ClaimedRun, Failure
+from episodic.generation.launcher_support import ClaimedRun, Failure, RunOwnership
 
 if typ.TYPE_CHECKING:
     import uuid
@@ -48,6 +48,8 @@ class _LauncherRunSession:
         The launcher whose port methods perform the I/O.
     run_id : uuid.UUID
         The run this session serves.
+    ownership : RunOwnership
+        Per-invocation claim record shared with the scheduling task.
     claimed : ClaimedRun | None
         Hydrated run input, set by :meth:`initialize`.
     draft : DraftScriptResult | None
@@ -56,6 +58,7 @@ class _LauncherRunSession:
 
     launcher: LauncherHost
     run_id: uuid.UUID
+    ownership: RunOwnership
     claimed: ClaimedRun | None = None
     draft: DraftScriptResult | None = None
 
@@ -68,7 +71,7 @@ class _LauncherRunSession:
             If the run is absent or was claimed by another worker, so the
             graph must stop before spending inference.
         """
-        claimed = await self.launcher._hydrate(self.run_id)
+        claimed = await self.launcher._hydrate(self.run_id, self.ownership)
         if claimed is None:
             msg = f"generation run {self.run_id} was not claimed"
             raise RunNotClaimedError(msg)

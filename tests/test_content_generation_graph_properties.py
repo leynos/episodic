@@ -201,7 +201,7 @@ async def _check_case(
     observed = await observed_nodes(mode, behaviours, fault)
     assert_observed_ownership(mode, observed)
     if mode is QualityMode.QA_GATED and not behaviours:
-        assert observed == (), observed
+        assert observed == ("initialize",), observed
     elif fault is None:
         expected_generate = (
             "generate_qa_candidate"

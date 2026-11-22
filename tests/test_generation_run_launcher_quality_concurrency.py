@@ -27,6 +27,10 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.observability import RecordingTracer
 from episodic.orchestration import LangGraphContentGenerationGraph
 from tests._content_graph_fakes import RecordingSteps
+from tests.generation_run_launcher_read_fault_support import (
+    ReadFault,
+    RunReadFaultUnitOfWork,
+)
 from tests.generation_run_launcher_support import (
     BlockingDraftGenerator,
     LauncherOptions,
@@ -51,7 +55,6 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.canonical.generation_graph_ports import QualityEvaluatorPort
-    from episodic.canonical.generation_run_ports import GenerationRunPort
     from episodic.generation.launcher import InProcessGenerationRunLauncher
 
 
@@ -158,71 +161,20 @@ async def test_cancelling_one_runner_preserves_another_run_task() -> None:
     assert "complete_with_draft" in second_steps.step_names(), second_steps.step_names()
 
 
-class _FlakyReadController:
-    """Fail the first run read, then let later reads through."""
-
-    should_fail: bool = True
-
-
-class _FlakyReadRunStore:
-    """Run-store proxy that fails its first ``get_run`` call."""
-
-    def __init__(
-        self, inner: GenerationRunPort, controller: _FlakyReadController
-    ) -> None:
-        """Wrap the store whose first read fails."""
-        self._inner = inner
-        self._controller = controller
-
-    def __getattr__(self, name: str) -> object:
-        """Delegate every other attribute to the inner store."""
-        return getattr(self._inner, name)
-
-    async def get_run(self, run_id: uuid.UUID) -> GenerationRun | None:
-        """Fail once, then delegate to the inner store."""
-        if self._controller.should_fail:
-            self._controller.should_fail = False
-            msg = "transient read fault"
-            raise RuntimeError(msg)
-        return await self._inner.get_run(run_id)
-
-
-class _FlakyReadUnitOfWork(SqlAlchemyUnitOfWork):
-    """Unit of work whose first run read fails."""
-
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-        controller: _FlakyReadController,
-    ) -> None:
-        """Open the real unit of work with an injected read fault."""
-        super().__init__(session_factory)
-        self._controller = controller
-
-    async def __aenter__(self) -> SqlAlchemyUnitOfWork:
-        """Open the real unit of work and wrap only the run read."""
-        uow = await super().__aenter__()
-        uow.generation_runs = typ.cast(
-            "GenerationRunPort",
-            _FlakyReadRunStore(uow.generation_runs, self._controller),
-        )
-        return uow
-
-
 @pytest.mark.asyncio
 async def test_failed_quality_mode_read_records_a_terminal_failure(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A failed initial read must still record a terminal failure."""
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
-    controller = _FlakyReadController()
+    fault = ReadFault()
     run_launcher = dc.replace(
         launcher(
             session_factory,
             RecordingDraftGenerator(draft_result(valid_tei())),
             options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
         ),
-        uow_factory=lambda: _FlakyReadUnitOfWork(session_factory, controller),
+        uow_factory=lambda: RunReadFaultUnitOfWork(session_factory, fault),
     )
 
     await run_launcher.launch(run_id)

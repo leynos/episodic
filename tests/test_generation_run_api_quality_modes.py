@@ -236,3 +236,83 @@ async def test_unaccepted_mode_outranks_budget_validation(
             details={"quality_mode": "qa_gated"},
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_no_qa_budget_error_outranks_the_missing_key(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A malformed budget hint is reported before the missing-key error."""
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers=_HEADERS,
+            json={
+                "quality_mode": "draft_without_qa",
+                "skip_qa_rationale": "Vertical slice.",
+                "budget_hints": ["not", "an", "object"],
+            },
+        )
+
+    _assert_error_envelope(
+        response,
+        _ExpectedError(
+            status=400,
+            code="validation_error",
+            message="budget_hints must be a JSON object.",
+            details={"field": "budget_hints", "constraint": "object"},
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_unaccepted_mode_outranks_the_missing_key(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """An unaccepted mode keeps its 422 even when the key is absent."""
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers=_HEADERS,
+            json=_gated_payload(),
+        )
+
+    _assert_error_envelope(
+        response,
+        _ExpectedError(
+            status=422,
+            code="quality_mode_unsupported",
+            message="Unsupported quality_mode: qa_gated.",
+            details={"quality_mode": "qa_gated"},
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_missing_key_with_an_accepted_mode_is_reported(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """An acceptable request without a key still reports the missing header."""
+    async with _client(_dependencies(session_factory, _ACCEPTING_MODES)) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers=_HEADERS,
+            json=_gated_payload(),
+        )
+
+    _assert_error_envelope(
+        response,
+        _ExpectedError(
+            status=400,
+            code="validation_error",
+            message="Idempotency-Key header is required.",
+            details={"field": "Idempotency-Key", "constraint": "required"},
+        ),
+    )

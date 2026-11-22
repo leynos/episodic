@@ -68,6 +68,7 @@ __all__ = [
     "GenerationSourceLimits",
     "PersistedTei",
     "ProviderCallRecordRequest",
+    "RunOwnership",
     "SequentialDraftIds",
     "classify_failure",
     "draft_generated_payload",
@@ -108,6 +109,20 @@ class ClaimedRun:
     episode: CanonicalEpisode
     sources: tuple[DraftScriptSource, ...]
     presenter_profiles: tuple[DraftPresenterProfile, ...]
+
+
+@dc.dataclass(slots=True)
+class RunOwnership:
+    """Whether one launcher invocation has claimed the run it is driving.
+
+    A claim, not a task name, is the authority to write a run's terminal
+    state: two launchers can target the same run id in one process, and only
+    the one whose atomic pending-to-running transition succeeded may record
+    its outcome. The flag is raised as soon as the claim commits, before
+    hydration, so a later hydration fault is still recorded by the owner.
+    """
+
+    claimed: bool = False
 
 
 @dc.dataclass(frozen=True, slots=True)

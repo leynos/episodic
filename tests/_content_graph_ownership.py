@@ -90,8 +90,10 @@ async def observed_nodes(
     )
     observed: list[str] = []
     with contextlib.suppress(Exception):
-        # A fault ends observation; the visits recorded before it remain evidence.
-        async for update in graph.astream(
+        # The debug stream reports each node task as it starts, so a node that
+        # raises is still recorded; a plain updates stream would omit it. A
+        # fault ends observation; entries recorded before it remain evidence.
+        async for chunk in graph.astream(
             ContentGenerationGraphState(
                 request=ContentGenerationRequest(
                     run_id=uuid.UUID(_RUN_ID),
@@ -99,9 +101,12 @@ async def observed_nodes(
                 )
             ),
             context=context,
-            stream_mode="updates",
+            stream_mode="debug",
         ):
-            observed.extend(update.keys())
+            event = typ.cast("dict[str, object]", chunk)
+            if event.get("type") == "task":
+                payload = typ.cast("dict[str, object]", event["payload"])
+                observed.append(typ.cast("str", payload["name"]))
     return tuple(observed)
 
 

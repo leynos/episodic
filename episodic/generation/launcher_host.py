@@ -34,6 +34,7 @@ if typ.TYPE_CHECKING:
         DraftIdFactoryFactory,
         Failure,
         GenerationSourceLimits,
+        RunOwnership,
     )
     from episodic.observability import (
         MonotonicClockPort,
@@ -75,7 +76,11 @@ class LauncherHost(typ.Protocol):
         """Load bounded source text for a claimed run."""
         ...
 
-    async def _hydrate(self, run_id: uuid.UUID) -> ClaimedRun | None:
+    async def _hydrate(
+        self,
+        run_id: uuid.UUID,
+        ownership: RunOwnership,
+    ) -> ClaimedRun | None:
         """Claim a pending run and hydrate its input."""
         ...
 
@@ -101,14 +106,23 @@ class LauncherHost(typ.Protocol):
         """Persist a successful run's TEI, costs, and terminal status."""
         ...
 
+    async def _claim_for_failure(
+        self,
+        uow: CanonicalUnitOfWork,
+        run_id: uuid.UUID,
+    ) -> bool:
+        """Claim a still-pending run so only its owner can fail it."""
+        ...
+
     async def _record_failure(
         self,
         run_id: uuid.UUID,
         failure: Failure,
         *,
+        ownership: RunOwnership | None = None,
         draft: DraftScriptResult | None = None,
-    ) -> None:
-        """Record a terminal failed run state."""
+    ) -> bool:
+        """Record a terminal failed run state when this invocation owns it."""
         ...
 
     def _record_pending_depth(self) -> None:

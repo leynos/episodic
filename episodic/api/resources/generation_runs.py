@@ -9,10 +9,8 @@ from episodic.api.errors import http_error, map_source_intake_error
 from episodic.api.helpers import parse_uuid, require_payload_dict
 from episodic.api.resources.generation_runs_create_support import (
     _CreateGenerationRun,
-    _optional_mapping,
     _parse_create_request,
-    _require_accepted_mode,
-    _require_no_gated_rationale,
+    _validate_quality_request,
 )
 from episodic.api.resources.generation_runs_errors import (
     _RETRY_AFTER,
@@ -171,16 +169,29 @@ class GenerationRunsResource:
         if actor is None:
             raise _ingestion_job_not_found(source_bundle_id)
 
+        # Without a key no replay is possible, so the request rules are
+        # reported before the missing-key error, as they were before this
+        # item. With a key they run inside the idempotent work: a stored 202
+        # must still replay after the deployment withdraws the capability, and
+        # a rejection must release the key.
+        if idempotency_key is None or not idempotency_key.strip():
+            request = _validate_quality_request(
+                request,
+                payload,
+                self._accepted_quality_modes,
+            )
+
         async def work() -> IdempotentResponse:
             """Create and schedule the run, then build its 202 response."""
-            _require_accepted_mode(request.quality_mode, self._accepted_quality_modes)
-            _require_no_gated_rationale(payload, request.quality_mode)
+            validated = _validate_quality_request(
+                request,
+                payload,
+                self._accepted_quality_modes,
+            )
             run = await self._create_and_schedule_run(
                 self._create_run(
                     source_bundle_id,
-                    request._replace(
-                        budget_snapshot=_optional_mapping(payload, "budget_hints")
-                    ),
+                    validated,
                     actor=actor,
                     idempotency_key=idempotency_key,
                 ),

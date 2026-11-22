@@ -29,6 +29,7 @@ from episodic.generation.launcher_support import (
     Failure,
     PersistedTei,
     ProviderCallRecordRequest,
+    RunOwnership,
     draft_generated_payload,
     provider_call_record,
 )
@@ -209,8 +210,9 @@ class _PersistenceMixin(_MixinBase):
         run_id: uuid.UUID,
         failure: Failure,
         *,
+        ownership: RunOwnership | None = None,
         draft: DraftScriptResult | None = None,
-    ) -> None:
+    ) -> bool:
         """Record a terminal failed run state.
 
         Parameters
@@ -219,12 +221,33 @@ class _PersistenceMixin(_MixinBase):
             Run to fail.
         failure : Failure
             Stable failure details, including an optional QA escalation.
+        ownership : RunOwnership | None
+            Claim record for this invocation. When supplied and still unset,
+            the failure is written only if this invocation can claim the
+            pending run, so a losing launcher cannot fail another's run.
+            ``None`` means the caller has already established ownership.
         draft : DraftScriptResult | None
             Draft that consumed inference, when the failure is QA escalation.
             Its provider cost is still recorded.
+
+        Returns
+        -------
+        bool
+            ``True`` when the failure was written, ``False`` when the run was
+            not this invocation's to fail.
         """
         async with self.uow_factory() as uow:
             try:
+                if ownership is not None and not ownership.claimed:
+                    if not await self._claim_for_failure(uow, run_id):
+                        await uow.rollback()
+                        log_info(
+                            logger,
+                            "generation_run_launcher.failure_not_owned run_id=%s",
+                            run_id,
+                        )
+                        return False
+                    ownership.claimed = True
                 await self._append_failure_events(uow, run_id, failure)
                 if draft is not None:
                     await self._record_costs(uow, run_id, draft)
@@ -242,7 +265,7 @@ class _PersistenceMixin(_MixinBase):
                 await uow.commit()
             except RunAlreadyTerminal, RunNotFound:
                 await uow.rollback()
-                return
+                return False
         self._record_terminal_metric(GenerationRunStatus.FAILED, failure.category)
         if failure.is_draft_error:
             self.metrics.increment_counter(
@@ -256,6 +279,7 @@ class _PersistenceMixin(_MixinBase):
             run_id,
             failure.category,
         )
+        return True
 
     async def _append_failure_events(
         self,

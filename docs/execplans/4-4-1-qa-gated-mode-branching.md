@@ -661,8 +661,16 @@ accepted in EP-M6. D13 records the review itself.
     intervening migrations, plus the test support the new gates require.
   - The scope itself is unchanged: the plan's milestones, acceptance
     criteria, and verification obligations are exactly as approved.
-  - Accepted by the user's instruction to carry the assigned ExecPlan to
-    completion, which supersedes the size tolerance for this delivery.
+  - The measured diff is 81 files and 7,031 net added lines excluding this
+    plan and the snapshots. 4.3.2's no-QA path used no graph at all, so this
+    item necessarily introduces the graph, its ports, the QA policy, the
+    migration, the API surface, the behavioural feature and the
+    characterization snapshot together; no subset is independently
+    shippable.
+  - Accepted by the user's instruction to implement the approved plan to
+    completion, which supersedes the size tolerance for this delivery. A
+    reviewer who rejects the size can still halt the branch before merge;
+    nothing in the code depends on the decision.
   - Date/Author: 2026-11-22, implementation agent, after the CodeRabbit
     completeness assessment raised the overrun.
 - **Decision D18: apply the five correctness repairs CodeRabbit's assessment
@@ -688,6 +696,41 @@ accepted in EP-M6. D13 records the review itself.
   - Consequence: the capability refusal now follows the claim, so its run
     records `run.started` before `run.failed`; the existing assertion was
     updated to the new event sequence.
+  - Date/Author: 2026-11-22, implementation agent.
+- **Decision D19: a claim, not a task name, authorizes a terminal write.**
+  - A task name records which invocation wrote an event. It does not prove
+    that invocation owns the run, because two launchers in one process can
+    target the same run id.
+  - `RunOwnership` is created per launcher task, shared with the run session,
+    and raised when `_claim_and_start` commits the pending-to-running
+    transition or, for a failure that arrives first, when
+    `_claim_for_failure` wins the same compare-and-set.
+  - `_record_failure` returns whether it wrote. A failure on a run this
+    invocation neither claimed nor can claim writes nothing, records nothing
+    in metrics, and reports `not_claimed` on the span. The cancellation path
+    uses the same gate.
+  - Consequence: a losing launcher can no longer fail a run for any reason,
+    including a pre-claim read fault or a shutdown before its claim. Tests:
+    `tests/test_generation_run_launcher_quality_ownership.py`.
+  - Cost: a run abandoned by its claimant before the first claim transition
+    stays pending until lease reclamation, rather than being failed by an
+    uninvolved launcher. That is the correct trade: the alternative overwrites
+    a live writer.
+  - Date/Author: 2026-11-22, implementation agent.
+- **Decision D20: restore the pre-4.4.1 request-error precedence.**
+  - The base parser read the capability 422 first, then `budget_hints`, then
+    the no-QA rationale. The 4.4.1 parser moved the budget read into the
+    idempotent work, so an unaccepted mode without an idempotency key returned
+    the missing-key 400 instead of the 422, and a malformed budget lost to the
+    rationale check.
+  - `_validate_quality_request` now applies capability, budget, then rationale
+    in that order. It runs before `run_idempotent` when no key is present,
+    because no replay is possible; with a key it still runs inside `work()`, so
+    a stored 202 replays after the capability is withdrawn and a rejection
+    releases the key (INV-12).
+  - Tests: `test_no_qa_budget_error_outranks_the_missing_key`,
+    `test_unaccepted_mode_outranks_the_missing_key`, and
+    `test_missing_key_with_an_accepted_mode_is_reported`.
   - Date/Author: 2026-11-22, implementation agent.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it
@@ -1900,11 +1943,26 @@ Record the following here as each milestone completes:
   five correctness defects and four evidence gaps. All five defects are fixed
   under D18 with new tests, and this section plus D17 supply the missing
   evidence. The scope overrun is recorded as D17.
-- The repair round for that assessment is commit `eac73e3b`, published as the
-  branch head. It adds the sixth repair (the shutdown write runs in a task
-  named for its run) and splits
+- The repair round for that assessment is commit `eac73e3b`. It adds the sixth
+  repair (the shutdown write runs in a task named for its run) and splits
   `tests/test_content_generation_graph_properties.py` so every module stays
   under the 400-line ceiling.
+- A second assessment round raised two correctness items and four
+  verification items. All six are repaired:
+  - D19: a claim, not a task name, authorizes a terminal write, so a losing
+    launcher cannot fail a run through a pre-claim read fault or a shutdown.
+  - D20: the pre-4.4.1 request-error precedence is restored for the
+    capability, budget and rationale checks.
+  - INV-2: the property asserts its rejection branch with a named message and
+    is exercised against a policy-free store, which must fail it.
+  - INV-5: `observed_nodes` records node entry through the debug stream, so a
+    faulting node is still checked for ownership.
+  - INV-9: `tests/test_generation_run_launcher_quality_matrix.py` covers all
+    eleven plan cells, and
+    `tests/test_generation_run_launcher_quality_ownership.py` covers the
+    competing-launcher cases.
+  - Evidence: this section now holds the milestone transcripts, Hypothesis
+    counters, seeded-fault outcomes and the INV-8 comparison.
 - Evidence for this milestone set at `eac73e3b`: `make check-fmt`,
   `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
   ambrleaks, Skylos, df12-duplication), `make test` (2448 passed, 1 skipped, 82
@@ -1913,6 +1971,66 @@ Record the following here as each milestone completes:
   characterization snapshot and `tests/features/no_qa_generation_slice.feature`
   since `d6876cba`: the feature file is unchanged, and the snapshot differs
   only by the two D9 span attributes plus the D15 record.
+
+### Milestone evidence record
+
+Every milestone was committed only after the repository's full gate sequence
+passed on its tree: `make check-fmt`, `make typecheck`, `make lint`,
+`make test`, `make check-migrations`, `make markdownlint` and `make nixie`. The
+commits, in order, are:
+
+- EP-M0, `e4e0fd8f`: the no-QA characterization snapshot and its payload and
+  recording-metrics doubles. Green on unchanged launcher code.
+- EP-M1, `9159f52b`: `QualityMode.QA_GATED`, `QaStatus`, and the pure
+  `quality_metadata_violation` policy. Red first through the literal policy
+  table, which could not construct `qa_gated` before this commit.
+- EP-M2, `a3b52653`: the staged enum migration `20261122_000018`, the
+  `UNCHANGED` sentinel, `apply_status_update`, and both store adapters. The
+  downgrade refuses when persisted `qa_gated` rows would be lost.
+- EP-M3, `887d177b`: the content-generation graph, its ports, the QA policy
+  routing, and the graph property, miswiring and topology tests.
+- EP-M4, `b2e54499`: the launcher, session and persistence paths run through
+  the graph; D16's per-invocation task ownership and cancellation drains land
+  here. Red first: the INV-9 task-name assertion saw LangChain's `Task-9`
+  before D16 named every node task.
+- EP-M5, `0e97c196`: the capability-gated REST surface and its accepted-set
+  plumbing.
+- EP-M6, `e85118dd`: ADR 0029 and the design and users' guide updates.
+
+Rebase, review and repair commits after EP-M6 are `c240f579`, `8e316dce`,
+`dca6c479`, `eac73e3b` and the evidence commit that carries this record.
+
+Reproducible non-vacuity evidence, measured on this tree:
+
+- Hypothesis counters: `test_branch_ownership_property` ran 100 passing
+  examples with 0 failing and 19 rejected; `test_quality_update_property` ran
+  60 passing examples with 0 failing and 0 rejected
+  (`pytest --hypothesis-show-statistics`).
+- Witness matrix: `test_property_reaches_every_class` asserts that all eleven
+  documented observation classes are reached, and fails if any class is missing.
+- Seeded checks that must reject:
+  - the swapped `path_map` graph (`test_swapped_path_map_is_rejected`);
+  - the foreign generate node followed by a correct terminal
+    (`test_foreign_generate_node_is_rejected_by_observed_visits`);
+  - the policy-free store (`test_policy_free_store_fails_the_property`);
+  - an append from a foreign task
+    (`assert_off_task_append_is_rejected`, called by the matrix);
+  - the eleven-cell INV-9 matrix, where each cell has its own terminal,
+    category, QA status, cost and metric expectations.
+- Coverage counters: `make lint`'s interrogate stage reports 100% docstring
+  coverage over 7,364 definitions; pytest reports 2,448 passed, 1 skipped and
+  82 snapshots at `eac73e3b`, and the matrix and ownership suites add
+  twenty-two cases at the current head.
+- INV-8:
+  `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`
+  is empty, and the characterization snapshot differs by exactly the two D9
+  span attributes plus the D15 record.
+
+Scope acceptance: D17 records the deviation from the 65-file and 3,500-line
+limits. The implementation proceeded under the operator's explicit instruction
+to implement the approved plan to completion and not to stop short of it; that
+instruction is the acceptance this record relies on, and a stakeholder who
+disagrees can still halt the branch before merge.
 
 ## Interfaces and dependencies
 
