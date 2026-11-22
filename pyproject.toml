@@ -566,8 +566,12 @@ full_name = [
     "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_enums",
     "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_qa_evaluations_table",
     "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_qa_findings_table",
+    "alembic.versions.20261122_000018_add_qa_gated_quality_mode._new_label_usage_sql",
+    "alembic.versions.20261122_000018_add_qa_gated_quality_mode._quoted",
+    "alembic.versions.20261122_000018_add_qa_gated_quality_mode._offline_downgrade_statement",
+    "alembic.versions.20261122_000018_add_qa_gated_quality_mode._require_no_new_label_rows",
 ]
-reason = "Alembic invokes these downgrade helpers when an operator rolls migration revisions back."
+reason = "Alembic invokes these downgrade helpers and their rendering helpers when an operator rolls migration revisions back."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "class"

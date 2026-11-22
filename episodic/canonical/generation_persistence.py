@@ -43,7 +43,6 @@ from episodic.canonical.generation_persistence_types import (
     # Re-exported service contract.
     DraftScriptPersistenceError as DraftScriptPersistenceError,
 )
-from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.hashing import sha256_text
 from episodic.canonical.source_intake_errors import IngestionJobNotFoundError
 from episodic.canonical.tei import parse_tei_header
@@ -190,7 +189,7 @@ async def persist_draft_script(
         request.episode_id,
         update=EpisodeTeiUpdate(
             tei_xml=request.result.tei_xml,
-            qa_status=QaStatus.SKIPPED,
+            qa_status=request.qa_status,
             last_generation_run_id=request.generation_run_id,
             expected_revision=request.expected_revision,
             updated_at=request.clock(),

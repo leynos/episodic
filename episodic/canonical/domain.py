@@ -28,6 +28,7 @@ from .domain_generation import (
     CheckpointResponse,
     GenerationEvent,
     GenerationRun,
+    apply_status_update,
 )
 from .domain_generation import (
     _validate_terminal_run_lifecycle as _validate_terminal_run_lifecycle,
@@ -90,4 +91,5 @@ __all__ = [
     "SourceDocumentInput",
     "TeiHeader",
     "WorkflowCheckpointStatus",
+    "apply_status_update",
 ]

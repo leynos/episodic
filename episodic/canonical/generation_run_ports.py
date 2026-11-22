@@ -13,6 +13,7 @@ async def use_runs(port: GenerationRunPort) -> None:
 """
 
 import dataclasses as dc
+import enum
 import typing as typ
 
 from .generation_run_lease_ports import GenerationRunLeaseReclamationPort
@@ -30,8 +31,18 @@ if typ.TYPE_CHECKING:
         GenerationRunStatus,
         JsonMapping,
     )
+    from .generation_quality import QaStatus
 
 EventSeq = typ.NewType("EventSeq", int)
+
+
+class Unchanged(enum.Enum):
+    """Sentinel for a status field that must keep its persisted value."""
+
+    UNCHANGED = "unchanged"
+
+
+UNCHANGED = Unchanged.UNCHANGED
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -51,6 +62,11 @@ class GenerationRunStatusUpdate:
     error_category : str | None
         Stable failure classification. An omitted value clears the persisted
         field.
+    qa_status : QaStatus | Unchanged
+        QA status to record. It defaults to :data:`UNCHANGED`, which keeps the
+        persisted value. This deliberately contrasts with the error fields,
+        where an omitted value clears the field: a failure write must not
+        silently erase a QA outcome that is still being decided.
     """
 
     status: GenerationRunStatus
@@ -58,6 +74,7 @@ class GenerationRunStatusUpdate:
     ended_at: dt.datetime | None
     error_message: str | None = None
     error_category: str | None = None
+    qa_status: QaStatus | Unchanged = UNCHANGED
 
 
 def event_seq(value: int) -> EventSeq:

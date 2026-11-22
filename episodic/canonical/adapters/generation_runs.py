@@ -13,7 +13,7 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
     JsonMapping,
-    _validate_terminal_run_lifecycle,
+    apply_status_update,
 )
 from episodic.canonical.generation_run_errors import (
     RunAlreadyTerminal,
@@ -33,6 +33,11 @@ from .generation_run_lease_reclamation import (
     InMemoryGenerationRunLeaseReclamationMixin,
 )
 
+type TimeProvider = cabc.Callable[[], dt.datetime]
+
+
+
+"""Ephemeral in-memory generation-run adapter for tests and local development."""
 type TimeProvider = cabc.Callable[[], dt.datetime]
 
 
@@ -218,18 +223,8 @@ class InMemoryGenerationRunStore(
                     requested_status=update.status.value,
                 ),
             )
-            _validate_terminal_run_lifecycle(
-                status=update.status,
-                current_node=update.current_node,
-                ended_at=update.ended_at,
-            )
             updated = dc.replace(
-                run,
-                status=update.status,
-                current_node=update.current_node,
-                ended_at=update.ended_at,
-                error_message=update.error_message,
-                error_category=update.error_category,
+                apply_status_update(run, update),
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated

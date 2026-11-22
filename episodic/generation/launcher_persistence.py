@@ -85,6 +85,7 @@ class _PersistenceMixin(_MixinBase):
                     generation_run_id=claimed.run.id,
                     result=result,
                     expected_revision=claimed.episode.tei_revision,
+                    qa_status=QaStatus.SKIPPED,
                     clock=self.clock,
                 ),
             )

@@ -21,6 +21,7 @@ from episodic.canonical.generation_persistence import (
     materialise_episode_from_ingestion,
     persist_draft_script,
 )
+from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.ingestion_sources import AttachmentKind
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.uploads import Upload, UploadState
@@ -274,6 +275,7 @@ async def test_persist_draft_script_rejects_mismatched_content_hash(
                     generation_run_id=run.id,
                     result=result,
                     expected_revision=episode.tei_revision,
+                    qa_status=QaStatus.SKIPPED,
                     clock=_clock,
                 ),
             )

@@ -10,7 +10,7 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
     JsonMapping,
-    _validate_terminal_run_lifecycle,
+    apply_status_update,
 )
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import event_page_minimum_sequence
@@ -42,6 +42,17 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.storage.generation_run_storage_runtime import (
         GenerationRunStorageRuntime,
     )
+
+
+
+"""SQLAlchemy adapter for durable generation runs and event logs."""
+if typ.TYPE_CHECKING:
+    import datetime as dt
+    import uuid
+    from sqlalchemy.engine import CursorResult
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from episodic.canonical.generation_run_ports import (
+    from episodic.canonical.storage.generation_run_storage_runtime import (
 
 
 class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
@@ -193,16 +204,13 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
         record = await self._require_mutable_run(run_id, lock=True)
-        _validate_terminal_run_lifecycle(
-            status=update.status,
-            current_node=update.current_node,
-            ended_at=update.ended_at,
-        )
-        record.status = update.status
-        record.current_node = update.current_node
-        record.ended_at = update.ended_at
-        record.error_message = update.error_message
-        record.error_category = update.error_category
+        resolved = apply_status_update(run_from_record(record), update)
+        record.status = resolved.status
+        record.current_node = resolved.current_node
+        record.ended_at = resolved.ended_at
+        record.error_message = resolved.error_message
+        record.error_category = resolved.error_category
+        record.qa_status = resolved.qa_status
         record.updated_at = self._runtime.clock()
         await self._session.flush()
         await self._session.refresh(record)

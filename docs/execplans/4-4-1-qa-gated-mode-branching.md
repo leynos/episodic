@@ -267,7 +267,7 @@ inference budget on a branch that cannot pass.
   graph ports moved to EP-M3 under D14, because the blocking Skylos dead-code
   gate runs on every commit and those symbols have no production caller until
   the graph exists.
-- [ ] EP-M2: persistence, migration and lifecycle updates.
+- [x] (2026-11-22) EP-M2: persistence, migration and lifecycle updates.
 - [ ] EP-M3: content-generation graph in orchestration.
 - [ ] EP-M4: launcher executes runs through the graph.
 - [ ] EP-M5: REST and composition-root acceptance of `qa_gated`.

@@ -10,6 +10,7 @@ if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
 
+    from episodic.canonical.generation_quality import QaStatus
     from episodic.canonical.ingestion_sources import IngestionJobSource
     from episodic.canonical.uploads import Upload
     from episodic.generation.draft_script import DraftScriptResult
@@ -225,6 +226,9 @@ class DraftScriptPersistenceRequest:
         Validated draft output from :class:`DraftScriptGenerator`.
     expected_revision
         Revision that must still be current when the TEI is written.
+    qa_status
+        QA outcome to record with the persisted TEI: ``skipped`` for a no-QA
+        draft or ``passed`` for a QA-gated draft that cleared evaluation.
     clock
         UTC clock used for the persisted update timestamp.
     """
@@ -233,6 +237,7 @@ class DraftScriptPersistenceRequest:
     generation_run_id: uuid.UUID
     result: DraftScriptResult
     expected_revision: int
+    qa_status: QaStatus
     clock: Clock = utc_now
 
 
@@ -245,3 +250,4 @@ class _SourceDocumentProjection:
     episode_id: uuid.UUID
     document_id: uuid.UUID
     now: dt.datetime
+# weave: run 'weave explain episodic/canonical/generation_persistence_types.py' for per-hunk detail, 'weave check' to verify your resolution

@@ -14,6 +14,7 @@ from .domain_validation import (
 )
 from .generation_quality import QaStatus, QualityMode
 from .generation_run_errors import CheckpointAlreadyTerminal
+from .generation_run_ports import UNCHANGED, GenerationRunStatusUpdate
 
 if typ.TYPE_CHECKING:
     import uuid
@@ -108,6 +109,52 @@ class GenerationRun:
         )
         _copy_json_mapping(self, "budget_snapshot")
         _copy_json_mapping(self, "configuration")
+
+
+def apply_status_update(
+    run: GenerationRun,
+    update: GenerationRunStatusUpdate,
+) -> GenerationRun:
+    """Return the run a status update resolves to, re-validating the result.
+
+    The :data:`~episodic.canonical.generation_run_ports.UNCHANGED` sentinel in
+    ``update.qa_status`` keeps the run's current QA status. Every other field is
+    written from the update, and the resulting run is rebuilt with
+    :func:`dataclasses.replace`, so ``__post_init__`` rejects a lifecycle or
+    quality combination the domain forbids before an adapter writes anything.
+
+    Parameters
+    ----------
+    run : GenerationRun
+        Current persisted run.
+    update : GenerationRunStatusUpdate
+        Requested lifecycle and QA-status fields.
+
+    Returns
+    -------
+    GenerationRun
+        The re-validated run to persist.
+
+    Raises
+    ------
+    ValueError
+        If the resolved run violates a lifecycle or quality invariant.
+
+    Examples
+    --------
+    >>> apply_status_update(run, update).status is update.status
+    True
+    """  # ruff: ignore[docstring-extraneous-exception]  # dc.replace re-runs GenerationRun.__post_init__.
+    qa_status = run.qa_status if update.qa_status is UNCHANGED else update.qa_status
+    return dc.replace(
+        run,
+        status=update.status,
+        current_node=update.current_node,
+        ended_at=update.ended_at,
+        error_message=update.error_message,
+        error_category=update.error_category,
+        qa_status=qa_status,
+    )
 
 
 @dc.dataclass(frozen=True, slots=True)
