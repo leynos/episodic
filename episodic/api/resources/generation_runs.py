@@ -9,6 +9,7 @@ from episodic.api.errors import http_error, map_source_intake_error
 from episodic.api.helpers import parse_uuid, require_payload_dict
 from episodic.api.resources.generation_runs_create_support import (
     _CreateGenerationRun,
+    _optional_mapping,
     _parse_create_request,
     _require_accepted_mode,
     _require_no_gated_rationale,
@@ -177,7 +178,9 @@ class GenerationRunsResource:
             run = await self._create_and_schedule_run(
                 self._create_run(
                     source_bundle_id,
-                    request,
+                    request._replace(
+                        budget_snapshot=_optional_mapping(payload, "budget_hints")
+                    ),
                     actor=actor,
                     idempotency_key=idempotency_key,
                 ),

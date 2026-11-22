@@ -103,9 +103,24 @@ class _SchedulingMixin(_MixinBase):
             task.cancel()
         await self.drain()
         for task, run_id in cancelled_tasks:
-            if task.cancelled() and run_id not in self._cancelled_run_ids:
-                await asyncio.shield(self._record_cancellation(run_id))
-                self._cancelled_run_ids.add(run_id)
+            if task.cancelled():
+                await self._record_cancellation_owned(run_id)
+
+    async def _record_cancellation_owned(self, run_id: uuid.UUID) -> None:
+        """Record a cancellation from a task named for the run (INV-9).
+
+        Shielding keeps a second cancellation from truncating the terminal
+        event; naming the shielded write keeps the single-writer invariant
+        true for this path too.
+        """
+        if run_id in self._cancelled_run_ids:
+            return
+        write = asyncio.create_task(
+            self._record_cancellation(run_id),
+            name=f"generation-run-{run_id}",
+        )
+        await asyncio.shield(write)
+        self._cancelled_run_ids.add(run_id)
 
     def _discard_task(self, task: asyncio.Task[None]) -> None:
         """Remove finished tasks from the strong-reference registry."""
@@ -146,8 +161,7 @@ class _SchedulingMixin(_MixinBase):
             except asyncio.CancelledError:
                 span.set_attribute("outcome", "cancelled")
                 span.set_attribute("failure_category", "launcher.shutdown")
-                await asyncio.shield(self._record_cancellation(run_id))
-                self._cancelled_run_ids.add(run_id)
+                await self._record_cancellation_owned(run_id)
                 raise
             span.set_attribute("outcome", outcome.outcome)
             if outcome.failure_category is not None:
@@ -165,17 +179,16 @@ class _SchedulingMixin(_MixinBase):
 
     async def _execute_run(self, run_id: uuid.UUID) -> _ExecutionOutcome:
         """Execute one generation run through the content-generation graph."""
-        quality_mode = await self._read_quality_mode(run_id)
-        if quality_mode is None:
-            return _ExecutionOutcome(outcome="not_claimed")
-        session = _LauncherRunSession(launcher=self, run_id=run_id)
         try:
+            quality_mode = await self._read_quality_mode(run_id)
+            if quality_mode is None:
+                return _ExecutionOutcome(outcome="not_claimed")
             terminal = await self.content_graph.run(
                 ContentGenerationRequest(
                     run_id=run_id,
                     quality_mode=quality_mode,
                 ),
-                steps=session,
+                steps=_LauncherRunSession(launcher=self, run_id=run_id),
             )
         except RunNotClaimedError:
             return _ExecutionOutcome(outcome="not_claimed")

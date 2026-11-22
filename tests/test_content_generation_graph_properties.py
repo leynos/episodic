@@ -26,18 +26,20 @@ from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_routing import (
     GenerationTerminal,
     QualityVerdict,
-    branch_for_terminal,
-    route_quality_mode,
 )
-from episodic.orchestration._content_graph_state import (
-    NODE_OWNERSHIP,
+from episodic.orchestration.content_generation import (
+    LangGraphContentGenerationGraph,
 )
-from episodic.orchestration.content_generation import LangGraphContentGenerationGraph
 from tests._content_graph_fakes import (
     FAULT_STEPS,
     RecordingSteps,
     ScriptedEvaluator,
     expected_aggregate,
+)
+from tests._content_graph_ownership import (
+    assert_branch_ownership,
+    assert_observed_ownership,
+    observed_nodes,
 )
 
 if typ.TYPE_CHECKING:
@@ -102,9 +104,11 @@ def _expected_steps(
     fault: str | None,
 ) -> tuple[str, ...]:
     """State the exact step log the graph must produce."""
+    steps = ["initialize"]
     if mode is QualityMode.QA_GATED and not behaviours:
-        return ()
-    steps = ["initialize", "generate_draft"]
+        # `initialize` claims the run before refusing an unevaluable one.
+        return ("initialize",)
+    steps.append("generate_draft")
     if mode is QualityMode.QA_GATED:
         passed = expected_aggregate(behaviours) is QualityVerdict.PASSED
         persist = "complete_with_draft" if passed else "escalate"
@@ -132,47 +136,6 @@ def _expected_terminal(
     if expected_aggregate(behaviours) is QualityVerdict.PASSED:
         return GenerationTerminal.QA_PASSED_DRAFT_PERSISTED
     return GenerationTerminal.QA_ESCALATED
-
-
-def _visited_nodes(mode: QualityMode, step_names: cabc.Sequence[str]) -> set[str]:
-    """Return the graph nodes a step log proves the run visited."""
-    visited: set[str] = {"initialize"}
-    if "generate_draft" in step_names:
-        visited.add(
-            "generate_qa_candidate"
-            if mode is QualityMode.QA_GATED
-            else "generate_draft_without_qa"
-        )
-    if "begin_evaluation" in step_names:
-        visited.add("evaluate")
-    if "complete_with_draft" in step_names:
-        visited.add(
-            "persist_qa_passed_draft"
-            if mode is QualityMode.QA_GATED
-            else "persist_draft_without_qa"
-        )
-    if "escalate" in step_names:
-        visited.add("escalate")
-    return visited
-
-
-def assert_branch_ownership(
-    mode: QualityMode,
-    step_names: cabc.Sequence[str],
-    terminal: GenerationTerminal | None,
-) -> None:
-    """Reject a trace that visits a node its quality branch does not own."""
-    branch = route_quality_mode(mode)
-    if mode is QualityMode.DRAFT_WITHOUT_QA:
-        assert "begin_evaluation" not in step_names, "no-QA runs never evaluate"
-        assert "escalate" not in step_names, "no-QA runs never escalate"
-    for node in _visited_nodes(mode, step_names):
-        owner = NODE_OWNERSHIP[node]
-        assert owner in {None, branch}, f"{node} belongs to {owner}, not {branch}"
-    if terminal is not None:
-        assert branch_for_terminal(terminal) is branch, (
-            f"{terminal} does not belong to {branch}"
-        )
 
 
 _FAULT_LABELS: dict[str, str] = {
@@ -235,6 +198,17 @@ async def _check_case(
     )
     assert replay.step_names() == steps.step_names(), "step log must be deterministic"
     assert_branch_ownership(mode, steps.step_names(), outcome.terminal)
+    observed = await observed_nodes(mode, behaviours, fault)
+    assert_observed_ownership(mode, observed)
+    if mode is QualityMode.QA_GATED and not behaviours:
+        assert observed == (), observed
+    elif fault is None:
+        expected_generate = (
+            "generate_qa_candidate"
+            if mode is QualityMode.QA_GATED
+            else "generate_draft_without_qa"
+        )
+        assert expected_generate in observed, observed
     if outcome.error is not None:
         assert expected_terminal is None, f"unexpected error {outcome.error!r}"
         assert type(replay_outcome.error) is type(outcome.error), (

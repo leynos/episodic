@@ -10,10 +10,14 @@ import typing as typ
 
 import hypothesis.strategies as st
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, example, given, settings
 
 from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
-from episodic.canonical.domain import GenerationRun, GenerationRunStatus
+from episodic.canonical.domain import (
+    GenerationRun,
+    GenerationRunStatus,
+    apply_status_update,
+)
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_ports import (
     UNCHANGED,
@@ -69,7 +73,38 @@ async def test_update_run_status_applies_qa_status(
 
 
 @pytest.mark.asyncio
+@example(
+    mode=QualityMode.QA_GATED,
+    update_status=GenerationRunStatus.SUCCEEDED,
+    update_qa=QaStatus.PASSED,
+)
+@example(
+    mode=QualityMode.QA_GATED,
+    update_status=GenerationRunStatus.SUCCEEDED,
+    update_qa=UNCHANGED,
+)
+@example(
+    mode=QualityMode.QA_GATED,
+    update_status=GenerationRunStatus.FAILED,
+    update_qa=QaStatus.FAILED,
+)
+@example(
+    mode=QualityMode.QA_GATED,
+    update_status=GenerationRunStatus.RUNNING,
+    update_qa=QaStatus.PASSED,
+)
+@example(
+    mode=QualityMode.DRAFT_WITHOUT_QA,
+    update_status=GenerationRunStatus.SUCCEEDED,
+    update_qa=UNCHANGED,
+)
+@example(
+    mode=QualityMode.DRAFT_WITHOUT_QA,
+    update_status=GenerationRunStatus.SUCCEEDED,
+    update_qa=QaStatus.PENDING,
+)
 @given(
+    mode=st.sampled_from(tuple(QualityMode)),
     update_status=st.sampled_from(tuple(GenerationRunStatus)),
     update_qa=st.sampled_from([UNCHANGED, *tuple(QaStatus)]),
 )
@@ -80,11 +115,21 @@ async def test_update_run_status_applies_qa_status(
 )
 async def test_quality_update_property(
     store: InMemoryGenerationRunStore,
+    mode: QualityMode,
     update_status: GenerationRunStatus,
     update_qa: QaStatus | object,
 ) -> None:
-    """Every accepted update keeps "succeeded if and only if passed" true."""
-    run = await _gated_running_run(store)
+    """Every accepted update keeps the mode's QA invariant true."""
+    no_qa = mode is QualityMode.DRAFT_WITHOUT_QA
+    run = await store.create_run(
+        dc.replace(
+            make_generation_run(),
+            status=GenerationRunStatus.RUNNING,
+            quality_mode=mode,
+            qa_status=QaStatus.SKIPPED if no_qa else QaStatus.PENDING,
+            skip_qa_rationale="No-QA draft." if no_qa else None,
+        )
+    )
     update = GenerationRunStatusUpdate(
         status=update_status,
         current_node=None if update_status.is_terminal() else "evaluate",
@@ -104,6 +149,46 @@ async def test_quality_update_property(
     assert updated.qa_status is resolved_qa, (
         f"resolved qa_status={updated.qa_status!r}, expected {resolved_qa!r}"
     )
-    assert (updated.qa_status is QaStatus.PASSED) == (
-        updated.status is GenerationRunStatus.SUCCEEDED
-    ), f"status={updated.status!r} qa_status={updated.qa_status!r}"
+    if no_qa:
+        assert updated.qa_status is QaStatus.SKIPPED, updated.qa_status
+    else:
+        assert (updated.qa_status is QaStatus.PASSED) == (
+            updated.status is GenerationRunStatus.SUCCEEDED
+        ), f"status={updated.status!r} qa_status={updated.qa_status!r}"
+
+
+def test_policy_free_update_would_violate_the_invariant() -> None:
+    """Mutating the QA status without revalidation breaks the invariant.
+
+    This is the negative control for the property: the store's policy, not the
+    dataclass constructor alone, is what prevents the invalid combination from
+    being persisted.
+    """
+    gated = dc.replace(
+        make_generation_run(),
+        status=GenerationRunStatus.RUNNING,
+        quality_mode=QualityMode.QA_GATED,
+        qa_status=QaStatus.PENDING,
+        skip_qa_rationale=None,
+    )
+    passed = dc.replace(
+        gated,
+        status=GenerationRunStatus.SUCCEEDED,
+        current_node=None,
+        ended_at=NOW,
+        qa_status=QaStatus.PASSED,
+    )
+    object.__setattr__(passed, "qa_status", QaStatus.PENDING)
+
+    assert (passed.qa_status is QaStatus.PASSED) != (
+        passed.status is GenerationRunStatus.SUCCEEDED
+    ), "the control mutation must break the invariant"
+    with pytest.raises(ValueError, match="qa_status"):
+        apply_status_update(
+            gated,
+            GenerationRunStatusUpdate(
+                status=GenerationRunStatus.SUCCEEDED,
+                current_node=None,
+                ended_at=NOW,
+            ),
+        )

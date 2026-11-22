@@ -210,3 +210,29 @@ async def test_unknown_mode_stays_a_400_enum_error(
             details={"field": "quality_mode", "constraint": "enum"},
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_unaccepted_mode_outranks_budget_validation(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """An unaccepted mode keeps its 422 even with a malformed budget hint."""
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers={**_HEADERS, "Idempotency-Key": "gated-budget-precedence"},
+            json=_gated_payload(budget_hints=["not", "an", "object"]),
+        )
+
+    _assert_error_envelope(
+        response,
+        _ExpectedError(
+            status=422,
+            code="quality_mode_unsupported",
+            message="Unsupported quality_mode: qa_gated.",
+            details={"quality_mode": "qa_gated"},
+        ),
+    )

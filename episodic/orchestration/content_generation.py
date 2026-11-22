@@ -50,6 +50,7 @@ from episodic.orchestration._content_graph_state import (
     NODE_OWNERSHIP,
     ContentGenerationContext,
     ContentGenerationGraphState,
+    RunTaskRegistry,
 )
 
 if typ.TYPE_CHECKING:
@@ -106,7 +107,12 @@ def _wrap(node: ContentGenerationNode) -> _WrappedNode:
         task = asyncio.current_task()
         if task is not None:
             task.set_name(f"generation-run-{state.request.run_id}")
-        return await node(state, runtime.context)
+            runtime.context.task_registry.tasks.add(task)
+        try:
+            return await node(state, runtime.context)
+        finally:
+            if task is not None:
+                runtime.context.task_registry.tasks.discard(task)
 
     return run
 
@@ -224,12 +230,14 @@ class LangGraphContentGenerationGraph:
             :class:`~langgraph.errors.NodeCancelledError`; the runner restores
             the cancellation so shutdown classification is unchanged.
         """
+        task_registry = RunTaskRegistry()
         graph_task = asyncio.create_task(
             self._compiled.ainvoke(
                 ContentGenerationGraphState(request=request),
                 context=ContentGenerationContext(
                     steps=steps,
                     evaluator_set=self.evaluator_set,
+                    task_registry=task_registry,
                 ),
             ),
             name=f"generation-run-{request.run_id}",
@@ -243,7 +251,7 @@ class LangGraphContentGenerationGraph:
             # could keep writing after shutdown.
             graph_task.cancel()
             await asyncio.gather(graph_task, return_exceptions=True)
-            await _cancel_run_tasks(request.run_id)
+            await _cancel_owned_tasks(task_registry)
             raise
         except NodeCancelledError as exc:
             raise asyncio.CancelledError from exc
@@ -258,15 +266,15 @@ class LangGraphContentGenerationGraph:
         return terminal
 
 
-async def _cancel_run_tasks(run_id: object) -> None:
-    """Cancel and drain in-flight node tasks belonging to one run."""
+async def _cancel_owned_tasks(registry: RunTaskRegistry) -> None:
+    """Cancel and drain the node tasks this invocation started."""
     current = asyncio.current_task()
-    task_name = f"generation-run-{run_id}"
     pending = [
         task
-        for task in asyncio.all_tasks()
-        if task is not current and task.get_name() == task_name and not task.done()
+        for task in tuple(registry.tasks)
+        if task is not current and not task.done()
     ]
+    registry.tasks.clear()
     for task in pending:
         task.cancel()
     if pending:

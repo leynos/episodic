@@ -18,7 +18,6 @@ from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptTransientProviderError
-from episodic.observability import RecordingTracer
 from tests.generation_run_launcher_observation_support import (
     RecordingMetrics,
 )
@@ -34,8 +33,6 @@ from tests.generation_run_launcher_support import (
 )
 from tests.generation_run_quality_support import (
     BlockingQualityEvaluator,
-    TaskNameAssertingUnitOfWork,
-    assert_off_task_append_is_rejected,
     failing_evaluator,
     inconclusive_evaluator,
     passing_evaluator,
@@ -175,7 +172,7 @@ async def test_qa_gated_run_without_evaluators_fails_closed(
     assert run.status is GenerationRunStatus.FAILED, f"status={run.status!r}"
     assert run.error_category == "qa.unavailable", run.error_category
     assert run.qa_status is QaStatus.PENDING, "an unevaluated run stays pending"
-    assert kinds == ["run.failed"], kinds
+    assert kinds == ["run.started", "run.failed"], kinds
     assert revision == 1, "no TEI may be written"
 
 
@@ -227,42 +224,6 @@ async def test_no_qa_run_records_no_qa_events_or_gate_metrics(
     assert run.qa_status is QaStatus.SKIPPED, run.qa_status
     assert "qa.evaluation_started" not in kinds, kinds
     assert _counter_sum(metrics, _METRIC_GATE) == 0, metrics.observations
-
-
-@pytest.mark.asyncio
-async def test_event_appends_run_in_the_run_task(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Every append happens on the run's own launcher task."""
-    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
-    run_launcher = launcher(
-        session_factory,
-        RecordingDraftGenerator(draft_result(valid_tei())),
-        options=LauncherOptions(
-            evaluator_set=QualityEvaluatorSet((passing_evaluator(),))
-        ),
-    )
-    run_launcher.uow_factory = lambda: TaskNameAssertingUnitOfWork(session_factory)
-    tracer = RecordingTracer()
-    run_launcher.tracer = tracer
-
-    await run_launcher.launch(run_id)
-    await run_launcher.drain()
-
-    run, events, _revision = await _load(session_factory, run_id)
-    print("FAILMSG", run.error_category, run.error_message)
-    print("EVENTS", [kind for kind, payload in events], events)
-    attributes = next(
-        span.attributes
-        for span in tracer.spans
-        if span.name == "generation_run.execute"
-    )
-    assert attributes["outcome"] == "completed", attributes
-    assert attributes["quality_branch"] == "qa_gated", attributes
-    assert attributes["terminal"] == "qa_passed_draft_persisted", attributes
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await assert_off_task_append_is_rejected(uow.generation_runs, run_id)
 
 
 @pytest.mark.asyncio

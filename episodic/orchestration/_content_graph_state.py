@@ -22,6 +22,7 @@ from episodic.canonical.generation_routing import (
 )
 
 if typ.TYPE_CHECKING:
+    import asyncio
     import collections.abc as cabc
 
 
@@ -47,6 +48,18 @@ class ContentGenerationGraphState:
     terminal: GenerationTerminal | None = None
 
 
+@dc.dataclass(slots=True)
+class RunTaskRegistry:
+    """In-flight node tasks owned by one graph invocation.
+
+    LangChain runs each node in its own task. Recording those tasks per
+    invocation lets the runner cancel exactly its own nodes at shutdown, even
+    when another launcher in the same process is executing the same run.
+    """
+
+    tasks: set[asyncio.Task[None]] = dc.field(default_factory=set)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class ContentGenerationContext:
     """Per-run collaborators delivered through the graph's runtime context.
@@ -57,10 +70,13 @@ class ContentGenerationContext:
         The run session through which nodes reach run state.
     evaluator_set : QualityEvaluatorSet
         Configured evaluators and their timeout.
+    task_registry : RunTaskRegistry
+        Node tasks owned by this invocation, cancelled at shutdown.
     """
 
     steps: ContentGenerationSteps
     evaluator_set: QualityEvaluatorSet
+    task_registry: RunTaskRegistry = dc.field(default_factory=RunTaskRegistry)
 
 
 NODE_OWNERSHIP: cabc.Mapping[str, QualityBranch | None] = {

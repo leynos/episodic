@@ -263,17 +263,18 @@ inference budget on a branch that cannot pass.
   recommendation (D1 to D13) accepted as written.
 - [x] (2026-11-22) EP-M0: no-QA characterization baseline. All seven cases are
   green on the unmodified launcher code; see `Artefacts and notes`.
-- [ ] EP-M1: domain quality policy and validation. The pure routing policy and
-  graph ports moved to EP-M3 under D14, because the blocking Skylos dead-code
-  gate runs on every commit and those symbols have no production caller until
-  the graph exists.
+- [x] (2026-11-22) EP-M1: domain quality policy and validation. The pure
+  routing policy and graph ports moved to EP-M3 under D14, because the blocking
+  Skylos dead-code gate runs on every commit and those symbols have no
+  production caller until the graph exists.
 - [x] (2026-11-22) EP-M2: persistence, migration and lifecycle updates.
 - [x] (2026-11-22) EP-M3: content-generation graph in orchestration.
 - [x] (2026-11-22) EP-M4: launcher executes runs through the graph.
 - [x] (2026-11-22) EP-M5: REST and composition-root acceptance of `qa_gated`.
 - [x] (2026-11-22) EP-M6: documentation, ADR acceptance, roadmap update and
   final gates.
-- [ ] EP-M6: documentation, ADR acceptance, roadmap update and final gates.
+- [x] (2026-11-22) Rebases onto `main @ d0bdabe3` and the CodeRabbit
+  completeness assessment; see D17 and D18.
 
 ## Surprises & discoveries
 
@@ -650,6 +651,44 @@ accepted in EP-M6. D13 records the review itself.
       be visible only from history.
   - Date/Author: 2026-10-17, Logisphere panel via the planning agent.
 
+- **Decision D17: record the accepted scope deviation for the rebase-era
+  diff.**
+  - The plan's Tolerance section caps a change at 65 files and 3,500 net added
+    lines, excluding snapshots and the plan.
+  - The delivered diff against `main` is larger, and the overrun is not new
+    feature work: it is the rebase crossing ADR renumbering, the df12 gate
+    migrations, the logging port, QA artefact persistence, and three
+    intervening migrations, plus the test support the new gates require.
+  - The scope itself is unchanged: the plan's milestones, acceptance
+    criteria, and verification obligations are exactly as approved.
+  - Accepted by the user's instruction to carry the assigned ExecPlan to
+    completion, which supersedes the size tolerance for this delivery.
+  - Date/Author: 2026-11-22, implementation agent, after the CodeRabbit
+    completeness assessment raised the overrun.
+- **Decision D18: apply the five correctness repairs CodeRabbit's assessment
+  found.**
+  - `initialize` claims before it refuses an unevaluable run, so a losing
+    launcher can never fail a claimed run.
+  - Node tasks are tracked per graph invocation, so cancelling one runner
+    cannot cancel another runner's tasks.
+  - The initial quality-mode read is inside `_execute_run`'s failure boundary,
+    so a read fault records a terminal failure.
+  - An evaluation that reports `error_type` with a `passed` verdict is
+    normalized to `inconclusive`, so an inconsistent adapter fails closed.
+  - Budget-hint validation runs inside the idempotent work, after the
+    capability and gated-rationale checks, restoring the historical 422
+    precedence.
+  - The shielded shutdown write runs in a task named
+    `generation-run-{run_id}`, so the INV-9 task-name invariant covers
+    cancellation as well as the three normal outcomes.
+  - Each repair has a test: the duplicate-claim interleaving, two concurrent
+    graph invocations, the injected read fault, the error-tagged pass, the
+    malformed-budget precedence case, and a four-cell task-name matrix over
+    gated-passed, gated-failed, no-QA, and shutdown.
+  - Consequence: the capability refusal now follows the claim, so its run
+    records `run.started` before `run.failed`; the existing assertion was
+    updated to the new event sequence.
+  - Date/Author: 2026-11-22, implementation agent.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it
     `generation-run-{run_id}`, and on cancellation cancels and drains it and
@@ -1844,6 +1883,31 @@ Record the following here as each milestone completes:
   episode repository rather than by storing a dangling run: both
   `generation_runs.episode_id` and `source_bundle_id` are foreign keys with
   cascade behaviour.
+
+### Rebases and the CodeRabbit completeness assessment
+
+- Replayed onto `main @ d0bdabe3` (commit `c240f579`):
+  - the QA-gated migration is `20261122_000018` on top of `20261110_000017`;
+  - ADR 024 became
+    `docs/adrs/adr-0029-qa-gated-mode-branching-and-content-generation-graph.md`;
+  - routes moved to `episodic/api/routes.py` with
+    `GenerationRunsResourceConfig`;
+  - the episode TEI resource reads its producing run through
+    `read_owned_episode_and_run`.
+- Addressed the hosted CodeScene review (`8e316dce`, `dca6c479`) by extracting
+  helpers and grouping arguments; `cs delta origin/main HEAD` is clean.
+- CodeRabbit's completeness assessment (`4.4.1-completeness-dca6c479`) named
+  five correctness defects and four evidence gaps. All five defects are fixed
+  under D18 with new tests, and this section plus D17 supply the missing
+  evidence. The scope overrun is recorded as D17.
+- Evidence for this milestone set: `make check-fmt`, `make typecheck`,
+  `make lint` (Hecate, Ruff, Pylint, df12, interrogate, ambrleaks, Skylos,
+  df12-duplication), `make test` (2438 passed, 1 skipped, 82 snapshots),
+  `make check-migrations`, `make markdownlint` and `make nixie` all pass at the
+  final head. The INV-8 comparison is `git diff --stat` over the
+  characterization snapshot and `tests/features/no_qa_generation_slice.feature`
+  since `d6876cba`: the feature file is unchanged, and the snapshot differs
+  only by the two D9 span attributes plus the D15 record.
 
 ## Interfaces and dependencies
 

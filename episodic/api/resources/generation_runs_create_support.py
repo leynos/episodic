@@ -50,7 +50,6 @@ def _parse_create_request(payload: JsonPayload) -> _CreateGenerationRun:
         for key in ("template_id", "prompt_overrides")
         if key in payload
     }
-    budget_snapshot = _optional_mapping(payload, "budget_hints")
     rationale = (
         require_str(payload, "skip_qa_rationale")
         if parsed_mode is QualityMode.DRAFT_WITHOUT_QA
@@ -60,7 +59,7 @@ def _parse_create_request(payload: JsonPayload) -> _CreateGenerationRun:
         quality_mode=parsed_mode,
         skip_qa_rationale=rationale,
         configuration=configuration,
-        budget_snapshot=budget_snapshot,
+        budget_snapshot={},
     )
 
 

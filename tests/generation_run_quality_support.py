@@ -105,6 +105,27 @@ def raising_evaluator(slug: str = "pedante") -> ScriptedQualityEvaluator:
 
 
 @dc.dataclass(slots=True)
+class ReleasableQualityEvaluator:
+    """Evaluator that blocks until the test releases it, then passes."""
+
+    slug: str = "releasable-evaluator"
+    started: asyncio.Event = dc.field(default_factory=asyncio.Event)
+    release: asyncio.Event = dc.field(default_factory=asyncio.Event)
+
+    @property
+    def name(self) -> str:
+        """The evaluator's stable slug."""
+        return self.slug
+
+    async def evaluate(self, subject: EvaluationSubject) -> QualityEvaluation:
+        """Wait for the test, then return a passing verdict."""
+        _ = subject
+        self.started.set()
+        await self.release.wait()
+        return QualityEvaluation(self.slug, QualityVerdict.PASSED)
+
+
+@dc.dataclass(slots=True)
 class BlockingCostRecorder:
     """Cost recorder that blocks inside the terminal transaction."""
 

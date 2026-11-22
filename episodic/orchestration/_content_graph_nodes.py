@@ -55,14 +55,29 @@ async def initialize(
     state: ContentGenerationGraphState,
     context: ContentGenerationContext,
 ) -> NodeResult:
-    """Refuse an unevaluable QA-gated run, then claim and hydrate it."""
+    """Claim and hydrate the run, then refuse an unevaluable QA-gated run.
+
+    The claim comes first so that only the task that won the claim can record
+    an ``qa.unavailable`` terminal. Checking earlier would let a losing
+    launcher fail another worker's running job.
+
+    Returns
+    -------
+    NodeResult
+        An empty state delta.
+
+    Raises
+    ------
+    QualityEvaluationUnavailableError
+        If the claimed run is QA-gated and no evaluator is configured.
+    """
+    await context.steps.initialize()
     if (
         state.request.quality_mode is QualityMode.QA_GATED
         and not context.evaluator_set.evaluators
     ):
         msg = "QA-gated generation requires at least one configured evaluator."
         raise QualityEvaluationUnavailableError(msg)
-    await context.steps.initialize()
     return {}
 
 
@@ -140,11 +155,23 @@ async def _evaluate_one(
             verdict=QualityVerdict.INCONCLUSIVE,
             error_type=type(exc).__name__,
         )
+    if evaluation.error_type is not None:
+        log_error(
+            logger,
+            "content_generation.evaluator_inconsistent evaluator=%s error_type=%s",
+            evaluator.name,
+            evaluation.error_type,
+        )
+        return QualityEvaluation(
+            evaluator=evaluator.name,
+            verdict=QualityVerdict.INCONCLUSIVE,
+            summary=evaluation.summary,
+            error_type=evaluation.error_type,
+        )
     return QualityEvaluation(
         evaluator=evaluator.name,
         verdict=evaluation.verdict,
         summary=evaluation.summary,
-        error_type=evaluation.error_type,
     )
 
 
