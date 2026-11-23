@@ -8,10 +8,11 @@ import falcon
 from episodic.api.errors import http_error, map_source_intake_error
 from episodic.api.helpers import parse_uuid, require_payload_dict
 from episodic.api.resources.generation_runs_create_support import (
+    RequestRuleOrder,
     _CreateGenerationRun,
     _parse_create_request,
-    _prevalidates_before_idempotency,
     _quality_precondition,
+    _request_rule_order,
     _Submission,
     _validate_quality_request,
 )
@@ -192,7 +193,9 @@ class GenerationRunsResource:
         # a rejection must release the key.
         launcher: GenerationRunLauncher | None = None
         prepared: _CreateGenerationRun | None = None
-        if _prevalidates_before_idempotency(request, idempotency_key):
+        if _request_rule_order(request, idempotency_key) is (
+            RequestRuleOrder.BEFORE_IDEMPOTENCY
+        ):
             prepared = _validate_quality_request(
                 request,
                 payload,

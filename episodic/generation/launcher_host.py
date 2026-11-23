@@ -15,7 +15,11 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from episodic.canonical.domain import GenerationRun, SourceDocument
+    from episodic.canonical.domain import (
+        GenerationRun,
+        GenerationRunStatus,
+        SourceDocument,
+    )
     from episodic.canonical.generation_graph_ports import (
         ContentGenerationGraphPort,
     )
@@ -34,6 +38,7 @@ if typ.TYPE_CHECKING:
         CostRecorderFactory,
         DraftIdFactoryFactory,
         Failure,
+        FailureWriteResult,
         GenerationSourceLimits,
         RunClaim,
     )
@@ -68,6 +73,8 @@ class LauncherHost(typ.Protocol):
     _semaphore: asyncio.Semaphore
     _admitted_run_count: int
     _cancelled_run_ids: set[uuid.UUID]
+    _pending_cancellation_ids: set[uuid.UUID]
+    _cancellation_tasks: set[asyncio.Task[bool]]
     _is_shutting_down: bool
 
     async def _load_sources(
@@ -130,8 +137,44 @@ class LauncherHost(typ.Protocol):
         *,
         claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
-    ) -> bool:
+    ) -> FailureWriteResult:
         """Record a terminal failed run state when this invocation owns it."""
+        ...
+
+    async def _record_owned_failure(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+        token: ClaimToken,
+        *,
+        draft: DraftScriptResult | None = None,
+    ) -> FailureWriteResult:
+        """Record a terminal failure for an explicit token holder."""
+        ...
+
+    async def _record_costs(
+        self,
+        uow: CanonicalUnitOfWork,
+        run_id: uuid.UUID,
+        result: DraftScriptResult,
+    ) -> None:
+        """Record provider costs for a generated draft."""
+        ...
+
+    def _record_terminal_metric(
+        self,
+        status: GenerationRunStatus,
+        error_category: str,
+    ) -> None:
+        """Record the terminal-state counter."""
+        ...
+
+    def _record_failure_observation(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+    ) -> None:
+        """Emit the metrics and log line for a written failure."""
         ...
 
     def _record_pending_depth(self) -> None:

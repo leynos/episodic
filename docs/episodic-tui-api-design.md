@@ -288,9 +288,10 @@ client choice:
 - `qa_gated` is accepted only where at least one QA evaluator is configured.
   It must not carry `skip_qa_rationale`, starts with `qa_status=pending`, and
   ends `succeeded` with `qa_status=passed` or `failed` with `qa_status=failed`.
-  Shutdown cancellation is the one exception: a cancelled gated run ends
-  `failed` with `qa_status=pending`, because no QA decision was made. Completed
-  QA decisions keep the succeeded/passed or failed/failed pairing.
+  A run that fails before any QA decision ends `failed` with
+  `qa_status=pending`: that covers a draft error, an evaluator set that is
+  unavailable at execution time, and a shutdown cancellation. Completed QA
+  decisions keep the succeeded/passed or failed/failed pairing.
 
 Errors are checked in this order:
 

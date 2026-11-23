@@ -189,3 +189,36 @@ class CancelCommitUnitOfWork(SqlAlchemyUnitOfWork):
             self._fault.pending = False
             raise asyncio.CancelledError
         await super().commit()
+
+
+@dc.dataclass(slots=True)
+class CommitFault:
+    """Control a unit of work's commit acknowledgement."""
+
+    lose_ack: bool = False
+    block: bool = False
+    started: asyncio.Event = dc.field(default_factory=asyncio.Event)
+    release: asyncio.Event = dc.field(default_factory=asyncio.Event)
+
+
+class CommitFaultUnitOfWork(SqlAlchemyUnitOfWork):
+    """Unit of work that can lose a commit acknowledgement or block in commit."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        fault: CommitFault,
+    ) -> None:
+        """Open the real unit of work with the supplied commit fault."""
+        super().__init__(session_factory)
+        self._fault = fault
+
+    async def commit(self) -> None:
+        """Commit, optionally blocking first or dropping the acknowledgement."""
+        if self._fault.block:
+            self._fault.started.set()
+            await self._fault.release.wait()
+        await super().commit()
+        if self._fault.lose_ack:
+            self._fault.lose_ack = False
+            raise asyncio.CancelledError

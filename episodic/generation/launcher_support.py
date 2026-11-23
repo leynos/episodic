@@ -50,6 +50,7 @@ from episodic.generation.launcher_support_sources import (
 from episodic.runtime_providers import Clock
 
 if typ.TYPE_CHECKING:
+    import datetime as dt
     import uuid
 
     from episodic.canonical.domain import CanonicalEpisode, GenerationRun
@@ -67,6 +68,7 @@ __all__ = [
     "DraftIdFactoryFactory",
     "Failure",
     "FailureWrite",
+    "FailureWriteResult",
     "GenerationSourceLimitError",
     "GenerationSourceLimits",
     "PersistedTei",
@@ -130,11 +132,29 @@ class ClaimToken:
 class RunClaim:
     """The claim token one launcher invocation holds for the run it drives.
 
-    ``token`` is ``None`` until this invocation wins the claim. It is written
-    only where the claim is made and after a failure write commits, so a
-    rolled-back transaction cannot leave a token that no durable write backs.
+    ``token`` is ``None`` until this invocation wins the claim. ``started_at``
+    records the timestamp used in the compare-and-set, so a cancellation that
+    interrupts the commit acknowledgement can be reconciled against the
+    durable row instead of guessing.
     """
 
+    token: ClaimToken | None = None
+    started_at: dt.datetime | None = None
+
+
+@dc.dataclass(frozen=True, slots=True)
+class FailureWriteResult:
+    """Outcome of a failure write attempt.
+
+    Attributes
+    ----------
+    written : bool
+        Whether this invocation recorded the terminal failure.
+    token : ClaimToken | None
+        The authority the write used, for the caller to retain.
+    """
+
+    written: bool
     token: ClaimToken | None = None
 
 
@@ -144,6 +164,7 @@ class FailureWrite:
 
     run_id: uuid.UUID
     failure: Failure
+    token: ClaimToken
     draft: DraftScriptResult | None
 
 

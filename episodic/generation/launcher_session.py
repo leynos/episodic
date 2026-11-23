@@ -25,7 +25,12 @@ from episodic.canonical.generation_routing import QualityVerdict
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.tei import parse_tei_header
 from episodic.generation.launcher_quality import QaOutcome, record_qa_metrics
-from episodic.generation.launcher_support import ClaimedRun, Failure, RunClaim
+from episodic.generation.launcher_support import (
+    ClaimedRun,
+    ClaimToken,
+    Failure,
+    RunClaim,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -33,6 +38,8 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import DraftScriptResult
+    from episodic.generation.launcher_host import LauncherHost
+    from episodic.generation.launcher_support import FailureWriteResult
     from episodic.observability import ValueMetricsPort
     from episodic.runtime_providers import Clock
 
@@ -89,9 +96,97 @@ class SessionPorts(typ.Protocol):
         *,
         claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
-    ) -> bool:
-        """Record a terminal failure."""
+    ) -> FailureWriteResult:
+        """Record a terminal failure when this invocation owns the run."""
         ...
+
+    async def _record_owned_failure(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+        token: ClaimToken,
+        *,
+        draft: DraftScriptResult | None = None,
+    ) -> FailureWriteResult:
+        """Record a terminal failure for an explicit token holder."""
+        ...
+
+
+class SessionPortsAdapter:
+    """Expose only the launcher operations a run session needs.
+
+    The session never receives the launcher itself, so a node cannot reach
+    scheduling, admission or claim methods through the step port.
+    """
+
+    def __init__(self, host: LauncherHost) -> None:
+        """Bind the launcher fields and operations the session may use."""
+        self._host = host
+        self.uow_factory = host.uow_factory
+        self.clock = host.clock
+        self.metrics = host.metrics
+
+    async def _claim_and_hydrate(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimedRun | None:
+        """Claim the run and load its input."""
+        return await self._host._claim_and_hydrate(run_id, claim)
+
+    async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:
+        """Generate one draft."""
+        return await self._host._generate(claimed)
+
+    async def _record_draft_generated(
+        self,
+        run_id: uuid.UUID,
+        result: DraftScriptResult,
+    ) -> None:
+        """Record that generation returned a draft."""
+        await self._host._record_draft_generated(run_id, result)
+
+    async def _persist_success(
+        self,
+        claimed: ClaimedRun,
+        result: DraftScriptResult,
+        *,
+        qa: QaOutcome,
+    ) -> None:
+        """Persist a successful run."""
+        await self._host._persist_success(claimed, result, qa=qa)
+
+    async def _record_failure(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+        *,
+        claim: RunClaim | None = None,
+        draft: DraftScriptResult | None = None,
+    ) -> FailureWriteResult:
+        """Record a terminal failure."""
+        return await self._host._record_failure(
+            run_id,
+            failure,
+            claim=claim,
+            draft=draft,
+        )
+
+    async def _record_owned_failure(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+        token: ClaimToken,
+        *,
+        draft: DraftScriptResult | None = None,
+    ) -> FailureWriteResult:
+        """Record a terminal failure for an explicit token holder."""
+        return await self._host._record_owned_failure(
+            run_id,
+            failure,
+            token,
+            draft=draft,
+        )
 
 
 class RunNotClaimedError(Exception):
@@ -223,15 +318,25 @@ class _LauncherRunSession:
         """Record the escalated terminal without persisting TEI."""
         draft = self._require_draft()
         record_qa_metrics(self.launcher.metrics, verdict, evaluations)
-        await self.launcher._record_failure(
+        token = self._require_token()
+        result = await self.launcher._record_owned_failure(
             self.run_id,
             Failure.escalation_failure(
                 verdict=verdict,
                 evaluations=evaluations,
                 content_hash=draft.content_hash,
             ),
+            token,
             draft=draft,
         )
+        _ = result
+
+    def _require_token(self) -> ClaimToken:
+        """Return this session's claim token, or fail loudly without one."""
+        if self.claim.token is None:
+            msg = "run session has no claim token"
+            raise RuntimeError(msg)
+        return self.claim.token
 
     def _require_claimed(self) -> ClaimedRun:
         """Return the hydrated run or fail loudly if a node skipped hydration."""

@@ -20,6 +20,7 @@ from episodic.canonical.generation_routing import (
 )
 from episodic.generation.launcher_session import (
     RunNotClaimedError,
+    SessionPortsAdapter,
     _LauncherRunSession,
 )
 from episodic.generation.launcher_support import (
@@ -88,9 +89,13 @@ class _SchedulingMixin(_MixinBase):
         log_info(logger, "generation_run_launcher.scheduled run_id=%s", run_id)
 
     async def drain(self) -> None:
-        """Wait for all currently scheduled tasks to finish."""
-        while self._tasks:
-            await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+        """Wait for all scheduled tasks and cancellation writes to finish."""
+        while self._tasks or self._cancellation_tasks:
+            await asyncio.gather(
+                *tuple(self._tasks),
+                *tuple(self._cancellation_tasks),
+                return_exceptions=True,
+            )
 
     @property
     def scheduled_run_count(self) -> int:
@@ -107,7 +112,7 @@ class _SchedulingMixin(_MixinBase):
             task.cancel()
         await self.drain()
         for task, run_id in cancelled_tasks:
-            if task.cancelled():
+            if task.cancelled() and run_id not in self._pending_cancellation_ids:
                 await self._record_cancellation_owned(run_id, RunClaim())
 
     async def _record_cancellation_owned(
@@ -121,12 +126,23 @@ class _SchedulingMixin(_MixinBase):
         event; naming the shielded write keeps the single-writer invariant
         true for this path too.
         """
-        if run_id in self._cancelled_run_ids:
+        if run_id in self._cancelled_run_ids or run_id in (
+            self._pending_cancellation_ids
+        ):
             return
+        self._pending_cancellation_ids.add(run_id)
         write = asyncio.create_task(
             self._record_cancellation(run_id, claim),
             name=f"generation-run-{run_id}",
         )
+        self._cancellation_tasks.add(write)
+
+        def _done(task: asyncio.Task[bool]) -> None:
+            """Forget a finished cancellation write."""
+            self._cancellation_tasks.discard(task)
+            self._pending_cancellation_ids.discard(run_id)
+
+        write.add_done_callback(_done)
         recorded = await asyncio.shield(write)
         if recorded:
             self._cancelled_run_ids.add(run_id)
@@ -214,7 +230,7 @@ class _SchedulingMixin(_MixinBase):
                     quality_mode=quality_mode,
                 ),
                 steps=_LauncherRunSession(
-                    launcher=self,
+                    launcher=SessionPortsAdapter(self),
                     run_id=run_id,
                     claim=claim,
                 ),
@@ -223,12 +239,12 @@ class _SchedulingMixin(_MixinBase):
             return _ExecutionOutcome(outcome="not_claimed")
         except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
             failure = classify_failure(exc)
-            recorded = await self._record_failure(
+            result = await self._record_failure(
                 run_id,
                 failure,
                 claim=claim,
             )
-            if not recorded:
+            if not result.written:
                 return _ExecutionOutcome(outcome="not_claimed")
             return _ExecutionOutcome(
                 outcome="failed",
@@ -261,7 +277,7 @@ class _SchedulingMixin(_MixinBase):
             write must not mark the run cancelled, or a losing invocation
             would suppress the owner's cancellation write.
         """
-        return await self._record_failure(
+        result = await self._record_failure(
             run_id,
             Failure(
                 message="Generation task cancelled during shutdown.",
@@ -269,3 +285,4 @@ class _SchedulingMixin(_MixinBase):
             ),
             claim=claim,
         )
+        return result.written

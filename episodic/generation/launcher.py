@@ -32,6 +32,7 @@ import datetime as dt
 import typing as typ
 
 from episodic.generation.launcher_claim import _ClaimMixin
+from episodic.generation.launcher_failure import _FailurePersistenceMixin
 from episodic.generation.launcher_persistence import _PersistenceMixin
 from episodic.generation.launcher_scheduling import (
     GenerationRunAdmissionError as GenerationRunAdmissionError,
@@ -86,6 +87,7 @@ class InProcessGenerationRunLauncher(
     _SchedulingMixin,
     _ClaimMixin,
     _PersistenceMixin,
+    _FailurePersistenceMixin,
     GenerationRunLauncher,
 ):
     """Schedule and execute no-QA draft generation in-process."""
@@ -116,6 +118,14 @@ class InProcessGenerationRunLauncher(
     _semaphore: asyncio.Semaphore = dc.field(init=False)
     _admitted_run_count: int = dc.field(default=0, init=False)
     _cancelled_run_ids: set[uuid.UUID] = dc.field(default_factory=set, init=False)
+    _pending_cancellation_ids: set[uuid.UUID] = dc.field(
+        default_factory=set,
+        init=False,
+    )
+    _cancellation_tasks: set[asyncio.Task[bool]] = dc.field(
+        default_factory=set,
+        init=False,
+    )
     _is_shutting_down: bool = dc.field(default=False, init=False)
 
     def __post_init__(self) -> None:

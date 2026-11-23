@@ -196,6 +196,11 @@ Poll the run until it is terminal:
 - `failed` with `qa_status=failed` and `error_category=qa.escalation_required`
   means evaluation did not pass. No TEI is written, so episode TEI retrieval
   returns `404`, but the run's inference cost is still recorded.
+- A run that fails before any QA decision keeps `qa_status=pending`: a draft
+  error (`provider.*` or `tei.invalid`), an evaluator set that is unavailable
+  at execution time (`qa.unavailable`), and a shutdown cancellation
+  (`launcher.shutdown`) all end `failed` with `pending`, because no verdict was
+  ever reached.
 
 The `qa.escalated` event is the stable signal that a run escalated; the
 `qa.escalation_required` category is specific to this release. Evaluator errors

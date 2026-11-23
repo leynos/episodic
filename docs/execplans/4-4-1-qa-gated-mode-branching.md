@@ -92,6 +92,11 @@ inference budget on a branch that cannot pass.
   - No TEI is persisted that was not already committed.
   - A `qa_gated` run's `qa_status` stays at `pending`, unless a terminal had
     already committed.
+  - The same rule covers every failure before a QA decision: a generator
+    error, an evaluator set that is unavailable at execution time, and a
+    shutdown cancellation all end `failed` with `qa_status` still `pending`.
+    `qa_status=failed` is recorded only when evaluation completed and did not
+    pass.
 - **Respect the hexagonal boundaries enforced by Hecate.** These are
   configured under `[tool.hecate]` in `pyproject.toml` and described in ADR
   0014 and ADR 0022.

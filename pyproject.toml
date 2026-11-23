@@ -1294,9 +1294,6 @@ reason = "The same shared validator called on different fields."
 members = ["episodic/runtime_providers.py::utc_now", "episodic/cost/pricing_catalogue/file_loader.py::_default_now"]
 reason = "Two one-line clock defaults at different layers: the service-runtime providers expose the production clock for injected collaborators, and the file catalogue keeps a local default so it can be constructed without a runtime composition root."
 [[tool.duplication_gate.allow]]
-members = ["episodic/generation/launcher_support.py", "episodic/api/episode_access.py"]
-reason = "Both modules end with a TYPE_CHECKING import block of the same two annotation-only names; an import list cannot be factored into a helper."
-[[tool.duplication_gate.allow]]
 members = ["episodic/orchestration/_content_graph_nodes.py::generate_draft_without_qa", "episodic/orchestration/_content_graph_nodes.py::generate_qa_candidate"]
 reason = "Each branch must own its generate node so the topology states branch ownership; both delegate to the same run-session step, which is the whole point."
 [[tool.duplication_gate.allow]]

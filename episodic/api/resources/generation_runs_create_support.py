@@ -7,6 +7,7 @@ its idempotency key and the ordering matches the published contract.
 """
 
 import dataclasses as dc
+import enum
 import typing as typ
 
 import falcon
@@ -177,25 +178,43 @@ def _optional_mapping(payload: JsonPayload, field_name: str) -> JsonPayload:
     return typ.cast("JsonPayload", value)
 
 
-def _prevalidates_before_idempotency(
+class RequestRuleOrder(enum.StrEnum):
+    """Where a create request's rules run relative to idempotency.
+
+    ``BEFORE_IDEMPOTENCY`` reports body errors and a missing launcher before a
+    replay or conflict is considered. ``IN_IDEMPOTENT_WORK`` runs the same
+    rules inside ``work()``, so a rejection releases the key and a stored 202
+    still replays after the capability is withdrawn.
+    """
+
+    BEFORE_IDEMPOTENCY = "before_idempotency"
+    IN_IDEMPOTENT_WORK = "in_idempotent_work"
+
+
+def _request_rule_order(
     request: _CreateGenerationRun,
     idempotency_key: str | None,
-) -> bool:
-    """Whether the body rules and launcher precede idempotency for a request.
+) -> RequestRuleOrder:
+    """State where this request's rules run, in one place.
 
-    ``draft_without_qa`` is the pre-existing contract: its request errors and
-    the missing-launcher 503 both precede replay and conflict. A ``qa_gated``
-    request keeps D7's ordering instead, so a rejection releases its key and
-    a stored 202 still replays after the capability is withdrawn.
+    The table is:
+
+    | Key | Mode | Order |
+    | --- | ---- | ----- |
+    | absent | any | before idempotency, so a 400/422/503 is not masked |
+    | present | ``draft_without_qa`` | before idempotency, the base contract |
+    | present | ``qa_gated`` | in the work, per D7 and INV-12 |
 
     Returns
     -------
-    bool
-        ``True`` when the caller validates and resolves the launcher first.
+    RequestRuleOrder
+        The ordering the caller must apply.
     """
     if is_blank_text(idempotency_key):
-        return True
-    return request.quality_mode is QualityMode.DRAFT_WITHOUT_QA
+        return RequestRuleOrder.BEFORE_IDEMPOTENCY
+    if request.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
+        return RequestRuleOrder.BEFORE_IDEMPOTENCY
+    return RequestRuleOrder.IN_IDEMPOTENT_WORK
 
 
 def _quality_precondition(

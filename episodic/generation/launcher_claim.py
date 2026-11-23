@@ -12,9 +12,11 @@ The content-generation graph's ``initialize`` node claims through
 hydrates to ``None``, and the session turns that into ``not_claimed``.
 """
 
+import asyncio
 import datetime as dt
 import typing as typ
 
+from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
@@ -135,9 +137,16 @@ class _ClaimMixin(_MixinBase):
         -------
         GenerationRun | None
             The claimed run, or ``None`` when another invocation owns it.
+
+        Raises
+        ------
+        asyncio.CancelledError
+            If cancelled; the claim is reconciled against the durable row
+            first so a committed claim keeps an owner.
         """
         async with self.uow_factory() as uow:
             started_at = self.clock()
+            claim.started_at = started_at
             run = await uow.generation_runs.claim_run_for_execution(
                 run_id,
                 current_node="draft",
@@ -153,9 +162,55 @@ class _ClaimMixin(_MixinBase):
                 payload={"current_node": "draft"},
                 occurred_at=started_at,
             )
-            await uow.commit()
+            try:
+                await uow.commit()
+            except asyncio.CancelledError:
+                # The commit may have landed. Reconcile against the durable
+                # row before the cancellation path gives up on the run.
+                await asyncio.shield(self._reconcile_claim(run_id, claim))
+                raise
             claim.token = ClaimToken(run.id)
         return run
+
+    async def _reconcile_claim(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
+        """Re-adopt a durable claim whose commit acknowledgement was lost.
+
+        Returns
+        -------
+        ClaimToken | None
+            The token when the stored run carries this attempt's claim.
+
+        Notes
+        -----
+        Runs under a shield from the cancellation path, so it returns rather
+        than raising when the outer task is cancelled again.
+        """
+        if claim.token is not None or claim.started_at is None:
+            return claim.token
+        async with self.uow_factory() as uow:
+            run = await uow.generation_runs.get_run(run_id)
+        reacquired = (
+            None if run is None else self._adopt_if_owned(run, run_id, claim.started_at)
+        )
+        if reacquired is not None:
+            claim.token = reacquired
+        return reacquired
+
+    @staticmethod
+    def _adopt_if_owned(
+        run: GenerationRun,
+        run_id: uuid.UUID,
+        started_at: dt.datetime,
+    ) -> ClaimToken | None:
+        """Return a token when the stored run is this attempt's claim."""
+        owned = run.status is GenerationRunStatus.RUNNING and (
+            run.started_at == started_at
+        )
+        return ClaimToken(run_id) if owned else None
 
     async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:
         """Generate one draft and record latency metrics."""
