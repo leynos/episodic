@@ -1,6 +1,16 @@
 # serializer version: 1
 # name: test_offline_downgrade_emits_the_lossy_guard
   '''
+  BEGIN;
+  
+  -- Running downgrade 20261123_000019 -> 20261122_000018
+  
+  ALTER TABLE generation_runs DROP COLUMN claim_token;
+  
+  UPDATE alembic_version SET version_num='20261122_000018' WHERE alembic_version.version_num = '20261123_000019';
+  
+  -- Running downgrade 20261122_000018 -> 20261110_000017
+  
   DO $$
   BEGIN
       IF (SELECT EXISTS (SELECT 1 FROM generation_runs WHERE qa_status::text IN ('pending', 'passed', 'failed')) OR EXISTS (SELECT 1 FROM episodes WHERE qa_status::text IN ('pending', 'passed', 'failed')) OR EXISTS (SELECT 1 FROM generation_runs WHERE quality_mode::text IN ('qa_gated'))) THEN
@@ -8,6 +18,30 @@
               'QA-gated quality-mode labels are still in use';
       END IF;
   END;
-  $$;
+  $$;;
+  
+  ALTER TYPE qa_status RENAME TO qa_status_old;
+  
+  CREATE TYPE qa_status AS ENUM ('skipped');
+  
+  ALTER TABLE generation_runs ALTER COLUMN qa_status TYPE qa_status USING qa_status::text::qa_status;
+  
+  ALTER TABLE episodes ALTER COLUMN qa_status TYPE qa_status USING qa_status::text::qa_status;
+  
+  DROP TYPE qa_status_old;
+  
+  ALTER TYPE quality_mode RENAME TO quality_mode_old;
+  
+  CREATE TYPE quality_mode AS ENUM ('draft_without_qa');
+  
+  ALTER TABLE generation_runs ALTER COLUMN quality_mode TYPE quality_mode USING quality_mode::text::quality_mode;
+  
+  DROP TYPE quality_mode_old;
+  
+  UPDATE alembic_version SET version_num='20261110_000017' WHERE alembic_version.version_num = '20261122_000018';
+  
+  COMMIT;
+  
+  
   '''
 # ---

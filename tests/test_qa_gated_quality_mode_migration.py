@@ -182,23 +182,19 @@ async def test_downgrade_recreates_original_types_when_no_rows_use_new_labels(
         await _assert_label_parity(connection)
 
 
-def test_offline_downgrade_emits_the_lossy_guard(snapshot: object) -> None:
-    """The offline downgrade renders a guard that refuses a lossy rollback."""
-    import importlib.util
-    from pathlib import Path
+def test_offline_downgrade_emits_the_lossy_guard(
+    snapshot: object,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Alembic's offline downgrade emits the guard that refuses a lossy rollback."""
+    config = alembic_config("postgresql://user:pass@localhost/episodic")
 
-    path = (
-        Path(__file__).resolve().parents[1]
-        / "alembic"
-        / "versions"
-        / "20261122_000018_add_qa_gated_quality_mode.py"
+    command.downgrade(
+        config,
+        f"{_HEAD_REVISION}:{_PREVIOUS_REVISION}",
+        sql=True,
     )
-    spec = importlib.util.spec_from_file_location("qa_gated_migration", path)
-    assert spec is not None, path
-    assert spec.loader is not None, path
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
 
-    statement = migration._offline_downgrade_statement()
+    emitted = capsys.readouterr().out
 
-    assert statement == snapshot, statement
+    assert emitted == snapshot, emitted

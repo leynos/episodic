@@ -16,7 +16,7 @@ episode TEI.
 
 | Priority           | Area               | What to do                                                                               |
 | ------------------ | ------------------ | ---------------------------------------------------------------------------------------- |
-| Required           | Database           | Apply `20261122_000018` with the other 0.2.0 migrations.                                 |
+| Required           | Database           | Apply the 0.2.0 migrations through `20261123_000019`.                                    |
 | Required if called | Generation-run API | Handle the new `qa_gated` mode where it is advertised, and the new `400` rationale rule. |
 | Review if enabled  | Observability      | Alert on the new `qa.*` events and error categories.                                     |
 | Optional           | Clients            | Adopt QA-gated runs where the deployment configures evaluators.                          |
@@ -99,6 +99,14 @@ and `pending`, `passed` and `failed` to `qa_status`. The upgrade is additive.
 The downgrade refuses, raising `CommandError` when online, while any
 `generation_runs` or `episodes` row still uses a new label, because dropping an
 enum label would corrupt those rows.
+
+Revision `20261123_000019` adds the nullable `generation_runs.claim_token` UUID
+column, which records the per-attempt claim proof that authorizes a terminal
+write. The upgrade is additive and needs no backfill: existing rows keep
+`NULL`, and only a claimed run writes a token. Its downgrade drops the column,
+losing claim evidence but no run data. Apply it in the same stop-the-world step
+as `20261122_000018`; a writer that starts before the column exists fails its
+first claim.
 
 `make check-migrations` reports drift between the object-relational mapping
 (ORM) models and the migration history. A deployment that skips this step fails

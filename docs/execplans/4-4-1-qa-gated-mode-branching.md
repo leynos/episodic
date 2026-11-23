@@ -78,9 +78,11 @@ inference budget on a branch that cannot pass.
     supplies for that run.
   - Graph nodes never open a unit of work.
   - No unit of work is held open across an evaluator `await`.
-- **Keep event publication ordered.** Every event for a run is appended from
-  that run's launcher task, in graph order, with graph nodes running inline in
-  that task. In this item:
+- **Keep event publication ordered.** Every event for a run is appended from a
+  task named `generation-run-{run_id}`, in graph order. D16 records that
+  LangChain wraps each node in a child task owned and named by the invocation,
+  so "named for the run" is the contract rather than "the one launcher task".
+  In this item:
   - No graph branch may run in parallel.
   - The graph must not use `step_timeout`, subgraphs, `stream_eager`, or the
     `messages` or `custom` stream modes. Each of these moves node execution
@@ -283,6 +285,13 @@ inference budget on a branch that cannot pass.
   final gates.
 - [x] (2026-11-22) Rebases onto `main @ d0bdabe3` and the CodeRabbit
   completeness assessment; see D17 and D18.
+- [x] (2026-11-23) Merged `main` at #438 and ported the QA-gated feature onto
+  the injected launcher components; see D19 to D23 and the integration record.
+- [x] (2026-11-23) Fifth assessment round: Alembic's own offline downgrade is
+  snapshotted (INV-11), the precedence envelopes are snapshotted including the
+  accepted-gated rationale (INV-12), the INV-1 seeded mutation is measured, and
+  the two-connection claim race is recorded as infeasible on py-pglite with its
+  measured failure mode.
 
 ## Surprises & discoveries
 
@@ -375,6 +384,20 @@ inference budget on a branch that cannot pass.
   The only metric assertions cover admission and pending depth
   (`tests/test_generation_run_launcher.py:366-375`).
   - Impact: EP-M0 adds a characterization suite before any refactor.
+- **Observation: py-pglite serves one connection at a time, so no test in
+  this harness can interleave two database sessions.**
+  - Evidence: a scratch probe opened one session and then a second on the
+    migrated `session_factory`. Holding the first idle and running
+    `SELECT 1` on the second failed with
+    `sqlalchemy.exc.OperationalError: (psycopg.errors.ConnectionTimeout)`,
+    and a second probe that entered a transaction on the first session timed
+    out waiting for the second to connect. The probe file was deleted after
+    the measurement.
+  - Impact: a two-connection competing claim during the failure transaction
+    cannot be written as a real-database test. The claim race is covered with
+    fakes and single-connection faults instead; the INV-9 method records the
+    limitation and names the covering tests, and the PostgreSQL row-lock
+    behaviour remains a deployment-level assumption.
 
 ## Decision log
 
@@ -1173,7 +1196,11 @@ These are trusted, not verified.
     - A pre-check asserts that the table has accept and reject cells for each
       mode.
     - Seeded mutation: deleting the "rationale forbidden for `qa_gated`" rule
-      must fail named rows. Record this in `Artefacts and notes`.
+      must fail named rows. Measured: with the rule removed,
+      `tests/test_generation_quality_policy.py` reports 22 failed and 165
+      passed, every failure a `qa_gated` cell with `DID NOT RAISE ValueError`;
+      restoring the rule returns 187 passed. The seeded list in
+      `Artefacts and notes` records the same result.
 - **INV-2: a QA-gated run succeeds if and only if QA passed, and the stores
   enforce it.**
   - Statement:
@@ -1322,7 +1349,17 @@ These are trusted, not verified.
       escalations.
   - Method: a parameterized launcher test over the valid cells against
     py-pglite. A `uow_factory` wrapper asserts the task name inside
-    `append_event`.
+    `append_event`. The competing-writer precondition (a second connection
+    claiming the same run while the first transaction is open) cannot be
+    expressed on py-pglite: it serves one connection at a time, and a second
+    session fails to connect even while the first is idle (measured
+    `psycopg.errors.ConnectionTimeout` after the harness's connect timeout).
+    The claim race is therefore covered with fakes and single-connection
+    faults: `tests/test_generation_run_launcher_quality_ownership.py`
+    (`claim-exit` fault matrix, refused cancellation) and
+    `tests/test_generation_run_launcher_claim_reconciliation.py` (lost
+    acknowledgement, reconciliation blocked while the task is cancelled,
+    same-unit-of-work authority and append, proof mismatch).
   - Artefact: `tests/test_generation_run_launcher_quality_modes.py`.
   - Non-vacuity:
     - Each cell asserts its specific terminal kind and category.
@@ -1360,7 +1397,10 @@ These are trusted, not verified.
     1. upgrade to `20261010_000013` and commit;
     2. upgrade to head and commit;
     3. insert a row and read it back.
-  - Artefact: `tests/test_qa_gated_quality_mode_migration.py`.
+  - Artefact: `tests/test_qa_gated_quality_mode_migration.py`. The offline
+    guard is exercised through Alembic itself, not a helper call:
+    `command.downgrade(config, "20261123_000019:20261122_000018", sql=True)`
+    with `capsys` compared to a syrupy snapshot of the emitted SQL.
   - Non-vacuity: the parity check first runs at `20261010_000013`, where it
     must report the missing labels.
 - **INV-12: the REST capability gate, and its ordering.**
@@ -1379,7 +1419,10 @@ These are trusted, not verified.
   - Method: a parameterized Falcon test, plus syrupy snapshots of the new
     error envelopes.
   - Artefacts: `tests/test_generation_run_api_quality_modes.py` and its
-    `.ambr`.
+    `.ambr`, plus `tests/test_generation_run_api_quality_precedence.py` and
+    its `.ambr`, which snapshots the error envelopes for the no-launcher,
+    accepted-gated-rationale and unknown-mode cases against the same request
+    bodies the precedence table uses.
 - **INV-13: TEI provenance.**
   - Statement:
     - The envelope's `quality_mode` equals the producing run's
@@ -2044,13 +2087,13 @@ Record the following here as each milestone completes:
   body error. The round also asked for the cancellation case at the post-commit
   close boundary, which
   `test_cancellation_at_claim_exit_still_ records_the_failure` now covers.
-- Evidence for this milestone set at `eac73e3b` (the pre-#438 head; see the
-  integration record below for the current figures): `make check-fmt`,
+- Evidence at `eac73e3b` (the pre-#438 head) was: `make check-fmt`,
   `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
-  ambrleaks, Skylos, df12-duplication), `make test` (2,607 passed, 1 skipped,
-  82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`
-  all pass at the final head. The INV-8 comparison is `git diff --stat` over
-  the characterization snapshot and
+  ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
+  82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
+  At the current head (see the integration record below) the suite reports
+  2,607 passed, 1 skipped and 84 snapshots. The INV-8 comparison is
+  `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
   attributes plus the D15 record.
@@ -2140,11 +2183,17 @@ Reproducible non-vacuity evidence, measured on this tree:
   - an append from a foreign task
     (`assert_off_task_append_is_rejected`, called by the matrix);
   - the ten-cell INV-9 matrix, where each cell has its own terminal,
-    category, QA status, cost and metric expectations.
-- Coverage counters: `make lint`'s interrogate stage reports 100% docstring
-  coverage over 7,725 definitions; pytest reports 2,607 passed, 1 skipped and
-  82 snapshots at `eac73e3b`, and the matrix and ownership suites add
-  twenty-two cases at the current head.
+    category, QA status, cost and metric expectations;
+  - the INV-1 seeded mutation: deleting the `qa_gated` rationale rule from
+    `quality_metadata_violation` makes
+    `tests/test_generation_quality_policy.py` report 22 failed and 165
+    passed, every failure a `test_quality_metadata_policy[qa_gated-*]` cell
+    failing with `DID NOT RAISE ValueError`; restoring the rule returns
+    187 passed.
+- Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
+  100% docstring coverage over 7,364 definitions and pytest reported 2,448
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,732
+  definitions and 2,607 passed, 1 skipped and 84 snapshots.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`
   is empty, and the characterization snapshot differs by exactly the two D9

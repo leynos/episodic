@@ -34,6 +34,11 @@ class _RequestCase:
     expected: _ExpectedError
 
 
+_ACCEPTING_MODES = frozenset({
+    QualityMode.DRAFT_WITHOUT_QA,
+    QualityMode.QA_GATED,
+})
+
 _REQUEST_CASES: dict[str, _RequestCase] = {
     "unaccepted-mode-without-launcher": _RequestCase(
         headers=_HEADERS,
@@ -189,12 +194,18 @@ async def test_error_envelopes_match_the_snapshot(
     session_factory: async_sessionmaker[AsyncSession],
     snapshot: object,
 ) -> None:
-    """The precedence error envelopes are stable."""
+    """The precedence and gated-rationale error envelopes are stable."""
     bodies: dict[str, object] = {}
-    async with _client(
-        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
-    ) as client:
-        job = await create_ready_ingestion_job(client, _HEADERS)
+    no_launcher = dc.replace(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA})),
+        launcher=None,
+    )
+    async with _client(no_launcher) as client:
+        job = await create_ready_ingestion_job(
+            client,
+            _HEADERS,
+            key_prefix="snapshot-no-launcher",
+        )
         endpoint = _GATED_ENDPOINT.format(job=job)
         for name, case in _REQUEST_CASES.items():
             response = await client.post(
@@ -203,5 +214,19 @@ async def test_error_envelopes_match_the_snapshot(
                 json=case.payload,
             )
             bodies[name] = response.json()
+
+    accepting = _dependencies(session_factory, _ACCEPTING_MODES)
+    async with _client(accepting) as client:
+        job = await create_ready_ingestion_job(
+            client,
+            _HEADERS,
+            key_prefix="snapshot-gated-rationale",
+        )
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers={**_HEADERS, "Idempotency-Key": "gated-rationale-snapshot"},
+            json=_gated_payload(skip_qa_rationale="Not allowed."),
+        )
+        bodies["gated-rationale"] = response.json()
 
     assert bodies == snapshot, bodies

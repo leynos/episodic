@@ -1,6 +1,15 @@
 # serializer version: 1
 # name: test_error_envelopes_match_the_snapshot
   dict({
+    'gated-rationale': dict({
+      'code': 'validation_error',
+      'details': dict({
+        'constraint': 'exclusive_with_quality_mode',
+        'field': 'skip_qa_rationale',
+        'quality_mode': 'qa_gated',
+      }),
+      'message': 'skip_qa_rationale is not accepted with quality_mode qa_gated.',
+    }),
     'keyed-unaccepted-mode-without-launcher': dict({
       'code': 'quality_mode_unsupported',
       'details': dict({
