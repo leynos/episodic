@@ -34,6 +34,7 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.generation.draft_script import DraftScriptSource
+    from episodic.generation.launcher_support import SourceDocumentLoader
 
 _SECOND_DOCUMENT_CREATED_AT = dt.datetime(2026, 6, 24, 13, 0, tzinfo=dt.UTC)
 
@@ -241,6 +242,37 @@ async def test_launcher_observes_source_limits_tightened_during_claim(
     )
 
 
+class _BlockingSourceDocumentLoader:
+    """Source loader that blocks its first call and records every call."""
+
+    def __init__(self, delegate: SourceDocumentLoader) -> None:
+        """Store the real loader and create the coordination events."""
+        self._delegate = delegate
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.calls = 0
+
+    async def __call__(
+        self,
+        document: SourceDocument,
+        object_store: ObjectStorePort | None,
+        limits: GenerationSourceLimits | None = None,
+        *,
+        remaining_aggregate_bytes: int | None = None,
+    ) -> DraftScriptSource:
+        """Block the first call, then delegate to the real loader."""
+        self.calls += 1
+        if self.calls == 1:
+            self.started.set()
+            await self.release.wait()
+        return await self._delegate(
+            document,
+            object_store,
+            limits,
+            remaining_aggregate_bytes=remaining_aggregate_bytes,
+        )
+
+
 @pytest.mark.asyncio
 async def test_launcher_reads_source_limits_for_each_document(
     session_factory: async_sessionmaker[AsyncSession],
@@ -254,51 +286,23 @@ async def test_launcher_reads_source_limits_for_each_document(
         content="Second source text.",
         source_uri="https://example.test/second.md",
     )
-    first_load_started = asyncio.Event()
-    release_first_load = asyncio.Event()
-    real_source_from_document = launcher_module.source_from_document
-    load_count = 0
-
-    async def blocking_source_from_document(
-        document: SourceDocument,
-        object_store: ObjectStorePort | None,
-        limits: GenerationSourceLimits | None = None,
-        *,
-        remaining_aggregate_bytes: int | None = None,
-    ) -> DraftScriptSource:
-        """Block the first document load, then delegate to the real loader."""
-        nonlocal load_count
-        load_count += 1
-        if load_count == 1:
-            first_load_started.set()
-            await release_first_load.wait()
-        return await real_source_from_document(
-            document,
-            object_store,
-            limits,
-            remaining_aggregate_bytes=remaining_aggregate_bytes,
-        )
-
-    monkeypatch.setattr(
-        launcher_module,
-        "source_from_document",
-        blocking_source_from_document,
-    )
+    loader = _BlockingSourceDocumentLoader(launcher_module.source_from_document)
+    monkeypatch.setattr(launcher_module, "source_from_document", loader)
     run_launcher = launcher(
         session_factory,
         RecordingDraftGenerator(draft_result(valid_tei())),
     )
 
     await run_launcher.launch(run_id)
-    await asyncio.wait_for(first_load_started.wait(), timeout=1)
+    await asyncio.wait_for(loader.started.wait(), timeout=1)
     run_launcher.source_limits = GenerationSourceLimits(max_source_bytes=1)
-    release_first_load.set()
+    loader.release.set()
     await run_launcher.drain()
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         run = await uow.generation_runs.get_run(run_id)
         events = await uow.generation_runs.list_events(run_id)
-    assert load_count == 2, "expected the second document load to be attempted"
+    assert loader.calls == 2, "expected the second document load to be attempted"
     assert run is not None, f"run {run_id} was not persisted"
     assert run.status is GenerationRunStatus.FAILED, (
         f"run {run_id} status={run.status}; events={events!r}"
@@ -325,50 +329,22 @@ async def test_launcher_reads_object_store_for_each_document(
         content=None,
         source_uri="upload:uploads/second",
     )
-    first_load_started = asyncio.Event()
-    release_first_load = asyncio.Event()
-    real_source_from_document = launcher_module.source_from_document
-    load_count = 0
-
-    async def blocking_source_from_document(
-        document: SourceDocument,
-        object_store: ObjectStorePort | None,
-        limits: GenerationSourceLimits | None = None,
-        *,
-        remaining_aggregate_bytes: int | None = None,
-    ) -> DraftScriptSource:
-        """Block the first document load, then delegate to the real loader."""
-        nonlocal load_count
-        load_count += 1
-        if load_count == 1:
-            first_load_started.set()
-            await release_first_load.wait()
-        return await real_source_from_document(
-            document,
-            object_store,
-            limits,
-            remaining_aggregate_bytes=remaining_aggregate_bytes,
-        )
-
-    monkeypatch.setattr(
-        launcher_module,
-        "source_from_document",
-        blocking_source_from_document,
-    )
+    loader = _BlockingSourceDocumentLoader(launcher_module.source_from_document)
+    monkeypatch.setattr(launcher_module, "source_from_document", loader)
     run_launcher = launcher(
         session_factory,
         RecordingDraftGenerator(draft_result(valid_tei())),
     )
 
     await run_launcher.launch(run_id)
-    await asyncio.wait_for(first_load_started.wait(), timeout=1)
+    await asyncio.wait_for(loader.started.wait(), timeout=1)
     run_launcher.object_store = FilesystemObjectStore(tmp_path)
-    release_first_load.set()
+    loader.release.set()
     await run_launcher.drain()
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         run = await uow.generation_runs.get_run(run_id)
-    assert load_count == 2, load_count
+    assert loader.calls == 2, loader.calls
     assert run is not None, f"run {run_id} was not persisted"
     assert run.status is GenerationRunStatus.SUCCEEDED, (
         f"run {run_id} status={run.status}"
