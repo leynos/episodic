@@ -43,8 +43,13 @@ from episodic.generation.launcher_support_presenters import (
     project_presenter_profiles,
 )
 from episodic.generation.launcher_support_sources import (
+    BoundedSourceLoader,
     GenerationSourceLimitError,
     GenerationSourceLimits,
+    GenerationSourceLoader,
+    SourceDocumentLoader,
+    SourceLoadContext,
+    SourceLoadRuntime,
     source_from_document,
 )
 from episodic.runtime_providers import Clock
@@ -59,6 +64,7 @@ if typ.TYPE_CHECKING:
 type DraftIdFactoryFactory = cabc.Callable[[], cabc.Callable[[str], str]]
 
 __all__ = [
+    "BoundedSourceLoader",
     "ClaimedRun",
     "Clock",
     "CostRecorderFactory",
@@ -66,9 +72,13 @@ __all__ = [
     "Failure",
     "GenerationSourceLimitError",
     "GenerationSourceLimits",
+    "GenerationSourceLoader",
     "PersistedTei",
     "ProviderCallRecordRequest",
     "SequentialDraftIds",
+    "SourceDocumentLoader",
+    "SourceLoadContext",
+    "SourceLoadRuntime",
     "classify_failure",
     "draft_generated_payload",
     "draft_request",

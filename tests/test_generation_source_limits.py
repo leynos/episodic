@@ -12,20 +12,19 @@ import pytest
 from episodic.canonical.domain import SourceDocument
 from episodic.canonical.storage.filesystem_object_store import FilesystemObjectStore
 from episodic.generation.draft_script import DraftScriptGenerationError
-from episodic.generation.launcher import InProcessGenerationRunLauncher
 from episodic.generation.launcher_support import (
+    BoundedSourceLoader,
     GenerationSourceLimitError,
     GenerationSourceLimits,
+    SourceLoadContext,
     source_from_document,
 )
-from tests.generation_run_launcher_support import RecordingDraftGenerator, draft_result
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     from pathlib import Path
 
     from episodic.canonical.object_store import ObjectStorePort
-    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 @dc.dataclass(slots=True)
@@ -71,29 +70,20 @@ def _source_document(
     )
 
 
-def _launcher(*, limits: GenerationSourceLimits) -> InProcessGenerationRunLauncher:
-    """Build a launcher only for its source-loading boundary."""
-    return InProcessGenerationRunLauncher(
-        uow_factory=lambda: typ.cast("CanonicalUnitOfWork", object()),
-        draft_generator=RecordingDraftGenerator(draft_result("<TEI/>")),
-        source_limits=limits,
-    )
-
-
 @pytest.mark.asyncio
 async def test_source_loading_rejects_count_above_configured_limit() -> None:
     """Reject source bundles before loading content beyond the source-count bound."""
-    run_launcher = _launcher(
-        limits=GenerationSourceLimits(
-            max_source_count=1,
-            max_source_bytes=10,
-            max_aggregate_source_bytes=10,
-            max_normalized_source_bytes=10,
-        )
+    limits = GenerationSourceLimits(
+        max_source_count=1,
+        max_source_bytes=10,
+        max_aggregate_source_bytes=10,
+        max_normalized_source_bytes=10,
     )
 
+    loader = BoundedSourceLoader(runtime=SourceLoadContext(source_limits=limits))
+
     with pytest.raises(GenerationSourceLimitError, match="count"):
-        await run_launcher._load_sources([
+        await loader.load([
             _source_document(content="one"),
             _source_document(content="two"),
         ])
