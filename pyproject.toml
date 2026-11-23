@@ -610,10 +610,8 @@ reason = "Alembic invokes these downgrade helpers and their rendering helpers wh
 type = "class"
 full_name = [
     "episodic.canonical.storage.review_checkpoints.SqlAlchemyReviewCheckpointStore",
-    "episodic.generation.launcher_persistence._FailureWrite",
-    "episodic.generation.launcher_persistence._SuccessRecord",
 ]
-reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer. _SuccessRecord is constructed by _persist_success and consumed by _record_success_transition, and _FailureWrite is constructed by _record_failure and consumed by _write_failure, each within one transaction."
+reason = "No runtime caller until roadmap 2.6.3 wires the checkpoint store into the launcher; the shared contract scenarios are the only current consumer."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "parameter"
@@ -732,13 +730,6 @@ full_name = [
     "episodic.canonical.domain_reference_documents.ReferenceBinding._validate_effective_from_constraint",
 ]
 reason = "Canonical value objects call these validation methods from dataclass post-initialization hooks."
-
-[[tool.skylos.dead_code.entrypoints]]
-type = "method"
-full_name = [
-    "episodic.generation.launcher.InProcessGenerationRunLauncher._load_sources",
-]
-reason = "The claim mixin in launcher_claim calls self._load_sources; it stays on the launcher so tests can patch source_from_document in this module."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"

@@ -7,6 +7,7 @@ propagated fault after which no terminal step is recorded. A second invocation
 with the same input must produce an identical step log and outcome.
 """
 
+import asyncio
 import collections
 import dataclasses as dc
 import typing as typ
@@ -32,6 +33,7 @@ from episodic.orchestration.content_generation import (
 )
 from tests._content_graph_fakes import (
     FAULT_STEPS,
+    InjectedFaultError,
     RecordingSteps,
     ScriptedEvaluator,
     expected_aggregate,
@@ -211,6 +213,9 @@ async def _check_case(
         assert expected_generate in observed, observed
     if outcome.error is not None:
         assert expected_terminal is None, f"unexpected error {outcome.error!r}"
+        expected_error = _expected_fault(mode, behaviours, fault)
+        assert expected_error is not None, f"unexpected error {outcome.error!r}"
+        _assert_fault_type(expected_error, outcome.error)
         assert type(replay_outcome.error) is type(outcome.error), (
             "a fault must be deterministic"
         )
@@ -224,6 +229,32 @@ async def _check_case(
     _assert_terminal_details(outcome.terminal, steps, behaviours)
     if reached is not None:
         reached[_classify(mode, behaviours, fault, outcome)] += 1
+
+
+def _expected_fault(
+    mode: QualityMode,
+    behaviours: cabc.Sequence[str],
+    fault: str | None,
+) -> type[BaseException] | None:
+    """Return the exact exception type the cell's failure mode must raise."""
+    steps = _expected_steps(mode, behaviours, fault)
+    if mode is QualityMode.QA_GATED and not behaviours:
+        # `initialize` still runs, then refuses the unevaluable run, unless an
+        # injected fault stops the graph first.
+        if fault is not None and fault in steps:
+            return InjectedFaultError
+        return QualityEvaluationUnavailableError
+    if fault is None or fault not in steps:
+        return None
+    return InjectedFaultError
+
+
+def _assert_fault_type(
+    expected: type[BaseException],
+    error: BaseException,
+) -> None:
+    """Assert the raised error is the exact expected type."""
+    assert type(error) is expected, f"expected {expected.__name__}, got {error!r}"
 
 
 def _assert_terminal_details(
@@ -298,28 +329,54 @@ _EXPECTED_CLASSES: frozenset[str] = frozenset({
     "fault@escalate",
 })
 
-_MATRIX: tuple[tuple[QualityMode, tuple[str, ...], str | None], ...] = (
-    (QualityMode.DRAFT_WITHOUT_QA, (), None),
-    (QualityMode.QA_GATED, ("passed",), None),
-    (QualityMode.QA_GATED, ("failed",), None),
-    (QualityMode.QA_GATED, ("inconclusive",), None),
-    (QualityMode.QA_GATED, ("timeout",), None),
-    (QualityMode.QA_GATED, (), None),
-    (QualityMode.DRAFT_WITHOUT_QA, (), "initialize"),
-    (QualityMode.DRAFT_WITHOUT_QA, (), "generate_draft"),
-    (QualityMode.QA_GATED, ("passed",), "begin_evaluation"),
-    (QualityMode.QA_GATED, ("passed",), "complete_with_draft"),
-    (QualityMode.QA_GATED, ("failed",), "escalate"),
-)
 
-
-@pytest.mark.asyncio
-async def test_property_reaches_every_class() -> None:
-    """The property's witness matrix reaches each documented class."""
+def test_property_reaches_every_class() -> None:
+    """The inner Hypothesis run reaches each documented class."""
     reached: collections.Counter[str] = collections.Counter()
-    for mode, behaviours, fault in _MATRIX:
-        await _check_case(mode, behaviours, fault, reached)
+
+    @example(QualityMode.QA_GATED, (), None)
+    @example(QualityMode.QA_GATED, ("passed",), None)
+    @example(QualityMode.QA_GATED, ("failed",), None)
+    @example(QualityMode.QA_GATED, ("inconclusive",), None)
+    @example(QualityMode.QA_GATED, ("timeout",), None)
+    @example(QualityMode.DRAFT_WITHOUT_QA, (), None)
+    @example(QualityMode.DRAFT_WITHOUT_QA, (), "initialize")
+    @example(QualityMode.DRAFT_WITHOUT_QA, (), "generate_draft")
+    @example(QualityMode.QA_GATED, ("passed",), "begin_evaluation")
+    @example(QualityMode.QA_GATED, ("passed",), "complete_with_draft")
+    @example(QualityMode.QA_GATED, ("failed",), "escalate")
+    @given(
+        mode=st.sampled_from(tuple(QualityMode)),
+        behaviours=st.lists(st.sampled_from(_BEHAVIOURS), max_size=3),
+        fault=st.one_of(st.none(), st.sampled_from(FAULT_STEPS)),
+    )
+    @settings(deadline=None, max_examples=100)
+    def _inner(
+        mode: QualityMode,
+        behaviours: list[str],
+        fault: str | None,
+    ) -> None:
+        """Check one generated example inside its own event loop."""
+        asyncio.run(_check_case(mode, behaviours, fault, reached))
+
+    _inner()
     assert set(reached) == _EXPECTED_CLASSES, f"reached classes: {sorted(reached)}"
+
+
+def test_fault_type_checker_rejects_a_substituted_error() -> None:
+    """The fault oracle rejects an error of the wrong type."""
+    expected = _expected_fault(QualityMode.QA_GATED, ("passed",), "generate_draft")
+    assert expected is InjectedFaultError, expected
+    with pytest.raises(AssertionError, match="InjectedFaultError"):
+        _assert_fault_type(expected, RuntimeError("substituted"))
+    assert (
+        _expected_fault(QualityMode.QA_GATED, (), "initialize") is InjectedFaultError
+    ), "a fault at initialize is the injected fault"
+
+    assert (
+        _expected_fault(QualityMode.QA_GATED, (), None)
+        is QualityEvaluationUnavailableError
+    ), "an unevaluable gated run must fail closed"
 
 
 def test_ownership_checker_rejects_bad_traces() -> None:

@@ -15,7 +15,7 @@ from episodic.generation.launcher_persistence import (
     GenerationRunPersistence,
     PersistenceContext,
 )
-from episodic.generation.launcher_support import Failure
+from episodic.generation.launcher_support import ClaimToken, Failure, RunClaim
 from tests.generation_run_launcher_support import valid_tei
 from tests.generation_run_persistence_support import (
     EPISODE_ID,
@@ -185,7 +185,11 @@ async def test_record_failure_writes_failure_events_and_terminal_status() -> Non
         should_emit_invalid_tei=True,
     )
 
-    await run_persistence.record_failure(RUN_ID, failure)
+    await run_persistence.record_failure(
+        RUN_ID,
+        failure,
+        claim=RunClaim(token=ClaimToken(RUN_ID)),
+    )
 
     assert [(run_id, kind) for run_id, kind, _, _ in uow.generation_runs.events] == [
         (RUN_ID, "tei.invalid"),
@@ -231,6 +235,7 @@ async def test_record_failure_ignores_runs_that_are_not_writable(
     await run_persistence.record_failure(
         RUN_ID,
         Failure(message="Provider failed.", category="provider.transient"),
+        claim=RunClaim(token=ClaimToken(RUN_ID)),
     )
 
     assert [kind for _, kind, _, _ in uow.generation_runs.events] == ["run.failed"], (

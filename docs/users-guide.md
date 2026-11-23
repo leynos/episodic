@@ -500,6 +500,9 @@ endpoints are not covered by this `/v1` authorization requirement.
 
 ### Migration note for the next minor release
 
+See [Migrating to Episodic 0.2.0](migration-0.2.0.md) for the release upgrade
+steps, including the QA-gated generation changes.
+
 Before upgrading to the next minor release, apply the new Alembic revisions.
 Production API clients must configure the bearer token and principal settings
 above, send the bearer header on every `/v1` request, and adopt the generation

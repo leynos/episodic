@@ -174,7 +174,7 @@ async def test_blocked_reconciliation_then_second_cancellation(
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A second cancellation while reconciliation is blocked still records."""
+    """Cancelling the task during blocked reconciliation still records once."""
     from episodic.generation.launcher_claim import GenerationRunClaimer
 
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
@@ -203,15 +203,19 @@ async def test_blocked_reconciliation_then_second_cancellation(
         blocked_reconcile,
     )
 
-    write_task = asyncio.create_task(
+    first = asyncio.create_task(
         run_launcher._scheduler.record_cancellation_owned(run_id, claim),
     )
     await asyncio.wait_for(gate.wait(), timeout=5)
-    # A second cancellation reaches the same path while reconcile is blocked;
-    # the pending marker makes it a no-op rather than a fresh claim attempt.
+    # Cancel the task that started the shielded write, then issue a second
+    # cancellation while the write is still blocked in reconciliation.
+    first.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await first
     await run_launcher._scheduler.record_cancellation_owned(run_id, claim)
+
     release.set()
-    await asyncio.wait_for(write_task, timeout=5)
+    await asyncio.wait_for(run_launcher._scheduler.drain(), timeout=5)
 
     run, kinds = await _load(session_factory, run_id)
     assert kinds.count("run.failed") == 1, kinds

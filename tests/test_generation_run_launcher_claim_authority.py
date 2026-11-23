@@ -160,13 +160,8 @@ async def test_failure_write_without_a_claim_is_rejected(
         RecordingDraftGenerator(draft_result(valid_tei())),
         options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
     )
+    failures = run_launcher._components()[2]
+    untyped = typ.cast("typ.Any", failures.record_failure)
 
-    # Without a claim the write is unowned, so it records nothing.
-    result = await run_launcher._components()[2].record_failure(
-        run_id,
-        Failure("no claim", "unexpected"),
-    )
-    assert result.written is True, result
-    run, kinds = await _load(session_factory, run_id)
-    assert kinds == ["run.failed"], kinds
-    assert run.status is GenerationRunStatus.FAILED, run.status
+    with pytest.raises(TypeError):
+        await untyped(run_id, Failure("no claim", "unexpected"))

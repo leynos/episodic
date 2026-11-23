@@ -67,7 +67,7 @@ class FailureSteps(typ.Protocol):
         run_id: uuid.UUID,
         failure: Failure,
         *,
-        claim: RunClaim | None = None,
+        claim: RunClaim,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failure."""

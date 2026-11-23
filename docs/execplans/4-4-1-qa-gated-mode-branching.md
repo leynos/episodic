@@ -120,14 +120,17 @@ inference budget on a branch that cannot pass.
 - **Never persist TEI for a `qa_gated` run before its aggregate verdict is a
   pass.** `EpisodeTeiUpdate` must refuse the `pending` and `failed` QA statuses.
 - **Make database changes additive only.** Add enum labels with
-  `ALTER TYPE ... ADD VALUE IF NOT EXISTS`. Do not rename or reorder labels,
-  and add no columns.
+  `ALTER TYPE ... ADD VALUE IF NOT EXISTS`. Do not rename or reorder labels.
+  D23 records the one accepted exception: a nullable
+  `generation_runs.claim_token` column in revision `20261123_000019`, needed so
+  a lost commit acknowledgement is reconciled against a unique proof rather
+  than a shared timestamp.
 - **Add no new third-party dependency.** LangGraph (`>=1.2.11`), Hypothesis,
   pytest, pytest-bdd, syrupy, py-pglite and Vidai Mock are already available.
-- **Keep every code file under 400 lines** (`AGENTS.md`). The launcher mixins
-  are 103–252 lines and the run-store adapters are about 358 and 390 lines. New
-  behaviour therefore goes into new cohesive modules or shared domain helpers,
-  not into those files.
+- **Keep every code file under 400 lines** (`AGENTS.md`). The launcher's
+  components are 100–250 lines and the run-store adapters are about 358 and 390
+  lines. New behaviour therefore goes into new cohesive modules or shared
+  domain helpers, not into those files.
 - **Write en-GB Oxford spelling** (`-ize`, `-yse`, `-our`) in comments and
   documentation, and follow `docs/documentation-style-guide.md`.
 
@@ -844,9 +847,10 @@ What was delivered:
 
 - Domain policy: `qa_gated`, the four QA statuses, one exhaustive
   quality-metadata rule, and a persisted-draft-only `EpisodeTeiUpdate`.
-- Persistence: additive enum labels in revision `20261122_000018`, the
-  `UNCHANGED` QA sentinel with one shared status-update helper in both
-  adapters, and a TEI envelope that reports the producing run's mode.
+- Persistence: additive enum labels in revision `20261122_000018` and the
+  D23 claim-token column in `20261123_000019`, the `UNCHANGED` QA sentinel with
+  one shared status-update helper in both adapters, and a TEI envelope that
+  reports the producing run's mode.
 - Orchestration: pure routing policy, graph ports, node functions that import
   no framework, a compiled graph with per-branch nodes and terminals, and a
   runner that owns its graph task and translates LangGraph's cancellation
@@ -920,17 +924,20 @@ Terms used in this plan:
   QA status (`QaStatus`) is the recorded QA outcome, both on the run and on the
   episode TEI that the run wrote.
 - **Launcher.** `InProcessGenerationRunLauncher`
-  (`episodic/generation/launcher.py`), one dataclass composed of three mixins:
-  - `launcher_scheduling.py` handles admission, the task registry, shutdown
-    and `_execute_run`.
-  - `launcher_claim.py` holds `_claim`, which calls `_claim_and_start` (the
-    atomic `pending→running` claim plus `run.started`) and then hydrates the
-    run. It also holds `_generate`.
-  - `launcher_persistence.py` handles events, TEI, costs and terminal writes.
+  (`episodic/generation/launcher.py`) is the orchestration boundary over four
+  injected components:
+  - `GenerationRunScheduler` (`launcher_scheduling.py`) owns admission, the
+    task registry, cancellation bookkeeping and shutdown.
+  - `GenerationRunClaimer` (`launcher_claim.py`) owns the claim, its token and
+    proof, hydration and draft generation.
+  - `GenerationRunPersistence` (`launcher_persistence.py`) owns draft events,
+    TEI, costs and successful terminals.
+  - `GenerationRunFailurePersistence` (`launcher_failure.py`) owns
+    authoritative failure terminals.
 
-  `launcher_host.py` declares the mixins' shared surface as a protocol used
-  only for type checking. Issue #350 tracks replacing the mixins with injected
-  components; this plan does not attempt that.
+  The launcher keeps the graph invocation and failure classification in
+  `_execute_run`. Issue #350 landed this split on `main`; the QA-gated work is
+  merged onto it.
 - **Step port.** A protocol through which a graph node asks the launcher to
   perform one I/O step for the run that the node is executing.
 - **Terminal.** A graph node after which the graph ends, together with the
@@ -1591,15 +1598,16 @@ Red tests:
 Production changes:
 
 1. **`episodic/generation/launcher_claim.py`.**
-   - Extract `_hydrate(run) -> ClaimedRun` from `_claim`.
+   - Extract the claim-and-hydrate path (`_claim_and_hydrate` in this
+     branch, later `GenerationRunClaimer.claim`) from the claim step.
    - Delete `_claim` and `LauncherHost._claim`.
-   - Keep the qa-bypass increment at the end of `_hydrate`, after
+   - Keep the qa-bypass increment at the end of the hydration step, after
      `_load_sources`, guarded by
      `run.quality_mode is QualityMode.DRAFT_WITHOUT_QA`.
 2. **New `episodic/generation/launcher_session.py`** (`application`).
    `_LauncherRunSession` is a slotted dataclass that implements
    `ContentGenerationSteps` structurally:
-   - `initialize()` calls `_hydrate`.
+   - `initialize()` calls the claim-and-hydrate step.
    - `generate_draft()` calls `_generate` and `_record_draft_generated`, then
      validates the TEI header (D11).
    - `begin_evaluation(names)` appends `qa.evaluation_started` and updates
@@ -2036,9 +2044,10 @@ Record the following here as each milestone completes:
   body error. The round also asked for the cancellation case at the post-commit
   close boundary, which
   `test_cancellation_at_claim_exit_still_ records_the_failure` now covers.
-- Evidence for this milestone set at `eac73e3b`: `make check-fmt`,
+- Evidence for this milestone set at `eac73e3b` (the pre-#438 head; see the
+  integration record below for the current figures): `make check-fmt`,
   `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
-  ambrleaks, Skylos, df12-duplication), `make test` (2,544 passed, 1 skipped,
+  ambrleaks, Skylos, df12-duplication), `make test` (2,545 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`
   all pass at the final head. The INV-8 comparison is `git diff --stat` over
   the characterization snapshot and
@@ -2133,7 +2142,7 @@ Reproducible non-vacuity evidence, measured on this tree:
   - the ten-cell INV-9 matrix, where each cell has its own terminal,
     category, QA status, cost and metric expectations.
 - Coverage counters: `make lint`'s interrogate stage reports 100% docstring
-  coverage over 7,725 definitions; pytest reports 2,544 passed, 1 skipped and
+  coverage over 7,725 definitions; pytest reports 2,545 passed, 1 skipped and
   82 snapshots at `eac73e3b`, and the matrix and ownership suites add
   twenty-two cases at the current head.
 - INV-8:

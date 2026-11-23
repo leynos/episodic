@@ -64,7 +64,7 @@ class GenerationRunFailurePersistence:
         run_id: uuid.UUID,
         failure: Failure,
         *,
-        claim: RunClaim | None = None,
+        claim: RunClaim,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failed run state.
@@ -75,11 +75,10 @@ class GenerationRunFailurePersistence:
             Identifier of the run to mark failed.
         failure : Failure
             Stable failure details, including an optional QA escalation.
-        claim : RunClaim | None
-            This invocation's claim record. When supplied without a token, the
-            write proceeds only if the authority callables can claim or
-            reconcile the run. ``None`` asserts that the caller already holds
-            authority.
+        claim : RunClaim
+            This invocation's claim record. When it holds no token, the write
+            proceeds only if the authority callables can reconcile or claim
+            the run.
         draft : DraftScriptResult | None
             Draft that consumed inference, when the failure is an escalation.
 
@@ -119,8 +118,7 @@ class GenerationRunFailurePersistence:
             except RunAlreadyTerminal, RunNotFound:
                 await uow.rollback()
                 return FailureWriteResult(written=False)
-        if claim is not None:
-            claim.token = token
+        claim.token = token
         self._record_failure_observation(run_id, failure)
         return FailureWriteResult(written=True, token=token)
 
@@ -128,7 +126,7 @@ class GenerationRunFailurePersistence:
         self,
         uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
-        claim: RunClaim | None,
+        claim: RunClaim,
     ) -> ClaimToken | None:
         """Return the token authorizing this failure write, if any.
 
@@ -138,8 +136,6 @@ class GenerationRunFailurePersistence:
             The existing token, a reconciled or freshly claimed one, or
             ``None`` when another launcher owns the run.
         """
-        if claim is None:
-            return ClaimToken(run_id)
         if claim.token is not None:
             return claim.token
         if self.reconcile_claim is not None:
