@@ -215,14 +215,23 @@ py-pglite serves one connection at a time: a second session fails to connect
 with `psycopg.errors.ConnectionTimeout` even while the first is idle. Any test
 that needs two concurrent transactions therefore has to run against a real
 server. `tests/canonical_storage/test_generation_run_claim_concurrency.py` is
-the worked example: it runs only when `EPISODIC_TEST_POSTGRES_DSN` names a
-disposable database whose name ends in `_test`, drops and recreates `public`,
-applies the migrations, and skips otherwise. The DSN must select the psycopg
-async driver, for example
-`postgresql+psycopg://user:secret@127.0.0.1:5432/episodic_test`. The fixture
-refuses any database that does not end in `_test`, because it destroys the
-schema. These tests are evidence for row-locking behaviour, not a replacement
-for the py-pglite suite that `make test` runs by default.
+the worked example. It runs only when `EPISODIC_TEST_POSTGRES_DSN` names a
+disposable server whose base database ends in `_test`, and skips otherwise. The
+DSN must select the psycopg async driver, for example
+`postgresql+psycopg://user:secret@127.0.0.1:5432/episodic_test`.
+
+The fixture in `tests/canonical_storage/_postgres_claim_race_support.py` does
+not touch the base database's schema. Each xdist worker gets its own
+`<database>_w<worker>` database, created, migrated and dropped by the fixture,
+so parallel workers cannot reset each other's schema. The DSN user must be
+allowed to create and drop databases. The base name check guards against
+pointing the fixture at a shared database by accident.
+
+The tests synchronize on the database, not on a sleep: after starting the
+competing claim they poll `pg_stat_activity` until a backend reports a lock
+wait, which proves the competitor reached PostgreSQL and was refused the row
+lock. They are evidence for row-locking behaviour, not a replacement for the
+py-pglite suite that `make test` runs by default.
 
 ## 8. Maintenance guidance
 

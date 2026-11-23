@@ -2,112 +2,40 @@
 
 py-pglite serves a single connection, so a competing claim cannot be expressed
 there. These tests run only when ``EPISODIC_TEST_POSTGRES_DSN`` names a
-disposable PostgreSQL database whose name ends in ``_test``; the fixture drops
-and recreates ``public`` before migrating, so it refuses any other database.
-The DSN must select the psycopg async driver, for example
-``postgresql+psycopg://user:secret@127.0.0.1:5432/episodic_test``.
+disposable server; see :mod:`tests.canonical_storage._postgres_claim_race_support`
+for the database isolation and synchronization they rely on.
+
+Each test holds one transaction open and starts a competing claim on a second
+connection. The test waits until PostgreSQL reports the competitor as blocked
+on the row lock, then releases the holder, so the outcome is synchronized on
+the database rather than on a sleep.
 """
 
 import asyncio
-import dataclasses as dc
-import datetime as dt
-import os
 import typing as typ
 import uuid
 
 import pytest
-import pytest_asyncio
-import sqlalchemy as sa
-from sqlalchemy.engine import make_url
 
-from episodic.canonical.domain import GenerationRun, GenerationRunStatus
-from episodic.canonical.generation_claim import ExecutionClaim
-from episodic.canonical.generation_quality import QaStatus, QualityMode
+from episodic.canonical.domain import GenerationRunStatus
+from episodic.canonical.generation_run_errors import RunAlreadyTerminal
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from episodic.canonical.storage.alembic_helpers import apply_migrations
-from tests.canonical_storage._generation_run_support import (
-    GenerationRunFixture,
-    make_generation_run,
-    persist_generation_run_prerequisites,
+from tests.canonical_storage._postgres_claim_race_support import (
+    CommitGate,
+    claim,
+    claim_token,
+    competing_claim,
+    hold_failure_and_claim,
+    load_events,
+    pending_run,
+    postgres_factory,
+    wait_for_claim_lock_wait,
 )
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-_DSN_VARIABLE = "EPISODIC_TEST_POSTGRES_DSN"
-_TEST_SUFFIX = "_test"
-
-
-async def _pending_run(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> GenerationRun:
-    """Persist the prerequisites and one pending QA-gated run."""
-    run = dc.replace(
-        make_generation_run(GenerationRunFixture(run_id=uuid.uuid7())),
-        quality_mode=QualityMode.QA_GATED,
-        qa_status=QaStatus.PENDING,
-        skip_qa_rationale=None,
-    )
-    await persist_generation_run_prerequisites(session_factory, run)
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        stored = await uow.generation_runs.create_run(run)
-        await uow.commit()
-    return stored
-
-
-def _claim(proof: uuid.UUID) -> ExecutionClaim:
-    """Build the execution claim a competing launcher would send."""
-    now = dt.datetime.now(dt.UTC)
-    return ExecutionClaim(
-        current_node=None,
-        started_at=now,
-        lease_expires_at=None,
-        claim_token=proof,
-    )
-
-
-async def _claim_token(
-    session_factory: async_sessionmaker[AsyncSession],
-    run_id: uuid.UUID,
-) -> uuid.UUID | None:
-    """Read the durable claim proof for a run."""
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        return await uow.generation_runs.claim_token_for(run_id)
-
-
-@pytest_asyncio.fixture
-async def postgres_factory() -> cabc.AsyncIterator[async_sessionmaker[AsyncSession]]:
-    """Migrate a disposable PostgreSQL database and yield its session factory."""
-    from sqlalchemy.ext.asyncio import (
-        AsyncSession,
-        async_sessionmaker,
-        create_async_engine,
-    )
-
-    dsn = os.environ.get(_DSN_VARIABLE)
-    if not dsn:
-        pytest.skip(f"set {_DSN_VARIABLE} to run real-PostgreSQL claim races")
-    database = make_url(dsn).database
-    if database is None or not database.endswith(_TEST_SUFFIX):
-        pytest.fail(
-            f"{_DSN_VARIABLE} must name a database ending in {_TEST_SUFFIX!r}",
-            pytrace=False,
-        )
-    engine = create_async_engine(dsn)
-    async with engine.begin() as connection:
-        await connection.execute(sa.text("DROP SCHEMA IF EXISTS public CASCADE"))
-        await connection.execute(sa.text("CREATE SCHEMA public"))
-    await apply_migrations(engine)
-    try:
-        yield async_sessionmaker(
-            engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-        )
-    finally:
-        await engine.dispose()
+__all__ = ["postgres_factory"]
 
 
 @pytest.mark.asyncio
@@ -115,7 +43,7 @@ async def test_a_committed_claim_beats_the_blocked_competitor(
     postgres_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A competitor waits on the row lock and loses once the claim commits."""
-    run = await _pending_run(postgres_factory)
+    run = await pending_run(postgres_factory)
     winner_proof = uuid.uuid4()
     loser_proof = uuid.uuid4()
     claimed = asyncio.Event()
@@ -126,27 +54,19 @@ async def test_a_committed_claim_beats_the_blocked_competitor(
         async with SqlAlchemyUnitOfWork(postgres_factory) as uow:
             outcome = await uow.generation_runs.claim_run_for_execution(
                 run.id,
-                _claim(winner_proof),
+                claim(winner_proof),
             )
             claimed.set()
             await release.wait()
             await uow.commit()
         return outcome is not None
 
-    async def compete() -> bool:
-        """Attempt the same claim from a second connection."""
-        async with SqlAlchemyUnitOfWork(postgres_factory) as uow:
-            outcome = await uow.generation_runs.claim_run_for_execution(
-                run.id,
-                _claim(loser_proof),
-            )
-        return outcome is not None
-
     holder = asyncio.create_task(hold_claim())
     await asyncio.wait_for(claimed.wait(), timeout=10)
-    competitor = asyncio.create_task(compete())
-    await asyncio.sleep(0.5)
-    assert not competitor.done(), "the competitor must block on the row lock"
+    competitor = asyncio.create_task(
+        competing_claim(postgres_factory, run.id, loser_proof),
+    )
+    await wait_for_claim_lock_wait(postgres_factory)
 
     release.set()
     assert await asyncio.wait_for(holder, timeout=10) is True, (
@@ -156,7 +76,7 @@ async def test_a_committed_claim_beats_the_blocked_competitor(
         "the competitor must lose after the claim commits"
     )
 
-    stored_proof = await _claim_token(postgres_factory, run.id)
+    stored_proof = await claim_token(postgres_factory, run.id)
     assert stored_proof == winner_proof, "the winner's proof must stay durable"
     async with SqlAlchemyUnitOfWork(postgres_factory) as uow:
         stored = await uow.generation_runs.get_run(run.id)
@@ -169,7 +89,7 @@ async def test_a_rolled_back_claim_lets_the_competitor_win(
     postgres_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A competitor claims the run once the open transaction rolls back."""
-    run = await _pending_run(postgres_factory)
+    run = await pending_run(postgres_factory)
     abandoned_proof = uuid.uuid4()
     winner_proof = uuid.uuid4()
     claimed = asyncio.Event()
@@ -180,27 +100,18 @@ async def test_a_rolled_back_claim_lets_the_competitor_win(
         async with SqlAlchemyUnitOfWork(postgres_factory) as uow:
             await uow.generation_runs.claim_run_for_execution(
                 run.id,
-                _claim(abandoned_proof),
+                claim(abandoned_proof),
             )
             claimed.set()
             await release.wait()
             await uow.rollback()
 
-    async def compete() -> bool:
-        """Attempt the same claim from a second connection."""
-        async with SqlAlchemyUnitOfWork(postgres_factory) as uow:
-            outcome = await uow.generation_runs.claim_run_for_execution(
-                run.id,
-                _claim(winner_proof),
-            )
-            await uow.commit()
-        return outcome is not None
-
     holder = asyncio.create_task(hold_claim())
     await asyncio.wait_for(claimed.wait(), timeout=10)
-    competitor = asyncio.create_task(compete())
-    await asyncio.sleep(0.5)
-    assert not competitor.done(), "the competitor must block on the row lock"
+    competitor = asyncio.create_task(
+        competing_claim(postgres_factory, run.id, winner_proof),
+    )
+    await wait_for_claim_lock_wait(postgres_factory)
 
     release.set()
     await asyncio.wait_for(holder, timeout=10)
@@ -208,5 +119,38 @@ async def test_a_rolled_back_claim_lets_the_competitor_win(
         "the competitor must win after the rollback"
     )
 
-    stored_proof = await _claim_token(postgres_factory, run.id)
+    stored_proof = await claim_token(postgres_factory, run.id)
     assert stored_proof == winner_proof, "the competitor's proof must be durable"
+
+
+@pytest.mark.asyncio
+async def test_the_failure_transaction_blocks_the_competing_claim(
+    postgres_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A competitor cannot win while a failure write holds its transaction."""
+    run = await pending_run(postgres_factory)
+    failure_proof = uuid.uuid4()
+    competitor_proof = uuid.uuid4()
+    gate = CommitGate()
+
+    writer = asyncio.create_task(
+        hold_failure_and_claim(postgres_factory, gate, run.id, failure_proof),
+    )
+    await asyncio.wait_for(gate.entered.wait(), timeout=10)
+    competitor = asyncio.create_task(
+        competing_claim(postgres_factory, run.id, competitor_proof),
+    )
+    await wait_for_claim_lock_wait(postgres_factory)
+
+    gate.release.set()
+    assert await asyncio.wait_for(writer, timeout=10) is True, (
+        "the failure write must commit"
+    )
+    with pytest.raises(RunAlreadyTerminal):
+        await asyncio.wait_for(competitor, timeout=10)
+
+    run_after, kinds = await load_events(postgres_factory, run.id)
+    assert kinds == ["run.failed"], kinds
+    assert run_after.status is GenerationRunStatus.FAILED, run_after.status
+    stored_proof = await claim_token(postgres_factory, run.id)
+    assert stored_proof == failure_proof, "the failure's proof must stay durable"
