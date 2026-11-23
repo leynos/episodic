@@ -182,3 +182,26 @@ async def test_no_qa_missing_launcher_outranks_idempotency(
             details={},
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_error_envelopes_match_the_snapshot(
+    session_factory: async_sessionmaker[AsyncSession],
+    snapshot: object,
+) -> None:
+    """The precedence error envelopes are stable."""
+    bodies: dict[str, object] = {}
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        endpoint = _GATED_ENDPOINT.format(job=job)
+        for name, case in _REQUEST_CASES.items():
+            response = await client.post(
+                endpoint,
+                headers=case.headers,
+                json=case.payload,
+            )
+            bodies[name] = response.json()
+
+    assert bodies == snapshot, bodies

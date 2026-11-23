@@ -180,3 +180,25 @@ async def test_downgrade_recreates_original_types_when_no_rows_use_new_labels(
         await connection.run_sync(_migrate, "upgrade", "head")
     async with migrated_engine.connect() as connection:
         await _assert_label_parity(connection)
+
+
+def test_offline_downgrade_emits_the_lossy_guard(snapshot: object) -> None:
+    """The offline downgrade renders a guard that refuses a lossy rollback."""
+    import importlib.util
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "20261122_000018_add_qa_gated_quality_mode.py"
+    )
+    spec = importlib.util.spec_from_file_location("qa_gated_migration", path)
+    assert spec is not None, path
+    assert spec.loader is not None, path
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    statement = migration._offline_downgrade_statement()
+
+    assert statement == snapshot, statement

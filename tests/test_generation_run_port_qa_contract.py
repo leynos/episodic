@@ -291,3 +291,17 @@ def test_policy_free_update_would_violate_the_invariant() -> None:
                 ended_at=NOW,
             ),
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", tuple(QualityMode))
+@pytest.mark.parametrize("update_status", tuple(GenerationRunStatus))
+@pytest.mark.parametrize("update_qa", [UNCHANGED, *tuple(QaStatus)])
+async def test_every_status_and_qa_pair(
+    store: InMemoryGenerationRunStore,
+    mode: QualityMode,
+    update_status: GenerationRunStatus,
+    update_qa: QaStatus | object,
+) -> None:
+    """Each mode, terminal status and QA status is accepted or rejected once."""
+    await check_quality_update(store, mode, update_status, update_qa)

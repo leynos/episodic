@@ -2047,7 +2047,7 @@ Record the following here as each milestone completes:
 - Evidence for this milestone set at `eac73e3b` (the pre-#438 head; see the
   integration record below for the current figures): `make check-fmt`,
   `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
-  ambrleaks, Skylos, df12-duplication), `make test` (2,545 passed, 1 skipped,
+  ambrleaks, Skylos, df12-duplication), `make test` (2,607 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`
   all pass at the final head. The INV-8 comparison is `git diff --stat` over
   the characterization snapshot and
@@ -2142,7 +2142,7 @@ Reproducible non-vacuity evidence, measured on this tree:
   - the ten-cell INV-9 matrix, where each cell has its own terminal,
     category, QA status, cost and metric expectations.
 - Coverage counters: `make lint`'s interrogate stage reports 100% docstring
-  coverage over 7,725 definitions; pytest reports 2,545 passed, 1 skipped and
+  coverage over 7,725 definitions; pytest reports 2,607 passed, 1 skipped and
   82 snapshots at `eac73e3b`, and the matrix and ownership suites add
   twenty-two cases at the current head.
 - INV-8:

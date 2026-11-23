@@ -1,0 +1,13 @@
+# serializer version: 1
+# name: test_offline_downgrade_emits_the_lossy_guard
+  '''
+  DO $$
+  BEGIN
+      IF (SELECT EXISTS (SELECT 1 FROM generation_runs WHERE qa_status::text IN ('pending', 'passed', 'failed')) OR EXISTS (SELECT 1 FROM episodes WHERE qa_status::text IN ('pending', 'passed', 'failed')) OR EXISTS (SELECT 1 FROM generation_runs WHERE quality_mode::text IN ('qa_gated'))) THEN
+          RAISE EXCEPTION
+              'QA-gated quality-mode labels are still in use';
+      END IF;
+  END;
+  $$;
+  '''
+# ---

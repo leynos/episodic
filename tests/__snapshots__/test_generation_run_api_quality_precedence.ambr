@@ -1,0 +1,27 @@
+# serializer version: 1
+# name: test_error_envelopes_match_the_snapshot
+  dict({
+    'keyed-unaccepted-mode-without-launcher': dict({
+      'code': 'quality_mode_unsupported',
+      'details': dict({
+        'quality_mode': 'qa_gated',
+      }),
+      'message': 'Unsupported quality_mode: qa_gated.',
+    }),
+    'malformed-budget-without-launcher': dict({
+      'code': 'validation_error',
+      'details': dict({
+        'constraint': 'object',
+        'field': 'budget_hints',
+      }),
+      'message': 'budget_hints must be a JSON object.',
+    }),
+    'unaccepted-mode-without-launcher': dict({
+      'code': 'quality_mode_unsupported',
+      'details': dict({
+        'quality_mode': 'qa_gated',
+      }),
+      'message': 'Unsupported quality_mode: qa_gated.',
+    }),
+  })
+# ---
