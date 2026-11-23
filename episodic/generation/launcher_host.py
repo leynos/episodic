@@ -134,8 +134,8 @@ class LauncherHost(typ.Protocol):
         self,
         run_id: uuid.UUID,
         failure: Failure,
+        claim: RunClaim,
         *,
-        claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failed run state when this invocation owns it."""
@@ -145,8 +145,8 @@ class LauncherHost(typ.Protocol):
         self,
         run_id: uuid.UUID,
         failure: Failure,
-        token: ClaimToken,
         *,
+        token: ClaimToken,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failure for an explicit token holder."""

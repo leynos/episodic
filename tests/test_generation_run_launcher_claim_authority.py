@@ -163,11 +163,9 @@ async def test_failure_write_without_a_claim_is_rejected(
         options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
     )
 
-    with pytest.raises(ValueError, match="requires a claim"):
-        await run_launcher._record_failure(
-            run_id,
-            Failure("no claim", "unexpected"),
-        )
+    untyped = typ.cast("typ.Any", run_launcher._record_failure)
+    with pytest.raises(TypeError):
+        await untyped(run_id, Failure("no claim", "unexpected"))
 
 
 @pytest.mark.asyncio
@@ -194,7 +192,7 @@ async def test_lost_commit_acknowledgement_is_reconciled(
     result = await run_launcher._record_owned_failure(
         run_id,
         Failure("after lost ack", "unexpected"),
-        claim.token,
+        token=claim.token,
     )
     assert result.written is True, result
     run, kinds = await _load(session_factory, run_id)

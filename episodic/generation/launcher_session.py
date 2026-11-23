@@ -93,8 +93,8 @@ class SessionPorts(typ.Protocol):
         self,
         run_id: uuid.UUID,
         failure: Failure,
+        claim: RunClaim,
         *,
-        claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failure when this invocation owns the run."""
@@ -104,8 +104,8 @@ class SessionPorts(typ.Protocol):
         self,
         run_id: uuid.UUID,
         failure: Failure,
-        token: ClaimToken,
         *,
+        token: ClaimToken,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failure for an explicit token holder."""
@@ -160,8 +160,8 @@ class SessionPortsAdapter:
         self,
         run_id: uuid.UUID,
         failure: Failure,
+        claim: RunClaim,
         *,
-        claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failure."""
@@ -176,15 +176,15 @@ class SessionPortsAdapter:
         self,
         run_id: uuid.UUID,
         failure: Failure,
-        token: ClaimToken,
         *,
+        token: ClaimToken,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failure for an explicit token holder."""
         return await self._host._record_owned_failure(
             run_id,
             failure,
-            token,
+            token=token,
             draft=draft,
         )
 
@@ -326,7 +326,7 @@ class _LauncherRunSession:
                 evaluations=evaluations,
                 content_hash=draft.content_hash,
             ),
-            token,
+            token=token,
             draft=draft,
         )
         _ = result

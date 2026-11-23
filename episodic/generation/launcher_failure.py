@@ -48,8 +48,8 @@ class _FailurePersistenceMixin(_MixinBase):
         self,
         run_id: uuid.UUID,
         failure: Failure,
+        claim: RunClaim,
         *,
-        claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failed run state when this invocation owns it.
@@ -60,10 +60,9 @@ class _FailurePersistenceMixin(_MixinBase):
             Run to fail.
         failure : Failure
             Stable failure details, including an optional QA escalation.
-        claim : RunClaim | None
-            This invocation's claim record. ``None`` asserts that the caller
-            already holds authority and must supply ``draft``-free escalation
-            only through :meth:`_record_owned_failure`.
+        claim : RunClaim
+            This invocation's claim record. A caller that already holds a
+            token uses :meth:`_record_owned_failure` instead.
         draft : DraftScriptResult | None
             Draft that consumed inference, when the failure is QA escalation.
             Its provider cost is still recorded.
@@ -83,7 +82,7 @@ class _FailurePersistenceMixin(_MixinBase):
     async def _failure_authority(
         self,
         run_id: uuid.UUID,
-        claim: RunClaim | None,
+        claim: RunClaim,
     ) -> ClaimToken | None:
         """Return the token authorizing this failure write, if any.
 
@@ -93,15 +92,7 @@ class _FailurePersistenceMixin(_MixinBase):
             The claim's existing token, a freshly won one, or ``None`` when
             another launcher owns the run.
 
-        Raises
-        ------
-        ValueError
-            If no claim is supplied. Authority must be explicit: a caller
-            that already holds a token uses :meth:`_record_owned_failure`.
         """
-        if claim is None:
-            msg = "a failure write requires a claim or an owned token"
-            raise ValueError(msg)
         if claim.token is not None:
             return claim.token
         async with self.uow_factory() as uow:
@@ -125,8 +116,8 @@ class _FailurePersistenceMixin(_MixinBase):
         self,
         run_id: uuid.UUID,
         failure: Failure,
-        token: ClaimToken,
         *,
+        token: ClaimToken,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a failure for a caller that already holds a token.
