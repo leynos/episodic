@@ -64,6 +64,16 @@ _REQUEST_CASES: dict[str, _RequestCase] = {
             details={"field": "budget_hints", "constraint": "object"},
         ),
     ),
+    "unknown-mode-without-launcher": _RequestCase(
+        headers=_HEADERS,
+        payload={"quality_mode": "advisory", "skip_qa_rationale": "Vertical slice."},
+        expected=_ExpectedError(
+            status=400,
+            code="validation_error",
+            message="Invalid quality_mode: 'advisory'.",
+            details={"field": "quality_mode", "constraint": "enum"},
+        ),
+    ),
     "keyed-unaccepted-mode-without-launcher": _RequestCase(
         headers={**_HEADERS, "Idempotency-Key": "no-launcher-precedence"},
         payload=_gated_payload(),

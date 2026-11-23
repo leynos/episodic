@@ -226,7 +226,7 @@ inference budget on a branch that cannot pass.
   (`episodic/canonical/storage/alembic_helpers.py:113`), and there the type is
   created in that same transaction, so the restriction never bites.
   - Severity: medium. Likelihood: medium.
-  - Mitigation: INV-11 upgrades to `20261010_000013` and commits, then
+  - Mitigation: INV-11 downgrades to `20261110_000017` and commits, then
     upgrades to head and commits, and only then inserts a `qa_gated` row.
 - **Risk: rolling back to 4.3.2 code fails on rows with a new label,** because
   its enum lookup raises.
@@ -289,9 +289,11 @@ inference budget on a branch that cannot pass.
   the injected launcher components; see D19 to D23 and the integration record.
 - [x] (2026-11-23) Fifth assessment round: Alembic's own offline downgrade is
   snapshotted (INV-11), the precedence envelopes are snapshotted including the
-  accepted-gated rationale (INV-12), the INV-1 seeded mutation is measured, and
-  the two-connection claim race is recorded as infeasible on py-pglite with its
-  measured failure mode.
+  accepted-gated rationale and unknown-mode cases (INV-12), the INV-1 seeded
+  mutation is measured, and the two-connection claim race runs as a DSN-gated
+  test against real PostgreSQL (measured for commit-loses and rollback-wins)
+  alongside the launcher-level fault tests and the claim-task cancellation
+  interleaving.
 
 ## Surprises & discoveries
 
@@ -393,11 +395,12 @@ inference budget on a branch that cannot pass.
     and a second probe that entered a transaction on the first session timed
     out waiting for the second to connect. The probe file was deleted after
     the measurement.
-  - Impact: a two-connection competing claim during the failure transaction
-    cannot be written as a real-database test. The claim race is covered with
-    fakes and single-connection faults instead; the INV-9 method records the
-    limitation and names the covering tests, and the PostgreSQL row-lock
-    behaviour remains a deployment-level assumption.
+  - Impact: the race needs a real PostgreSQL server, not py-pglite. The
+    committed test `tests/canonical_storage/test_generation_run_claim_concurrency.py`
+    runs it when `EPISODIC_TEST_POSTGRES_DSN` is set and skips otherwise; it
+    passed against PostgreSQL 17.11 for both the commit-loses and
+    rollback-wins directions. Launcher-level fakes cover the same race
+    without a second connection, and the INV-9 method names both.
 
 ## Decision log
 
@@ -1354,12 +1357,21 @@ These are trusted, not verified.
     expressed on py-pglite: it serves one connection at a time, and a second
     session fails to connect even while the first is idle (measured
     `psycopg.errors.ConnectionTimeout` after the harness's connect timeout).
-    The claim race is therefore covered with fakes and single-connection
-    faults: `tests/test_generation_run_launcher_quality_ownership.py`
-    (`claim-exit` fault matrix, refused cancellation) and
-    `tests/test_generation_run_launcher_claim_reconciliation.py` (lost
-    acknowledgement, reconciliation blocked while the task is cancelled,
-    same-unit-of-work authority and append, proof mismatch).
+    It is covered two ways:
+    - `tests/canonical_storage/test_generation_run_claim_concurrency.py`
+      runs the real race against a PostgreSQL server when
+      `EPISODIC_TEST_POSTGRES_DSN` names a disposable database ending in
+      `_test`, and skips otherwise. Measured against PostgreSQL 17.11: an
+      open claim transaction blocks the competitor, which loses after the
+      claim commits (`claim_token` stays the winner's proof) and wins after
+      the claim rolls back.
+    - Launcher-level faults cover the same race without a second connection:
+      `tests/test_generation_run_launcher_quality_ownership.py` (the
+      `claim-exit` fault matrix and refused cancellation) and
+      `tests/test_generation_run_launcher_claim_reconciliation.py` (lost
+      acknowledgement, cancellation of the claim task during shielded
+      reconciliation, reconciliation blocked while a cancellation task is
+      cancelled, same-unit-of-work authority and append, proof mismatch).
   - Artefact: `tests/test_generation_run_launcher_quality_modes.py`.
   - Non-vacuity:
     - Each cell asserts its specific terminal kind and category.
@@ -1394,14 +1406,14 @@ These are trusted, not verified.
       does.
   - Method: py-pglite migration tests following
     `tests/test_pricing_snapshot_constraint_migration.py`:
-    1. upgrade to `20261010_000013` and commit;
+    1. downgrade to `20261110_000017` and commit;
     2. upgrade to head and commit;
     3. insert a row and read it back.
   - Artefact: `tests/test_qa_gated_quality_mode_migration.py`. The offline
     guard is exercised through Alembic itself, not a helper call:
-    `command.downgrade(config, "20261123_000019:20261122_000018", sql=True)`
+    `command.downgrade(config, "20261123_000019:20261110_000017", sql=True)`
     with `capsys` compared to a syrupy snapshot of the emitted SQL.
-  - Non-vacuity: the parity check first runs at `20261010_000013`, where it
+  - Non-vacuity: the parity check first runs at `20261110_000017`, where it
     must report the missing labels.
 - **INV-12: the REST capability gate, and its ordering.**
   - Statement, over accepted set × mode × rationale-present × replay:
@@ -2092,7 +2104,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,607 passed, 1 skipped and 84 snapshots. The INV-8 comparison is
+  2,609 passed, 3 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2192,8 +2204,9 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,732
-  definitions and 2,607 passed, 1 skipped and 84 snapshots.
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,745
+  definitions and 2,609 passed, 3 skipped and 84 snapshots. The two extra skips
+  are the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`
   is empty, and the characterization snapshot differs by exactly the two D9

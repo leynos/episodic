@@ -32,5 +32,13 @@
       }),
       'message': 'Unsupported quality_mode: qa_gated.',
     }),
+    'unknown-mode-without-launcher': dict({
+      'code': 'validation_error',
+      'details': dict({
+        'constraint': 'enum',
+        'field': 'quality_mode',
+      }),
+      'message': "Invalid quality_mode: 'advisory'.",
+    }),
   })
 # ---

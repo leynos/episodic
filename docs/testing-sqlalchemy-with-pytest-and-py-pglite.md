@@ -209,6 +209,21 @@ through `tests/conftest.py`.
   bootstrap unless py-pglite compatibility has been re-verified for the current
   dependency set.
 
+### Real-PostgreSQL tests for multi-connection behaviour
+
+py-pglite serves one connection at a time: a second session fails to connect
+with `psycopg.errors.ConnectionTimeout` even while the first is idle. Any test
+that needs two concurrent transactions therefore has to run against a real
+server. `tests/canonical_storage/test_generation_run_claim_concurrency.py` is
+the worked example: it runs only when `EPISODIC_TEST_POSTGRES_DSN` names a
+disposable database whose name ends in `_test`, drops and recreates `public`,
+applies the migrations, and skips otherwise. The DSN must select the psycopg
+async driver, for example
+`postgresql+psycopg://user:secret@127.0.0.1:5432/episodic_test`. The fixture
+refuses any database that does not end in `_test`, because it destroys the
+schema. These tests are evidence for row-locking behaviour, not a replacement
+for the py-pglite suite that `make test` runs by default.
+
 ## 8. Maintenance guidance
 
 When changing the database-test approach, keep these files in sync:
