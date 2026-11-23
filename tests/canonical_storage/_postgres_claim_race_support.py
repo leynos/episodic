@@ -50,19 +50,47 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import GenerationRun
 
-_DSN_VARIABLE = "EPISODIC_TEST_POSTGRES_DSN"
+DSN_VARIABLE = "EPISODIC_TEST_POSTGRES_DSN"
 _TEST_SUFFIX = "_test"
 _LOCK_POLL_SECONDS = 0.05
 _LOCK_POLL_LIMIT = 200
 _IDENTIFIER_LIMIT = 63
+# Alembic's environment context is process-global, so two migrations started
+# from one process must not overlap. Separate processes (xdist workers and
+# independent runs) still migrate in parallel against their own databases.
+_MIGRATION_LOCK = asyncio.Lock()
 
 
 def require_dsn() -> str:
-    """Return the configured DSN, or skip the calling test."""
-    dsn = os.environ.get(_DSN_VARIABLE)
+    """Return the validated DSN, or skip the calling test.
+
+    Every server-backed test and fixture goes through this entry point, so
+    the ``_test`` base-name guard applies to all of them.
+
+    Returns
+    -------
+    str
+        The configured DSN. The test fails, rather than skipping, when the
+        base database does not end in ``_test``.
+    """
+    dsn = os.environ.get(DSN_VARIABLE)
     if not dsn:
-        pytest.skip(f"set {_DSN_VARIABLE} to run real-PostgreSQL claim races")
+        pytest.skip(f"set {DSN_VARIABLE} to run real-PostgreSQL claim races")
+    database = str(make_url(dsn).database)
+    if not database.endswith(_TEST_SUFFIX):
+        pytest.fail(
+            f"{DSN_VARIABLE} must name a database ending in {_TEST_SUFFIX!r}",
+            pytrace=False,
+        )
     return dsn
+
+
+def _truncate_bytes(text: str, max_bytes: int) -> str:
+    """Return ``text`` truncated to at most ``max_bytes`` of UTF-8."""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[:max_bytes].decode("utf-8", errors="ignore")
 
 
 def database_name(
@@ -80,10 +108,12 @@ def database_name(
     Returns
     -------
     str
-        A PostgreSQL identifier of at most 63 bytes.
+        A PostgreSQL identifier of at most 63 bytes. The suffix is always
+        preserved, even when the base name contains multibyte characters.
     """
     suffix = f"_w{worker}_{pid}_{nonce}"
-    return f"{base_database[: _IDENTIFIER_LIMIT - len(suffix)]}{suffix}"
+    budget = _IDENTIFIER_LIMIT - len(suffix.encode("utf-8"))
+    return f"{_truncate_bytes(base_database, budget)}{suffix}"
 
 
 def _render(url: URL) -> str:
@@ -140,24 +170,20 @@ async def database_exists(dsn: str, name: str) -> bool:
         return result.scalar_one_or_none() is not None
 
 
-@pytest_asyncio.fixture
-async def postgres_factory() -> cabc.AsyncIterator[async_sessionmaker[AsyncSession]]:
-    """Yield a session factory over this invocation's own migrated database."""
+@contextlib.asynccontextmanager
+async def isolated_database(
+    dsn: str | None = None,
+) -> cabc.AsyncIterator[tuple[str, async_sessionmaker[AsyncSession]]]:
+    """Create, migrate, yield and drop one invocation's own database."""
     from sqlalchemy.ext.asyncio import (
         AsyncSession,
         async_sessionmaker,
         create_async_engine,
     )
 
-    dsn = require_dsn()
-    base_database = str(make_url(dsn).database)
-    if not base_database.endswith(_TEST_SUFFIX):
-        pytest.fail(
-            f"{_DSN_VARIABLE} must name a database ending in {_TEST_SUFFIX!r}",
-            pytrace=False,
-        )
+    dsn = dsn or require_dsn()
     name = database_name(
-        base_database,
+        str(make_url(dsn).database),
         worker=os.environ.get("PYTEST_XDIST_WORKER", "main"),
         pid=os.getpid(),
         nonce=uuid.uuid4().hex[:8],
@@ -165,15 +191,26 @@ async def postgres_factory() -> cabc.AsyncIterator[async_sessionmaker[AsyncSessi
     await create_database(dsn, name)
     engine = create_async_engine(_render(make_url(dsn).set(database=name)))
     try:
-        await apply_migrations(engine)
-        yield async_sessionmaker(
-            engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
+        async with _MIGRATION_LOCK:
+            await apply_migrations(engine)
+        yield (
+            name,
+            async_sessionmaker(
+                engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+            ),
         )
     finally:
         await engine.dispose()
         await drop_database(dsn, name)
+
+
+@pytest_asyncio.fixture
+async def postgres_factory() -> cabc.AsyncIterator[async_sessionmaker[AsyncSession]]:
+    """Yield a session factory over this invocation's own migrated database."""
+    async with isolated_database() as (_name, factory):
+        yield factory
 
 
 async def pending_run(

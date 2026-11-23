@@ -225,10 +225,19 @@ not touch the base database's schema. Every fixture invocation creates its own
 `<database>_w<worker>_<pid>_<nonce>` database, migrates it, and drops only that
 database at teardown. The nonce makes the name unique per invocation, so two
 independent pytest runs on the same server cannot select the same database, and
-parallel xdist workers cannot reset each other's schema. Creation never drops
-an existing database: a name collision fails the test rather than destroying
-data. The DSN user must be allowed to create and drop databases, and the base
-name check guards against pointing the fixture at a shared database by accident.
+parallel xdist workers cannot reset each other's schema. The name is truncated
+by UTF-8 bytes, not characters, so the suffix survives a multibyte base name
+inside PostgreSQL's 63-byte identifier limit. Creation never drops an existing
+database: a name collision fails the test rather than destroying data.
+
+Every server-backed test and fixture goes through `require_dsn`, which skips
+when the variable is unset and fails when the base database does not end in
+`_test`, so the guard protects every path that creates or drops a database. The
+DSN user must be allowed to create and drop databases. Because Alembic's
+environment context is process-global, migrations started from one process are
+serialized with an `asyncio.Lock`; separate processes still migrate in parallel
+against their own databases. A test runs two invocations concurrently and
+asserts each owns a distinct database that survives until its own teardown.
 
 The tests synchronize on the database, not on a sleep: after starting the
 competing claim they poll `pg_stat_activity` until a backend reports a lock

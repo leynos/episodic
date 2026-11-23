@@ -24,6 +24,7 @@ from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from tests.canonical_storage._postgres_claim_race_support import (
+    DSN_VARIABLE,
     CommitGate,
     claim,
     claim_token,
@@ -33,6 +34,7 @@ from tests.canonical_storage._postgres_claim_race_support import (
     database_name,
     drop_database,
     hold_failure_and_claim,
+    isolated_database,
     load_events,
     pending_run,
     postgres_factory,
@@ -173,7 +175,29 @@ def test_database_names_are_unique_per_invocation_and_worker() -> None:
         database_name("episodic_test", worker="gw0", pid=2, nonce="aaaa"),
     }
     assert len(names) == 4, names
-    assert all(len(name) <= 63 for name in names), names
+    assert all(len(name.encode("utf-8")) <= 63 for name in names), names
+
+
+def test_database_names_respect_the_byte_limit() -> None:
+    """A multibyte base keeps the full suffix inside 63 bytes."""
+    name = database_name(
+        "episódio_teste_aprovação_" * 4,
+        worker="gw0",
+        pid=12345,
+        nonce="a1b2c3d4",
+    )
+    assert len(name.encode("utf-8")) <= 63, name
+    assert name.endswith("_wgw0_12345_a1b2c3d4"), name
+
+
+def test_a_non_test_dsn_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every server-backed entry point rejects a non-_test base database."""
+    monkeypatch.setenv(
+        DSN_VARIABLE,
+        "postgresql+psycopg://user:secret@127.0.0.1:5432/episodic",
+    )
+    with pytest.raises(pytest.fail.Exception, match="_test"):
+        require_dsn()
 
 
 @pytest.mark.asyncio
@@ -193,3 +217,21 @@ async def test_creation_never_drops_a_pre_existing_database() -> None:
         assert await database_exists(dsn, name) is True, "the database must survive"
     finally:
         await drop_database(dsn, name)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_invocations_keep_separate_databases() -> None:
+    """Two invocations at once own distinct databases until their teardown."""
+    dsn = require_dsn()
+
+    async def invocation() -> str:
+        """Create, migrate and drop one database, returning its name."""
+        async with isolated_database(dsn) as (name, _factory):
+            await asyncio.sleep(0.1)
+            assert await database_exists(dsn, name) is True, name
+            return name
+
+    first, second = await asyncio.gather(invocation(), invocation())
+    assert first != second, (first, second)
+    assert await database_exists(dsn, first) is False, first
+    assert await database_exists(dsn, second) is False, second
