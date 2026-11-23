@@ -111,14 +111,16 @@ class ClaimExitFaultStore:
         return getattr(self._inner, name)
 
     async def claim_run_for_execution(
-        self, run_id: uuid.UUID, **kwargs: object
+        self,
+        run_id: uuid.UUID,
+        claim: object,
     ) -> object:
         """Delegate the claim and record that it succeeded."""
-        claim = typ.cast(
+        delegate = typ.cast(
             "cabc.Callable[..., cabc.Awaitable[object]]",
             self._inner.claim_run_for_execution,
         )
-        run = await claim(run_id, **kwargs)
+        run = await delegate(run_id, claim)
         if run is not None:
             self._fault.claimed = True
         return run

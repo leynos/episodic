@@ -16,6 +16,7 @@ import asyncio
 import datetime as dt
 import typing as typ
 
+from episodic.canonical.generation_claim import ExecutionClaim
 from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
@@ -115,10 +116,12 @@ class _ClaimMixin(_MixinBase):
         """
         run = await uow.generation_runs.claim_run_for_execution(
             run_id,
-            current_node=None,
-            started_at=self.clock(),
-            lease_expires_at=None,
-            claim_token=claim.proof,
+            ExecutionClaim(
+                current_node=None,
+                started_at=self.clock(),
+                lease_expires_at=None,
+                claim_token=claim.proof,
+            ),
         )
         return None if run is None else ClaimToken(run_id)
 
@@ -150,10 +153,13 @@ class _ClaimMixin(_MixinBase):
             claim.started_at = started_at
             run = await uow.generation_runs.claim_run_for_execution(
                 run_id,
-                current_node="draft",
-                started_at=started_at,
-                lease_expires_at=started_at + dt.timedelta(seconds=self.lease_seconds),
-                claim_token=claim.proof,
+                ExecutionClaim(
+                    current_node="draft",
+                    started_at=started_at,
+                    lease_expires_at=started_at
+                    + dt.timedelta(seconds=self.lease_seconds),
+                    claim_token=claim.proof,
+                ),
             )
             if run is None:
                 await uow.rollback()

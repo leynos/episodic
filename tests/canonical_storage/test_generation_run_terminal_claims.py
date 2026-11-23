@@ -7,8 +7,11 @@ import typing as typ
 import pytest
 
 from episodic.canonical.domain import GenerationRunStatus
+from episodic.canonical.generation_claim import ExecutionClaim
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal
-from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
+from episodic.canonical.generation_run_ports import (
+    GenerationRunStatusUpdate,
+)
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from tests.canonical_storage._generation_run_support import (
     NOW,
@@ -44,9 +47,11 @@ async def test_sql_generation_run_claim_rejects_terminal_status(
         with pytest.raises(RunAlreadyTerminal, match="generation run is already"):
             await uow.generation_runs.claim_run_for_execution(
                 run.id,
-                current_node="draft",
-                started_at=NOW,
-                lease_expires_at=NOW + dt.timedelta(minutes=5),
+                ExecutionClaim(
+                    current_node="draft",
+                    started_at=NOW,
+                    lease_expires_at=NOW + dt.timedelta(minutes=5),
+                ),
             )
 
 

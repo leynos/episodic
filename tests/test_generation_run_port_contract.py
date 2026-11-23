@@ -19,6 +19,7 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
 )
+from episodic.canonical.generation_claim import ExecutionClaim
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import (
@@ -229,15 +230,19 @@ class TestGenerationRunRepository:
         results = await asyncio.gather(
             store.claim_run_for_execution(
                 run.id,
-                current_node="draft",
-                started_at=NOW,
-                lease_expires_at=NOW + dt.timedelta(minutes=5),
+                ExecutionClaim(
+                    current_node="draft",
+                    started_at=NOW,
+                    lease_expires_at=NOW + dt.timedelta(minutes=5),
+                ),
             ),
             store.claim_run_for_execution(
                 run.id,
-                current_node="draft",
-                started_at=NOW,
-                lease_expires_at=NOW + dt.timedelta(minutes=5),
+                ExecutionClaim(
+                    current_node="draft",
+                    started_at=NOW,
+                    lease_expires_at=NOW + dt.timedelta(minutes=5),
+                ),
             ),
         )
         claim_count = sum(result is not None for result in results)
@@ -271,9 +276,11 @@ class TestGenerationRunRepository:
         with pytest.raises(RunAlreadyTerminal, match="generation run is already"):
             await store.claim_run_for_execution(
                 run.id,
-                current_node="draft",
-                started_at=NOW,
-                lease_expires_at=NOW + dt.timedelta(minutes=5),
+                ExecutionClaim(
+                    current_node="draft",
+                    started_at=NOW,
+                    lease_expires_at=NOW + dt.timedelta(minutes=5),
+                ),
             )
 
     @pytest.mark.asyncio

@@ -5,6 +5,7 @@ import bisect
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
+import typing as typ
 import uuid
 
 from episodic.canonical.domain import (
@@ -34,6 +35,9 @@ from .generation_run_lease_reclamation import (
 )
 
 type TimeProvider = cabc.Callable[[], dt.datetime]
+
+if typ.TYPE_CHECKING:
+    from episodic.canonical.generation_claim import ExecutionClaim
 
 
 """Ephemeral in-memory generation-run adapter for tests and local development."""
@@ -238,15 +242,10 @@ class InMemoryGenerationRunStore(
             )
             return updated
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def claim_run_for_execution(  # ruff: ignore[too-many-arguments]  # Port contract.
+    async def claim_run_for_execution(
         self,
         run_id: uuid.UUID,
-        *,
-        current_node: str | None,
-        started_at: dt.datetime,
-        lease_expires_at: dt.datetime | None,
-        claim_token: uuid.UUID | None = None,
+        claim: ExecutionClaim,
     ) -> GenerationRun | None:
         """Atomically claim a pending run for execution.
 
@@ -285,20 +284,20 @@ class InMemoryGenerationRunStore(
             updated = dc.replace(
                 run,
                 status=GenerationRunStatus.RUNNING,
-                current_node=current_node,
-                started_at=started_at,
+                current_node=claim.current_node,
+                started_at=claim.started_at,
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated
-            if claim_token is not None:
-                self._claim_tokens[run_id] = claim_token
+            if claim.claim_token is not None:
+                self._claim_tokens[run_id] = claim.claim_token
             _log_event(
                 "info",
                 "generation_run_store.claim_run",
                 run_id=str(run_id),
-                current_node=current_node,
-                lease_expires_at=lease_expires_at.isoformat()
-                if lease_expires_at is not None
+                current_node=claim.current_node,
+                lease_expires_at=claim.lease_expires_at.isoformat()
+                if claim.lease_expires_at is not None
                 else None,
             )
             return updated

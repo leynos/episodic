@@ -35,6 +35,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from episodic.canonical.generation_claim import ExecutionClaim
     from episodic.canonical.generation_run_ports import (
         EventSeq,
         GenerationRunStatusUpdate,
@@ -54,7 +55,7 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
 
     def __init__(
         self,
-        session: "AsyncSession",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
+        session: AsyncSession,
         *,
         runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:
@@ -212,15 +213,10 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         )
         return run_from_record(record)
 
-    # pylint: disable-next=too-many-arguments  # Port contract.
-    async def claim_run_for_execution(  # ruff: ignore[too-many-arguments]  # Port contract.
+    async def claim_run_for_execution(
         self,
         run_id: uuid.UUID,
-        *,
-        current_node: str | None,
-        started_at: dt.datetime,
-        lease_expires_at: dt.datetime | None,
-        claim_token: uuid.UUID | None = None,
+        claim: ExecutionClaim,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
         now = self._runtime.clock()
@@ -233,10 +229,10 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
             )
             .values(
                 status=GenerationRunStatus.RUNNING,
-                current_node=current_node,
-                started_at=started_at,
-                lease_expires_at=lease_expires_at,
-                claim_token=claim_token,
+                current_node=claim.current_node,
+                started_at=claim.started_at,
+                lease_expires_at=claim.lease_expires_at,
+                claim_token=claim.claim_token,
                 updated_at=now,
             )
         )
@@ -249,9 +245,9 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
                 "info",
                 "sql_generation_run_store.claim_run",
                 run_id=str(run_id),
-                current_node=current_node,
-                lease_expires_at=lease_expires_at.isoformat()
-                if lease_expires_at is not None
+                current_node=claim.current_node,
+                lease_expires_at=claim.lease_expires_at.isoformat()
+                if claim.lease_expires_at is not None
                 else None,
             )
             return run_from_record(record)

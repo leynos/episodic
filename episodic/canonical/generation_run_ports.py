@@ -13,9 +13,9 @@ async def use_runs(port: GenerationRunPort) -> None:
 """
 
 import dataclasses as dc
-import enum
 import typing as typ
 
+from .generation_quality import UNCHANGED, Unchanged
 from .generation_run_lease_ports import GenerationRunLeaseReclamationPort
 
 if typ.TYPE_CHECKING:
@@ -31,18 +31,10 @@ if typ.TYPE_CHECKING:
         GenerationRunStatus,
         JsonMapping,
     )
+    from .generation_claim import ExecutionClaim
     from .generation_quality import QaStatus
 
 EventSeq = typ.NewType("EventSeq", int)
-
-
-class Unchanged(enum.Enum):
-    """Sentinel for a status field that must keep its persisted value."""
-
-    UNCHANGED = "unchanged"
-
-
-UNCHANGED = Unchanged.UNCHANGED
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -159,14 +151,10 @@ class GenerationRunRepository(typ.Protocol):
         raise NotImplementedError
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def claim_run_for_execution(  # ruff: ignore[too-many-arguments]  # Port contract.
+    async def claim_run_for_execution(
         self,
         run_id: uuid.UUID,
-        *,
-        current_node: str | None,
-        started_at: dt.datetime,
-        lease_expires_at: dt.datetime | None,
-        claim_token: uuid.UUID | None = None,
+        claim: ExecutionClaim,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
         raise NotImplementedError

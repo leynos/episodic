@@ -37,6 +37,14 @@ class QaStatus(enum.StrEnum):
     FAILED = "failed"
 
 
+class Unchanged(enum.Enum):
+    """Sentinel for a status field that must keep its persisted value."""
+
+    UNCHANGED = "unchanged"
+
+
+UNCHANGED = Unchanged.UNCHANGED
+
 _GATED_QA_STATUSES: frozenset[QaStatus] = frozenset({
     QaStatus.PENDING,
     QaStatus.PASSED,

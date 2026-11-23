@@ -14,6 +14,7 @@ import uuid
 import pytest
 
 from episodic.canonical.domain import GenerationRunStatus
+from episodic.canonical.generation_claim import ExecutionClaim
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal
 from episodic.canonical.generation_run_ports import (
@@ -256,18 +257,22 @@ async def test_generation_run_store_claims_pending_run_once(
     async with SqlAlchemyUnitOfWork(session_factory) as first_uow:
         claimed = await first_uow.generation_runs.claim_run_for_execution(
             run.id,
-            current_node="draft",
-            started_at=NOW,
-            lease_expires_at=lease_expires_at,
+            ExecutionClaim(
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=lease_expires_at,
+            ),
         )
         await first_uow.commit()
 
     async with SqlAlchemyUnitOfWork(session_factory) as second_uow:
         lost = await second_uow.generation_runs.claim_run_for_execution(
             run.id,
-            current_node="draft",
-            started_at=NOW,
-            lease_expires_at=lease_expires_at,
+            ExecutionClaim(
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=lease_expires_at,
+            ),
         )
 
     assert claimed is not None, f"expected run {run.id} to be claimed, got {claimed!r}"
