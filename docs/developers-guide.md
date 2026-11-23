@@ -2539,27 +2539,40 @@ documents. It commits that request-scoped unit of work before calling
 serves the persisted episode TEI as JSON by default or raw
 `application/tei+xml` with content negotiation.
 
-`InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is one
-dataclass composed from four mixins: `launcher_scheduling.py` owns bounded task
-admission, draining and cancellation and executes each run through the injected
-content-generation graph; `launcher_claim.py` claims and hydrates a run and
-generates drafts; `launcher_persistence.py` owns success persistence, success
-transitions and cost recording; and `launcher_failure.py`
-(`_FailurePersistenceMixin`) owns failure persistence. The failure mixin
-obtains authority from a claim token, a reconciled claim or a
-pending-to-running claim, writes the failure with its escalation and
-invalid-TEI events, records the supplied draft's costs, and emits the terminal
-metric and log only after the transaction commits. `launcher_session.py`
-implements the graph's step port for one run through a `SessionPorts` adapter,
-and `launcher_quality.py` owns the QA event payload and metric helpers. The
-mixins read the launcher's fields through `self`, so `launcher_host.py`
-declares that shared surface as the `LauncherHost` protocol. The mixins inherit
-from it only while type checking; at runtime their base is `object`, and the
-launcher's MRO and slots are unchanged. Construct the launcher, never a mixin
-on its own. `_load_sources` stays on the launcher because tests patch
-`source_from_document` in `launcher.py`. Replacing the mixins with injected
-scheduling, claim and persistence components is tracked in
-[#350](https://github.com/leynos/episodic/issues/350).
+`InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is the
+orchestration boundary over three purpose-shaped components.
+`GenerationRunScheduler` (`launcher_scheduling.py`) owns the task set,
+admission limits, execution semaphore, cancellation bookkeeping, and the
+pending-depth and admission metrics. `GenerationRunClaimer`
+(`launcher_claim.py`) takes the unit-of-work factory, source loader, source
+limits, clock, draft generator, and metrics, and owns claim, hydration and
+draft generation. `GenerationRunPersistence` (`launcher_persistence.py`) takes
+the unit-of-work factory, clock, cost-recorder factory, provider metadata and
+metrics, and owns draft events, TEI persistence, costs and terminal status.
+Each component is a dataclass with explicit constructor collaborators, so unit
+tests construct it with fakes rather than a launcher. The launcher builds the
+long-lived scheduler in `__post_init__` and, for each run, builds the stateless
+claimer and persistence components over live views of its fields. It delegates
+`launch`, `drain`, `shutdown` and `scheduled_run_count` to the scheduler, and
+keeps the claim-generate-persist sequence plus failure classification in
+`_execute_run`.
+
+Each component reads its collaborators through a narrow live view supplied by
+the launcher (`_LauncherClaimerRuntime`, `_LauncherPersistenceRuntime`,
+`_LauncherSourceLoadRuntime` and `_LauncherSchedulerRuntime`), and reads each
+one at the stage that uses it. That preserves the base's use-time behaviour:
+assigning `draft_generator`, `source_limits`, `metrics`, `tracer`,
+`cost_recorder_factory`, `clock` or another collaborator while a run is at any
+stage affects the later reads in that run, not only the next run.
+`source_from_document` is resolved when a run hydrates, so a patch applied to
+`launcher.py` at any point before hydration is observed. `BoundedSourceLoader`
+implements the `GenerationSourceLoader` seam and reads the object store and
+limits for each document it loads, so a change made while one document is
+loading applies to the next. The scheduler keeps its task registry and
+cancellation bookkeeping across view changes, and a changed `max_concurrency`
+affects admission but does not resize the semaphore created at construction, as
+before. Replacing the mixins with injected scheduling, claim and persistence
+components was tracked in [#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they
@@ -2577,9 +2590,7 @@ immutable command.
 
 `persist_draft_script` is the persistence boundary. It validates the generated
 TEI, applies the expected `tei_revision` check, and updates the episode with
-the TEI, content hash, generation-run identifier, and the caller's QA status:
-`skipped` for a no-QA draft or `passed` for a QA-gated draft that cleared
-evaluation. `EpisodeTeiUpdate` rejects every other status. The
+the TEI, content hash, generation-run identifier, and `QaStatus.SKIPPED`. The
 `EpisodeTeiUpdate` command carries that TEI, QA status, generation-run
 provenance, timestamp, and expected revision as one immutable update. The SQL
 episode repository updates only when the stored revision equals
@@ -2670,135 +2681,6 @@ launcher emits a `generation_run.execute` span and bounded terminal,
 draft-error, QA-bypass, and latency metrics; the API command span and stable
 failure categories provide the corresponding request and outcome trace without
 unbounded run identifiers in metric labels.
-
-### Content-generation graph and quality branch
-
-Every launcher run executes through the content-generation graph introduced in
-roadmap item `4.4.1`. ADR 0029 records the decisions and the deviations from
-the system design.
-
-The layers are strict:
-
-- `episodic.canonical.generation_routing` holds pure policy: the branch a
-  quality mode selects, the branch that owns each terminal, verdict
-  aggregation, the evaluation route, and the run and QA status a terminal
-  records.
-- `episodic.canonical.generation_graph_ports` holds the graph's protocols and
-  value objects: `ContentGenerationGraphPort`, `ContentGenerationSteps`,
-  `ContentGenerationRequest`, `QualityEvaluatorPort`, `QualityEvaluatorSet`,
-  `EvaluationSubject`, `QualityEvaluation`, and the two graph errors.
-- `episodic.orchestration._content_graph_state` and
-  `episodic.orchestration._content_graph_nodes` hold the graph state, the
-  per-run context, the node ownership table, and plain async node functions.
-  Node functions must not import `langgraph`; Hecate cannot check third-party
-  imports, so review enforces it.
-- `episodic.orchestration.content_generation` builds and compiles the graph and
-  implements the port. The composition root injects it into
-  `InProcessGenerationRunLauncher.content_graph`; the application layer never
-  imports orchestration.
-
-The builder wraps each node in a closure that supplies `runtime.context`, so
-nodes see only `ContentGenerationContext` and never a LangGraph type. LangChain
-creates a task for every node call, so the closure also renames that task to
-`generation-run-{run_id}` and registers it in the invocation's
-`RunTaskRegistry`. The runner names its own graph task the same way and, on
-cancellation, cancels and drains that task and then only the tasks in its own
-registry. The shared name labels a task for INV-9's assertion; it does not
-select tasks for cancellation, because two invocations for the same run id use
-the same name. Without that drain, a cancelled run's evaluator or terminal
-transaction could keep running after shutdown.
-
-The single-writer rule is absolute. A run session implements
-`ContentGenerationSteps`, and it is the only path from a node to run state.
-Nodes never open a unit of work; each session method opens one short detached
-unit of work, commits it, and returns. No unit of work is held across an
-evaluator `await`. The launcher task that claimed the run remains the only code
-that appends that run's events or changes its status.
-
-Branch ownership is data, not convention: `NODE_OWNERSHIP` assigns every node
-except `initialize` to exactly one quality branch. Property tests in
-`tests/test_content_generation_graph_properties.py` drive the production runner
-over generated modes, evaluator outcomes, and injected faults and assert that
-only the run's branch runs and exactly one owned terminal is reached.
-`tests/test_content_generation_graph_topology.py` pins the compiled topology.
-
-To add an evaluator:
-
-1. Implement `QualityEvaluatorPort` with a stable slug as `name`. The slug is
-   an event field and a metric label, so never derive it from a model or a
-   per-run value.
-2. Keep `evaluate` free of persistence. It receives an `EvaluationSubject` and
-   returns a `QualityEvaluation`.
-3. Register it in the `QualityEvaluatorSet` the composition root builds. The
-   set validates unique, non-blank names and a positive timeout.
-4. Rely on the node-level timeout and error isolation rather than catching
-   inside the adapter. An exception, timeout, or self-raised `CancelledError`
-   becomes an inconclusive result with an error classification; a genuine
-   cancellation is re-raised.
-
-Alert on `generation_run_qa_evaluator_errors_total` and the `qa.result` event's
-`errored` fields, not on the escalation rate. A broken adapter otherwise looks
-like QA rejecting good drafts. `generation_run_qa_gate_total` counts aggregate
-verdicts, and an escalation deliberately does not increment
-`generation_run_draft_errors_total` because the draft did generate.
-
-Graph-state tests follow three conventions:
-
-- Every property has `@example` witnesses for each documented class; a plain
-  test drives the same matrix and asserts the `Counter` of reached classes, so
-  coverage is checked even under `pytest-xdist`.
-- Expected outcomes come from literal tables or snapshots, not from a second
-  implementation of the rule inside the test.
-- A seeded fault proves the check can fail: for example, the swapped-target
-  test builds a graph from the same public node functions with the branches
-  exchanged and asserts the ownership checker rejects it. Production code has
-  no test-only switch.
-
-The migration test compares `pg_enum` labels with the Python enums after a
-staged upgrade, because Alembic metadata comparison ignores enum labels.
-
-### Generation-run ownership and request ordering
-
-Four internally facing rules keep a run consistent when several launchers or
-retried requests touch it. Each is enforced in code and pinned by tests.
-
-- **Who may write a terminal state.** `RunClaim` carries a frozen
-  `ClaimToken` per launcher task, set when that invocation wins the
-  pending-to-running claim. The claim also records a unique proof, persisted as
-  `generation_runs.claim_token`, so a lost commit acknowledgement is reconciled
-  against an exact attempt rather than a shared timestamp.
-  `launcher_failure.py` is the only owner of failure persistence; see its
-  boundary note above. On the success path the claim is recorded immediately
-  after `commit()` inside the claim's unit of work, so a failure while that
-  session closes cannot lose a durable claim. On the failure and cancellation
-  paths, an invocation that has not claimed may write only by winning the same
-  compare-and-set; a refused write records no event, no metric, and reports
-  `not_claimed`. A cancelled failure transaction rolls the flag back with it. A
-  task name is not authority: two invocations for one run id share
-  `generation-run-{run_id}`.
-- **Status updates.** Both adapters resolve a `GenerationRunStatusUpdate`
-  through `apply_status_update`, which revalidates the immutable run with
-  `dataclasses.replace` and rejects a violation with `ValueError`. The
-  `UNCHANGED` sentinel means "keep the stored value" and is the default for
-  `qa_status`, so a caller that has no QA opinion cannot accidentally clear it.
-- **Idempotent request ordering.** `run_idempotent` accepts an optional
-  `precondition`. It runs after a stored replay is ruled out and before a
-  `Conflict` or `InFlight` outcome is reported, so a reused key cannot turn a
-  malformed body into a 409 while a completed replay still returns its stored
-  response. It is not applied to a freshly acquired record: the work validates,
-  so a rejection releases the key. A `draft_without_qa` request is the
-  exception to the exception: its body rules and the missing-launcher 503 are
-  checked before idempotency, matching the pre-4.4.1 contract, because it has
-  no replay-sensitive capability of its own.
-- **Capability advertisement.** `create_app_from_env` builds one
-  `QualityEvaluatorSet`, derives `accepted_quality_modes` from it through
-  `LangGraphContentGenerationGraph.accepted_quality_modes()`, and stores the
-  result on `ApiDependencies`. `ApiDependencies` freezes the set, requires
-  `draft_without_qa`, and `GenerationRunsResourceConfig` carries it to the
-  resource, which applies the REST `qa_gated` gate. Deployments without
-  evaluators therefore keep the `422` and never spend inference on a branch
-  that would escalate for lack of evaluators. The user-facing rules live in the
-  users' guide.
 
 ### Manual recovery of expired generation-run leases
 

@@ -1,49 +1,40 @@
 """Admit, schedule, and shut down background generation-run tasks.
 
-:class:`_SchedulingMixin` supplies :class:`InProcessGenerationRunLauncher`
-with bounded task admission, strong task references, and cancellation
-handling. Admission is checked before an asyncio task is allocated, so a
-launcher never exceeds its configured concurrency and pending-run budget.
-Shutdown cancels outstanding tasks, drains them, and records cancellation as
-a terminal failure rather than a restart-recoverable state.
+:class:`GenerationRunScheduler` owns bounded task admission, strong task
+references, the execution semaphore, and cancellation bookkeeping. It takes
+the run executor and the cancellation recorder as narrow injected callables,
+so it neither claims a run nor decides how an outcome is persisted. Admission
+is checked before an asyncio task is allocated, so a scheduler never exceeds
+its configured concurrency and pending-run budget. Shutdown cancels
+outstanding tasks, drains them, and records cancellation as a terminal
+failure rather than a restart-recoverable state.
 """
 
 import asyncio
 import dataclasses as dc
 import typing as typ
 
-from episodic.canonical.generation_graph_ports import ContentGenerationRequest
-from episodic.canonical.generation_routing import (
-    GenerationTerminal,
-    route_quality_mode,
-    terminal_outcome,
-)
-from episodic.generation.launcher_session import (
-    RunNotClaimedError,
-    SessionPortsAdapter,
-    _LauncherRunSession,
-)
-from episodic.generation.launcher_support import (
-    Failure,
-    RunClaim,
-    classify_failure,
-)
+from episodic.generation.launcher_support import RunClaim
 from episodic.logging import get_logger, log_info
+from episodic.observability import (
+    NoopTracer,
+    NoopValueMetrics,
+    TracerPort,
+    ValueMetricsPort,
+)
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
-    from episodic.canonical.generation_quality import QualityMode
-
+DEFAULT_MAX_CONCURRENCY = 4
+DEFAULT_MAX_PENDING_RUNS = 16
 _METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
+_METRIC_PENDING_DEPTH = "generation_run_pending_depth"
 
 logger = get_logger(__name__)
 
-
-def _terminal_outcome_name(terminal: GenerationTerminal) -> str:
-    """Name the span outcome a terminal records."""
-    outcome = terminal_outcome(terminal)
-    return "escalated" if outcome.error_category is not None else "completed"
+type TaskSet = set[asyncio.Task[None]]
 
 
 class GenerationRunAdmissionError(RuntimeError):
@@ -51,8 +42,8 @@ class GenerationRunAdmissionError(RuntimeError):
 
 
 @dc.dataclass(frozen=True, slots=True)
-class _ExecutionOutcome:
-    """Describe the terminal result of one launcher task."""
+class ExecutionOutcome:
+    """Describe the terminal result of one scheduled run."""
 
     outcome: str
     failure_category: str | None = None
@@ -60,16 +51,88 @@ class _ExecutionOutcome:
     terminal: str | None = None
 
 
-if typ.TYPE_CHECKING:
-    from episodic.generation.launcher_host import LauncherHost as _MixinBase
-else:
-    _MixinBase = object
+class SchedulerRuntimeView(typ.Protocol):
+    """Live configuration and observability consulted at use time.
+
+    Attributes are properties rather than values so a scheduler that outlives
+    its composition root observes the caller's current sinks and admission
+    limits after the caller replaces them. The execution semaphore is sized
+    once from the limits in force at construction, matching the pre-split
+    launcher, which never resized it.
+    """
+
+    @property
+    def metrics(self) -> ValueMetricsPort:
+        """Sink for admission and pending-depth metrics."""
+
+    @property
+    def tracer(self) -> TracerPort:
+        """Sink for the per-run execution span."""
+
+    @property
+    def max_concurrency(self) -> int:
+        """Maximum runs allowed to execute concurrently."""
+
+    @property
+    def max_pending_runs(self) -> int:
+        """Maximum runs allowed to wait beyond the execution capacity."""
 
 
-class _SchedulingMixin(_MixinBase):
-    """Bound task admission and drive scheduled generation-run tasks."""
+@dc.dataclass(frozen=True, slots=True)
+class NoopSchedulerRuntimeView:
+    """Inert runtime view used when the caller supplies none."""
 
-    __slots__ = ()
+    metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
+    tracer: TracerPort = dc.field(default_factory=NoopTracer)
+    max_concurrency: int = DEFAULT_MAX_CONCURRENCY
+    max_pending_runs: int = DEFAULT_MAX_PENDING_RUNS
+
+
+@dc.dataclass(slots=True)
+class GenerationRunScheduler:
+    """Bound task admission and drive scheduled generation-run tasks.
+
+    Attributes
+    ----------
+    execute_run : cabc.Callable[[uuid.UUID], cabc.Awaitable[ExecutionOutcome]]
+        Execute one admitted run under a concurrency permit and report its
+        terminal outcome.
+    record_cancellation : cabc.Callable[[uuid.UUID], cabc.Awaitable[None]]
+        Persist cancellation as a terminal failure for one run.
+    runtime : SchedulerRuntimeView
+        Live view of the metrics, tracer and admission limits.
+    """
+
+    execute_run: cabc.Callable[[uuid.UUID, RunClaim], cabc.Awaitable[ExecutionOutcome]]
+    record_cancellation: cabc.Callable[[uuid.UUID, RunClaim], cabc.Awaitable[bool]]
+    runtime: SchedulerRuntimeView = dc.field(default_factory=NoopSchedulerRuntimeView)
+    _tasks: TaskSet = dc.field(default_factory=set, init=False)
+    _task_run_ids: dict[asyncio.Task[None], uuid.UUID] = dc.field(
+        default_factory=dict,
+        init=False,
+    )
+    _semaphore: asyncio.Semaphore = dc.field(init=False)
+    _admitted_run_count: int = dc.field(default=0, init=False)
+    _cancelled_run_ids: set[uuid.UUID] = dc.field(default_factory=set, init=False)
+    _pending_cancellation_ids: set[uuid.UUID] = dc.field(
+        default_factory=set,
+        init=False,
+    )
+    _cancellation_tasks: set[asyncio.Task[bool]] = dc.field(
+        default_factory=set,
+        init=False,
+    )
+    _is_shutting_down: bool = dc.field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        """Validate scheduling limits and allocate the execution semaphore."""
+        if self.runtime.max_concurrency < 1:
+            msg = "max_concurrency must be at least 1."
+            raise ValueError(msg)
+        if self.runtime.max_pending_runs < 0:
+            msg = "max_pending_runs must be non-negative."
+            raise ValueError(msg)
+        self._semaphore = asyncio.Semaphore(self.runtime.max_concurrency)
 
     async def launch(self, run_id: uuid.UUID) -> None:
         """Schedule a background task for one generation run."""
@@ -99,7 +162,7 @@ class _SchedulingMixin(_MixinBase):
 
     @property
     def scheduled_run_count(self) -> int:
-        """The number of background runs retained by the launcher."""
+        """The number of background runs retained by the scheduler."""
         return len(self._tasks)
 
     async def shutdown(self) -> None:
@@ -113,28 +176,71 @@ class _SchedulingMixin(_MixinBase):
         await self.drain()
         for task, run_id in cancelled_tasks:
             if task.cancelled() and run_id not in self._pending_cancellation_ids:
-                await self._record_cancellation_owned(run_id, RunClaim())
+                await self.record_cancellation_owned(run_id, RunClaim())
 
-    async def _record_cancellation_owned(
+    def _discard_task(self, task: asyncio.Task[None]) -> None:
+        """Remove finished tasks from the strong-reference registry."""
+        self._tasks.discard(task)
+        self._task_run_ids.pop(task, None)
+        self._admitted_run_count -= 1
+        self._record_pending_depth()
+
+    def _admit(self) -> None:
+        """Reserve bounded capacity before creating a background task."""
+        if self._is_shutting_down:
+            self.runtime.metrics.increment_counter(
+                _METRIC_ADMISSION_REJECTED,
+                labels={"reason": "shutdown"},
+            )
+            msg = "Generation run admission is closed during shutdown."
+            raise GenerationRunAdmissionError(msg)
+        capacity = self.runtime.max_concurrency + self.runtime.max_pending_runs
+        if self._admitted_run_count >= capacity:
+            self.runtime.metrics.increment_counter(
+                _METRIC_ADMISSION_REJECTED,
+                labels={"reason": "capacity"},
+            )
+            msg = "Generation run admission capacity is exhausted."
+            raise GenerationRunAdmissionError(msg)
+        self._admitted_run_count += 1
+        self._record_pending_depth()
+
+    async def _run_task(self, run_id: uuid.UUID) -> None:
+        """Execute one scheduled generation run."""
+        with self.runtime.tracer.start_span(
+            "generation_run.execute",
+            attributes={"operation": "generation_run.execute", "run_id": str(run_id)},
+        ) as span:
+            claim = RunClaim()
+            try:
+                async with self._semaphore:
+                    outcome = await self.execute_run(run_id, claim)
+            except asyncio.CancelledError:
+                span.set_attribute("outcome", "cancelled")
+                span.set_attribute("failure_category", "launcher.shutdown")
+                await self.record_cancellation_owned(run_id, claim)
+                raise
+            span.set_attribute("outcome", outcome.outcome)
+            if outcome.failure_category is not None:
+                span.set_attribute("failure_category", outcome.failure_category)
+            if outcome.quality_branch is not None:
+                span.set_attribute("quality_branch", outcome.quality_branch)
+            if outcome.terminal is not None:
+                span.set_attribute("terminal", outcome.terminal)
+
+    async def record_cancellation_owned(
         self,
         run_id: uuid.UUID,
         claim: RunClaim,
     ) -> None:
-        """Record a cancellation from a task named for the run (INV-9).
-
-        Shielding keeps a second cancellation from truncating the terminal
-        event; naming the shielded write keeps the single-writer invariant
-        true for this path too.
-        """
+        """Record a cancellation from a task named for the run (INV-9)."""
         if run_id in self._cancelled_run_ids:
             return
         if claim.token is None and run_id in self._pending_cancellation_ids:
-            # A tokenless duplicate must not suppress the owner: only the
-            # claimant can make the terminal write authoritative.
             return
         self._pending_cancellation_ids.add(run_id)
         write = asyncio.create_task(
-            self._record_cancellation(run_id, claim),
+            self._record_cancellation_write(run_id, claim),
             name=f"generation-run-{run_id}",
         )
         self._cancellation_tasks.add(write)
@@ -149,142 +255,19 @@ class _SchedulingMixin(_MixinBase):
         if recorded:
             self._cancelled_run_ids.add(run_id)
 
-    def _discard_task(self, task: asyncio.Task[None]) -> None:
-        """Remove finished tasks from the strong-reference registry."""
-        self._tasks.discard(task)
-        self._task_run_ids.pop(task, None)
-        self._admitted_run_count -= 1
-        self._record_pending_depth()
-
-    def _admit(self) -> None:
-        """Reserve bounded capacity before creating a background task."""
-        if self._is_shutting_down:
-            self.metrics.increment_counter(
-                _METRIC_ADMISSION_REJECTED,
-                labels={"reason": "shutdown"},
-            )
-            msg = "Generation run admission is closed during shutdown."
-            raise GenerationRunAdmissionError(msg)
-        capacity = self.max_concurrency + self.max_pending_runs
-        if self._admitted_run_count >= capacity:
-            self.metrics.increment_counter(
-                _METRIC_ADMISSION_REJECTED,
-                labels={"reason": "capacity"},
-            )
-            msg = "Generation run admission capacity is exhausted."
-            raise GenerationRunAdmissionError(msg)
-        self._admitted_run_count += 1
-        self._record_pending_depth()
-
-    async def _run_task(self, run_id: uuid.UUID) -> None:
-        """Execute one scheduled generation run."""
-        with self.tracer.start_span(
-            "generation_run.execute",
-            attributes={"operation": "generation_run.execute", "run_id": str(run_id)},
-        ) as span:
-            claim = RunClaim()
-            try:
-                async with self._semaphore:
-                    outcome = await self._execute_run(run_id, claim)
-            except asyncio.CancelledError:
-                span.set_attribute("outcome", "cancelled")
-                span.set_attribute("failure_category", "launcher.shutdown")
-                await self._record_cancellation_owned(run_id, claim)
-                raise
-            span.set_attribute("outcome", outcome.outcome)
-            if outcome.failure_category is not None:
-                span.set_attribute("failure_category", outcome.failure_category)
-            if outcome.quality_branch is not None:
-                span.set_attribute("quality_branch", outcome.quality_branch)
-            if outcome.terminal is not None:
-                span.set_attribute("terminal", outcome.terminal)
-
-    async def _read_quality_mode(self, run_id: uuid.UUID) -> QualityMode | None:
-        """Read a run's requested quality mode before the graph forks on it."""
-        async with self.uow_factory() as uow:
-            run = await uow.generation_runs.get_run(run_id)
-        return None if run is None else run.quality_mode
-
-    async def _execute_run(
-        self,
-        run_id: uuid.UUID,
-        claim: RunClaim,
-    ) -> _ExecutionOutcome:
-        """Execute one generation run through the content-generation graph.
-
-        ``claim`` carries this invocation's token once its claim commits. Until
-        then a failure is written only if the failure path can claim the run
-        itself, so a launcher that lost the race cannot overwrite the winner.
-
-        Returns
-        -------
-        _ExecutionOutcome
-            The terminal outcome, or ``not_claimed`` when another launcher
-            owns the run.
-        """
-        try:
-            quality_mode = await self._read_quality_mode(run_id)
-            if quality_mode is None:
-                return _ExecutionOutcome(outcome="not_claimed")
-            terminal = await self.content_graph.run(
-                ContentGenerationRequest(
-                    run_id=run_id,
-                    quality_mode=quality_mode,
-                ),
-                steps=_LauncherRunSession(
-                    launcher=SessionPortsAdapter(self),
-                    run_id=run_id,
-                    claim=claim,
-                ),
-            )
-        except RunNotClaimedError:
-            return _ExecutionOutcome(outcome="not_claimed")
-        except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
-            failure = classify_failure(exc)
-            result = await self._record_failure(
-                run_id,
-                failure,
-                claim=claim,
-            )
-            if not result.written:
-                return _ExecutionOutcome(outcome="not_claimed")
-            return _ExecutionOutcome(
-                outcome="failed",
-                failure_category=failure.category,
-            )
-        branch = route_quality_mode(quality_mode)
-        log_info(
-            logger,
-            "generation_run.quality_branch run_id=%s branch=%s",
-            run_id,
-            branch.value,
-        )
-        return _ExecutionOutcome(
-            outcome=_terminal_outcome_name(terminal),
-            quality_branch=branch.value,
-            terminal=terminal.value,
-        )
-
-    async def _record_cancellation(
+    async def _record_cancellation_write(
         self,
         run_id: uuid.UUID,
         claim: RunClaim,
     ) -> bool:
-        """Record cancellation consistently before or during execution.
+        """Perform one cancellation write and report whether it landed."""
+        return await self.record_cancellation(run_id, claim)
 
-        Returns
-        -------
-        bool
-            ``True`` when this invocation wrote the terminal state. A refused
-            write must not mark the run cancelled, or a losing invocation
-            would suppress the owner's cancellation write.
-        """
-        result = await self._record_failure(
-            run_id,
-            Failure(
-                message="Generation task cancelled during shutdown.",
-                category="launcher.shutdown",
-            ),
-            claim=claim,
+    def _record_pending_depth(self) -> None:
+        """Report bounded work waiting beyond the execution capacity."""
+        pending_depth = max(0, self._admitted_run_count - self.runtime.max_concurrency)
+        self.runtime.metrics.observe_value(
+            _METRIC_PENDING_DEPTH,
+            float(pending_depth),
+            labels={},
         )
-        return result.written

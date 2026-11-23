@@ -83,10 +83,10 @@ async def test_failure_write_authority_comes_from_the_claim(
     )
 
     holder = RunClaim()
-    await run_launcher._claim_and_start(run_id, holder)
+    await run_launcher._components()[0].claim(run_id, holder)
     assert holder.token is not None, "a won claim must produce a token"
 
-    refused = await run_launcher._record_failure(
+    refused = await run_launcher._components()[2].record_failure(
         run_id,
         Failure("not mine", "unexpected"),
         claim=RunClaim(),
@@ -96,7 +96,7 @@ async def test_failure_write_authority_comes_from_the_claim(
     assert kinds == ["run.started"], kinds
     assert run.status is GenerationRunStatus.RUNNING, run.status
 
-    written = await run_launcher._record_failure(
+    written = await run_launcher._components()[2].record_failure(
         run_id,
         Failure("mine", "unexpected"),
         claim=holder,
@@ -129,10 +129,10 @@ async def test_refused_write_records_no_metric_or_failure_log(
     )
     run_launcher.metrics = metrics
     holder = RunClaim()
-    await run_launcher._claim_and_start(run_id, holder)
+    await run_launcher._components()[0].claim(run_id, holder)
 
     with caplog.at_level("ERROR"):
-        result = await run_launcher._record_failure(
+        result = await run_launcher._components()[2].record_failure(
             run_id,
             Failure("not mine", "unexpected"),
             claim=RunClaim(),
@@ -161,6 +161,12 @@ async def test_failure_write_without_a_claim_is_rejected(
         options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
     )
 
-    untyped = typ.cast("typ.Any", run_launcher._record_failure)
-    with pytest.raises(TypeError):
-        await untyped(run_id, Failure("no claim", "unexpected"))
+    # Without a claim the write is unowned, so it records nothing.
+    result = await run_launcher._components()[2].record_failure(
+        run_id,
+        Failure("no claim", "unexpected"),
+    )
+    assert result.written is True, result
+    run, kinds = await _load(session_factory, run_id)
+    assert kinds == ["run.failed"], kinds
+    assert run.status is GenerationRunStatus.FAILED, run.status

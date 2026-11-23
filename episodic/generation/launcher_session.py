@@ -20,7 +20,7 @@ from episodic.canonical.generation_graph_ports import (
     QualityEvaluation,
 )
 from episodic.canonical.generation_persistence import InvalidDraftTeiError
-from episodic.canonical.generation_quality import QaStatus, QualityMode
+from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.generation_routing import QualityVerdict
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.tei import parse_tei_header
@@ -29,6 +29,7 @@ from episodic.generation.launcher_support import (
     ClaimedRun,
     ClaimToken,
     Failure,
+    FailureWriteResult,
     RunClaim,
 )
 
@@ -38,128 +39,61 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import DraftScriptResult
-    from episodic.generation.launcher_host import LauncherHost
-    from episodic.generation.launcher_support import FailureWriteResult
     from episodic.observability import ValueMetricsPort
     from episodic.runtime_providers import Clock
 
 
-_METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
+class ClaimerSteps(typ.Protocol):
+    """The claim and generation operations one run session may call."""
 
-
-class SessionPorts(typ.Protocol):
-    """The launcher operations one run session may call.
-
-    The session deliberately sees only these six operations rather than the
-    whole launcher, so a node cannot reach scheduling, claims or admission
-    through the step port.
-    """
-
-    uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
-    clock: Clock
-    metrics: ValueMetricsPort
-
-    async def _claim_and_hydrate(
+    async def claim(
         self,
         run_id: uuid.UUID,
-        claim: RunClaim,
+        claim: RunClaim | None = None,
     ) -> ClaimedRun | None:
-        """Claim the run and load its input."""
+        """Claim and hydrate the run."""
         ...
 
-    async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:
+    async def generate(self, claimed: ClaimedRun) -> DraftScriptResult:
         """Generate one draft."""
         ...
 
-    async def _record_draft_generated(
-        self,
-        run_id: uuid.UUID,
-        result: DraftScriptResult,
-    ) -> None:
-        """Record that generation returned a draft."""
-        ...
 
-    async def _persist_success(
-        self,
-        claimed: ClaimedRun,
-        result: DraftScriptResult,
-        *,
-        qa: QaOutcome,
-    ) -> None:
-        """Persist a successful run."""
-        ...
+class FailureSteps(typ.Protocol):
+    """The failure-recording operation one run session may call."""
 
-    async def _record_failure(
+    async def record_failure(
         self,
         run_id: uuid.UUID,
         failure: Failure,
-        claim: RunClaim,
         *,
-        draft: DraftScriptResult | None = None,
-    ) -> FailureWriteResult:
-        """Record a terminal failure when this invocation owns the run."""
-        ...
-
-
-class SessionPortsAdapter:
-    """Expose only the launcher operations a run session needs.
-
-    The session never receives the launcher itself, so a node cannot reach
-    scheduling, admission or claim methods through the step port.
-    """
-
-    def __init__(self, host: LauncherHost) -> None:
-        """Bind the launcher fields and operations the session may use."""
-        self._host = host
-        self.uow_factory = host.uow_factory
-        self.clock = host.clock
-        self.metrics = host.metrics
-
-    async def _claim_and_hydrate(
-        self,
-        run_id: uuid.UUID,
-        claim: RunClaim,
-    ) -> ClaimedRun | None:
-        """Claim the run and load its input."""
-        return await self._host._claim_and_hydrate(run_id, claim)
-
-    async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:
-        """Generate one draft."""
-        return await self._host._generate(claimed)
-
-    async def _record_draft_generated(
-        self,
-        run_id: uuid.UUID,
-        result: DraftScriptResult,
-    ) -> None:
-        """Record that generation returned a draft."""
-        await self._host._record_draft_generated(run_id, result)
-
-    async def _persist_success(
-        self,
-        claimed: ClaimedRun,
-        result: DraftScriptResult,
-        *,
-        qa: QaOutcome,
-    ) -> None:
-        """Persist a successful run."""
-        await self._host._persist_success(claimed, result, qa=qa)
-
-    async def _record_failure(
-        self,
-        run_id: uuid.UUID,
-        failure: Failure,
-        claim: RunClaim,
-        *,
+        claim: RunClaim | None = None,
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failure."""
-        return await self._host._record_failure(
-            run_id,
-            failure,
-            claim=claim,
-            draft=draft,
-        )
+        ...
+
+
+class SessionPersistenceSteps(typ.Protocol):
+    """The persistence operations one run session may call."""
+
+    async def record_draft_generated(
+        self,
+        run_id: uuid.UUID,
+        result: DraftScriptResult,
+    ) -> None:
+        """Record that generation returned a draft."""
+        ...
+
+    async def persist_success(
+        self,
+        claimed: ClaimedRun,
+        result: DraftScriptResult,
+        *,
+        qa: QaOutcome | None = None,
+    ) -> None:
+        """Persist a successful run."""
+        ...
 
 
 class RunNotClaimedError(Exception):
@@ -172,8 +106,18 @@ class _LauncherRunSession:
 
     Attributes
     ----------
-    launcher : SessionPorts
-        The narrow launcher surface whose port methods perform the I/O.
+    claimer : ClaimerSteps
+        Claim and generation component for this run.
+    persistence : SessionPersistenceSteps
+        Success-side persistence component.
+    failures : FailureSteps
+        Failure persistence component.
+    uow_factory : cabc.Callable[[], CanonicalUnitOfWork]
+        Factory for the session's own short units of work.
+    clock : Clock
+        Clock for lifecycle timestamps.
+    metrics : ValueMetricsPort
+        Metrics sink for QA gate observations.
     run_id : uuid.UUID
         The run this session serves.
     claim : RunClaim
@@ -184,7 +128,12 @@ class _LauncherRunSession:
         Generated draft, set by :meth:`generate_draft`.
     """
 
-    launcher: SessionPorts
+    claimer: ClaimerSteps
+    persistence: SessionPersistenceSteps
+    failures: FailureSteps
+    uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
+    clock: Clock
+    metrics: ValueMetricsPort
     run_id: uuid.UUID
     claim: RunClaim
     claimed: ClaimedRun | None = None
@@ -199,16 +148,11 @@ class _LauncherRunSession:
             If the run is absent or was claimed by another worker, so the
             graph must stop before spending inference.
         """
-        claimed = await self.launcher._claim_and_hydrate(self.run_id, self.claim)
+        claimed = await self.claimer.claim(self.run_id, self.claim)
         if claimed is None:
             msg = f"generation run {self.run_id} was not claimed"
             raise RunNotClaimedError(msg)
         self.claimed = claimed
-        if claimed.run.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
-            self.launcher.metrics.increment_counter(
-                _METRIC_QA_BYPASS,
-                labels={"quality_mode": claimed.run.quality_mode.value},
-            )
 
     async def generate_draft(self) -> None:
         """Generate one draft, record it, and validate it as TEI.
@@ -220,8 +164,8 @@ class _LauncherRunSession:
             invalid TEI, and persistence would reject it anyway.
         """
         claimed = self._require_claimed()
-        result = await self.launcher._generate(claimed)
-        await self.launcher._record_draft_generated(claimed.run.id, result)
+        result = await self.claimer.generate(claimed)
+        await self.persistence.record_draft_generated(claimed.run.id, result)
         try:
             parse_tei_header(result.tei_xml)
         except (TypeError, ValueError) as exc:
@@ -231,7 +175,7 @@ class _LauncherRunSession:
     async def begin_evaluation(self, evaluator_names: tuple[str, ...]) -> None:
         """Record that evaluation started and expose the current node."""
         draft = self._require_draft()
-        async with self.launcher.uow_factory() as uow:
+        async with self.uow_factory() as uow:
             await uow.generation_runs.append_event(
                 self.run_id,
                 kind="qa.evaluation_started",
@@ -240,7 +184,7 @@ class _LauncherRunSession:
                     "evaluators": list(evaluator_names),
                     "content_hash": draft.content_hash,
                 },
-                occurred_at=self.launcher.clock(),
+                occurred_at=self.clock(),
             )
             await uow.generation_runs.update_run_status(
                 self.run_id,
@@ -273,11 +217,11 @@ class _LauncherRunSession:
         draft = self._require_draft()
         if qa_status is QaStatus.PASSED:
             record_qa_metrics(
-                self.launcher.metrics,
+                self.metrics,
                 QualityVerdict.PASSED,
                 evaluations,
             )
-        await self.launcher._persist_success(
+        await self.persistence.persist_success(
             claimed,
             draft,
             qa=QaOutcome(qa_status, evaluations),
@@ -290,17 +234,17 @@ class _LauncherRunSession:
     ) -> None:
         """Record the escalated terminal without persisting TEI."""
         draft = self._require_draft()
-        record_qa_metrics(self.launcher.metrics, verdict, evaluations)
+        record_qa_metrics(self.metrics, verdict, evaluations)
         token = self._require_token()
         self.claim.token = token
-        result = await self.launcher._record_failure(
+        result = await self.failures.record_failure(
             self.run_id,
             Failure.escalation_failure(
                 verdict=verdict,
                 evaluations=evaluations,
                 content_hash=draft.content_hash,
             ),
-            self.claim,
+            claim=self.claim,
             draft=draft,
         )
         if not result.written:

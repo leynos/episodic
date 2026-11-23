@@ -31,6 +31,7 @@ from episodic.canonical.episode_errors import EpisodeNotFoundError
 from episodic.generation.draft_script import (
     DraftPresenterProfile,
     DraftScriptRequest,
+    DraftScriptResult,
     DraftScriptSource,
 )
 from episodic.generation.launcher_support_events import (
@@ -44,23 +45,26 @@ from episodic.generation.launcher_support_presenters import (
     project_presenter_profiles,
 )
 from episodic.generation.launcher_support_sources import (
+    BoundedSourceLoader,
     GenerationSourceLimitError,
     GenerationSourceLimits,
+    GenerationSourceLoader,
+    SourceDocumentLoader,
+    SourceLoadContext,
+    SourceLoadRuntime,
     source_from_document,
 )
 from episodic.runtime_providers import Clock
 
 if typ.TYPE_CHECKING:
-    import datetime as dt
-
     from episodic.canonical.domain import CanonicalEpisode, GenerationRun
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.cost.recorder import CostRecorderPort
-    from episodic.generation.draft_script import DraftScriptResult
 
 type DraftIdFactoryFactory = cabc.Callable[[], cabc.Callable[[str], str]]
 
 __all__ = [
+    "BoundedSourceLoader",
     "ClaimToken",
     "ClaimedRun",
     "Clock",
@@ -71,10 +75,14 @@ __all__ = [
     "FailureWriteResult",
     "GenerationSourceLimitError",
     "GenerationSourceLimits",
+    "GenerationSourceLoader",
     "PersistedTei",
     "ProviderCallRecordRequest",
     "RunClaim",
     "SequentialDraftIds",
+    "SourceDocumentLoader",
+    "SourceLoadContext",
+    "SourceLoadRuntime",
     "classify_failure",
     "draft_generated_payload",
     "draft_request",
@@ -118,12 +126,7 @@ class ClaimedRun:
 
 @dc.dataclass(frozen=True, slots=True)
 class ClaimToken:
-    """Proof that one invocation won a run's pending-to-running claim.
-
-    The token, not a task name and not a boolean, is the authority to write a
-    run's terminal state: only the invocation whose compare-and-set returned
-    this value may record an outcome.
-    """
+    """Proof that one invocation won a run's pending-to-running claim."""
 
     run_id: uuid.UUID
 
@@ -132,31 +135,13 @@ class ClaimToken:
 class RunClaim:
     """The claim token one launcher invocation holds for the run it drives.
 
-    ``token`` is ``None`` until this invocation wins the claim. ``proof`` is a
-    unique per-attempt value stored with the claim, so a cancellation that
-    interrupts the commit acknowledgement is reconciled against an exact
-    proof rather than a timestamp that another attempt could share.
+    ``proof`` is a unique per-attempt value stored with the claim, so a lost
+    commit acknowledgement is reconciled against an exact attempt rather than
+    a timestamp another attempt could share.
     """
 
     token: ClaimToken | None = None
-    started_at: dt.datetime | None = None
     proof: uuid.UUID = dc.field(default_factory=uuid.uuid4)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class FailureWriteResult:
-    """Outcome of a failure write attempt.
-
-    Attributes
-    ----------
-    written : bool
-        Whether this invocation recorded the terminal failure.
-    token : ClaimToken | None
-        The authority the write used, for the caller to retain.
-    """
-
-    written: bool
-    token: ClaimToken | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -165,8 +150,15 @@ class FailureWrite:
 
     run_id: uuid.UUID
     failure: Failure
-    token: ClaimToken
     draft: DraftScriptResult | None
+
+
+@dc.dataclass(frozen=True, slots=True)
+class FailureWriteResult:
+    """Outcome of a failure write attempt."""
+
+    written: bool
+    token: ClaimToken | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)

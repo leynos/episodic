@@ -147,7 +147,7 @@ async def test_refused_cancellation_does_not_suppress_the_owner(
 
     await run_launcher.launch(run_id)
     await asyncio.wait_for(generator.started.wait(), timeout=5)
-    await run_launcher._record_cancellation_owned(run_id, RunClaim())
+    await run_launcher._scheduler.record_cancellation_owned(run_id, RunClaim())
     run, kinds = await _load(session_factory, run_id)
     assert run.status is GenerationRunStatus.RUNNING, kinds
     assert "run.failed" not in kinds, kinds
@@ -224,8 +224,9 @@ async def test_rolled_back_failure_claim_is_not_reused(
     )
     claim = RunClaim()
 
+    failures = flaky._components()[2]
     with pytest.raises(asyncio.CancelledError):
-        await flaky._record_failure(
+        await failures.record_failure(
             run_id,
             Failure("transient failure", "unexpected"),
             claim=claim,
@@ -237,7 +238,7 @@ async def test_rolled_back_failure_claim_is_not_reused(
     await owner.launch(run_id)
     await asyncio.wait_for(generator.started.wait(), timeout=5)
 
-    await flaky._record_cancellation_owned(run_id, claim)
+    await flaky._scheduler.record_cancellation_owned(run_id, claim)
     run, kinds = await _load(session_factory, run_id)
     assert run.status is GenerationRunStatus.RUNNING, kinds
     assert "run.failed" not in kinds, kinds

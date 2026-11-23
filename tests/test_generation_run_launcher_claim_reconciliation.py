@@ -36,7 +36,6 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
-    from episodic.generation.launcher_support import FailureWrite
 
 
 @pytest.mark.asyncio
@@ -57,13 +56,13 @@ async def test_lost_commit_acknowledgement_is_reconciled(
     claim = RunClaim()
 
     with pytest.raises(asyncio.CancelledError):
-        await run_launcher._claim_and_start(run_id, claim)
+        await run_launcher._components()[0].claim(run_id, claim)
 
     assert claim.token is not None, "the durable claim must be re-adopted"
-    result = await run_launcher._record_owned_failure(
+    result = await run_launcher._components()[2].record_failure(
         run_id,
         Failure("after lost ack", "unexpected"),
-        token=claim.token,
+        claim=claim,
     )
     assert result.written is True, result
     run, kinds = await _load(session_factory, run_id)
@@ -87,11 +86,11 @@ async def test_shutdown_waits_for_a_cancelled_cancellation_write(
         uow_factory=lambda: CommitFaultUnitOfWork(session_factory, fault),
     )
     claim = RunClaim()
-    await run_launcher._claim_and_start(run_id, claim)
+    await run_launcher._components()[0].claim(run_id, claim)
 
     fault.block = True
     write_task = asyncio.create_task(
-        run_launcher._record_cancellation_owned(run_id, claim),
+        run_launcher._scheduler.record_cancellation_owned(run_id, claim),
     )
     await asyncio.wait_for(fault.started.wait(), timeout=5)
     write_task.cancel()
@@ -115,17 +114,18 @@ async def test_failure_claim_and_write_share_one_transaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The authority claim and the failure write use the same unit of work."""
-    from episodic.generation.launcher import InProcessGenerationRunLauncher
+    from episodic.generation.launcher_claim import GenerationRunClaimer
+    from episodic.generation.launcher_failure import GenerationRunFailurePersistence
 
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
     seen: dict[str, object] = {}
 
-    original_claim = InProcessGenerationRunLauncher._claim_for_failure
-    original_write = InProcessGenerationRunLauncher._write_failure
+    original_claim = GenerationRunClaimer.claim_for_failure
+    original_write = GenerationRunFailurePersistence._append_failure_events
 
     async def claim_for_failure(
-        self: InProcessGenerationRunLauncher,
+        self: GenerationRunClaimer,
         uow: CanonicalUnitOfWork,
         failed_run_id: uuid.UUID,
         claim: RunClaim,
@@ -135,29 +135,31 @@ async def test_failure_claim_and_write_share_one_transaction(
         return await original_claim(self, uow, failed_run_id, claim)
 
     async def write_failure(
-        self: InProcessGenerationRunLauncher,
+        self: GenerationRunFailurePersistence,
         uow: CanonicalUnitOfWork,
-        write: FailureWrite,
+        failed_run_id: uuid.UUID,
+        failure: Failure,
     ) -> None:
         """Record the unit of work used for the write."""
         seen["write"] = uow
-        await original_write(self, uow, write)
+        await original_write(self, uow, failed_run_id, failure)
 
     monkeypatch.setattr(
-        InProcessGenerationRunLauncher,
-        "_claim_for_failure",
+        GenerationRunClaimer,
+        "claim_for_failure",
         claim_for_failure,
     )
     monkeypatch.setattr(
-        InProcessGenerationRunLauncher,
-        "_write_failure",
+        GenerationRunFailurePersistence,
+        "_append_failure_events",
         write_failure,
     )
 
-    result = await run_launcher._record_failure(
+    failures = run_launcher._components()[2]
+    result = await failures.record_failure(
         run_id,
         Failure("transactional", "unexpected"),
-        RunClaim(),
+        claim=RunClaim(),
     )
 
     assert result.written is True, result
@@ -173,20 +175,20 @@ async def test_blocked_reconciliation_then_second_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A second cancellation while reconciliation is blocked still records."""
-    from episodic.generation.launcher import InProcessGenerationRunLauncher
+    from episodic.generation.launcher_claim import GenerationRunClaimer
 
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
     claim = RunClaim()
-    await run_launcher._claim_and_start(run_id, claim)
+    await run_launcher._components()[0].claim(run_id, claim)
     claim.token = None
 
-    original = InProcessGenerationRunLauncher._reconcile_claim
+    original = GenerationRunClaimer.reconcile
     gate = asyncio.Event()
     release = asyncio.Event()
 
     async def blocked_reconcile(
-        self: InProcessGenerationRunLauncher,
+        self: GenerationRunClaimer,
         run_id: uuid.UUID,
         candidate: RunClaim,
     ) -> ClaimToken | None:
@@ -196,18 +198,18 @@ async def test_blocked_reconciliation_then_second_cancellation(
         return await original(self, run_id, candidate)
 
     monkeypatch.setattr(
-        InProcessGenerationRunLauncher,
-        "_reconcile_claim",
+        GenerationRunClaimer,
+        "reconcile",
         blocked_reconcile,
     )
 
     write_task = asyncio.create_task(
-        run_launcher._record_cancellation_owned(run_id, claim),
+        run_launcher._scheduler.record_cancellation_owned(run_id, claim),
     )
     await asyncio.wait_for(gate.wait(), timeout=5)
     # A second cancellation reaches the same path while reconcile is blocked;
     # the pending marker makes it a no-op rather than a fresh claim attempt.
-    await run_launcher._record_cancellation_owned(run_id, claim)
+    await run_launcher._scheduler.record_cancellation_owned(run_id, claim)
     release.set()
     await asyncio.wait_for(write_task, timeout=5)
 
@@ -217,14 +219,10 @@ async def test_blocked_reconciliation_then_second_cancellation(
     assert claim.token is not None, claim
 
 
-class _RefusingPorts:
-    """Session ports whose failure write is refused."""
+class _RefusingFailures:
+    """Failure component whose writes are always refused."""
 
-    uow_factory = staticmethod(lambda: None)
-    clock = staticmethod(lambda: None)
-    metrics = types.SimpleNamespace(increment_counter=lambda *a, **k: None)
-
-    async def _record_failure(self, *args: object, **kwargs: object) -> object:
+    async def record_failure(self, *args: object, **kwargs: object) -> object:
         """Refuse the write."""
         _ = (args, kwargs)
         from episodic.generation.launcher_support import FailureWriteResult
@@ -244,7 +242,15 @@ async def test_escalation_propagates_a_refused_write() -> None:
     from tests.generation_run_launcher_support import draft_result, valid_tei
 
     session = _LauncherRunSession(
-        launcher=typ.cast("typ.Any", _RefusingPorts()),
+        claimer=typ.cast("typ.Any", _RefusingFailures()),
+        persistence=typ.cast("typ.Any", _RefusingFailures()),
+        failures=typ.cast("typ.Any", _RefusingFailures()),
+        uow_factory=typ.cast("typ.Any", lambda: None),
+        clock=typ.cast("typ.Any", lambda: None),
+        metrics=typ.cast(
+            "typ.Any",
+            types.SimpleNamespace(increment_counter=lambda *a, **k: None),
+        ),
         run_id=uuid.uuid4(),
         claim=RunClaim(token=ClaimToken(uuid.uuid4())),
     )
@@ -264,13 +270,12 @@ async def test_reconcile_rejects_another_attempts_claim(
     winner_launcher = _launcher(session_factory)
     loser_launcher = _launcher(session_factory)
     winner = RunClaim()
-    await winner_launcher._claim_and_start(run_id, winner)
+    await winner_launcher._components()[0].claim(run_id, winner)
 
     loser = RunClaim()
-    loser.started_at = winner.started_at  # the test clock is frozen
-    lost = await loser_launcher._claim_and_start(run_id, loser)
+    lost = await loser_launcher._components()[0].claim(run_id, loser)
     assert lost is None, lost
-    reconciled = await loser_launcher._reconcile_claim(run_id, loser)
+    reconciled = await loser_launcher._components()[0].reconcile(run_id, loser)
     assert reconciled is None, reconciled
     assert loser.token is None, loser.token
 
@@ -283,12 +288,12 @@ async def test_pending_tokenless_marker_does_not_suppress_a_token_holder(
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
     claim = RunClaim()
-    await run_launcher._claim_and_start(run_id, claim)
+    await run_launcher._components()[0].claim(run_id, claim)
 
     # Simulate a tokenless duplicate that registered a marker and then could
     # not write. The claimant's token must still be honoured.
-    run_launcher._pending_cancellation_ids.add(run_id)
-    await run_launcher._record_cancellation_owned(run_id, claim)
+    run_launcher._scheduler._pending_cancellation_ids.add(run_id)
+    await run_launcher._scheduler.record_cancellation_owned(run_id, claim)
 
     run, kinds = await _load(session_factory, run_id)
     assert kinds.count("run.failed") == 1, kinds
