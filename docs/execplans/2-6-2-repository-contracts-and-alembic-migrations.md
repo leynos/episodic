@@ -1897,7 +1897,7 @@ documents serve that role. Upstream items traced by this plan:
   `seq` number for ordering and replay", with `resume_from` replay. The
   operative requirement is **prefix stability**, not gaplessness; the only
   gap-sensitive text is the backpressure heuristic at lines 629–633.
-- `ADR-015` — the port split and the `Checkpoint` / `WorkflowCheckpoint`
+- `ADR-0031` — the port split and the `Checkpoint` / `WorkflowCheckpoint`
   separation.
 - `ADR-018` — `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`:
   the governing record for versioning, concurrency shapes, immutability, and
@@ -1921,7 +1921,7 @@ DESIGN-ORCH-CKPT -> EP-M1 -> alembic/versions/20261020_000014_add_review_checkpo
 DESIGN-ORCH-CKPT -> EP-M2 -> episodic/canonical/storage/review_checkpoints.py
 API-GENRUN-CKPT  -> EP-M2 -> uow.generation_runs satisfies GenerationRunPort
 API-GENRUN-CKPT  -> EP-M3 -> tests/features/generation_run_lifecycle.feature
-ADR-015          -> EP-M5 -> docs/adrs/adr-0024-review-checkpoint-persistence.md
+ADR-0031         -> EP-M5 -> docs/adrs/adr-0024-review-checkpoint-persistence.md
 ADR-018          -> EP-M2 -> compare-and-set transitions; ON DELETE RESTRICT
 ADR-014          -> EP-M2 -> generation_run_ports in Hecate domain_ports (D-12)
 EP-4.3.2-DEFER   -> EP-M4 -> tests/canonical_storage/test_generation_run_lease_reclamation.py
@@ -1933,13 +1933,14 @@ table in the same commit; a stale trace table is worse than none.
 
 A new ADR is warranted. ADR-018 to ADR-023 now exist, so the next free number
 is **024**; re-check at EP-M5, because two numbers this plan reserved were
-taken while it was in review. Separately, three files already share 015
-(`adr-0032-cost-accounting-ports-and-pricing-engine.md`,
-`adr-0015-upload-and-idempotency-ports.md`,
-`adr-0031-generation-run-port-split.md`), and **two of them are absent from
-`docs/contents.md` entirely**. Renumbering to 015/018/019 and re-indexing is
-out of scope here; add it to the roadmap as a docs-only follow-up rather than
-leaving it as a remark in a plan that will be marked `COMPLETE`.
+taken while it was in review. Separately, when this plan was written three
+files shared 015 (the cost-accounting ports and pricing engine ADR, the upload
+and idempotency ports ADR, and the generation-run port split ADR), and two of
+them were absent from `docs/contents.md` entirely. The duplicate-number
+renumbering has since moved the first to
+`adr-0032-cost-accounting-ports-and-pricing-engine.md` and the last to
+`adr-0031-generation-run-port-split.md`; the upload ADR keeps
+`adr-0015-upload-and-idempotency-ports.md`.
 
 ## Verification plan
 

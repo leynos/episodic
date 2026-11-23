@@ -86,7 +86,7 @@ into line with the amended ADR.
 
 ## Tolerances
 
-- Interface tolerance: stop and escalate if aligning Pedante with ADR 001
+- Interface tolerance: stop and escalate if aligning Pedante with ADR 0030
   requires changing the signature or required fields of
   `PedanteEvaluationRequest`, `PedanteFinding`, or `PedanteEvaluationResult`.
 - Scope tolerance: stop and escalate if implementation appears to require more

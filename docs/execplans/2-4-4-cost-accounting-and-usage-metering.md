@@ -786,7 +786,7 @@ The deliverable is this ExecPlan in `APPROVED` status and a stub
 status.
 
 The author then drafts the canonical metric vocabulary and the
-`PricingSnapshot.source_kind` discriminator in ADR-015, with explicit worked
+`PricingSnapshot.source_kind` discriminator in ADR-0032, with explicit worked
 examples for OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages
 usage payloads.
 
@@ -1148,7 +1148,7 @@ LangGraph generation graph.
 
    - `docs/episodic-podcast-generation-system-design.md` — minor edits in
      the "Cost accounting and budget enforcement" section pointing to
-     ADR-015 and the `run_pricing_pins` table.
+     ADR-0032 and the `run_pricing_pins` table.
    - `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md` —
      status flips from `Proposed` to `Accepted` at the end of this
      stage. Records the port shape, the canonical metric vocabulary, the

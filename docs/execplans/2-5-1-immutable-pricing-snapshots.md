@@ -1488,7 +1488,7 @@ Upstream identifiers used for tracing:
   rate cards …".
 - `TDD-COST-SLA`: design document §"Future service-oriented pricing
   contracts".
-- `ADR-015`: cost-accounting ports and pricing engine (plus addendum).
+- `ADR-0032`: cost-accounting ports and pricing engine (plus addendum).
 - `ADR-018-INV-IMM`: "Immutable content is content-addressed or append-only,
   not permission-protected."
 - `ADR-018-INV-PIN`: "Consumers pin versions rather than resolving latest."

@@ -2769,7 +2769,7 @@ REST API and a first-party CLI.
 - The design document's *Data Model and Storage* bullet names
   `qa_evaluations` and its `qa_findings` children, replacing the two
   placeholder tables the design originally carried.
-- ADR 001's open item — record the versioning and compatibility guarantees
+- ADR 0030's open item — record the versioning and compatibility guarantees
   that apply once evaluator results are persisted or exposed — is discharged by
   ADR 026, which names the two version columns, the reader-side schema check,
   and the single errored-supersession exception as those guarantees and links
@@ -3082,7 +3082,7 @@ RM-2.2.7-a  -> TDD-DATA -> EP-M2 -> tests/canonical_storage/test_qa_artefacts.py
 RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_records_pedante_result
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)
 RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_cli_retrieval.feature (CLI scenarios)
-ADR-001(open item) -> EP-M6 -> docs/adrs/adr-0026-qa-artefact-persistence-contract.md
+ADR-0030(open item) -> EP-M6 -> docs/adrs/adr-0026-qa-artefact-persistence-contract.md
 TDD-DATA(deviation, accepted 2026-08-23) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
 ```
 

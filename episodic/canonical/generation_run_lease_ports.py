@@ -7,7 +7,7 @@ because the reclamation transaction also appends a ``run.failed`` event, which
 is `GenerationEventLog` behaviour. That is why the method lives on the composite
 `GenerationRunPort` and not on the narrow `GenerationRunRepository`: putting it
 on the repository would oblige every future implementer of that port to also be
-an event log, the coupling ADR-015 removed.
+an event log, the coupling ADR-0031 removed.
 
 The primitive is deliberately not a worker. It performs one transaction with a
 finite state partition, so a caller decides when to run it and how often; the
