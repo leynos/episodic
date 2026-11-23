@@ -1362,11 +1362,16 @@ These are trusted, not verified.
       runs the real race against a PostgreSQL server when
       `EPISODIC_TEST_POSTGRES_DSN` names a disposable server whose base
       database ends in `_test`, and skips otherwise. The support module
-      `tests/canonical_storage/_postgres_claim_race_support.py` gives each
-      xdist worker its own `<database>_w<worker>` database. Each test starts
-      the competing claim and then polls `pg_stat_activity` until a backend
-      reports a lock wait, so the release is synchronized on the database
-      rather than a sleep. Measured against PostgreSQL 17.11:
+      `tests/canonical_storage/_postgres_claim_race_support.py` gives every
+      fixture invocation its own
+      `<database>_w<worker>_<pid>_<nonce>` database, so independent runs and
+      parallel xdist workers cannot collide, and it never drops a pre-existing
+      database: a collision fails the test. A unit test covers the naming, and
+      a server-backed test proves a repeated create is refused while the
+      existing database survives. Each test starts the competing claim and
+      then polls `pg_stat_activity` until a backend reports a lock wait, so
+      the release is synchronized on the database rather than a sleep.
+      Measured against PostgreSQL 17.11:
       - an open claim transaction blocks the competitor, which loses after
         the claim commits (`claim_token` stays the winner's proof) and wins
         after the claim rolls back;
@@ -2113,7 +2118,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,609 passed, 4 skipped and 84 snapshots. The INV-8 comparison is
+  2,610 passed, 5 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2213,9 +2218,9 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,759
-  definitions and 2,609 passed, 4 skipped and 84 snapshots. The three extra
-  skips are the DSN-gated real-PostgreSQL claim races.
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,764
+  definitions and 2,610 passed, 5 skipped and 84 snapshots. The extra skips are
+  the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`
   is empty, and the characterization snapshot differs by exactly the two D9

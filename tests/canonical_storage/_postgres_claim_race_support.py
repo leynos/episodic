@@ -4,11 +4,12 @@ py-pglite serves a single connection, so a competing claim cannot be expressed
 there. These helpers run the race against a server named by
 ``EPISODIC_TEST_POSTGRES_DSN``. The DSN must select the psycopg async driver
 and its base database must end in ``_test``; the user must be allowed to create
-and drop databases, because each xdist worker gets its own
-``<database>_w<worker>`` database that the fixture creates, migrates and drops.
+and drop databases, because every fixture invocation creates its own uniquely
+named database and drops only that database at teardown.
 """
 
 import asyncio
+import contextlib
 import dataclasses as dc
 import datetime as dt
 import functools
@@ -41,6 +42,7 @@ if typ.TYPE_CHECKING:
 
     from sqlalchemy.engine import URL
     from sqlalchemy.ext.asyncio import (
+        AsyncConnection,
         AsyncEngine,
         AsyncSession,
         async_sessionmaker,
@@ -55,10 +57,32 @@ _LOCK_POLL_LIMIT = 200
 _IDENTIFIER_LIMIT = 63
 
 
-def _worker_database_name(base_database: str) -> str:
-    """Return this xdist worker's database name."""
-    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
-    suffix = f"_w{worker}"
+def require_dsn() -> str:
+    """Return the configured DSN, or skip the calling test."""
+    dsn = os.environ.get(_DSN_VARIABLE)
+    if not dsn:
+        pytest.skip(f"set {_DSN_VARIABLE} to run real-PostgreSQL claim races")
+    return dsn
+
+
+def database_name(
+    base_database: str,
+    *,
+    worker: str,
+    pid: int,
+    nonce: str,
+) -> str:
+    """Return a database name unique to one invocation and worker.
+
+    The nonce makes the name unique per fixture invocation, so two independent
+    pytest runs on the same server never select the same database.
+
+    Returns
+    -------
+    str
+        A PostgreSQL identifier of at most 63 bytes.
+    """
+    suffix = f"_w{worker}_{pid}_{nonce}"
     return f"{base_database[: _IDENTIFIER_LIMIT - len(suffix)]}{suffix}"
 
 
@@ -68,58 +92,77 @@ def _render(url: URL) -> str:
 
 
 def _admin_engine(dsn: str) -> AsyncEngine:
-    """Open an autocommit engine on the server's maintenance database."""
+    """Open an autocommit engine on the server's maintenance database.
+
+    Returns
+    -------
+    AsyncEngine
+        An engine connected to the server's ``postgres`` database.
+    """
     from sqlalchemy.ext.asyncio import create_async_engine
 
     admin = make_url(dsn).set(database="postgres")
     return create_async_engine(_render(admin), isolation_level="AUTOCOMMIT")
 
 
-async def _replace_database(dsn: str, name: str) -> None:
-    """Drop a leftover worker database and create it afresh."""
+@contextlib.asynccontextmanager
+async def _admin_connection(dsn: str) -> cabc.AsyncIterator[AsyncConnection]:
+    """Yield an autocommit admin connection and dispose its engine."""
     engine = _admin_engine(dsn)
     try:
         async with engine.connect() as connection:
-            await connection.execute(
-                sa.text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
-            )
-            await connection.execute(sa.text(f'CREATE DATABASE "{name}"'))
+            yield connection
     finally:
         await engine.dispose()
 
 
-async def _drop_database(dsn: str, name: str) -> None:
-    """Drop the worker database at teardown."""
-    engine = _admin_engine(dsn)
-    try:
-        async with engine.connect() as connection:
-            await connection.execute(
-                sa.text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
-            )
-    finally:
-        await engine.dispose()
+async def create_database(dsn: str, name: str) -> None:
+    """Create the database, refusing to touch one that already exists."""
+    async with _admin_connection(dsn) as connection:
+        await connection.execute(sa.text(f'CREATE DATABASE "{name}"'))
+
+
+async def drop_database(dsn: str, name: str) -> None:
+    """Drop the database this invocation created."""
+    async with _admin_connection(dsn) as connection:
+        await connection.execute(
+            sa.text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+        )
+
+
+async def database_exists(dsn: str, name: str) -> bool:
+    """Report whether the server already has a database with this name."""
+    async with _admin_connection(dsn) as connection:
+        result = await connection.execute(
+            sa.text("SELECT 1 FROM pg_database WHERE datname = :name"),
+            {"name": name},
+        )
+        return result.scalar_one_or_none() is not None
 
 
 @pytest_asyncio.fixture
 async def postgres_factory() -> cabc.AsyncIterator[async_sessionmaker[AsyncSession]]:
-    """Yield a session factory over this worker's own migrated database."""
+    """Yield a session factory over this invocation's own migrated database."""
     from sqlalchemy.ext.asyncio import (
         AsyncSession,
         async_sessionmaker,
         create_async_engine,
     )
 
-    dsn = os.environ.get(_DSN_VARIABLE)
-    if not dsn:
-        pytest.skip(f"set {_DSN_VARIABLE} to run real-PostgreSQL claim races")
+    dsn = require_dsn()
     base_database = str(make_url(dsn).database)
     if not base_database.endswith(_TEST_SUFFIX):
         pytest.fail(
             f"{_DSN_VARIABLE} must name a database ending in {_TEST_SUFFIX!r}",
             pytrace=False,
         )
-    name = _worker_database_name(base_database)
-    await _replace_database(dsn, name)
+    name = database_name(
+        base_database,
+        worker=os.environ.get("PYTEST_XDIST_WORKER", "main"),
+        pid=os.getpid(),
+        nonce=uuid.uuid4().hex[:8],
+    )
+    await create_database(dsn, name)
     engine = create_async_engine(_render(make_url(dsn).set(database=name)))
     try:
         await apply_migrations(engine)
@@ -130,7 +173,7 @@ async def postgres_factory() -> cabc.AsyncIterator[async_sessionmaker[AsyncSessi
         )
     finally:
         await engine.dispose()
-        await _drop_database(dsn, name)
+        await drop_database(dsn, name)
 
 
 async def pending_run(

@@ -221,11 +221,14 @@ DSN must select the psycopg async driver, for example
 `postgresql+psycopg://user:secret@127.0.0.1:5432/episodic_test`.
 
 The fixture in `tests/canonical_storage/_postgres_claim_race_support.py` does
-not touch the base database's schema. Each xdist worker gets its own
-`<database>_w<worker>` database, created, migrated and dropped by the fixture,
-so parallel workers cannot reset each other's schema. The DSN user must be
-allowed to create and drop databases. The base name check guards against
-pointing the fixture at a shared database by accident.
+not touch the base database's schema. Every fixture invocation creates its own
+`<database>_w<worker>_<pid>_<nonce>` database, migrates it, and drops only that
+database at teardown. The nonce makes the name unique per invocation, so two
+independent pytest runs on the same server cannot select the same database, and
+parallel xdist workers cannot reset each other's schema. Creation never drops
+an existing database: a name collision fails the test rather than destroying
+data. The DSN user must be allowed to create and drop databases, and the base
+name check guards against pointing the fixture at a shared database by accident.
 
 The tests synchronize on the database, not on a sleep: after starting the
 competing claim they poll `pg_stat_activity` until a backend reports a lock

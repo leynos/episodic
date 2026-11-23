@@ -12,10 +12,13 @@ the database rather than on a sleep.
 """
 
 import asyncio
+import os
 import typing as typ
 import uuid
 
 import pytest
+import sqlalchemy.exc as sa_exc
+from sqlalchemy.engine import make_url
 
 from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal
@@ -25,10 +28,15 @@ from tests.canonical_storage._postgres_claim_race_support import (
     claim,
     claim_token,
     competing_claim,
+    create_database,
+    database_exists,
+    database_name,
+    drop_database,
     hold_failure_and_claim,
     load_events,
     pending_run,
     postgres_factory,
+    require_dsn,
     wait_for_claim_lock_wait,
 )
 
@@ -154,3 +162,34 @@ async def test_the_failure_transaction_blocks_the_competing_claim(
     assert run_after.status is GenerationRunStatus.FAILED, run_after.status
     stored_proof = await claim_token(postgres_factory, run.id)
     assert stored_proof == failure_proof, "the failure's proof must stay durable"
+
+
+def test_database_names_are_unique_per_invocation_and_worker() -> None:
+    """Invocations and workers cannot select each other's database."""
+    names = {
+        database_name("episodic_test", worker="gw0", pid=1, nonce="aaaa"),
+        database_name("episodic_test", worker="gw0", pid=1, nonce="bbbb"),
+        database_name("episodic_test", worker="gw1", pid=1, nonce="aaaa"),
+        database_name("episodic_test", worker="gw0", pid=2, nonce="aaaa"),
+    }
+    assert len(names) == 4, names
+    assert all(len(name) <= 63 for name in names), names
+
+
+@pytest.mark.asyncio
+async def test_creation_never_drops_a_pre_existing_database() -> None:
+    """A repeated create is refused, and the existing database survives."""
+    dsn = require_dsn()
+    name = database_name(
+        str(make_url(dsn).database),
+        worker=os.environ.get("PYTEST_XDIST_WORKER", "main"),
+        pid=os.getpid(),
+        nonce=uuid.uuid4().hex[:8],
+    )
+    await create_database(dsn, name)
+    try:
+        with pytest.raises(sa_exc.DBAPIError, match="already exists"):
+            await create_database(dsn, name)
+        assert await database_exists(dsn, name) is True, "the database must survive"
+    finally:
+        await drop_database(dsn, name)
