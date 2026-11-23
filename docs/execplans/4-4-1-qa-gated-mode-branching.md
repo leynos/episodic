@@ -2038,7 +2038,7 @@ Record the following here as each milestone completes:
   `test_cancellation_at_claim_exit_still_ records_the_failure` now covers.
 - Evidence for this milestone set at `eac73e3b`: `make check-fmt`,
   `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
-  ambrleaks, Skylos, df12-duplication), `make test` (2,509 passed, 1 skipped,
+  ambrleaks, Skylos, df12-duplication), `make test` (2,544 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`
   all pass at the final head. The INV-8 comparison is `git diff --stat` over
   the characterization snapshot and
@@ -2133,7 +2133,7 @@ Reproducible non-vacuity evidence, measured on this tree:
   - the ten-cell INV-9 matrix, where each cell has its own terminal,
     category, QA status, cost and metric expectations.
 - Coverage counters: `make lint`'s interrogate stage reports 100% docstring
-  coverage over 7,530 definitions; pytest reports 2,509 passed, 1 skipped and
+  coverage over 7,725 definitions; pytest reports 2,544 passed, 1 skipped and
   82 snapshots at `eac73e3b`, and the matrix and ownership suites add
   twenty-two cases at the current head.
 - INV-8:
@@ -2146,6 +2146,28 @@ limits. The implementation proceeded under the operator's explicit instruction
 to implement the approved plan to completion and not to stop short of it; that
 instruction is the acceptance this record relies on, and a stakeholder who
 disagrees can still halt the branch before merge.
+
+### Integration with the injected launcher components (#438)
+
+`main` replaced the launcher mixins with `GenerationRunScheduler`,
+`GenerationRunClaimer` and `GenerationRunPersistence`, so this branch is merged
+rather than rebased (`436ae804`) and the QA-gated work is ported onto that
+structure:
+
+- `GenerationRunClaimer` owns the claim token, its unique proof and
+  reconciliation, and hydrates the run.
+- `GenerationRunFailurePersistence` (`launcher_failure.py`) is new: it owns
+  authoritative failure writes, the escalation events, escalation costs and the
+  failure observation.
+- `GenerationRunPersistence` gained `qa`-aware `persist_success` and a public
+  `record_costs` the failure component reuses.
+- `_LauncherRunSession` receives the three components plus a unit-of-work
+  factory, clock and metrics, instead of the launcher itself.
+- `InProcessGenerationRunLauncher._execute_run` reads the run's quality mode,
+  runs the content graph, and reports `quality_branch` and `terminal` on the
+  span; the scheduler tracks and drains shielded cancellation writes.
+- The live runtime views moved to `launcher_runtime_views.py` to keep the
+  launcher under the file-size ceiling.
 
 ## Interfaces and dependencies
 
