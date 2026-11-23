@@ -697,8 +697,9 @@ full_name = [
     "episodic.generation.launcher._LauncherClaimerRuntime",
     "episodic.generation.launcher._LauncherPersistenceRuntime",
     "episodic.generation.launcher._LauncherSchedulerRuntime",
+    "episodic.generation.launcher._LauncherSourceLoadRuntime",
 ]
-reason = "InProcessGenerationRunLauncher composes these live views for its claimer, persistence and scheduler; Skylos does not traverse the runtime-selected callbacks or dataclass post-initialization hook that install them."
+reason = "InProcessGenerationRunLauncher composes these live views for its claimer, persistence, scheduler and source loader; Skylos does not traverse the runtime-selected callbacks or dataclass post-initialization hook that install them."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -1289,6 +1290,9 @@ reason = "The same shared validator called on different fields."
 [[tool.duplication_gate.allow]]
 members = ["episodic/runtime_providers.py::utc_now", "episodic/cost/pricing_catalogue/file_loader.py::_default_now"]
 reason = "Two one-line clock defaults at different layers: the service-runtime providers expose the production clock for injected collaborators, and the file catalogue keeps a local default so it can be constructed without a runtime composition root."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/storage/repositories.py", "episodic/generation/launcher.py", "episodic/api/runtime.py"]
+reason = "Annotation-only TYPE_CHECKING import blocks: each module names the domain, port and observability types its own signatures use; an import list cannot be factored into a shared helper."
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"

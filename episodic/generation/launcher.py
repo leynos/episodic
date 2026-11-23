@@ -80,6 +80,7 @@ if typ.TYPE_CHECKING:
         DraftScriptGenerator,
         DraftScriptSource,
     )
+    from episodic.generation.launcher_support import SourceDocumentLoader
 
 __all__ = [
     "GenerationRunLauncher",
@@ -153,6 +154,28 @@ class _LauncherSchedulerRuntime:
 
 
 @dc.dataclass(frozen=True, slots=True)
+class _LauncherSourceLoadRuntime:
+    """Live view of the launcher's source-loading collaborators."""
+
+    launcher: InProcessGenerationRunLauncher
+
+    @property
+    def object_store(self) -> ObjectStorePort | None:
+        """The launcher's current object store."""
+        return self.launcher.object_store
+
+    @property
+    def source_limits(self) -> GenerationSourceLimits:
+        """The launcher's current source limits."""
+        return self.launcher.source_limits
+
+    @property
+    def load_document(self) -> SourceDocumentLoader:
+        """The module's patchable source-document loader."""
+        return _load_source_document
+
+
+@dc.dataclass(frozen=True, slots=True)
 class _LauncherClaimerRuntime:
     """Live view of the launcher's claim-stage collaborators."""
 
@@ -170,8 +193,8 @@ class _LauncherClaimerRuntime:
 
     @property
     def source_loader(self) -> GenerationSourceLoader:
-        """A loader over the launcher's current object store."""
-        return BoundedSourceLoader(self.launcher.object_store, _load_source_document)
+        """A loader over the launcher's current source-loading collaborators."""
+        return BoundedSourceLoader(runtime=_LauncherSourceLoadRuntime(self.launcher))
 
     @property
     def clock(self) -> Clock:

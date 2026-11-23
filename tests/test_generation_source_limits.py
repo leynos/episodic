@@ -16,6 +16,7 @@ from episodic.generation.launcher_support import (
     BoundedSourceLoader,
     GenerationSourceLimitError,
     GenerationSourceLimits,
+    SourceLoadContext,
     source_from_document,
 )
 
@@ -79,14 +80,13 @@ async def test_source_loading_rejects_count_above_configured_limit() -> None:
         max_normalized_source_bytes=10,
     )
 
+    loader = BoundedSourceLoader(runtime=SourceLoadContext(source_limits=limits))
+
     with pytest.raises(GenerationSourceLimitError, match="count"):
-        await BoundedSourceLoader().load(
-            [
-                _source_document(content="one"),
-                _source_document(content="two"),
-            ],
-            limits,
-        )
+        await loader.load([
+            _source_document(content="one"),
+            _source_document(content="two"),
+        ])
 
 
 @pytest.mark.asyncio

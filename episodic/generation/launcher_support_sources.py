@@ -145,13 +145,55 @@ class SourceDocumentLoader(typ.Protocol):
         ...
 
 
+class SourceLoadRuntime(typ.Protocol):
+    """Live source-loading collaborators consulted for each document.
+
+    Properties rather than values keep the loader's reads aligned with the
+    pre-split launcher, which read the object store and limits once per
+    document rather than once per bundle.
+    """
+
+    @property
+    def object_store(self) -> ObjectStorePort | None:
+        """Store used to read uploaded source content."""
+
+    @property
+    def source_limits(self) -> GenerationSourceLimits:
+        """Count and byte bounds applied to each source document."""
+
+    @property
+    def load_document(self) -> SourceDocumentLoader:
+        """Seam that converts one canonical document into bounded source text."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class SourceLoadContext:
+    """Value-backed source-load runtime for direct construction and tests.
+
+    Attributes
+    ----------
+    object_store : ObjectStorePort | None
+        Store used to read uploaded source content, or ``None`` when every
+        source is inline or URI-backed.
+    source_limits : GenerationSourceLimits
+        Count and byte bounds applied to each source document.
+    load_document : SourceDocumentLoader
+        Seam that converts one canonical document into bounded source text.
+    """
+
+    object_store: ObjectStorePort | None = None
+    source_limits: GenerationSourceLimits = dc.field(
+        default_factory=GenerationSourceLimits
+    )
+    load_document: SourceDocumentLoader = source_from_document
+
+
 class GenerationSourceLoader(typ.Protocol):
     """Load bounded generator source input from canonical source documents."""
 
     async def load(
         self,
         documents: cabc.Sequence[SourceDocument],
-        limits: GenerationSourceLimits,
     ) -> tuple[DraftScriptSource, ...]:
         """Return source text for every document within the configured limits.
 
@@ -166,34 +208,30 @@ class GenerationSourceLoader(typ.Protocol):
 
 @dc.dataclass(frozen=True, slots=True)
 class BoundedSourceLoader:
-    """Load a source bundle within the configured count and byte limits.
+    """Load a source bundle, reading limits and store for each document.
 
     Attributes
     ----------
-    object_store : ObjectStorePort | None
-        Store used to read uploaded source content, or ``None`` when every
-        source is inline or URI-backed.
-    load_document : SourceDocumentLoader
-        Seam that converts one canonical document into bounded source text.
+    runtime : SourceLoadRuntime
+        Live view of the object store, source limits and document loader.
     """
 
-    object_store: ObjectStorePort | None = None
-    load_document: SourceDocumentLoader = source_from_document
+    runtime: SourceLoadRuntime = dc.field(default_factory=SourceLoadContext)
 
     async def load(
         self,
         documents: cabc.Sequence[SourceDocument],
-        limits: GenerationSourceLimits,
     ) -> tuple[DraftScriptSource, ...]:
         """Load bounded source text and reject an aggregate-size overflow."""
-        if len(documents) > limits.max_source_count:
+        if len(documents) > self.runtime.source_limits.max_source_count:
             raise GenerationSourceLimitError.source_count()
         aggregate_bytes = 0
         sources: list[DraftScriptSource] = []
         for document in documents:
-            source = await self.load_document(
+            limits = self.runtime.source_limits
+            source = await self.runtime.load_document(
                 document,
-                self.object_store,
+                self.runtime.object_store,
                 limits,
                 remaining_aggregate_bytes=(
                     limits.max_aggregate_source_bytes - aggregate_bytes

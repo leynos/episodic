@@ -185,10 +185,7 @@ class GenerationRunClaimer:
                     episode_id=episode.id,
                 )
             )
-        sources = await self.runtime.source_loader.load(
-            documents,
-            self.runtime.source_limits,
-        )
+        sources = await self.runtime.source_loader.load(documents)
         self.runtime.metrics.increment_counter(
             _METRIC_QA_BYPASS,
             labels={"quality_mode": run.quality_mode.value},

@@ -48,6 +48,8 @@ from episodic.generation.launcher_support_sources import (
     GenerationSourceLimits,
     GenerationSourceLoader,
     SourceDocumentLoader,
+    SourceLoadContext,
+    SourceLoadRuntime,
     source_from_document,
 )
 from episodic.runtime_providers import Clock
@@ -75,6 +77,8 @@ __all__ = [
     "ProviderCallRecordRequest",
     "SequentialDraftIds",
     "SourceDocumentLoader",
+    "SourceLoadContext",
+    "SourceLoadRuntime",
     "classify_failure",
     "draft_generated_payload",
     "draft_request",

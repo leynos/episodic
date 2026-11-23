@@ -2558,20 +2558,21 @@ keeps the claim-generate-persist sequence plus failure classification in
 `_execute_run`.
 
 Each component reads its collaborators through a narrow live view supplied by
-the launcher (`_LauncherClaimerRuntime`, `_LauncherPersistenceRuntime` and
-`_LauncherSchedulerRuntime`), and reads each one at the stage that uses it.
-That preserves the base's use-time behaviour: assigning `draft_generator`,
-`source_limits`, `metrics`, `tracer`, `cost_recorder_factory`, `clock` or
-another collaborator while a run is at any stage affects the later reads in
-that run, not only the next run. `source_from_document` is resolved when a run
-hydrates, so a patch applied to `launcher.py` at any point before hydration is
-observed. `BoundedSourceLoader` implements the `GenerationSourceLoader` seam
-and applies the source count and byte limits. The scheduler keeps its task
-registry and cancellation bookkeeping across view changes, and a changed
-`max_concurrency` affects admission but does not resize the semaphore created
-at construction, as before. Replacing the mixins with injected scheduling,
-claim and persistence components was tracked in
-[#350](https://github.com/leynos/episodic/issues/350).
+the launcher (`_LauncherClaimerRuntime`, `_LauncherPersistenceRuntime`,
+`_LauncherSourceLoadRuntime` and `_LauncherSchedulerRuntime`), and reads each
+one at the stage that uses it. That preserves the base's use-time behaviour:
+assigning `draft_generator`, `source_limits`, `metrics`, `tracer`,
+`cost_recorder_factory`, `clock` or another collaborator while a run is at any
+stage affects the later reads in that run, not only the next run.
+`source_from_document` is resolved when a run hydrates, so a patch applied to
+`launcher.py` at any point before hydration is observed. `BoundedSourceLoader`
+implements the `GenerationSourceLoader` seam and reads the object store and
+limits for each document it loads, so a change made while one document is
+loading applies to the next. The scheduler keeps its task registry and
+cancellation bookkeeping across view changes, and a changed `max_concurrency`
+affects admission but does not resize the semaphore created at construction, as
+before. Replacing the mixins with injected scheduling, claim and persistence
+components was tracked in [#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they

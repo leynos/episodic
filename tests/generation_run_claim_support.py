@@ -19,7 +19,7 @@ from episodic.generation.draft_script import (
     DraftScriptSource,
 )
 from episodic.generation.launcher_claim import ClaimerContext, GenerationRunClaimer
-from episodic.generation.launcher_support import ClaimedRun, GenerationSourceLimits
+from episodic.generation.launcher_support import ClaimedRun
 from episodic.llm import LLMUsage
 
 if typ.TYPE_CHECKING:
@@ -249,17 +249,14 @@ class RecordingSourceLoader:
     """Source loader fake that records the documents and limits it received."""
 
     sources: tuple[DraftScriptSource, ...] = ()
-    calls: list[tuple[list[SourceDocument], GenerationSourceLimits]] = dc.field(
-        default_factory=list
-    )
+    calls: list[list[SourceDocument]] = dc.field(default_factory=list)
 
     async def load(
         self,
         documents: cabc.Sequence[SourceDocument],
-        limits: GenerationSourceLimits,
     ) -> tuple[DraftScriptSource, ...]:
         """Record the load and return the configured sources."""
-        self.calls.append((list(documents), limits))
+        self.calls.append(list(documents))
         return self.sources
 
 

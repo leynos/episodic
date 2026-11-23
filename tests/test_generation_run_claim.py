@@ -81,7 +81,7 @@ async def test_claim_hydrates_episode_and_sources() -> None:
     assert uow.reference_bindings.targets == [
         (ReferenceBindingTargetKind.SERIES_PROFILE, SERIES_ID)
     ], uow.reference_bindings.targets
-    assert loader.calls == [([source_document()], limits)], loader.calls
+    assert loader.calls == [[source_document()]], loader.calls
     assert claimed.sources == (source(),), claimed.sources
     assert claimed.presenter_profiles == (), claimed.presenter_profiles
     assert metrics.counters == [
