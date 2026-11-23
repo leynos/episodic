@@ -122,6 +122,14 @@ class LauncherHost(typ.Protocol):
         """Claim a pending run and record its token in the claim."""
         ...
 
+    async def _reconcile_claim(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
+        """Re-adopt a claim whose commit acknowledgement was lost."""
+        ...
+
     async def _claim_for_failure(
         self,
         uow: CanonicalUnitOfWork,

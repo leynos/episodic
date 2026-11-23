@@ -293,7 +293,7 @@ class _LauncherRunSession:
         record_qa_metrics(self.launcher.metrics, verdict, evaluations)
         token = self._require_token()
         self.claim.token = token
-        await self.launcher._record_failure(
+        result = await self.launcher._record_failure(
             self.run_id,
             Failure.escalation_failure(
                 verdict=verdict,
@@ -303,6 +303,9 @@ class _LauncherRunSession:
             self.claim,
             draft=draft,
         )
+        if not result.written:
+            msg = f"generation run {self.run_id} refused the escalation write"
+            raise RunNotClaimedError(msg)
 
     def _require_token(self) -> ClaimToken:
         """Return this session's claim token, or fail loudly without one."""

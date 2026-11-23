@@ -71,46 +71,70 @@ class _FailurePersistenceMixin(_MixinBase):
         -------
         FailureWriteResult
             Whether the failure was written, and the token that authorized it.
+
+        Notes
+        -----
+        The authority claim and the failure write share one transaction. A
+        separate claim transaction would release the run before the write
+        lands, letting another launcher claim it in between.
         """
-        token = await self._failure_authority(run_id, claim)
-        if token is None:
-            return FailureWriteResult(written=False)
-        return await self._commit_and_observe(
-            FailureWrite(run_id=run_id, failure=failure, token=token, draft=draft),
-        )
+        async with self.uow_factory() as uow:
+            try:
+                token = await self._failure_authority(uow, run_id, claim)
+                if token is None:
+                    return FailureWriteResult(written=False)
+                await self._write_failure(
+                    uow,
+                    FailureWrite(
+                        run_id=run_id,
+                        failure=failure,
+                        token=token,
+                        draft=draft,
+                    ),
+                )
+                await uow.commit()
+            except RunAlreadyTerminal, RunNotFound:
+                await uow.rollback()
+                return FailureWriteResult(written=False)
+        claim.token = token
+        self._record_failure_observation(run_id, failure)
+        return FailureWriteResult(written=True, token=token)
 
     async def _failure_authority(
         self,
+        uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
         claim: RunClaim,
     ) -> ClaimToken | None:
         """Return the token authorizing this failure write, if any.
 
+        The compare-and-set runs inside the caller's transaction, so a won
+        claim is committed or rolled back with the write it authorizes.
+
         Returns
         -------
         ClaimToken | None
-            The claim's existing token, a freshly won one, or ``None`` when
-            another launcher owns the run.
-
+            The claim's existing token, a re-adopted one, a freshly won one,
+            or ``None`` when another launcher owns the run.
         """
         if claim.token is not None:
             return claim.token
-        async with self.uow_factory() as uow:
-            try:
-                token = await self._claim_for_failure(uow, run_id)
-            except RunAlreadyTerminal, RunNotFound:
-                # The run is gone or already terminal: not this invocation's
-                # to fail, and not an error in the failure path.
-                await uow.rollback()
-                return None
-            if token is None:
-                await uow.rollback()
-                log_info(
-                    logger,
-                    "generation_run_launcher.failure_not_owned run_id=%s",
-                    run_id,
-                )
-            return token
+        reconciled = await self._reconcile_claim(run_id, claim)
+        if reconciled is not None:
+            return reconciled
+        try:
+            token = await self._claim_for_failure(uow, run_id)
+        except RunAlreadyTerminal, RunNotFound:
+            # The run is gone or already terminal: not this invocation's to
+            # fail, and not an error in the failure path.
+            return None
+        if token is None:
+            log_info(
+                logger,
+                "generation_run_launcher.failure_not_owned run_id=%s",
+                run_id,
+            )
+        return token
 
     async def _record_owned_failure(
         self,
@@ -127,52 +151,42 @@ class _FailurePersistenceMixin(_MixinBase):
         FailureWriteResult
             Whether the failure was written, and the token used.
         """
-        return await self._commit_and_observe(
-            FailureWrite(run_id=run_id, failure=failure, token=token, draft=draft),
+        write = FailureWrite(
+            run_id=run_id,
+            failure=failure,
+            token=token,
+            draft=draft,
         )
-
-    async def _commit_and_observe(self, write: FailureWrite) -> FailureWriteResult:
-        """Commit one failure write, then record its observation.
-
-        Returns
-        -------
-        FailureWriteResult
-            Whether the write landed, and the token that authorized it.
-        """
-        written = await self._write_failure(write)
-        if written:
-            self._record_failure_observation(write.run_id, write.failure)
-        return FailureWriteResult(written=written, token=write.token)
-
-    async def _write_failure(self, write: FailureWrite) -> bool:
-        """Write the failure events, costs and terminal status in one commit.
-
-        Returns
-        -------
-        bool
-            ``True`` when the transaction committed.
-        """
         async with self.uow_factory() as uow:
             try:
-                await self._append_failure_events(uow, write.run_id, write.failure)
-                if write.draft is not None:
-                    await self._record_costs(uow, write.run_id, write.draft)
-                await uow.generation_runs.update_run_status(
-                    write.run_id,
-                    update=GenerationRunStatusUpdate(
-                        status=GenerationRunStatus.FAILED,
-                        current_node=None,
-                        ended_at=self.clock(),
-                        error_message=write.failure.message,
-                        error_category=write.failure.category,
-                        qa_status=write.failure.qa_status,
-                    ),
-                )
+                await self._write_failure(uow, write)
                 await uow.commit()
             except RunAlreadyTerminal, RunNotFound:
                 await uow.rollback()
-                return False
-        return True
+                return FailureWriteResult(written=False)
+        self._record_failure_observation(run_id, failure)
+        return FailureWriteResult(written=True, token=token)
+
+    async def _write_failure(
+        self,
+        uow: CanonicalUnitOfWork,
+        write: FailureWrite,
+    ) -> None:
+        """Write the failure events, costs and terminal status."""
+        await self._append_failure_events(uow, write.run_id, write.failure)
+        if write.draft is not None:
+            await self._record_costs(uow, write.run_id, write.draft)
+        await uow.generation_runs.update_run_status(
+            write.run_id,
+            update=GenerationRunStatusUpdate(
+                status=GenerationRunStatus.FAILED,
+                current_node=None,
+                ended_at=self.clock(),
+                error_message=write.failure.message,
+                error_category=write.failure.category,
+                qa_status=write.failure.qa_status,
+            ),
+        )
 
     def _record_failure_observation(
         self,

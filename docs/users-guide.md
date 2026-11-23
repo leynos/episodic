@@ -983,6 +983,9 @@ A missing pinned snapshot or a stored row that no longer matches its content
 hash fails the generation under the stable `cost.pricing_snapshot` category. An
 invalid card stops the process at startup with an error naming the file.
 
+See [Migrating to Episodic 0.2.0](migration-0.2.0.md) for the release upgrade
+steps, including the QA-gated generation changes.
+
 Upgrading a deployment that holds `2.4.4` rows is stop-the-world. Stop every
 writer first: scale launchers, workers, and API pods to zero, and wait for
 in-flight requests to drain, because a row committed after the backup is not in

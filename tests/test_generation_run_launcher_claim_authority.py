@@ -8,6 +8,7 @@ shutdown wait for a shielded cancellation write.
 import asyncio
 import contextlib
 import dataclasses as dc
+import types
 import typing as typ
 import uuid
 
@@ -34,7 +35,9 @@ from tests.generation_run_quality_support import prepare_pending_qa_gated_run
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.launcher import InProcessGenerationRunLauncher
+    from episodic.generation.launcher_support import FailureWrite
 
 
 async def _load(
@@ -236,3 +239,148 @@ async def test_shutdown_waits_for_a_cancelled_cancellation_write(
     run, kinds = await _load(session_factory, run_id)
     assert kinds.count("run.failed") == 1, kinds
     assert run.status is GenerationRunStatus.FAILED, run.status
+
+
+@pytest.mark.asyncio
+async def test_failure_claim_and_write_share_one_transaction(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The authority claim and the failure write use the same unit of work."""
+    from episodic.generation.launcher import InProcessGenerationRunLauncher
+
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    run_launcher = _launcher(session_factory)
+    seen: dict[str, object] = {}
+
+    original_claim = InProcessGenerationRunLauncher._claim_for_failure
+    original_write = InProcessGenerationRunLauncher._write_failure
+
+    async def claim_for_failure(
+        self: InProcessGenerationRunLauncher,
+        uow: CanonicalUnitOfWork,
+        failed_run_id: uuid.UUID,
+    ) -> ClaimToken | None:
+        """Record the unit of work used for the claim."""
+        seen["claim"] = uow
+        return await original_claim(self, uow, failed_run_id)
+
+    async def write_failure(
+        self: InProcessGenerationRunLauncher,
+        uow: CanonicalUnitOfWork,
+        write: FailureWrite,
+    ) -> None:
+        """Record the unit of work used for the write."""
+        seen["write"] = uow
+        await original_write(self, uow, write)
+
+    monkeypatch.setattr(
+        InProcessGenerationRunLauncher,
+        "_claim_for_failure",
+        claim_for_failure,
+    )
+    monkeypatch.setattr(
+        InProcessGenerationRunLauncher,
+        "_write_failure",
+        write_failure,
+    )
+
+    result = await run_launcher._record_failure(
+        run_id,
+        Failure("transactional", "unexpected"),
+        RunClaim(),
+    )
+
+    assert result.written is True, result
+    assert seen["claim"] is seen["write"], "claim and write must share a unit of work"
+    run, kinds = await _load(session_factory, run_id)
+    assert kinds.count("run.failed") == 1, kinds
+    assert run.status is GenerationRunStatus.FAILED, run.status
+
+
+@pytest.mark.asyncio
+async def test_blocked_reconciliation_then_second_cancellation(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second cancellation while reconciliation is blocked still records."""
+    from episodic.generation.launcher import InProcessGenerationRunLauncher
+
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    run_launcher = _launcher(session_factory)
+    claim = RunClaim()
+    await run_launcher._claim_and_start(run_id, claim)
+    claim.token = None
+
+    original = InProcessGenerationRunLauncher._reconcile_claim
+    gate = asyncio.Event()
+    release = asyncio.Event()
+
+    async def blocked_reconcile(
+        self: InProcessGenerationRunLauncher,
+        run_id: uuid.UUID,
+        candidate: RunClaim,
+    ) -> ClaimToken | None:
+        """Block reconciliation until the test releases it."""
+        gate.set()
+        await release.wait()
+        return await original(self, run_id, candidate)
+
+    monkeypatch.setattr(
+        InProcessGenerationRunLauncher,
+        "_reconcile_claim",
+        blocked_reconcile,
+    )
+
+    write_task = asyncio.create_task(
+        run_launcher._record_cancellation_owned(run_id, claim),
+    )
+    await asyncio.wait_for(gate.wait(), timeout=5)
+    # A second cancellation reaches the same path while reconcile is blocked;
+    # the pending marker makes it a no-op rather than a fresh claim attempt.
+    await run_launcher._record_cancellation_owned(run_id, claim)
+    release.set()
+    await asyncio.wait_for(write_task, timeout=5)
+
+    run, kinds = await _load(session_factory, run_id)
+    assert kinds.count("run.failed") == 1, kinds
+    assert run.status is GenerationRunStatus.FAILED, run.status
+    assert claim.token is not None, claim
+
+
+class _RefusingPorts:
+    """Session ports whose failure write is refused."""
+
+    uow_factory = staticmethod(lambda: None)
+    clock = staticmethod(lambda: None)
+    metrics = types.SimpleNamespace(increment_counter=lambda *a, **k: None)
+
+    async def _record_failure(self, *args: object, **kwargs: object) -> object:
+        """Refuse the write."""
+        _ = (args, kwargs)
+        from episodic.generation.launcher_support import FailureWriteResult
+
+        return FailureWriteResult(written=False)
+
+
+@pytest.mark.asyncio
+async def test_escalation_propagates_a_refused_write() -> None:
+    """A refused escalation write is not treated as recorded."""
+    from episodic.canonical.generation_quality import QaStatus
+    from episodic.canonical.generation_routing import QualityVerdict
+    from episodic.generation.launcher_session import (
+        RunNotClaimedError,
+        _LauncherRunSession,
+    )
+    from tests.generation_run_launcher_support import draft_result, valid_tei
+
+    session = _LauncherRunSession(
+        launcher=typ.cast("typ.Any", _RefusingPorts()),
+        run_id=uuid.uuid4(),
+        claim=RunClaim(token=ClaimToken(uuid.uuid4())),
+    )
+    session.draft = draft_result(valid_tei())
+
+    with pytest.raises(RunNotClaimedError, match="refused the escalation"):
+        await session.escalate(QualityVerdict.FAILED, ())
+    _ = QaStatus
