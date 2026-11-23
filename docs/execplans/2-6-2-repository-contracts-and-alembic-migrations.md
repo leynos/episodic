@@ -798,7 +798,7 @@ Record a timestamp against each item as it completes, in the form
 
 - **Observation: `StaleEventSequence` is declared, never raised, never
   imported.** `episodic/canonical/generation_run_errors.py` declares it with a
-  `# noqa: N818` suppression. ADR-015 decided that "event sequence allocation
+  `# noqa: N818` suppression. ADR-0031 decided that "event sequence allocation
   is owned by the adapter, not the caller", which makes the error unreachable
   by construction. Impact: dead surface that will eventually trip Skylos.
   Deleting it touches a frozen module, so it is recorded as a follow-up rather
@@ -1241,7 +1241,7 @@ Append further observations here as work proceeds.
   upward into its subclass. It also re-declares `_session` and `_runtime` as
   bare annotations, a second declaration site that can silently drift from
   `__init__`. `AGENTS.md` says "use functions and composition"; this is
-  file-splitting wearing a design costume. Further, ADR-015 argues *against*
+  file-splitting wearing a design costume. Further, ADR-0031 argues *against*
   the mixin: its stated benefits are that "tests can fake only the sub-port
   they exercise" and that "the later SQL adapter can use different locking and
   uniqueness strategies for run state, events, and checkpoints". A
@@ -1265,7 +1265,7 @@ Append further observations here as work proceeds.
   checkpoint by bare identifier with no run id; an event fold would need an
   expression or GIN index on `payload->>'checkpoint_id'`, a JSONB indexing
   pattern used nowhere in this repository. Second, the alternative partially
-  reverses ADR-015's separation of `Checkpoint` from `WorkflowCheckpoint` and
+  reverses ADR-0031's separation of `Checkpoint` from `WorkflowCheckpoint` and
   so needs an ADR *amendment*, not just a new ADR. Third, `Checkpoint` is
   frozen for this slice by `Constraints`, and the fold changes
   `create_checkpoint` semantics. Recorded honestly: the deciding question is
@@ -1301,9 +1301,9 @@ Append further observations here as work proceeds.
     contention is near zero, so it is cheaper in the common case. Not worth
     rewriting a working path for.
   - *CTE-guarded conditional insert* — requires the caller to supply the
-    expected sequence, which ADR-015 forbids ("event sequence allocation is
+    expected sequence, which ADR-0031 forbids ("event sequence allocation is
     owned by the adapter, not the caller"). Do not reopen without amending
-    ADR-015. It would, however, make `StaleEventSequence` reachable.
+    ADR-0031. It would, however, make `StaleEventSequence` reachable.
   - *Advisory `pg_advisory_xact_lock(run_id)`* — reject. A second, invisible
     mutual-exclusion regime alongside `FOR UPDATE`; 64-bit hashing can
     false-serialize unrelated runs; and its only benefit is also delivered by
@@ -1354,7 +1354,7 @@ Append further observations here as work proceeds.
   **not** on `GenerationRunRepository`. The method must append a `run.failed`
   event, which is `GenerationEventLog` behaviour; putting it on the narrow
   repository port would oblige every future implementer of that port to also be
-  an event log — exactly the coupling ADR-015 removed. The primitive/worker
+  an event log — exactly the coupling ADR-0031 removed. The primitive/worker
   line is drawn at the transaction boundary: the primitive is one transaction
   with a finite state partition, testable in process; the worker needs a
   scheduler, at-most-once semantics, and an operational owner. Date/Author:
@@ -1718,7 +1718,7 @@ basis* has an artefact, and the trace table lists them.
 `docs/roadmap.md` with the note that run and event persistence had already
 landed under 4.3.2. `DESIGN-ORCH-CKPT`, `API-GENRUN-CKPT`, and `API-GENRUN-SEQ`
 are discharged by the table, the port, and the sequencing evidence respectively.
-`ADR-015` is honoured by the split and extended by ADR-024; `ADR-018` is
+`ADR-0031` is honoured by the split and extended by ADR-024; `ADR-018` is
 honoured by the compare-and-set shape, the `RESTRICT` foreign key, and D-11's
 recorded reason for having no history table. `EP-4.3.2-DEFER` named two gaps —
 checkpoint persistence and an automated stuck-run recovery worker. The first is
@@ -2273,7 +2273,7 @@ uv run pytest \
   are harmless (~50 MB/month at expected volume), but a run logging full LLM
   node payloads into `payload` could be tens of megabytes alone.
 - **`StaleEventSequence` is dead surface** — declared, never raised, never
-  imported, and unreachable given ADR-015's decision that the adapter owns
+  imported, and unreachable given ADR-0031's decision that the adapter owns
   sequence allocation. Deleting it touches a frozen module; follow-up.
 - **`GenerationRunEventStore` is superseded surface** — declared in
   `episodic/canonical/generation_run_ports.py` as the two-base composition of
@@ -2283,7 +2283,7 @@ uv run pytest \
   `CanonicalUnitOfWork.generation_runs` exposes the four-base
   `GenerationRunPort`, so the narrower seam has no consumer. Kept, and its
   bullet in the developers' guide corrected rather than deleted, because
-  ADR-015's "tests can fake only the sub-port they exercise" reasoning applies
+  ADR-0031's "tests can fake only the sub-port they exercise" reasoning applies
   to it directly — a future test wanting run-plus-event persistence without
   checkpoints should use this port, and deleting it would force such a test to
   stand up the full composite. Recorded so that if no such caller appears, its
@@ -2672,7 +2672,7 @@ offending span rather than reverting the format.
 
 - Outcome: `uow.generation_runs` satisfies `GenerationRunPort`; reviewer
   checkpoints are durable when written; uncommitted work warns.
-- Requirements: `API-GENRUN-CKPT`, `ADR-015`.
+- Requirements: `API-GENRUN-CKPT`, `ADR-0031`.
 - Acceptance evidence: checkpoint scenarios pass against both adapters; the
   durability scenario passes; INV-COMMIT-1 passes.
 - Conformance check: `make check-architecture` passes; no existing port

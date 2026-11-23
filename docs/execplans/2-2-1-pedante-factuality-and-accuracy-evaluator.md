@@ -1,4 +1,4 @@
-# Align Pedante implementation with revised ADR 001
+# Align Pedante implementation with revised ADR 0030
 
 This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
@@ -143,8 +143,8 @@ into line with the amended ADR.
 
 - [x] (2026-03-19 01:43Z) The original Pedante implementation landed as a
   single-pass evaluator with typed findings, a minimal LangGraph seam, Vidai
-  Mock behavioural tests, and ADR 001.
-- [x] (2026-03-24 13:00Z) ADR 001 was amended to require TEI citation-spine
+  Mock behavioural tests, and ADR 0030.
+- [x] (2026-03-24 13:00Z) ADR 0030 was amended to require TEI citation-spine
   awareness and to allow an internal two-pass Pedante design.
 - [x] (2026-03-24 13:30Z) The current implementation was re-inspected. The code
   still uses one `build_prompt(...)` path over raw TEI XML and one
@@ -202,7 +202,7 @@ into line with the amended ADR.
 ## Decision Log
 
 - Decision: keep the public Pedante contract stable and express the two-pass
-  change as an internal refactor. Rationale: ADR 001 explicitly says the
+  change as an internal refactor. Rationale: ADR 0030 explicitly says the
   application layer still calls one Pedante evaluator and receives one
   `PedanteEvaluationResult`. Date/Author: 2026-03-24 / Codex.
 
@@ -228,7 +228,7 @@ into line with the amended ADR.
 
 No ADR-alignment implementation has started yet. The current outcome is a
 revised, self-contained plan that starts from the shipped single-pass code and
-defines the staged refactor needed to satisfy amended ADR 001.
+defines the staged refactor needed to satisfy amended ADR 0030.
 
 Expected outcome after implementation:
 
@@ -454,7 +454,7 @@ Once the code is stable, update:
   claim catalogue, verification pass, and Vidai Mock fixtures live.
 
 If implementation pins down a new durable representation boundary, add a new
-ADR rather than silently expanding ADR 001. Likely candidates are:
+ADR rather than silently expanding ADR 0030. Likely candidates are:
 
 - a reusable internal claim-catalogue DTO shared across evaluators,
 - a durable mapping contract between TEI pointer values and

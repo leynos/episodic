@@ -550,7 +550,7 @@ The delivered implementation matches the observable success criteria:
 - Hecate treats the new error and port modules as domain ports, while the
   reference adapter stays in the outbound-adapter group.
 - `docs/users-guide.md`, `docs/developers-guide.md`,
-  `docs/episodic-tui-api-design.md`, `docs/roadmap.md`, and ADR-015 now
+  `docs/episodic-tui-api-design.md`, `docs/roadmap.md`, and ADR-0031 now
   describe the implemented shape.
 
 The main follow-up for `2.6.2` is to preserve the same port semantics in the
@@ -1014,7 +1014,7 @@ Quality criteria — what *done* means:
 - Formatting: `make check-fmt` passes; `make markdownlint` passes; `make nixie`
   passes for any updated Mermaid diagrams.
 - Documentation: `docs/users-guide.md`, `docs/developers-guide.md`,
-  `docs/episodic-tui-api-design.md`, and the new `adr-015` reflect the
+  `docs/episodic-tui-api-design.md`, and the new `adr-0031` reflect the
   delivered shape.
 - CodeRabbit: `coderabbit review --agent` reports no unresolved concerns
   after iteration.
