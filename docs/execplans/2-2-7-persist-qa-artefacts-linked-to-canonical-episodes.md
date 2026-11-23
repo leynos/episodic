@@ -1927,7 +1927,7 @@ Stop and escalate when any of these is reached.
 - Observation (execution, 2026-10-29): ADR 001 does not enumerate the blocking
   support-level set, so the earlier claim that `INV-BLOCKING-SET`'s literal is
   "transcribed from ADR 001" was unsupportable. Evidence: grep of
-  `docs/adrs/adr-0001-pedante-evaluator-contract.md` finds only generic
+  `docs/adrs/adr-0030-pedante-evaluator-contract.md` finds only generic
   references to "a support-level taxonomy value". Impact: the test still
   carries an independently written literal, but its provenance is the taxonomy
   plus the recorded compliance policy, and it also asserts exact equality with
@@ -3026,14 +3026,14 @@ Repository documents that are prerequisites, not optional reading:
   limit.
 - `docs/episodic-podcast-generation-system-design.md` — the Quality Assurance
   Stack and Data Model and Storage sections.
-- `docs/adrs/adr-0001-pedante-evaluator-contract.md` — in particular its closing
+- `docs/adrs/adr-0030-pedante-evaluator-contract.md` — in particular its closing
   item: "If evaluator results are persisted or exposed through an external API,
   record any versioning or compatibility guarantees in a follow-on ADR." ADR
   024 discharges this.
 - `docs/adrs/adr-0006-chrono-spoken-text-semantics.md`,
   `docs/adrs/adr-0009-source-to-script-rest-vertical-slice.md`,
   `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`,
-  `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md`,
+  `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md`,
   `docs/adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`.
 - `docs/async-sqlalchemy-with-pg-and-falcon.md`,
   `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`,
@@ -3060,7 +3060,7 @@ writing (commit `5af0638`, "No-QA generation runs and TEI-P5 retrieval
   Assurance Stack* (`TDD-QA`), *Data Model and Storage* (`TDD-DATA`), *Client
   Experience Layer* (`TDD-CLIENT`), and *QA, Compliance, and Approvals*
   (`TDD-FLOW-QA`).
-- `docs/adrs/adr-0001-pedante-evaluator-contract.md` (`ADR-001`), open item on
+- `docs/adrs/adr-0030-pedante-evaluator-contract.md` (`ADR-0030`), open item on
   persistence and versioning guarantees.
 - `docs/adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`
   (`ADR-017`), which fixes `QaStatus.SKIPPED` semantics for the no-QA slice.

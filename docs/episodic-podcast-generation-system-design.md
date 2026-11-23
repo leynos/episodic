@@ -361,7 +361,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Pedante consumes the canonical TEI P5 script plus cited source packets. If
   prompt construction uses JSON, that JSON is a projection of the same
   TEI-backed content model rather than a competing canonical schema; see
-  [ADR 001: Pedante evaluator contract](adrs/adr-0001-pedante-evaluator-contract.md).
+  [ADR 0030: Pedante evaluator contract](adrs/adr-0030-pedante-evaluator-contract.md).
 - Bromide detects overused tropes, cliches, and snowclones in draft scripts.
 - Chiltern flags frequently mispronounced words or terminology that do not yet
   have pronunciation guidance attached, including domain-specific and internal

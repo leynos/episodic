@@ -100,7 +100,7 @@ Repository documentation:
   testing with py-pglite", "Canonical content persistence", "Generation-run
   domain ports", "Manual recovery of expired generation-run leases",
   "Code-duplication gate", and "Module size and façade modules".
-- `docs/adrs/adr-0015-generation-run-port-split.md` — why the port is split, and
+- `docs/adrs/adr-0031-generation-run-port-split.md` — why the port is split, and
   why the user-facing `Checkpoint` differs from `WorkflowCheckpoint`.
 - `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md` — the
   governing record for versioning, concurrency shapes, immutability, and
@@ -545,7 +545,7 @@ Stop and escalate rather than improvising when any of these is reached.
 - [x] (2026-10-21) EP-M5: documentation and reconciliation. `docs/contents.md`
       gains the ADR-024 entry after ADR-023, using the file's inline-link
       convention; `docs/adrs/adr-0024-review-checkpoint-persistence.md` follows
-      `adr-0015-generation-run-port-split.md`'s shape rather than the style
+      `adr-0031-generation-run-port-split.md`'s shape rather than the style
       guide's literal template, as every ADR from 010 onward does. The
       developers' guide gained the
       `GenerationRunLeaseReclamationPort` bullet, the corrected
@@ -1934,9 +1934,9 @@ table in the same commit; a stale trace table is worse than none.
 A new ADR is warranted. ADR-018 to ADR-023 now exist, so the next free number
 is **024**; re-check at EP-M5, because two numbers this plan reserved were
 taken while it was in review. Separately, three files already share 015
-(`adr-0015-cost-accounting-ports-and-pricing-engine.md`,
+(`adr-0032-cost-accounting-ports-and-pricing-engine.md`,
 `adr-0015-upload-and-idempotency-ports.md`,
-`adr-0015-generation-run-port-split.md`), and **two of them are absent from
+`adr-0031-generation-run-port-split.md`), and **two of them are absent from
 `docs/contents.md` entirely**. Renumbering to 015/018/019 and re-indexing is
 out of scope here; add it to the roadmap as a docs-only follow-up rather than
 leaving it as a remark in a plan that will be marked `COMPLETE`.
@@ -2618,7 +2618,7 @@ async def fail_expired_leases(
    Revisit in 2.6.3.
 3. Add `docs/adrs/adr-0024-review-checkpoint-persistence.md` — **024**, the next
    free number at the last reconciliation; re-check with `ls docs/adrs/` —
-   following the shape of `adr-0015-generation-run-port-split.md` (Status,
+   following the shape of `adr-0031-generation-run-port-split.md` (Status,
    Context, Decision, Consequences with Positive/Negative/Neutral, References)
    rather than the style guide's literal template. Every ADR from 010 onwards
    does the same, so this is house practice, not a deviation. Cover **D-2 and

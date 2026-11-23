@@ -1419,7 +1419,7 @@ Read these before implementing; each entry says why.
 - `docs/episodic-podcast-generation-system-design.md` §"Cost accounting and
   budget enforcement" (from line 1476) and §"Data Model and Storage" (from line
   1626): the design this plan amends.
-- `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md` (including
+- `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md` (including
   the 2026-10-10 addendum): current port and persistence decisions.
 - `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`: the
   versioning rules this plan must follow.

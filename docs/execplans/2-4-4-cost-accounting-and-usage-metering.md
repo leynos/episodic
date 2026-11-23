@@ -254,7 +254,7 @@ observation, evidence, and impact.
   issues in ADR-015: three headings using "Normalized metrics" and one
   "normalization" instance. Evidence: `coderabbit review --agent` completed on
   2026-06-04 with four minor findings, all in
-  `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md`. Impact: the
+  `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md`. Impact: the
   ADR now uses Oxford-preferred `-ize` spelling: "Normalized metrics" and
   "normalization".
 
@@ -782,7 +782,7 @@ Constraints sections above, and updates the cost-accounting and orchestration
 sections of `docs/episodic-podcast-generation-system-design.md` to reference
 this plan and the new `run_pricing_pins` table. No production source changes.
 The deliverable is this ExecPlan in `APPROVED` status and a stub
-`docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md` in `Proposed`
+`docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md` in `Proposed`
 status.
 
 The author then drafts the canonical metric vocabulary and the
@@ -1149,7 +1149,7 @@ LangGraph generation graph.
    - `docs/episodic-podcast-generation-system-design.md` — minor edits in
      the "Cost accounting and budget enforcement" section pointing to
      ADR-015 and the `run_pricing_pins` table.
-   - `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md` —
+   - `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md` —
      status flips from `Proposed` to `Accepted` at the end of this
      stage. Records the port shape, the canonical metric vocabulary, the
      idempotency-key composition, the run-pin strategy, and the streaming

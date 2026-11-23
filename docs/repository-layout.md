@@ -109,7 +109,7 @@ The `docs/` directory is the project knowledge base:
 - `docs/execplans/` contains execution plans for non-trivial implementation
   work.
 
-All ADRs, including `docs/adrs/adr-0001-pedante-evaluator-contract.md`, live in
+All ADRs, including `docs/adrs/adr-0030-pedante-evaluator-contract.md`, live in
 the `docs/adrs/` directory and follow the `adr-nnnn-title-slug.md` naming
 scheme.
 

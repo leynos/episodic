@@ -367,7 +367,7 @@ relative to the repository root.
 - `docs/developers-guide.md` — developer-facing practices. Covers QA
   evaluators, LLM adapter boundary, and testing patterns.
 - `docs/roadmap.md` — the roadmap. Item 2.3.1 is unchecked.
-- `docs/adrs/adr-0001-pedante-evaluator-contract.md` — reference for ADR format.
+- `docs/adrs/adr-0030-pedante-evaluator-contract.md` — reference for ADR format.
 
 ### Terms used in this plan
 

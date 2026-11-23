@@ -147,10 +147,10 @@ semantics per aggregate.
 [4-3-2-no-qa-generation]: ../execplans/4-3-2-no-qa-generation-runs-and-tei-p5-retrieval.md
 [adr-001]: adr-0001-reference-binding-resolution-algorithm.md
 [adr-007]: adr-0007-durable-generation-checkpoints.md
-[adr-015]: adr-0015-cost-accounting-ports-and-pricing-engine.md
+[adr-015]: adr-0032-cost-accounting-ports-and-pricing-engine.md
 [adr-017]: adr-0017-no-qa-generation-run-execution-and-tei-persistence.md
 [adr-019]: adr-0019-episode-tei-revision-history.md
 [adr-001-reference-binding-resolution-algorithm]: adr-0001-reference-binding-resolution-algorithm.md
 [adr-007-durable-generation-checkpoints]: adr-0007-durable-generation-checkpoints.md
-[adr-015-cost-accounting-ports-and-pricing-engine]: adr-0015-cost-accounting-ports-and-pricing-engine.md
+[adr-015-cost-accounting-ports-and-pricing-engine]: adr-0032-cost-accounting-ports-and-pricing-engine.md
 [adr-017-no-qa-generation-execution-and-tei-persistence]: adr-0017-no-qa-generation-run-execution-and-tei-persistence.md

@@ -231,7 +231,7 @@ versioning and history strategy ADR[^5].
 [^1]: Roadmap item `2.6.2` in `docs/roadmap.md`
 [^2]: TUI API design: `docs/episodic-tui-api-design.md`
 [^3]: Generation-run port split:
-  `docs/adrs/adr-0015-generation-run-port-split.md`
+  `docs/adrs/adr-0031-generation-run-port-split.md`
 [^4]: Durable orchestration checkpoint ADR:
   `docs/adrs/adr-0007-durable-generation-checkpoints.md`
 [^5]: Explicit versioning and history strategy:

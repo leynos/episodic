@@ -345,7 +345,7 @@ them, so no snapshot written now has to be rewritten later.
 
 - Roadmap item `2.5.1`: `docs/roadmap.md`.
 - Cost accounting ports and pricing engine: ADR-015,
-  `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md`.
+  `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md`.
 - Explicit versioning and history strategy: ADR-018,
   `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`.
 - Hexagonal architecture enforcement: ADR-014,
