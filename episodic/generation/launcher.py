@@ -72,9 +72,13 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from episodic.canonical.domain import SourceDocument
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
-    from episodic.generation.draft_script import DraftScriptGenerator
+    from episodic.generation.draft_script import (
+        DraftScriptGenerator,
+        DraftScriptSource,
+    )
 
 __all__ = [
     "GenerationRunLauncher",
@@ -89,13 +93,39 @@ class GenerationRunLauncher(typ.Protocol):
         """Schedule generation for one run."""
 
 
+async def _load_source_document(
+    document: SourceDocument,
+    object_store: ObjectStorePort | None,
+    limits: GenerationSourceLimits | None = None,
+    *,
+    remaining_aggregate_bytes: int | None = None,
+) -> DraftScriptSource:
+    """Load one source document through this module's patchable binding.
+
+    Resolving ``source_from_document`` here, rather than capturing it when the
+    launcher is constructed, preserves the pre-split patch point at hydration
+    time.
+
+    Returns
+    -------
+    DraftScriptSource
+        Bounded generator source input for the canonical document.
+    """
+    return await source_from_document(
+        document,
+        object_store,
+        limits,
+        remaining_aggregate_bytes=remaining_aggregate_bytes,
+    )
+
+
 @dc.dataclass(frozen=True, slots=True)
-class _LauncherObservability:
-    """Live view of a launcher's metrics and tracer sinks.
+class _LauncherSchedulerRuntime:
+    """Live view of a launcher's scheduling observability and admission limits.
 
     The scheduler owns the task registry and therefore outlives any single
-    run, so it cannot snapshot the launcher's observability fields the way the
-    per-run components do.
+    run, so it cannot snapshot these launcher fields the way the per-run
+    components do.
     """
 
     launcher: InProcessGenerationRunLauncher
@@ -109,6 +139,16 @@ class _LauncherObservability:
     def tracer(self) -> TracerPort:
         """The launcher's current tracer."""
         return self.launcher.tracer
+
+    @property
+    def max_concurrency(self) -> int:
+        """The launcher's current execution capacity."""
+        return self.launcher.max_concurrency
+
+    @property
+    def max_pending_runs(self) -> int:
+        """The launcher's current pending-run capacity."""
+        return self.launcher.max_pending_runs
 
 
 @dc.dataclass(slots=True)
@@ -173,9 +213,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         self._scheduler = GenerationRunScheduler(
             execute_run=self._execute_run,
             record_cancellation=self._record_cancellation,
-            observability=_LauncherObservability(self),
-            max_concurrency=self.max_concurrency,
-            max_pending_runs=self.max_pending_runs,
+            runtime=_LauncherSchedulerRuntime(self),
         )
 
     def _build_claimer(self) -> GenerationRunClaimer:
@@ -183,7 +221,10 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         return GenerationRunClaimer(
             uow_factory=self.uow_factory,
             draft_generator=self.draft_generator,
-            source_loader=BoundedSourceLoader(self.object_store, source_from_document),
+            source_loader=BoundedSourceLoader(
+                self.object_store,
+                _load_source_document,
+            ),
             clock=self.clock,
             source_limits=self.source_limits,
             metrics=self.metrics,
@@ -223,18 +264,21 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     async def _execute_run(self, run_id: uuid.UUID) -> ExecutionOutcome:
         """Execute one generation run while its concurrency permit is held."""
         claimer = self._build_claimer()
-        persistence = self._build_persistence()
         try:
             claimed = await claimer.claim(run_id)
             if claimed is None:
                 return ExecutionOutcome(outcome="not_claimed")
             result = await claimer.generate(claimed)
+            # Build the persistence component after generation so a recorder or
+            # provider metadata assignment made while the run was generating
+            # still applies to this run's writes.
+            persistence = self._build_persistence()
             await persistence.record_draft_generated(claimed.run.id, result)
             await persistence.persist_success(claimed, result)
             return ExecutionOutcome(outcome="completed")
         except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
             failure = classify_failure(exc)
-            await persistence.record_failure(run_id, failure)
+            await self._build_persistence().record_failure(run_id, failure)
             return ExecutionOutcome(
                 outcome="failed",
                 failure_category=failure.category,

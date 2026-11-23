@@ -7,21 +7,22 @@ silently freeze a value the base once read at use time.
 """
 
 import dataclasses as dc
-import datetime as dt
 import typing as typ
+import uuid
 
 import pytest
 
-import episodic.generation.launcher as launcher_module
-from episodic.canonical.domain import GenerationRunStatus, SourceDocument
+from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.generation_quality import QualityMode
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.generation.launcher import GenerationRunAdmissionError
 from episodic.generation.launcher_support import GenerationSourceLimits
 from episodic.observability import RecordingTracer
 from tests.generation_run_launcher_support import (
     LauncherOptions,
     RecordingCostRecorder,
     RecordingDraftGenerator,
+    ReleasableDraftGenerator,
     draft_result,
     launch_and_load_run,
     launcher,
@@ -34,11 +35,9 @@ if typ.TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    from episodic.canonical.object_store import ObjectStorePort
     from episodic.generation.draft_script import (
         DraftScriptRequest,
         DraftScriptResult,
-        DraftScriptSource,
     )
 
 
@@ -227,45 +226,57 @@ async def test_launcher_keeps_scheduler_state_across_collaborator_changes(
 
 
 @pytest.mark.asyncio
-async def test_launcher_uses_source_from_document_patched_after_construction(
+async def test_launcher_observes_cost_recorder_assigned_while_generating(
     session_factory: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Patching the launcher module's loader after construction must take effect."""
+    """A cost recorder assigned while generation blocks must record that run."""
     run_id, _ = await prepare_pending_run(session_factory)
+    generator = ReleasableDraftGenerator(draft_result(valid_tei()))
+    run_launcher = launcher(session_factory, generator)
+
+    await run_launcher.launch(run_id)
+    await generator.started.wait()
+    cost_recorder = RecordingCostRecorder()
+    run_launcher.cost_recorder_factory = lambda uow: cost_recorder
+    generator.release.set()
+    await run_launcher.drain()
+
+    assert cost_recorder.provider_calls, (
+        "expected the recorder assigned during generation to record the call"
+    )
+    assert cost_recorder.finalized_runs == [(str(run_id), "draft")], (
+        cost_recorder.finalized_runs
+    )
+
+
+@pytest.mark.asyncio
+async def test_launcher_observes_admission_limits_changed_after_construction(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Admission should read the current limits without resizing the semaphore."""
+    first_run_id, _ = await prepare_pending_run(session_factory)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        first_run = await uow.generation_runs.get_run(first_run_id)
+        assert first_run is not None, f"run {first_run_id} was not persisted"
+        second_run_id = uuid.uuid7()
+        await uow.generation_runs.create_run(dc.replace(first_run, id=second_run_id))
+        await uow.commit()
+    generator = ReleasableDraftGenerator(draft_result(valid_tei()))
     run_launcher = launcher(
         session_factory,
-        RecordingDraftGenerator(draft_result(valid_tei())),
-    )
-    seen: list[str] = []
-    real_source_from_document = launcher_module.source_from_document
-
-    async def recording_source_from_document(
-        document: SourceDocument,
-        object_store: ObjectStorePort | None,
-        limits: GenerationSourceLimits | None = None,
-        *,
-        remaining_aggregate_bytes: int | None = None,
-    ) -> DraftScriptSource:
-        """Record the patched call and delegate to the real loader."""
-        seen.append(str(document.id))
-        return await real_source_from_document(
-            document,
-            object_store,
-            limits,
-            remaining_aggregate_bytes=remaining_aggregate_bytes,
-        )
-
-    monkeypatch.setattr(
-        launcher_module,
-        "source_from_document",
-        recording_source_from_document,
+        generator,
+        options=LauncherOptions(max_concurrency=1, max_pending_runs=0),
     )
 
-    run, events = await launch_and_load_run(session_factory, run_id, run_launcher)
+    await run_launcher.launch(first_run_id)
+    await generator.started.wait()
+    with pytest.raises(GenerationRunAdmissionError, match="capacity"):
+        await run_launcher.launch(second_run_id)
 
-    assert run.status is GenerationRunStatus.SUCCEEDED, (
-        f"run {run_id} status={run.status}; events={events!r}"
-    )
-    assert seen, "expected the post-construction patch to load the run's sources"
-    assert events[-1].occurred_at >= dt.datetime(2026, 1, 1, tzinfo=dt.UTC), events
+    run_launcher.max_pending_runs = 1
+    await run_launcher.launch(second_run_id)
+    assert run_launcher.scheduled_run_count == 2, run_launcher.scheduled_run_count
+
+    generator.release.set()
+    await run_launcher.drain()
+    assert run_launcher.scheduled_run_count == 0, run_launcher.scheduled_run_count

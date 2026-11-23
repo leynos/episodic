@@ -2559,14 +2559,18 @@ keeps the claim-generate-persist sequence plus failure classification in
 
 Per-run composition preserves the late binding the mixins had. Assigning
 `draft_generator`, `metrics`, `tracer`, `source_limits`, `clock` or another
-collaborator after construction still affects the next run, and patching
-`source_from_document` in `launcher.py` after construction still overrides the
-document loader when a run hydrates. `BoundedSourceLoader` implements the
-`GenerationSourceLoader` seam and applies the source count and byte limits. The
-scheduler reads `metrics` and `tracer` through a live view, so replacing them
-does not discard its task or cancellation state. Replacing the mixins with
-injected scheduling, claim and persistence components was tracked in
-[#350](https://github.com/leynos/episodic/issues/350).
+collaborator after construction still affects the next run. The persistence
+component is built after draft generation, so a cost recorder or provider
+metadata assignment made while generation is blocked applies to that run's
+writes. `source_from_document` is resolved when a run hydrates, so a patch
+applied to `launcher.py` at any point before hydration is observed.
+`BoundedSourceLoader` implements the `GenerationSourceLoader` seam and applies
+the source count and byte limits. The scheduler reads its metrics, tracer and
+admission limits through a live view, so replacing them does not discard its
+task or cancellation state; as before, a changed `max_concurrency` affects
+admission but does not resize the semaphore created at construction. Replacing
+the mixins with injected scheduling, claim and persistence components was
+tracked in [#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they

@@ -702,9 +702,16 @@ reason = "InProcessGenerationRunLauncher._execute_run and ._record_cancellation 
 [[tool.skylos.dead_code.entrypoints]]
 type = "class"
 full_name = [
-    "episodic.generation.launcher._LauncherObservability",
+    "episodic.generation.launcher._LauncherSchedulerRuntime",
 ]
-reason = "InProcessGenerationRunLauncher.__post_init__ installs this live view as GenerationRunScheduler.observability; Skylos does not traverse dataclass post-initialization hooks."
+reason = "InProcessGenerationRunLauncher.__post_init__ installs this live view as GenerationRunScheduler.runtime; Skylos does not traverse dataclass post-initialization hooks."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.generation.launcher._load_source_document",
+]
+reason = "InProcessGenerationRunLauncher._build_claimer installs this loader so source_from_document is resolved at hydration time; Skylos does not traverse the runtime-selected callback that builds the claimer."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"

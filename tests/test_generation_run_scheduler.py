@@ -51,11 +51,13 @@ class _RecordingMetrics:
 
 
 @dc.dataclass(frozen=True, slots=True)
-class _Observability:
-    """Live observability view backed by recording fakes."""
+class _SchedulerRuntime:
+    """Live scheduler runtime view backed by recording fakes."""
 
     metrics: _RecordingMetrics = dc.field(default_factory=_RecordingMetrics)
     tracer: RecordingTracer = dc.field(default_factory=RecordingTracer)
+    max_concurrency: int = 4
+    max_pending_runs: int = 16
 
 
 @dc.dataclass(slots=True)
@@ -126,7 +128,7 @@ async def test_scheduler_executes_admitted_run_and_records_trace() -> None:
     tracer = RecordingTracer()
     scheduler = dc.replace(
         _scheduler(executor, _RecordingCancellation().record),
-        observability=_Observability(tracer=tracer),
+        runtime=_SchedulerRuntime(tracer=tracer),
     )
     run_id = uuid.uuid7()
 
@@ -153,7 +155,7 @@ async def test_scheduler_reports_failed_outcome_category() -> None:
     tracer = RecordingTracer()
     scheduler = dc.replace(
         _scheduler(executor, _RecordingCancellation().record),
-        observability=_Observability(tracer=tracer),
+        runtime=_SchedulerRuntime(tracer=tracer),
     )
 
     await scheduler.launch(uuid.uuid7())
@@ -172,9 +174,11 @@ async def test_scheduler_rejects_admission_beyond_capacity() -> None:
     metrics = _RecordingMetrics()
     scheduler = dc.replace(
         _scheduler(executor, _RecordingCancellation().record),
-        observability=_Observability(metrics=metrics),
-        max_concurrency=1,
-        max_pending_runs=1,
+        runtime=_SchedulerRuntime(
+            metrics=metrics,
+            max_concurrency=1,
+            max_pending_runs=1,
+        ),
     )
 
     await scheduler.launch(uuid.uuid7())
@@ -201,7 +205,7 @@ async def test_scheduler_closes_admission_during_shutdown() -> None:
     metrics = _RecordingMetrics()
     scheduler = dc.replace(
         _scheduler(_RecordingExecutor(), _RecordingCancellation().record),
-        observability=_Observability(metrics=metrics),
+        runtime=_SchedulerRuntime(metrics=metrics),
     )
 
     await scheduler.shutdown()
@@ -222,7 +226,7 @@ async def test_scheduler_records_cancellation_once_for_blocked_run() -> None:
     tracer = RecordingTracer()
     scheduler = dc.replace(
         _scheduler(executor, recorder.record),
-        observability=_Observability(tracer=tracer),
+        runtime=_SchedulerRuntime(tracer=tracer),
     )
     run_id = uuid.uuid7()
 
@@ -255,10 +259,10 @@ def test_scheduler_rejects_invalid_limits() -> None:
     with pytest.raises(ValueError, match="max_concurrency"):
         dc.replace(
             _scheduler(_RecordingExecutor(), _RecordingCancellation().record),
-            max_concurrency=0,
+            runtime=_SchedulerRuntime(max_concurrency=0),
         )
     with pytest.raises(ValueError, match="max_pending_runs"):
         dc.replace(
             _scheduler(_RecordingExecutor(), _RecordingCancellation().record),
-            max_pending_runs=-1,
+            runtime=_SchedulerRuntime(max_pending_runs=-1),
         )

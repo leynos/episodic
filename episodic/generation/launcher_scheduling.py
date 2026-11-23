@@ -48,12 +48,14 @@ class ExecutionOutcome:
     failure_category: str | None = None
 
 
-class SchedulerObservability(typ.Protocol):
-    """Live observability ports consulted for each scheduling observation.
+class SchedulerRuntimeView(typ.Protocol):
+    """Live configuration and observability consulted at use time.
 
     Attributes are properties rather than values so a scheduler that outlives
-    its composition root observes the caller's current sinks after the caller
-    replaces them.
+    its composition root observes the caller's current sinks and admission
+    limits after the caller replaces them. The execution semaphore is sized
+    once from the limits in force at construction, matching the pre-split
+    launcher, which never resized it.
     """
 
     @property
@@ -64,13 +66,23 @@ class SchedulerObservability(typ.Protocol):
     def tracer(self) -> TracerPort:
         """Sink for the per-run execution span."""
 
+    @property
+    def max_concurrency(self) -> int:
+        """Maximum runs allowed to execute concurrently."""
+
+    @property
+    def max_pending_runs(self) -> int:
+        """Maximum runs allowed to wait beyond the execution capacity."""
+
 
 @dc.dataclass(frozen=True, slots=True)
-class NoopSchedulerObservability:
-    """Inert observability view used when the caller supplies none."""
+class NoopSchedulerRuntimeView:
+    """Inert runtime view used when the caller supplies none."""
 
     metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
+    max_concurrency: int = DEFAULT_MAX_CONCURRENCY
+    max_pending_runs: int = DEFAULT_MAX_PENDING_RUNS
 
 
 @dc.dataclass(slots=True)
@@ -84,21 +96,13 @@ class GenerationRunScheduler:
         terminal outcome.
     record_cancellation : cabc.Callable[[uuid.UUID], cabc.Awaitable[None]]
         Persist cancellation as a terminal failure for one run.
-    observability : SchedulerObservability
-        Live view of the metrics and tracer sinks consulted at use time.
-    max_concurrency : int
-        Maximum runs allowed to execute concurrently.
-    max_pending_runs : int
-        Maximum runs allowed to wait beyond the execution capacity.
+    runtime : SchedulerRuntimeView
+        Live view of the metrics, tracer and admission limits.
     """
 
     execute_run: cabc.Callable[[uuid.UUID], cabc.Awaitable[ExecutionOutcome]]
     record_cancellation: cabc.Callable[[uuid.UUID], cabc.Awaitable[None]]
-    observability: SchedulerObservability = dc.field(
-        default_factory=NoopSchedulerObservability
-    )
-    max_concurrency: int = DEFAULT_MAX_CONCURRENCY
-    max_pending_runs: int = DEFAULT_MAX_PENDING_RUNS
+    runtime: SchedulerRuntimeView = dc.field(default_factory=NoopSchedulerRuntimeView)
     _tasks: TaskSet = dc.field(default_factory=set, init=False)
     _task_run_ids: dict[asyncio.Task[None], uuid.UUID] = dc.field(
         default_factory=dict,
@@ -111,13 +115,13 @@ class GenerationRunScheduler:
 
     def __post_init__(self) -> None:
         """Validate scheduling limits and allocate the execution semaphore."""
-        if self.max_concurrency < 1:
+        if self.runtime.max_concurrency < 1:
             msg = "max_concurrency must be at least 1."
             raise ValueError(msg)
-        if self.max_pending_runs < 0:
+        if self.runtime.max_pending_runs < 0:
             msg = "max_pending_runs must be non-negative."
             raise ValueError(msg)
-        self._semaphore = asyncio.Semaphore(self.max_concurrency)
+        self._semaphore = asyncio.Semaphore(self.runtime.max_concurrency)
 
     async def launch(self, run_id: uuid.UUID) -> None:
         """Schedule a background task for one generation run."""
@@ -170,15 +174,15 @@ class GenerationRunScheduler:
     def _admit(self) -> None:
         """Reserve bounded capacity before creating a background task."""
         if self._is_shutting_down:
-            self.observability.metrics.increment_counter(
+            self.runtime.metrics.increment_counter(
                 _METRIC_ADMISSION_REJECTED,
                 labels={"reason": "shutdown"},
             )
             msg = "Generation run admission is closed during shutdown."
             raise GenerationRunAdmissionError(msg)
-        capacity = self.max_concurrency + self.max_pending_runs
+        capacity = self.runtime.max_concurrency + self.runtime.max_pending_runs
         if self._admitted_run_count >= capacity:
-            self.observability.metrics.increment_counter(
+            self.runtime.metrics.increment_counter(
                 _METRIC_ADMISSION_REJECTED,
                 labels={"reason": "capacity"},
             )
@@ -189,7 +193,7 @@ class GenerationRunScheduler:
 
     async def _run_task(self, run_id: uuid.UUID) -> None:
         """Execute one scheduled generation run."""
-        with self.observability.tracer.start_span(
+        with self.runtime.tracer.start_span(
             "generation_run.execute",
             attributes={"operation": "generation_run.execute", "run_id": str(run_id)},
         ) as span:
@@ -208,8 +212,8 @@ class GenerationRunScheduler:
 
     def _record_pending_depth(self) -> None:
         """Report bounded work waiting beyond the execution capacity."""
-        pending_depth = max(0, self._admitted_run_count - self.max_concurrency)
-        self.observability.metrics.observe_value(
+        pending_depth = max(0, self._admitted_run_count - self.runtime.max_concurrency)
+        self.runtime.metrics.observe_value(
             _METRIC_PENDING_DEPTH,
             float(pending_depth),
             labels={},
