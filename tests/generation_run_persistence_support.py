@@ -14,7 +14,10 @@ from episodic.canonical.domain import (
 from episodic.canonical.domain_enums import ApprovalState, EpisodeStatus
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.cost.ports import BillingPeriodKey, CostLedgerEntryId
-from episodic.generation.launcher_persistence import GenerationRunPersistence
+from episodic.generation.launcher_persistence import (
+    GenerationRunPersistence,
+    PersistenceContext,
+)
 from episodic.generation.launcher_support import ClaimedRun
 from tests.generation_run_launcher_support import draft_result, valid_tei
 
@@ -264,18 +267,29 @@ def unit_of_work(
     )
 
 
-def persistence(uow: RecordingUnitOfWork) -> GenerationRunPersistence:
-    """Build a persistence component around an explicit unit-of-work fake.
+def persistence_context(uow: RecordingUnitOfWork) -> PersistenceContext:
+    """Build a value-backed persistence runtime around an explicit UoW fake.
 
     Tests that need a cost recorder or a recording metrics sink replace the
-    returned dataclass with ``dataclasses.replace``, so this seam stays small.
+    returned context with ``dataclasses.replace``, so this seam stays small.
+
+    Returns
+    -------
+    PersistenceContext
+        Runtime bound to the supplied unit-of-work fake.
+    """
+    return PersistenceContext(
+        uow_factory=lambda: typ.cast("CanonicalUnitOfWork", uow),
+        clock=clock,
+    )
+
+
+def persistence(uow: RecordingUnitOfWork) -> GenerationRunPersistence:
+    """Build a persistence component around an explicit unit-of-work fake.
 
     Returns
     -------
     GenerationRunPersistence
         Persistence component bound to the supplied unit-of-work fake.
     """
-    return GenerationRunPersistence(
-        uow_factory=lambda: typ.cast("CanonicalUnitOfWork", uow),
-        clock=clock,
-    )
+    return GenerationRunPersistence(runtime=persistence_context(uow))

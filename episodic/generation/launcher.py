@@ -55,6 +55,7 @@ from episodic.generation.launcher_support import (
     DraftIdFactoryFactory,
     Failure,
     GenerationSourceLimits,
+    GenerationSourceLoader,
     SequentialDraftIds,
     classify_failure,
     source_from_document,
@@ -151,6 +152,95 @@ class _LauncherSchedulerRuntime:
         return self.launcher.max_pending_runs
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _LauncherClaimerRuntime:
+    """Live view of the launcher's claim-stage collaborators."""
+
+    launcher: InProcessGenerationRunLauncher
+
+    @property
+    def uow_factory(self) -> cabc.Callable[[], CanonicalUnitOfWork]:
+        """The launcher's current unit-of-work factory."""
+        return self.launcher.uow_factory
+
+    @property
+    def draft_generator(self) -> DraftScriptGenerator:
+        """The launcher's current draft generator."""
+        return self.launcher.draft_generator
+
+    @property
+    def source_loader(self) -> GenerationSourceLoader:
+        """A loader over the launcher's current object store."""
+        return BoundedSourceLoader(self.launcher.object_store, _load_source_document)
+
+    @property
+    def clock(self) -> Clock:
+        """The launcher's current clock."""
+        return self.launcher.clock
+
+    @property
+    def source_limits(self) -> GenerationSourceLimits:
+        """The launcher's current source limits."""
+        return self.launcher.source_limits
+
+    @property
+    def metrics(self) -> ValueMetricsPort:
+        """The launcher's current metrics sink."""
+        return self.launcher.metrics
+
+    @property
+    def monotonic_clock(self) -> MonotonicClockPort:
+        """The launcher's current monotonic clock."""
+        return self.launcher.monotonic_clock
+
+    @property
+    def draft_id_factory_factory(self) -> DraftIdFactoryFactory:
+        """The launcher's current draft-id factory factory."""
+        return self.launcher.draft_id_factory_factory
+
+    @property
+    def lease_seconds(self) -> int:
+        """The launcher's current lease duration."""
+        return self.launcher.lease_seconds
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _LauncherPersistenceRuntime:
+    """Live view of the launcher's persistence-stage collaborators."""
+
+    launcher: InProcessGenerationRunLauncher
+
+    @property
+    def uow_factory(self) -> cabc.Callable[[], CanonicalUnitOfWork]:
+        """The launcher's current unit-of-work factory."""
+        return self.launcher.uow_factory
+
+    @property
+    def clock(self) -> Clock:
+        """The launcher's current clock."""
+        return self.launcher.clock
+
+    @property
+    def cost_recorder_factory(self) -> CostRecorderFactory | None:
+        """The launcher's current cost-recorder factory."""
+        return self.launcher.cost_recorder_factory
+
+    @property
+    def provider_name(self) -> str:
+        """The launcher's current provider name."""
+        return self.launcher.provider_name
+
+    @property
+    def provider_operation(self) -> str:
+        """The launcher's current provider operation."""
+        return self.launcher.provider_operation
+
+    @property
+    def metrics(self) -> ValueMetricsPort:
+        """The launcher's current metrics sink."""
+        return self.launcher.metrics
+
+
 @dc.dataclass(slots=True)
 class InProcessGenerationRunLauncher(GenerationRunLauncher):
     """Schedule and execute no-QA draft generation in-process.
@@ -216,34 +306,6 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             runtime=_LauncherSchedulerRuntime(self),
         )
 
-    def _build_claimer(self) -> GenerationRunClaimer:
-        """Build the stateless claim component from the current launcher fields."""
-        return GenerationRunClaimer(
-            uow_factory=self.uow_factory,
-            draft_generator=self.draft_generator,
-            source_loader=BoundedSourceLoader(
-                self.object_store,
-                _load_source_document,
-            ),
-            clock=self.clock,
-            source_limits=self.source_limits,
-            metrics=self.metrics,
-            monotonic_clock=self.monotonic_clock,
-            draft_id_factory_factory=self.draft_id_factory_factory,
-            lease_seconds=self.lease_seconds,
-        )
-
-    def _build_persistence(self) -> GenerationRunPersistence:
-        """Build the stateless persistence component from the current fields."""
-        return GenerationRunPersistence(
-            uow_factory=self.uow_factory,
-            clock=self.clock,
-            cost_recorder_factory=self.cost_recorder_factory,
-            provider_name=self.provider_name,
-            provider_operation=self.provider_operation,
-            metrics=self.metrics,
-        )
-
     async def launch(self, run_id: uuid.UUID) -> None:
         """Schedule a background task for one generation run."""
         await self._scheduler.launch(run_id)
@@ -263,22 +325,21 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
 
     async def _execute_run(self, run_id: uuid.UUID) -> ExecutionOutcome:
         """Execute one generation run while its concurrency permit is held."""
-        claimer = self._build_claimer()
+        claimer = GenerationRunClaimer(runtime=_LauncherClaimerRuntime(self))
+        persistence = GenerationRunPersistence(
+            runtime=_LauncherPersistenceRuntime(self)
+        )
         try:
             claimed = await claimer.claim(run_id)
             if claimed is None:
                 return ExecutionOutcome(outcome="not_claimed")
             result = await claimer.generate(claimed)
-            # Build the persistence component after generation so a recorder or
-            # provider metadata assignment made while the run was generating
-            # still applies to this run's writes.
-            persistence = self._build_persistence()
             await persistence.record_draft_generated(claimed.run.id, result)
             await persistence.persist_success(claimed, result)
             return ExecutionOutcome(outcome="completed")
         except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
             failure = classify_failure(exc)
-            await self._build_persistence().record_failure(run_id, failure)
+            await persistence.record_failure(run_id, failure)
             return ExecutionOutcome(
                 outcome="failed",
                 failure_category=failure.category,
@@ -286,7 +347,9 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
 
     async def _record_cancellation(self, run_id: uuid.UUID) -> None:
         """Record cancellation consistently before or during execution."""
-        await self._build_persistence().record_failure(
+        await GenerationRunPersistence(
+            runtime=_LauncherPersistenceRuntime(self)
+        ).record_failure(
             run_id,
             Failure(
                 message="Generation task cancelled during shutdown.",

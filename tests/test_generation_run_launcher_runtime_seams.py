@@ -1,11 +1,11 @@
 """Tests for launcher seams that callers replace at runtime.
 
 The launcher's collaborators were writable fields before the component split,
-and ``source_from_document`` was resolved from the launcher module when a run
-hydrated. These tests pin both behaviours so the injected components cannot
-silently freeze a value the base once read at use time.
+and the base read each one at the stage that used it. These tests pin that
+use-time behaviour so the injected components cannot silently freeze a value.
 """
 
+import asyncio
 import dataclasses as dc
 import typing as typ
 import uuid
@@ -29,6 +29,7 @@ from tests.generation_run_launcher_support import (
     prepare_pending_run,
     valid_tei,
 )
+from tests.generation_run_launcher_uow_fakes import BlockingUnitOfWorkFactory
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -243,6 +244,40 @@ async def test_launcher_observes_cost_recorder_assigned_while_generating(
 
     assert cost_recorder.provider_calls, (
         "expected the recorder assigned during generation to record the call"
+    )
+    assert cost_recorder.finalized_runs == [(str(run_id), "draft")], (
+        cost_recorder.finalized_runs
+    )
+
+
+@pytest.mark.asyncio
+async def test_launcher_observes_cost_recorder_assigned_during_draft_write(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A recorder assigned while the draft.generated write blocks must be used."""
+    run_id, _ = await prepare_pending_run(session_factory)
+    write_started = asyncio.Event()
+    release_write = asyncio.Event()
+    run_launcher = launcher(
+        session_factory,
+        RecordingDraftGenerator(draft_result(valid_tei())),
+    )
+    run_launcher.uow_factory = BlockingUnitOfWorkFactory(
+        lambda: SqlAlchemyUnitOfWork(session_factory),
+        {3},
+        write_started,
+        release_write,
+    )
+
+    await run_launcher.launch(run_id)
+    await asyncio.wait_for(write_started.wait(), timeout=1)
+    cost_recorder = RecordingCostRecorder()
+    run_launcher.cost_recorder_factory = lambda uow: cost_recorder
+    release_write.set()
+    await run_launcher.drain()
+
+    assert cost_recorder.provider_calls, (
+        "expected the recorder assigned during the draft write to be used"
     )
     assert cost_recorder.finalized_runs == [(str(run_id), "draft")], (
         cost_recorder.finalized_runs

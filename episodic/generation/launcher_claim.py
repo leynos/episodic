@@ -4,8 +4,9 @@
 marks a run started, loads its episode and resolved presenter bindings through
 a fresh unit of work, loads bounded source text through an injected
 :class:`~episodic.generation.launcher_support_sources.GenerationSourceLoader`,
-and generates the draft script. Its collaborators are explicit fields, so the
-component can be constructed with fakes instead of a launcher's shared state.
+and generates the draft script. Its collaborators arrive through a narrow
+:class:`ClaimerRuntime` view, so the component can be constructed with fakes
+and each collaborator is read at its use site rather than snapshotted.
 """
 
 import dataclasses as dc
@@ -50,9 +51,53 @@ _METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
 _METRIC_DRAFT_LATENCY = "generation_run_draft_latency_ms"
 
 
-@dc.dataclass(slots=True)
-class GenerationRunClaimer:
-    """Claim pending runs and generate one draft for each claimed run.
+class ClaimerRuntime(typ.Protocol):
+    """Live claim-stage collaborators consulted at their use sites.
+
+    Properties rather than values keep the component's reads aligned with the
+    pre-split launcher, which read each field when it reached that stage.
+    """
+
+    @property
+    def uow_factory(self) -> cabc.Callable[[], CanonicalUnitOfWork]:
+        """Factory for the detached units of work used by claim and hydration."""
+
+    @property
+    def draft_generator(self) -> DraftScriptGenerator:
+        """Generator invoked with the hydrated draft request."""
+
+    @property
+    def source_loader(self) -> GenerationSourceLoader:
+        """Loader that bounds and hydrates canonical source documents."""
+
+    @property
+    def clock(self) -> Clock:
+        """Clock for claim timestamps, events, and draft requests."""
+
+    @property
+    def source_limits(self) -> GenerationSourceLimits:
+        """Count and byte bounds applied to the source bundle."""
+
+    @property
+    def metrics(self) -> ValueMetricsPort:
+        """Sink for QA-bypass and draft-latency metrics."""
+
+    @property
+    def monotonic_clock(self) -> MonotonicClockPort:
+        """Clock used to measure draft-generation latency."""
+
+    @property
+    def draft_id_factory_factory(self) -> DraftIdFactoryFactory:
+        """Factory for the per-request TEI identifier generator."""
+
+    @property
+    def lease_seconds(self) -> int:
+        """Claim lease duration recorded with the started run."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class ClaimerContext:
+    """Value-backed claimer runtime for direct construction and tests.
 
     Attributes
     ----------
@@ -88,6 +133,19 @@ class GenerationRunClaimer:
     draft_id_factory_factory: DraftIdFactoryFactory = SequentialDraftIds
     lease_seconds: int = DEFAULT_LEASE_SECONDS
 
+
+@dc.dataclass(slots=True)
+class GenerationRunClaimer:
+    """Claim pending runs and generate one draft for each claimed run.
+
+    Attributes
+    ----------
+    runtime : ClaimerRuntime
+        Live view of the claim-stage collaborators.
+    """
+
+    runtime: ClaimerRuntime
+
     async def claim(self, run_id: uuid.UUID) -> ClaimedRun | None:
         """Claim a pending run, then load its input outside the claim transaction.
 
@@ -115,10 +173,10 @@ class GenerationRunClaimer:
         run = await self._claim_and_start(run_id)
         if run is None:
             return None
-        async with self.uow_factory() as uow:
+        async with self.runtime.uow_factory() as uow:
             episode = await require_episode(uow, run.episode_id)
             documents = await uow.source_documents.list_for_job(run.source_bundle_id)
-            if len(documents) > self.source_limits.max_source_count:
+            if len(documents) > self.runtime.source_limits.max_source_count:
                 raise GenerationSourceLimitError.source_count()
             presenter_profiles = project_presenter_profiles(
                 await resolve_bindings(
@@ -127,8 +185,11 @@ class GenerationRunClaimer:
                     episode_id=episode.id,
                 )
             )
-        sources = await self.source_loader.load(documents, self.source_limits)
-        self.metrics.increment_counter(
+        sources = await self.runtime.source_loader.load(
+            documents,
+            self.runtime.source_limits,
+        )
+        self.runtime.metrics.increment_counter(
             _METRIC_QA_BYPASS,
             labels={"quality_mode": run.quality_mode.value},
         )
@@ -158,18 +219,20 @@ class GenerationRunClaimer:
         DraftScriptResult
             Generated TEI, content hash, usage, and provider metadata.
         """
-        start = self.monotonic_clock.monotonic_seconds()
+        start = self.runtime.monotonic_clock.monotonic_seconds()
         try:
-            return await self.draft_generator.generate(
+            return await self.runtime.draft_generator.generate(
                 draft_request(
                     claimed=claimed,
-                    clock=self.clock,
-                    id_factory_factory=self.draft_id_factory_factory,
+                    clock=self.runtime.clock,
+                    id_factory_factory=self.runtime.draft_id_factory_factory,
                 )
             )
         finally:
-            elapsed_ms = (self.monotonic_clock.monotonic_seconds() - start) * 1000
-            self.metrics.observe_latency_ms(
+            elapsed_ms = (
+                self.runtime.monotonic_clock.monotonic_seconds() - start
+            ) * 1000
+            self.runtime.metrics.observe_latency_ms(
                 _METRIC_DRAFT_LATENCY,
                 elapsed_ms,
                 labels={"quality_mode": claimed.run.quality_mode.value},
@@ -177,13 +240,14 @@ class GenerationRunClaimer:
 
     async def _claim_and_start(self, run_id: uuid.UUID) -> GenerationRun | None:
         """Linearize a claim and make its started event durable before hydration."""
-        async with self.uow_factory() as uow:
-            started_at = self.clock()
+        async with self.runtime.uow_factory() as uow:
+            started_at = self.runtime.clock()
             run = await uow.generation_runs.claim_run_for_execution(
                 run_id,
                 current_node="draft",
                 started_at=started_at,
-                lease_expires_at=started_at + dt.timedelta(seconds=self.lease_seconds),
+                lease_expires_at=started_at
+                + dt.timedelta(seconds=self.runtime.lease_seconds),
             )
             if run is None:
                 await uow.rollback()
@@ -198,4 +262,4 @@ class GenerationRunClaimer:
         return run
 
 
-__all__ = ["GenerationRunClaimer"]
+__all__ = ["ClaimerContext", "ClaimerRuntime", "GenerationRunClaimer"]

@@ -48,9 +48,41 @@ _METRIC_DRAFT_ERRORS = "generation_run_draft_errors_total"
 logger = get_logger(__name__)
 
 
-@dc.dataclass(slots=True)
-class GenerationRunPersistence:
-    """Persist draft, success, cost, and failure outcomes for a run.
+class PersistenceRuntime(typ.Protocol):
+    """Live persistence-stage collaborators consulted at their use sites.
+
+    Properties rather than values keep the component's reads aligned with the
+    pre-split launcher, which read each field when it reached that write.
+    """
+
+    @property
+    def uow_factory(self) -> cabc.Callable[[], CanonicalUnitOfWork]:
+        """Factory for the detached units of work used by each write."""
+
+    @property
+    def clock(self) -> Clock:
+        """Clock for event timestamps and terminal transitions."""
+
+    @property
+    def cost_recorder_factory(self) -> CostRecorderFactory | None:
+        """Factory that binds a cost recorder to a unit of work."""
+
+    @property
+    def provider_name(self) -> str:
+        """Provider name recorded in pinned pricing and provider-call costs."""
+
+    @property
+    def provider_operation(self) -> str:
+        """Provider operation recorded in pinned pricing and provider-call costs."""
+
+    @property
+    def metrics(self) -> ValueMetricsPort:
+        """Sink for terminal-state and draft-error metrics."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class PersistenceContext:
+    """Value-backed persistence runtime for direct construction and tests.
 
     Attributes
     ----------
@@ -76,6 +108,19 @@ class GenerationRunPersistence:
     provider_operation: str = "chat_completions"
     metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
 
+
+@dc.dataclass(slots=True)
+class GenerationRunPersistence:
+    """Persist draft, success, cost, and failure outcomes for a run.
+
+    Attributes
+    ----------
+    runtime : PersistenceRuntime
+        Live view of the persistence-stage collaborators.
+    """
+
+    runtime: PersistenceRuntime
+
     async def record_draft_generated(
         self,
         run_id: uuid.UUID,
@@ -96,12 +141,12 @@ class GenerationRunPersistence:
             Generated draft whose provider metadata and usage form the event
             payload.
         """
-        async with self.uow_factory() as uow:
+        async with self.runtime.uow_factory() as uow:
             await uow.generation_runs.append_event(
                 run_id,
                 kind="draft.generated",
                 payload=draft_generated_payload(result),
-                occurred_at=self.clock(),
+                occurred_at=self.runtime.clock(),
             )
             await uow.commit()
 
@@ -126,7 +171,7 @@ class GenerationRunPersistence:
         result : DraftScriptResult
             Generated draft to persist and record as the run's outcome.
         """
-        async with self.uow_factory() as uow:
+        async with self.runtime.uow_factory() as uow:
             updated_episode = await persist_draft_script(
                 uow,
                 DraftScriptPersistenceRequest(
@@ -134,7 +179,7 @@ class GenerationRunPersistence:
                     generation_run_id=claimed.run.id,
                     result=result,
                     expected_revision=claimed.episode.tei_revision,
-                    clock=self.clock,
+                    clock=self.runtime.clock,
                 ),
             )
             await self._record_success_transition(
@@ -171,7 +216,7 @@ class GenerationRunPersistence:
         failure : Failure
             Stable failure message, category, and invalid-TEI flag.
         """
-        async with self.uow_factory() as uow:
+        async with self.runtime.uow_factory() as uow:
             try:
                 await self._append_failure_events(uow, run_id, failure)
                 await uow.generation_runs.update_run_status(
@@ -179,7 +224,7 @@ class GenerationRunPersistence:
                     update=GenerationRunStatusUpdate(
                         status=GenerationRunStatus.FAILED,
                         current_node=None,
-                        ended_at=self.clock(),
+                        ended_at=self.runtime.clock(),
                         error_message=failure.message,
                         error_category=failure.category,
                     ),
@@ -189,7 +234,7 @@ class GenerationRunPersistence:
                 await uow.rollback()
                 return
         self._record_terminal_metric(GenerationRunStatus.FAILED, failure.category)
-        self.metrics.increment_counter(
+        self.runtime.metrics.increment_counter(
             _METRIC_DRAFT_ERRORS,
             labels={"error_category": failure.category},
         )
@@ -216,21 +261,21 @@ class GenerationRunPersistence:
                 "content_hash": persisted_tei.content_hash,
                 "qa_status": QaStatus.SKIPPED.value,
             },
-            occurred_at=self.clock(),
+            occurred_at=self.runtime.clock(),
         )
         await self._record_costs(uow, claimed.run.id, result)
         await uow.generation_runs.append_event(
             claimed.run.id,
             kind="run.succeeded",
             payload={"current_node": "complete"},
-            occurred_at=self.clock(),
+            occurred_at=self.runtime.clock(),
         )
         await uow.generation_runs.update_run_status(
             claimed.run.id,
             update=GenerationRunStatusUpdate(
                 status=GenerationRunStatus.SUCCEEDED,
                 current_node=None,
-                ended_at=self.clock(),
+                ended_at=self.runtime.clock(),
             ),
         )
 
@@ -241,20 +286,20 @@ class GenerationRunPersistence:
         result: DraftScriptResult,
     ) -> None:
         """Record provider-call and roll-up cost entries when configured."""
-        if self.cost_recorder_factory is None:
+        if self.runtime.cost_recorder_factory is None:
             return
-        recorder = self.cost_recorder_factory(uow)
+        recorder = self.runtime.cost_recorder_factory(uow)
         if recorder is None:
             return
-        billing_period_key = BillingPeriodKey(self.clock().strftime("%Y-%m"))
+        billing_period_key = BillingPeriodKey(self.runtime.clock().strftime("%Y-%m"))
         await recorder.pin_run_pricing(
             str(run_id),
             (
                 CostProviderOperation(
                     service_kind=PricedService.LLM,
-                    provider_name=self.provider_name,
+                    provider_name=self.runtime.provider_name,
                     model=result.model,
-                    operation=self.provider_operation,
+                    operation=self.runtime.provider_operation,
                 ),
             ),
             billing_period_key,
@@ -263,11 +308,11 @@ class GenerationRunPersistence:
             provider_call_record(
                 ProviderCallRecordRequest(
                     run_id=run_id,
-                    provider_name=self.provider_name,
-                    provider_operation=self.provider_operation,
+                    provider_name=self.runtime.provider_name,
+                    provider_operation=self.runtime.provider_operation,
                     billing_period_key=billing_period_key,
                     result=result,
-                    recorded_at=self.clock(),
+                    recorded_at=self.runtime.clock(),
                 )
             )
         )
@@ -285,7 +330,7 @@ class GenerationRunPersistence:
                 run_id,
                 kind="tei.invalid",
                 payload={"error_category": failure.category},
-                occurred_at=self.clock(),
+                occurred_at=self.runtime.clock(),
             )
         await uow.generation_runs.append_event(
             run_id,
@@ -294,7 +339,7 @@ class GenerationRunPersistence:
                 "error_message": failure.message,
                 "error_category": failure.category,
             },
-            occurred_at=self.clock(),
+            occurred_at=self.runtime.clock(),
         )
 
     def _record_terminal_metric(
@@ -303,10 +348,10 @@ class GenerationRunPersistence:
         error_category: str,
     ) -> None:
         """Record the terminal-state counter."""
-        self.metrics.increment_counter(
+        self.runtime.metrics.increment_counter(
             _METRIC_TERMINAL_STATES,
             labels={"status": status.value, "error_category": error_category},
         )
 
 
-__all__ = ["GenerationRunPersistence"]
+__all__ = ["GenerationRunPersistence", "PersistenceContext", "PersistenceRuntime"]

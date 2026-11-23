@@ -692,19 +692,13 @@ full_name = [
 reason = "GenerationRunScheduler invokes both as injected callbacks (`execute_run` from _run_task and `record_cancellation` from the task runner and shutdown path)."
 
 [[tool.skylos.dead_code.entrypoints]]
-type = "method"
-full_name = [
-    "episodic.generation.launcher.InProcessGenerationRunLauncher._build_claimer",
-    "episodic.generation.launcher.InProcessGenerationRunLauncher._build_persistence",
-]
-reason = "InProcessGenerationRunLauncher._execute_run and ._record_cancellation call these directly; Skylos does not traverse the bodies of the runtime-selected callbacks that invoke them."
-
-[[tool.skylos.dead_code.entrypoints]]
 type = "class"
 full_name = [
+    "episodic.generation.launcher._LauncherClaimerRuntime",
+    "episodic.generation.launcher._LauncherPersistenceRuntime",
     "episodic.generation.launcher._LauncherSchedulerRuntime",
 ]
-reason = "InProcessGenerationRunLauncher.__post_init__ installs this live view as GenerationRunScheduler.runtime; Skylos does not traverse dataclass post-initialization hooks."
+reason = "InProcessGenerationRunLauncher composes these live views for its claimer, persistence and scheduler; Skylos does not traverse the runtime-selected callbacks or dataclass post-initialization hook that install them."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"

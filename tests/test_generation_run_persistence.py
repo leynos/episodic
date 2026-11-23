@@ -10,7 +10,10 @@ from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.cost.ports import BillingPeriodKey
 from episodic.cost.pricing_snapshot import PricedService
-from episodic.generation.launcher_persistence import GenerationRunPersistence
+from episodic.generation.launcher_persistence import (
+    GenerationRunPersistence,
+    PersistenceContext,
+)
 from episodic.generation.launcher_support import Failure
 from tests.generation_run_launcher_support import valid_tei
 from tests.generation_run_persistence_support import (
@@ -22,6 +25,7 @@ from tests.generation_run_persistence_support import (
     claimed_run_value,
     clock,
     persistence,
+    persistence_context,
     result,
     unit_of_work,
 )
@@ -96,10 +100,12 @@ async def test_persist_success_records_costs_and_terminal_metric() -> None:
     uow = unit_of_work()
     recorder = RecordingCostRecorder()
     metrics = RecordingMetrics()
-    run_persistence = dc.replace(
-        persistence(uow),
-        cost_recorder_factory=lambda uow: recorder,
-        metrics=metrics,
+    run_persistence = GenerationRunPersistence(
+        runtime=dc.replace(
+            persistence_context(uow),
+            cost_recorder_factory=lambda uow: recorder,
+            metrics=metrics,
+        )
     )
 
     await run_persistence.persist_success(claimed_run_value(), result())
@@ -148,9 +154,11 @@ async def test_persist_success_skips_cost_recording_when_disabled(
     """A disabled cost recorder should leave cost writes to a later stage."""
     uow = unit_of_work()
     run_persistence = GenerationRunPersistence(
-        uow_factory=lambda: typ.cast("CanonicalUnitOfWork", uow),
-        clock=clock,
-        cost_recorder_factory=typ.cast("typ.Any", recorder_factory),
+        runtime=PersistenceContext(
+            uow_factory=lambda: typ.cast("CanonicalUnitOfWork", uow),
+            clock=clock,
+            cost_recorder_factory=typ.cast("typ.Any", recorder_factory),
+        )
     )
 
     await run_persistence.persist_success(claimed_run_value(), result())
@@ -167,7 +175,9 @@ async def test_record_failure_writes_failure_events_and_terminal_status() -> Non
     """An invalid-TEI failure should record both events and a failed status."""
     uow = unit_of_work()
     metrics = RecordingMetrics()
-    run_persistence = dc.replace(persistence(uow), metrics=metrics)
+    run_persistence = GenerationRunPersistence(
+        runtime=dc.replace(persistence_context(uow), metrics=metrics)
+    )
     failure = Failure(
         message="Invalid TEI.",
         category="tei.invalid",
@@ -213,7 +223,9 @@ async def test_record_failure_ignores_runs_that_are_not_writable(
     """A terminal or missing run should roll back without recording metrics."""
     uow = unit_of_work(status_error=error)
     metrics = RecordingMetrics()
-    run_persistence = dc.replace(persistence(uow), metrics=metrics)
+    run_persistence = GenerationRunPersistence(
+        runtime=dc.replace(persistence_context(uow), metrics=metrics)
+    )
 
     await run_persistence.record_failure(
         RUN_ID,

@@ -7,6 +7,7 @@ import pytest
 
 from episodic.canonical.domain import ReferenceBindingTargetKind
 from episodic.canonical.generation_quality import QualityMode
+from episodic.generation.launcher_claim import GenerationRunClaimer
 from episodic.generation.launcher_support import (
     GenerationSourceLimitError,
     GenerationSourceLimits,
@@ -24,6 +25,7 @@ from tests.generation_run_claim_support import (
     RecordingSourceLoader,
     claimed_run_value,
     claimer,
+    claimer_context,
     clock,
     draft_result,
     source,
@@ -61,10 +63,12 @@ async def test_claim_hydrates_episode_and_sources() -> None:
     limits = GenerationSourceLimits(max_source_count=4)
     loader = RecordingSourceLoader(sources=(source(),))
     metrics = RecordingMetrics()
-    run_claimer = dc.replace(
-        claimer(uow, loader),
-        metrics=metrics,
-        source_limits=limits,
+    run_claimer = GenerationRunClaimer(
+        runtime=dc.replace(
+            claimer_context(uow, loader),
+            metrics=metrics,
+            source_limits=limits,
+        )
     )
 
     claimed = await run_claimer.claim(RUN_ID)
@@ -97,9 +101,11 @@ async def test_claim_rejects_source_bundle_above_the_count_limit() -> None:
         source_document(),
     ])
     loader = RecordingSourceLoader()
-    run_claimer = dc.replace(
-        claimer(uow, loader),
-        source_limits=GenerationSourceLimits(max_source_count=1),
+    run_claimer = GenerationRunClaimer(
+        runtime=dc.replace(
+            claimer_context(uow, loader),
+            source_limits=GenerationSourceLimits(max_source_count=1),
+        )
     )
 
     with pytest.raises(GenerationSourceLimitError, match="count"):
@@ -132,10 +138,12 @@ async def test_generate_records_draft_latency_from_the_monotonic_clock() -> None
     uow = unit_of_work()
     generator = RecordingDraftGenerator(draft_result())
     metrics = RecordingMetrics()
-    run_claimer = dc.replace(
-        claimer(uow, RecordingSourceLoader()),
-        draft_generator=generator,
-        metrics=metrics,
+    run_claimer = GenerationRunClaimer(
+        runtime=dc.replace(
+            claimer_context(uow, RecordingSourceLoader()),
+            draft_generator=generator,
+            metrics=metrics,
+        )
     )
 
     result = await run_claimer.generate(claimed_run_value())

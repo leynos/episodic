@@ -18,7 +18,7 @@ from episodic.generation.draft_script import (
     DraftScriptResult,
     DraftScriptSource,
 )
-from episodic.generation.launcher_claim import GenerationRunClaimer
+from episodic.generation.launcher_claim import ClaimerContext, GenerationRunClaimer
 from episodic.generation.launcher_support import ClaimedRun, GenerationSourceLimits
 from episodic.llm import LLMUsage
 
@@ -320,27 +320,41 @@ class SteppingMonotonicClock:
         return next(self._stamps)
 
 
-def claimer(
+def claimer_context(
     uow: RecordingUnitOfWork,
     loader: RecordingSourceLoader,
-) -> GenerationRunClaimer:
-    """Build a claimer around explicit unit-of-work and source-loader fakes.
+) -> ClaimerContext:
+    """Build a value-backed claimer runtime around explicit fakes.
 
-    Tests that need other collaborators replace the returned dataclass with
+    Tests that need other collaborators replace the returned context with
     ``dataclasses.replace``, so this seam stays small.
 
     Returns
     -------
-    GenerationRunClaimer
-        Claimer wired to the supplied fakes and the deterministic clocks.
+    ClaimerContext
+        Runtime wired to the supplied fakes and the deterministic clocks.
     """
-    return GenerationRunClaimer(
+    return ClaimerContext(
         uow_factory=lambda: typ.cast("CanonicalUnitOfWork", uow),
         draft_generator=RecordingDraftGenerator(draft_result()),
         source_loader=loader,
         clock=clock,
         monotonic_clock=SteppingMonotonicClock(iter((100.0, 100.25))),
     )
+
+
+def claimer(
+    uow: RecordingUnitOfWork,
+    loader: RecordingSourceLoader,
+) -> GenerationRunClaimer:
+    """Build a claimer around explicit unit-of-work and source-loader fakes.
+
+    Returns
+    -------
+    GenerationRunClaimer
+        Claimer wired to the supplied fakes and the deterministic clocks.
+    """
+    return GenerationRunClaimer(runtime=claimer_context(uow, loader))
 
 
 def unit_of_work(

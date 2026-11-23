@@ -2552,25 +2552,26 @@ metrics, and owns draft events, TEI persistence, costs and terminal status.
 Each component is a dataclass with explicit constructor collaborators, so unit
 tests construct it with fakes rather than a launcher. The launcher builds the
 long-lived scheduler in `__post_init__` and, for each run, builds the stateless
-claimer and persistence components from its current fields. It delegates
+claimer and persistence components over live views of its fields. It delegates
 `launch`, `drain`, `shutdown` and `scheduled_run_count` to the scheduler, and
 keeps the claim-generate-persist sequence plus failure classification in
 `_execute_run`.
 
-Per-run composition preserves the late binding the mixins had. Assigning
-`draft_generator`, `metrics`, `tracer`, `source_limits`, `clock` or another
-collaborator after construction still affects the next run. The persistence
-component is built after draft generation, so a cost recorder or provider
-metadata assignment made while generation is blocked applies to that run's
-writes. `source_from_document` is resolved when a run hydrates, so a patch
-applied to `launcher.py` at any point before hydration is observed.
-`BoundedSourceLoader` implements the `GenerationSourceLoader` seam and applies
-the source count and byte limits. The scheduler reads its metrics, tracer and
-admission limits through a live view, so replacing them does not discard its
-task or cancellation state; as before, a changed `max_concurrency` affects
-admission but does not resize the semaphore created at construction. Replacing
-the mixins with injected scheduling, claim and persistence components was
-tracked in [#350](https://github.com/leynos/episodic/issues/350).
+Each component reads its collaborators through a narrow live view supplied by
+the launcher (`_LauncherClaimerRuntime`, `_LauncherPersistenceRuntime` and
+`_LauncherSchedulerRuntime`), and reads each one at the stage that uses it.
+That preserves the base's use-time behaviour: assigning `draft_generator`,
+`source_limits`, `metrics`, `tracer`, `cost_recorder_factory`, `clock` or
+another collaborator while a run is at any stage affects the later reads in
+that run, not only the next run. `source_from_document` is resolved when a run
+hydrates, so a patch applied to `launcher.py` at any point before hydration is
+observed. `BoundedSourceLoader` implements the `GenerationSourceLoader` seam
+and applies the source count and byte limits. The scheduler keeps its task
+registry and cancellation bookkeeping across view changes, and a changed
+`max_concurrency` affects admission but does not resize the semaphore created
+at construction, as before. Replacing the mixins with injected scheduling,
+claim and persistence components was tracked in
+[#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they
