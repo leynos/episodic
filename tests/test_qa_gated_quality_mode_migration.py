@@ -36,7 +36,7 @@ if typ.TYPE_CHECKING:
     )
 
 _PREVIOUS_REVISION = "20261110_000017"
-_NEW_REVISION = "20261122_000018"
+_HEAD_REVISION = "20261123_000019"
 
 
 def _migrate(
@@ -102,7 +102,7 @@ async def test_upgrade_adds_labels_and_accepts_qa_gated_rows(
         await connection.run_sync(_migrate, "downgrade", _PREVIOUS_REVISION)
     # A separate transaction commits the ADD VALUE before any row uses it.
     async with migrated_engine.begin() as connection:
-        await connection.run_sync(_migrate, "upgrade", _NEW_REVISION)
+        await connection.run_sync(_migrate, "upgrade", _HEAD_REVISION)
     async with migrated_engine.connect() as connection:
         await _assert_label_parity(connection)
 
@@ -151,7 +151,7 @@ async def test_downgrade_refuses_while_new_labels_are_in_use(
         with pytest.raises(CommandError, match="Cannot downgrade"):
             async with connection.begin_nested():
                 await connection.run_sync(_migrate, "downgrade", _PREVIOUS_REVISION)
-        assert await connection.scalar(revision_statement) == _NEW_REVISION, (
+        assert await connection.scalar(revision_statement) == _HEAD_REVISION, (
             "a refused downgrade must not move the Alembic revision"
         )
     async with migrated_engine.connect() as connection:

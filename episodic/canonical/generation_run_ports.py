@@ -60,13 +60,10 @@ class GenerationRunStatusUpdate:
     error_message : str | None
         Failure detail. An omitted value clears the persisted field.
     error_category : str | None
-        Stable failure classification. An omitted value clears the persisted
-        field.
+        Stable failure classification; an omitted value clears the field.
     qa_status : QaStatus | Unchanged
-        QA status to record. It defaults to :data:`UNCHANGED`, which keeps the
-        persisted value. This deliberately contrasts with the error fields,
-        where an omitted value clears the field: a failure write must not
-        silently erase a QA outcome that is still being decided.
+        QA status to record; :data:`UNCHANGED` keeps the persisted value. A
+        failure write must not silently erase a QA outcome still being decided.
     """
 
     status: GenerationRunStatus
@@ -162,16 +159,20 @@ class GenerationRunRepository(typ.Protocol):
         raise NotImplementedError
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def claim_run_for_execution(
+    async def claim_run_for_execution(  # ruff: ignore[too-many-arguments]  # Port contract.
         self,
         run_id: uuid.UUID,
         *,
         current_node: str | None,
         started_at: dt.datetime,
         lease_expires_at: dt.datetime | None,
+        claim_token: uuid.UUID | None = None,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
         raise NotImplementedError
+
+    async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the owning claim's token, if any."""
 
 
 @typ.runtime_checkable

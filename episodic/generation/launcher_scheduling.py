@@ -126,9 +126,11 @@ class _SchedulingMixin(_MixinBase):
         event; naming the shielded write keeps the single-writer invariant
         true for this path too.
         """
-        if run_id in self._cancelled_run_ids or run_id in (
-            self._pending_cancellation_ids
-        ):
+        if run_id in self._cancelled_run_ids:
+            return
+        if claim.token is None and run_id in self._pending_cancellation_ids:
+            # A tokenless duplicate must not suppress the owner: only the
+            # claimant can make the terminal write authoritative.
             return
         self._pending_cancellation_ids.add(run_id)
         write = asyncio.create_task(

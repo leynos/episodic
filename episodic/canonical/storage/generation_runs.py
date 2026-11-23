@@ -212,13 +212,15 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         )
         return run_from_record(record)
 
-    async def claim_run_for_execution(
+    # pylint: disable-next=too-many-arguments  # Port contract.
+    async def claim_run_for_execution(  # ruff: ignore[too-many-arguments]  # Port contract.
         self,
         run_id: uuid.UUID,
         *,
         current_node: str | None,
         started_at: dt.datetime,
         lease_expires_at: dt.datetime | None,
+        claim_token: uuid.UUID | None = None,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
         now = self._runtime.clock()
@@ -234,6 +236,7 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
                 current_node=current_node,
                 started_at=started_at,
                 lease_expires_at=lease_expires_at,
+                claim_token=claim_token,
                 updated_at=now,
             )
         )
@@ -276,6 +279,11 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
             status=record.status.value,
         )
         return None
+
+    async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the token of the claim that owns a run, if any."""
+        record = await self._get_record(run_id)
+        return None if record is None else record.claim_token
 
     async def append_event(
         self,

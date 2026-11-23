@@ -69,6 +69,10 @@ class GenerationRunRecord(Base):
         QA_STATUS,
         nullable=True,
     )
+    claim_token: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        nullable=True,
+    )
     skip_qa_rationale: orm.Mapped[str | None] = orm.mapped_column(
         sa.Text,
         nullable=True,

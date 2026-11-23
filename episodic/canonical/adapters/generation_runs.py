@@ -63,6 +63,7 @@ class InMemoryGenerationRunStore(
         default_factory=dict
     )
     _lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
+    _claim_tokens: dict[uuid.UUID, uuid.UUID] = dc.field(default_factory=dict)
 
     def _require_mutable_run(
         self,
@@ -238,13 +239,14 @@ class InMemoryGenerationRunStore(
             return updated
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def claim_run_for_execution(
+    async def claim_run_for_execution(  # ruff: ignore[too-many-arguments]  # Port contract.
         self,
         run_id: uuid.UUID,
         *,
         current_node: str | None,
         started_at: dt.datetime,
         lease_expires_at: dt.datetime | None,
+        claim_token: uuid.UUID | None = None,
     ) -> GenerationRun | None:
         """Atomically claim a pending run for execution.
 
@@ -288,6 +290,8 @@ class InMemoryGenerationRunStore(
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated
+            if claim_token is not None:
+                self._claim_tokens[run_id] = claim_token
             _log_event(
                 "info",
                 "generation_run_store.claim_run",
@@ -298,6 +302,11 @@ class InMemoryGenerationRunStore(
                 else None,
             )
             return updated
+
+    async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the token of the claim that owns a run, if any."""
+        async with self._lock:
+            return self._claim_tokens.get(run_id)
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def append_event(

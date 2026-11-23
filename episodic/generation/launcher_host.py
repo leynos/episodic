@@ -134,6 +134,7 @@ class LauncherHost(typ.Protocol):
         self,
         uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
+        claim: RunClaim,
     ) -> ClaimToken | None:
         """Claim a still-pending run so only its owner can fail it."""
         ...

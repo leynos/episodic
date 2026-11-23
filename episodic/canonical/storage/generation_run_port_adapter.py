@@ -109,13 +109,15 @@ class SqlAlchemyGenerationRunPortAdapter:
         return await self._runs.update_run_status(run_id, update=update)
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def claim_run_for_execution(
+    # pylint: disable-next=too-many-arguments  # Port contract.
+    async def claim_run_for_execution(  # ruff: ignore[too-many-arguments]  # Port contract.
         self,
         run_id: uuid.UUID,
         *,
         current_node: str | None,
         started_at: dt.datetime,
         lease_expires_at: dt.datetime | None,
+        claim_token: uuid.UUID | None = None,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
         return await self._runs.claim_run_for_execution(
@@ -123,7 +125,12 @@ class SqlAlchemyGenerationRunPortAdapter:
             current_node=current_node,
             started_at=started_at,
             lease_expires_at=lease_expires_at,
+            claim_token=claim_token,
         )
+
+    async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the token of the claim that owns a run, if any."""
+        return await self._runs.claim_token_for(run_id)
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def append_event(

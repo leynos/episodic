@@ -2540,19 +2540,25 @@ serves the persisted episode TEI as JSON by default or raw
 `application/tei+xml` with content negotiation.
 
 `InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is one
-dataclass composed from three mixins: `launcher_scheduling.py` owns bounded
-task admission, draining and cancellation and executes each run through the
-injected content-generation graph; `launcher_claim.py` hydrates a claimed run
-and generates drafts; and `launcher_persistence.py` records events, TEI, costs
-and terminal status. `launcher_session.py` implements the graph's step port for
-one run, and `launcher_quality.py` owns the QA event payload and metric
-helpers. The mixins read the launcher's fields through `self`, so
-`launcher_host.py` declares that shared surface as the `LauncherHost` protocol.
-The mixins inherit from it only while type checking; at runtime their base is
-`object`, and the launcher's MRO and slots are unchanged. Construct the
-launcher, never a mixin on its own. `_load_sources` stays on the launcher
-because tests patch `source_from_document` in `launcher.py`. Replacing the
-mixins with injected scheduling, claim and persistence components is tracked in
+dataclass composed from four mixins: `launcher_scheduling.py` owns bounded task
+admission, draining and cancellation and executes each run through the injected
+content-generation graph; `launcher_claim.py` claims and hydrates a run and
+generates drafts; `launcher_persistence.py` owns success persistence, success
+transitions and cost recording; and `launcher_failure.py`
+(`_FailurePersistenceMixin`) owns failure persistence. The failure mixin
+obtains authority from a claim token, a reconciled claim or a
+pending-to-running claim, writes the failure with its escalation and
+invalid-TEI events, records the supplied draft's costs, and emits the terminal
+metric and log only after the transaction commits. `launcher_session.py`
+implements the graph's step port for one run through a `SessionPorts` adapter,
+and `launcher_quality.py` owns the QA event payload and metric helpers. The
+mixins read the launcher's fields through `self`, so `launcher_host.py`
+declares that shared surface as the `LauncherHost` protocol. The mixins inherit
+from it only while type checking; at runtime their base is `object`, and the
+launcher's MRO and slots are unchanged. Construct the launcher, never a mixin
+on its own. `_load_sources` stays on the launcher because tests patch
+`source_from_document` in `launcher.py`. Replacing the mixins with injected
+scheduling, claim and persistence components is tracked in
 [#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
@@ -2758,14 +2764,18 @@ retried requests touch it. Each is enforced in code and pinned by tests.
 
 - **Who may write a terminal state.** `RunClaim` carries a frozen
   `ClaimToken` per launcher task, set when that invocation wins the
-  pending-to-running claim. On the success path the claim is recorded
-  immediately after `commit()` inside the claim's unit of work, so a failure
-  while that session closes cannot lose a durable claim. On the failure and
-  cancellation paths, an invocation that has not claimed may write only by
-  winning the same compare-and-set; a refused write records no event, no
-  metric, and reports `not_claimed`. A cancelled failure transaction rolls the
-  flag back with it. A task name is not authority: two invocations for one run
-  id share `generation-run-{run_id}`.
+  pending-to-running claim. The claim also records a unique proof, persisted as
+  `generation_runs.claim_token`, so a lost commit acknowledgement is reconciled
+  against an exact attempt rather than a shared timestamp.
+  `launcher_failure.py` is the only owner of failure persistence; see its
+  boundary note above. On the success path the claim is recorded immediately
+  after `commit()` inside the claim's unit of work, so a failure while that
+  session closes cannot lose a durable claim. On the failure and cancellation
+  paths, an invocation that has not claimed may write only by winning the same
+  compare-and-set; a refused write records no event, no metric, and reports
+  `not_claimed`. A cancelled failure transaction rolls the flag back with it. A
+  task name is not authority: two invocations for one run id share
+  `generation-run-{run_id}`.
 - **Status updates.** Both adapters resolve a `GenerationRunStatusUpdate`
   through `apply_status_update`, which revalidates the immutable run with
   `dataclasses.replace` and rejects a violation with `ValueError`. The

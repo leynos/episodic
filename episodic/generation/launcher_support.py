@@ -25,6 +25,7 @@ module re-exports their public names to preserve the original import path.
 import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
+import uuid
 
 from episodic.canonical.episode_errors import EpisodeNotFoundError
 from episodic.generation.draft_script import (
@@ -51,7 +52,6 @@ from episodic.runtime_providers import Clock
 
 if typ.TYPE_CHECKING:
     import datetime as dt
-    import uuid
 
     from episodic.canonical.domain import CanonicalEpisode, GenerationRun
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
@@ -132,14 +132,15 @@ class ClaimToken:
 class RunClaim:
     """The claim token one launcher invocation holds for the run it drives.
 
-    ``token`` is ``None`` until this invocation wins the claim. ``started_at``
-    records the timestamp used in the compare-and-set, so a cancellation that
-    interrupts the commit acknowledgement can be reconciled against the
-    durable row instead of guessing.
+    ``token`` is ``None`` until this invocation wins the claim. ``proof`` is a
+    unique per-attempt value stored with the claim, so a cancellation that
+    interrupts the commit acknowledgement is reconciled against an exact
+    proof rather than a timestamp that another attempt could share.
     """
 
     token: ClaimToken | None = None
     started_at: dt.datetime | None = None
+    proof: uuid.UUID = dc.field(default_factory=uuid.uuid4)
 
 
 @dc.dataclass(frozen=True, slots=True)

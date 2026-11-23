@@ -16,7 +16,6 @@ import asyncio
 import datetime as dt
 import typing as typ
 
-from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
@@ -99,6 +98,7 @@ class _ClaimMixin(_MixinBase):
         self,
         uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
+        claim: RunClaim,
     ) -> ClaimToken | None:
         """Claim a still-pending run so only its owner can fail it.
 
@@ -118,6 +118,7 @@ class _ClaimMixin(_MixinBase):
             current_node=None,
             started_at=self.clock(),
             lease_expires_at=None,
+            claim_token=claim.proof,
         )
         return None if run is None else ClaimToken(run_id)
 
@@ -152,6 +153,7 @@ class _ClaimMixin(_MixinBase):
                 current_node="draft",
                 started_at=started_at,
                 lease_expires_at=started_at + dt.timedelta(seconds=self.lease_seconds),
+                claim_token=claim.proof,
             )
             if run is None:
                 await uow.rollback()
@@ -182,35 +184,22 @@ class _ClaimMixin(_MixinBase):
         Returns
         -------
         ClaimToken | None
-            The token when the stored run carries this attempt's claim.
+            The token when the stored claim carries this attempt's unique
+            proof, or ``None`` when another attempt owns the run.
 
         Notes
         -----
         Runs under a shield from the cancellation path, so it returns rather
         than raising when the outer task is cancelled again.
         """
-        if claim.token is not None or claim.started_at is None:
+        if claim.token is not None:
             return claim.token
         async with self.uow_factory() as uow:
-            run = await uow.generation_runs.get_run(run_id)
-        reacquired = (
-            None if run is None else self._adopt_if_owned(run, run_id, claim.started_at)
-        )
-        if reacquired is not None:
-            claim.token = reacquired
-        return reacquired
-
-    @staticmethod
-    def _adopt_if_owned(
-        run: GenerationRun,
-        run_id: uuid.UUID,
-        started_at: dt.datetime,
-    ) -> ClaimToken | None:
-        """Return a token when the stored run is this attempt's claim."""
-        owned = run.status is GenerationRunStatus.RUNNING and (
-            run.started_at == started_at
-        )
-        return ClaimToken(run_id) if owned else None
+            stored = await uow.generation_runs.claim_token_for(run_id)
+        if stored != claim.proof:
+            return None
+        claim.token = ClaimToken(run_id)
+        return claim.token
 
     async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:
         """Generate one draft and record latency metrics."""

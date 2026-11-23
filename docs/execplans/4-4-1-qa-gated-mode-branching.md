@@ -778,6 +778,20 @@ accepted in EP-M6. D13 records the review itself.
     releases the key and a stored 202 still replays after the capability is
     withdrawn.
   - Date/Author: 2026-11-22, implementation agent.
+- **Decision D23: authorize and reconcile claims with a unique proof.**
+  - The pending-to-running claim stores a per-attempt UUID in the nullable
+    `generation_runs.claim_token` column (revision `20261123_000019`). A
+    cancelled commit acknowledgement is reconciled by comparing that exact
+    proof, not the start timestamp, because a frozen test clock or a
+    microsecond collision can make timestamps equal.
+  - The failure authority claims and writes inside one transaction: a separate
+    claim transaction would release the run before the failure lands. If the
+    claim already exists it is reconciled first, so a second cancellation
+    during shielded reconciliation still adopts the durable claim.
+  - A tokenless duplicate cancellation may not suppress the claim holder's
+    write; only `_cancelled_run_ids` (recorded writes) deduplicates
+    unconditionally.
+  - Date/Author: 2026-11-23, implementation agent.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it
     `generation-run-{run_id}`, and on cancellation cancels and drains it and
@@ -2024,12 +2038,13 @@ Record the following here as each milestone completes:
   `test_cancellation_at_claim_exit_still_ records_the_failure` now covers.
 - Evidence for this milestone set at `eac73e3b`: `make check-fmt`,
   `make typecheck`, `make lint` (Hecate, Ruff, Pylint, df12, interrogate,
-  ambrleaks, Skylos, df12-duplication), `make test` (2448 passed, 1 skipped, 82
-  snapshots), `make check-migrations`, `make markdownlint` and `make nixie` all
-  pass at the final head. The INV-8 comparison is `git diff --stat` over the
-  characterization snapshot and `tests/features/no_qa_generation_slice.feature`
-  since `d6876cba`: the feature file is unchanged, and the snapshot differs
-  only by the two D9 span attributes plus the D15 record.
+  ambrleaks, Skylos, df12-duplication), `make test` (2,509 passed, 1 skipped,
+  82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`
+  all pass at the final head. The INV-8 comparison is `git diff --stat` over
+  the characterization snapshot and
+  `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
+  file is unchanged, and the snapshot differs only by the two D9 span
+  attributes plus the D15 record.
 
 ### Milestone evidence record
 
@@ -2118,7 +2133,7 @@ Reproducible non-vacuity evidence, measured on this tree:
   - the ten-cell INV-9 matrix, where each cell has its own terminal,
     category, QA status, cost and metric expectations.
 - Coverage counters: `make lint`'s interrogate stage reports 100% docstring
-  coverage over 7,364 definitions; pytest reports 2,448 passed, 1 skipped and
+  coverage over 7,530 definitions; pytest reports 2,509 passed, 1 skipped and
   82 snapshots at `eac73e3b`, and the matrix and ownership suites add
   twenty-two cases at the current head.
 - INV-8:

@@ -123,7 +123,7 @@ class _FailurePersistenceMixin(_MixinBase):
         if reconciled is not None:
             return reconciled
         try:
-            token = await self._claim_for_failure(uow, run_id)
+            token = await self._claim_for_failure(uow, run_id, claim)
         except RunAlreadyTerminal, RunNotFound:
             # The run is gone or already terminal: not this invocation's to
             # fail, and not an error in the failure path.
