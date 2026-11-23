@@ -220,7 +220,7 @@ Rejected, as described above.
   `episodic/qa/` would invert the dependency direction.
 - Readers must handle `qa_artefact_schema_unsupported`; a newer writer is a
   deployment-ordering fact, not a parse error to swallow.
-- This record discharges the open item in [ADR 001: Pedante evaluator
+- This record discharges the open item in [ADR 0030: Pedante evaluator
   contract](adr-0030-pedante-evaluator-contract.md), which asks for a follow-on
   record of the versioning and compatibility guarantees that apply once
   evaluator results are persisted or exposed through an API. The two version

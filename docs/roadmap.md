@@ -340,11 +340,11 @@ enables real-time visibility into generation progress.
   - Enforce idempotency-key support for run creation.
   - Validate hexagonal boundary tests passing.
   - See [Generation runs](episodic-tui-api-design.md#generation-runs).
-- [ ] 2.6.4. Renumber the three ADR 015 documents and index the ADR set.
+- [x] 2.6.4. Renumber the three ADR 015 documents and index the ADR set.
   - `adr-0032-cost-accounting-ports-and-pricing-engine.md`,
     `adr-0031-generation-run-port-split.md`, and
-    `adr-0015-upload-and-idempotency-ports.md` share one number; two of them are
-    absent from `docs/contents.md`.
+    `adr-0015-upload-and-idempotency-ports.md` now carry distinct numbers and
+    all appear in `docs/contents.md`.
   - Renumbering is docs-only and touches no runtime behaviour.
 - [ ] 2.6.5. Schedule generation-run lease reclamation and stuck-run detection.
   - `GenerationRunPort.fail_expired_leases` exists but nothing calls it on a

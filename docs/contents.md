@@ -107,6 +107,8 @@ or delivery planning.
   - import-boundary enforcement model.
 - [ADR 015: Upload and idempotency ports](adrs/adr-0015-upload-and-idempotency-ports.md)
   - source-intake upload storage and idempotency port decisions.
+- [ADR 0031: Generation-run port split](adrs/adr-0031-generation-run-port-split.md)
+  - generation-run port split decision.
 - [ADR 0032: Cost accounting ports and pricing engine](adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md)
   - cost-accounting port family, canonical usage metrics, snapshot pinning, and
     deterministic pricing rules.
