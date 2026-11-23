@@ -221,17 +221,35 @@ async def test_creation_never_drops_a_pre_existing_database() -> None:
 
 @pytest.mark.asyncio
 async def test_concurrent_invocations_keep_separate_databases() -> None:
-    """Two invocations at once own distinct databases until their teardown."""
+    """One invocation's teardown leaves the sibling's database intact."""
     dsn = require_dsn()
+    both_entered = asyncio.Barrier(2)
+    release_first = asyncio.Event()
+    first_finished = asyncio.Event()
 
-    async def invocation() -> str:
-        """Create, migrate and drop one database, returning its name."""
+    async def first_invocation() -> str:
+        """Enter, wait for the sibling, then leave and drop its database."""
         async with isolated_database(dsn) as (name, _factory):
-            await asyncio.sleep(0.1)
-            assert await database_exists(dsn, name) is True, name
+            async with asyncio.timeout(10):
+                await both_entered.wait()
+            await release_first.wait()
+        first_finished.set()
+        return name
+
+    async def second_invocation() -> str:
+        """Assert its database survives the sibling's teardown."""
+        async with isolated_database(dsn) as (name, _factory):
+            async with asyncio.timeout(10):
+                await both_entered.wait()
+            release_first.set()
+            async with asyncio.timeout(10):
+                await first_finished.wait()
+            assert await database_exists(dsn, name) is True, (
+                "the sibling's teardown must not drop this database"
+            )
             return name
 
-    first, second = await asyncio.gather(invocation(), invocation())
+    first, second = await asyncio.gather(first_invocation(), second_invocation())
     assert first != second, (first, second)
     assert await database_exists(dsn, first) is False, first
     assert await database_exists(dsn, second) is False, second
