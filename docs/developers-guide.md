@@ -2540,7 +2540,7 @@ serves the persisted episode TEI as JSON by default or raw
 `application/tei+xml` with content negotiation.
 
 `InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is the
-orchestration boundary over three purpose-shaped components.
+orchestration boundary over four purpose-shaped components.
 `GenerationRunScheduler` (`launcher_scheduling.py`) owns the task set,
 admission limits, execution semaphore, cancellation bookkeeping, and the
 pending-depth and admission metrics. `GenerationRunClaimer`
@@ -2548,31 +2548,40 @@ pending-depth and admission metrics. `GenerationRunClaimer`
 limits, clock, draft generator, and metrics, and owns claim, hydration and
 draft generation. `GenerationRunPersistence` (`launcher_persistence.py`) takes
 the unit-of-work factory, clock, cost-recorder factory, provider metadata and
-metrics, and owns draft events, TEI persistence, costs and terminal status.
-Each component is a dataclass with explicit constructor collaborators, so unit
-tests construct it with fakes rather than a launcher. The launcher builds the
-long-lived scheduler in `__post_init__` and, for each run, builds the stateless
-claimer and persistence components over live views of its fields. It delegates
-`launch`, `drain`, `shutdown` and `scheduled_run_count` to the scheduler, and
-keeps the claim-generate-persist sequence plus failure classification in
-`_execute_run`.
+metrics, and owns draft events, TEI persistence, costs and successful terminal
+status. `GenerationRunFailurePersistence` (`launcher_failure.py`) owns failed
+terminal writes: it obtains authority from a claim token, a reconciled claim or
+a pending-to-running claim inside the same transaction as the write, appends
+the failure events including an escalation's `qa.result` and `qa.escalated`,
+records the supplied draft's costs, and emits the terminal metric and log only
+after the commit. Each component is a dataclass with explicit constructor
+collaborators, so unit tests construct it with fakes rather than a launcher.
+The launcher builds the long-lived scheduler in `__post_init__` and, for each
+run, builds the stateless claimer and persistence components over live views of
+its fields. It delegates `launch`, `drain`, `shutdown` and
+`scheduled_run_count` to the scheduler, and keeps the graph invocation plus
+failure classification in `_execute_run`: it reads the run's quality mode, runs
+the content-generation graph with a `_LauncherRunSession` step port, and
+reports the branch and terminal on the execution span. The runtime views live in
+`launcher_runtime_views.py`.
 
 Each component reads its collaborators through a narrow live view supplied by
-the launcher (`_LauncherClaimerRuntime`, `_LauncherPersistenceRuntime`,
-`_LauncherSourceLoadRuntime` and `_LauncherSchedulerRuntime`), and reads each
-one at the stage that uses it. That preserves the base's use-time behaviour:
-assigning `draft_generator`, `source_limits`, `metrics`, `tracer`,
-`cost_recorder_factory`, `clock` or another collaborator while a run is at any
-stage affects the later reads in that run, not only the next run.
-`source_from_document` is resolved when a run hydrates, so a patch applied to
-`launcher.py` at any point before hydration is observed. `BoundedSourceLoader`
-implements the `GenerationSourceLoader` seam and reads the object store and
-limits for each document it loads, so a change made while one document is
-loading applies to the next. The scheduler keeps its task registry and
-cancellation bookkeeping across view changes, and a changed `max_concurrency`
-affects admission but does not resize the semaphore created at construction, as
-before. Replacing the mixins with injected scheduling, claim and persistence
-components was tracked in [#350](https://github.com/leynos/episodic/issues/350).
+`episodic/generation/launcher_runtime_views.py` (`_LauncherClaimerRuntime`,
+`_LauncherPersistenceRuntime`, `_LauncherSourceLoadRuntime` and
+`_LauncherSchedulerRuntime`), and reads each one at the stage that uses it.
+That preserves the base's use-time behaviour: assigning `draft_generator`,
+`source_limits`, `metrics`, `tracer`, `cost_recorder_factory`, `clock` or
+another collaborator while a run is at any stage affects the later reads in
+that run, not only the next run. `source_from_document` is resolved when a run
+hydrates, so a patch applied to `launcher.py` at any point before hydration is
+observed. `BoundedSourceLoader` implements the `GenerationSourceLoader` seam
+and reads the object store and limits for each document it loads, so a change
+made while one document is loading applies to the next. The scheduler keeps its
+task registry and cancellation bookkeeping across view changes, and a changed
+`max_concurrency` affects admission but does not resize the semaphore created
+at construction, as before. Replacing the mixins with injected scheduling,
+claim and persistence components was tracked in
+[#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they
