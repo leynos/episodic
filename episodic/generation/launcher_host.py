@@ -141,17 +141,6 @@ class LauncherHost(typ.Protocol):
         """Record a terminal failed run state when this invocation owns it."""
         ...
 
-    async def _record_owned_failure(
-        self,
-        run_id: uuid.UUID,
-        failure: Failure,
-        *,
-        token: ClaimToken,
-        draft: DraftScriptResult | None = None,
-    ) -> FailureWriteResult:
-        """Record a terminal failure for an explicit token holder."""
-        ...
-
     async def _record_costs(
         self,
         uow: CanonicalUnitOfWork,

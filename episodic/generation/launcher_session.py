@@ -100,17 +100,6 @@ class SessionPorts(typ.Protocol):
         """Record a terminal failure when this invocation owns the run."""
         ...
 
-    async def _record_owned_failure(
-        self,
-        run_id: uuid.UUID,
-        failure: Failure,
-        *,
-        token: ClaimToken,
-        draft: DraftScriptResult | None = None,
-    ) -> FailureWriteResult:
-        """Record a terminal failure for an explicit token holder."""
-        ...
-
 
 class SessionPortsAdapter:
     """Expose only the launcher operations a run session needs.
@@ -169,22 +158,6 @@ class SessionPortsAdapter:
             run_id,
             failure,
             claim=claim,
-            draft=draft,
-        )
-
-    async def _record_owned_failure(
-        self,
-        run_id: uuid.UUID,
-        failure: Failure,
-        *,
-        token: ClaimToken,
-        draft: DraftScriptResult | None = None,
-    ) -> FailureWriteResult:
-        """Record a terminal failure for an explicit token holder."""
-        return await self._host._record_owned_failure(
-            run_id,
-            failure,
-            token=token,
             draft=draft,
         )
 
@@ -319,17 +292,17 @@ class _LauncherRunSession:
         draft = self._require_draft()
         record_qa_metrics(self.launcher.metrics, verdict, evaluations)
         token = self._require_token()
-        result = await self.launcher._record_owned_failure(
+        self.claim.token = token
+        await self.launcher._record_failure(
             self.run_id,
             Failure.escalation_failure(
                 verdict=verdict,
                 evaluations=evaluations,
                 content_hash=draft.content_hash,
             ),
-            token=token,
+            self.claim,
             draft=draft,
         )
-        _ = result
 
     def _require_token(self) -> ClaimToken:
         """Return this session's claim token, or fail loudly without one."""
