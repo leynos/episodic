@@ -379,7 +379,7 @@ enables real-time visibility into generation progress.
     index-tuple reads per 20-event page.
 - [ ] 2.6.10. Retire the unreachable `StaleEventSequence`.
   - Declared, never raised, never imported, and unreachable given that the
-    adapter owns sequence allocation under ADR-015.
+    adapter owns sequence allocation under ADR-0031.
   - Deleting it touches a frozen module, so it is deferred rather than dropped.
 
 ### 2.7. Script projection and editing

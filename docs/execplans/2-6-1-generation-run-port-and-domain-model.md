@@ -310,7 +310,7 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   with zero findings after the PEP 695 alias and dataclass-state fixes.
 - 2026-06-14 15:20 Europe/Berlin: Rebasing onto `origin/main` stopped on a
   `docs/developers-guide.md` ADR-list conflict. Resolution kept both branch
-  ADR-015 (`generation-run-port-split`) and main ADR-015
+  ADR-0031 (`generation-run-port-split`) and main ADR-015
   (`upload-and-idempotency-ports`) links because both files exist and document
   distinct decisions. The first post-rebase `make test` then exposed a Hecate
   configuration merge issue: the five architecture groups had collapsed into
