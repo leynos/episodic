@@ -775,13 +775,16 @@ accepted in EP-M6. D13 records the review itself.
     the next launcher's compare-and-set picks it up, subject to any stalled
     transaction holding its row lock (D24).
   - Date/Author: 2026-11-22, implementation agent.
-- **D19 scope note: the claim token is launcher-enforced, not store-enforced.**
-  - `update_run_status` takes no token. Its row lock and terminal checks
-    protect concurrent writers, and the atomic pending-to-running claim is
-    the store-level guard; the token names the launcher invocation that may
-    write, which routes and audits ownership rather than fencing the store
-    itself. `launcher_failure`'s docstrings state that boundary explicitly
-    instead of implying the repository compares the token.
+- **D19 scope note: the claim token is decided by the launcher and enforced by
+  the store.**
+  - Originally `update_run_status` took no token: the row lock and terminal
+    checks protected concurrent writers, and the atomic pending-to-running
+    claim was the only store-level guard. That historical position was
+    superseded by the terminal-claim gate recorded under Residual gaps: every
+    terminal write now names its claim proof, and both adapters compare it
+    under the row lock, raising `RunClaimMismatch` for an absent or different
+    token. A run with no stored claim has no owner to check, so an internal
+    path (a launch failure, or reclamation) may still terminate it.
   - A cached token names exactly one run: `_failure_authority` refuses a
     token whose `run_id` differs from the run being failed. That rejects a
     *different* run's token; a token naming the same run is trusted without

@@ -321,10 +321,11 @@ class GenerationRunClaimer:
             claim.token = token
         return ClaimedRunResult(run=run, token=token)
 
-    # The cancelled-commit path above is the only place this component writes
-    # the caller's claim. The returned ClaimedRunResult is the normal channel,
-    # and claim() copies the token onto the caller-supplied claim so a failure
-    # write has it.
+    # Two paths write the caller's claim. The cancelled-commit path above must
+    # do so in place: cancellation cannot return a value, so the claim is the
+    # only way to carry authority out of the call. `claim()` also copies the
+    # returned token onto the caller-supplied claim, so a later failure write
+    # on the same claim already holds authority instead of reconciling.
 
     async def claim_for_failure(
         self,
