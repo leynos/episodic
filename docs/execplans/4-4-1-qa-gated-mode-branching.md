@@ -757,9 +757,11 @@ accepted in EP-M6. D13 records the review itself.
     including a pre-claim read fault or a shutdown before its claim. Tests:
     `tests/test_generation_run_launcher_quality_ownership.py`.
   - Cost: a run abandoned by its claimant before the first claim transition
-    stays pending until lease reclamation, rather than being failed by an
-    uninvolved launcher. That is the correct trade: the alternative overwrites
-    a live writer.
+    stays pending, rather than being failed by an uninvolved launcher. That is
+    the correct trade: the alternative overwrites a live writer. Such a run is
+    not covered by lease reclamation, which selects expired *running* runs;
+    the next launcher's compare-and-set picks it up, subject to any stalled
+    transaction holding its row lock (D24).
   - Date/Author: 2026-11-22, implementation agent.
 - **D19 scope note: the claim token is launcher-enforced, not store-enforced.**
   - `update_run_status` takes no token. Its row lock and terminal checks
@@ -769,9 +771,11 @@ accepted in EP-M6. D13 records the review itself.
     itself. `launcher_failure`'s docstrings state that boundary explicitly
     instead of implying the repository compares the token.
   - A cached token names exactly one run: `_failure_authority` refuses a
-    token whose `run_id` differs from the run being failed, so a caller
-    cannot fail a run it never claimed. The store's row lock does not check
-    ownership, so this guard belongs at the launcher boundary.
+    token whose `run_id` differs from the run being failed. That rejects a
+    *different* run's token; a token naming the same run is trusted without
+    comparing its stored proof, because the launcher set it only after the
+    claim committed. The store's row lock does not check ownership, so this
+    guard belongs at the launcher boundary.
   - A store-level token gate on every terminal write (success, failure,
     cancellation, reclamation) would be a separate change: it needs a token
     parameter on the terminal command, comparison inside the locked
