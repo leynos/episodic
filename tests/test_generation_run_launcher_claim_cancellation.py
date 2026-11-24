@@ -236,7 +236,7 @@ async def test_stalled_reconciliation_is_bounded(
             options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
         ),
         uow_factory=lambda: CommitFaultUnitOfWork(session_factory, fault),
-        cancellation_write_timeout_seconds=0.2,
+        reconcile_timeout_seconds=0.2,
     )
     claimer = run_launcher._components()[0]
     entered = asyncio.Event()
@@ -277,6 +277,9 @@ async def test_a_timed_out_cancellation_leaves_the_run_claimable(
         ),
         cancellation_write_timeout_seconds=0.2,
     )
+    assert run_launcher.reconcile_timeout_seconds != (
+        run_launcher.cancellation_write_timeout_seconds
+    ), "the two deadlines must be independent settings"
     stalled = asyncio.Event()
 
     async def never_writes(run_id: uuid.UUID, claim: RunClaim) -> bool:

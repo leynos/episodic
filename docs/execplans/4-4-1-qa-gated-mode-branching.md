@@ -866,9 +866,10 @@ accepted in EP-M6. D13 records the review itself.
     unit of work, so a failure write runs no nested unit of work and no hidden
     I/O inside its own open transaction. The proof rule applies to the
     tokenless path: an attempt with no token writes only when the stored proof
-    matches. An attempt that already holds a token for this run is trusted
-    without re-reading the proof, because the launcher set that token only
-    after the claim committed (D19's scope note).
+    matches, and if it matches nothing it may still claim the pending run in
+    this same transaction before writing. An attempt that already holds a
+    token for this run is trusted without re-reading the proof, because the
+    launcher set that token only after the claim committed (D19's scope note).
   - `_LauncherRunSession` records QA outcome metrics after
     `persist_success` commits and after `record_failure` reports a written
     escalation, so a refused or failed write emits no QA verdict metrics.
@@ -882,10 +883,12 @@ accepted in EP-M6. D13 records the review itself.
     which also means an unresponsive database call could hold `shutdown()`
     open forever. During shutdown, `drain()`, `record_cancellation_owned` and
     the claim cancellation path (`_claim_and_start`'s shielded reconciliation)
-    wait at most `cancellation_write_timeout_seconds` (default 10 seconds,
-    injected through the scheduler runtime view; the claimer reads it as
-    `reconcile_timeout_seconds`). A normal `drain()` stays unbounded so its
-    documented contract holds.
+    wait at most their own deadlines: the scheduler uses
+    `cancellation_write_timeout_seconds`, and the claimer uses
+    `reconcile_timeout_seconds`. Both default to 10 seconds and are
+    independent settings, so tightening one never changes the other. A normal
+    `drain()` stays unbounded, looping until its task registry is empty, so a
+    run admitted while it waits is still awaited.
   - An unverified claim is never adopted: a reconciliation that misses the
     deadline leaves `claim.token` unset, so the run is not failed by an
     invocation whose ownership the database did not confirm.
@@ -2250,7 +2253,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,622 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
+  2,623 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2350,8 +2353,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,808
-  definitions and 2,622 passed, 7 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,812
+  definitions and 2,623 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

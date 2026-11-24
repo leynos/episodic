@@ -2686,10 +2686,11 @@ disposes the database engine. After the drain, shutdown applies a fallback
 cancellation write for each task that was unfinished when cancellation began.
 This covers tasks cancelled before `_run_task` starts; terminal-state guards
 prevent duplicate failure events when the task handled cancellation itself.
-Both shutdown waits are bounded by `cancellation_write_timeout_seconds`
-(default 10 seconds, injected through the scheduler runtime view and read by
-the claimer as `reconcile_timeout_seconds`). A shielded write that does not
-finish is abandoned rather than cancelled, and each miss increments
+Both shutdown waits are bounded: the scheduler by
+`cancellation_write_timeout_seconds` and the claimer by its own
+`reconcile_timeout_seconds`, each defaulting to 10 seconds and independently
+configurable. A shielded write that does not finish is abandoned rather than
+cancelled, and each miss increments
 `generation_run_cancellation_write_timeouts_total`. The failure component
 reconciles inside the caller's unit of work rather than opening a second one,
 and QA outcome metrics are published only after the terminal write succeeds. An

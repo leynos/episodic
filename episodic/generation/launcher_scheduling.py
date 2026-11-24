@@ -188,10 +188,14 @@ class GenerationRunScheduler:
 
     async def _drain_tasks(self, *, deadline: float | None) -> None:
         """Await scheduled run tasks, bounded only when shutting down."""
-        if not self._tasks:
-            return
         if deadline is None:
-            await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+            # Loop until the registry is empty: a run admitted while this
+            # drain is waiting was not in the snapshot it awaited, so one
+            # pass could return with that run still scheduled.
+            while self._tasks:
+                await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+            return
+        if not self._tasks:
             return
         _done, still_pending = await asyncio.wait(
             tuple(self._tasks),

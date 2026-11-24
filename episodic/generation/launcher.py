@@ -46,6 +46,7 @@ from episodic.canonical.generation_routing import (
 )
 from episodic.generation.launcher_claim import (
     DEFAULT_LEASE_SECONDS,
+    DEFAULT_RECONCILE_TIMEOUT_SECONDS,
     GenerationRunClaimer,
 )
 from episodic.generation.launcher_failure import GenerationRunFailurePersistence
@@ -168,8 +169,14 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     max_pending_runs : int
         Maximum runs allowed to wait beyond the execution capacity.
     cancellation_write_timeout_seconds : float
-        Maximum time shutdown waits for one cancellation write. A write that
-        outlives it is abandoned to lease reclamation and counted.
+        Maximum time shutdown waits for one cancellation write. A missed wait
+        is abandoned and counted: a run whose earlier execution claim
+        committed falls back to lease reclamation, while an uncommitted
+        failure-only claim leaves the run pending until its transaction is
+        released.
+    reconcile_timeout_seconds : float
+        Maximum time a cancelled claim waits for its shielded reconciliation.
+        A missed wait leaves the claim unverified and therefore unadopted.
     lease_seconds : int
         Claim lease duration recorded with each started run.
     source_limits : GenerationSourceLimits
@@ -196,6 +203,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     cancellation_write_timeout_seconds: float = (
         DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS
     )
+    reconcile_timeout_seconds: float = DEFAULT_RECONCILE_TIMEOUT_SECONDS
     lease_seconds: int = DEFAULT_LEASE_SECONDS
     source_limits: GenerationSourceLimits = dc.field(
         default_factory=GenerationSourceLimits

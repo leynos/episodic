@@ -163,3 +163,50 @@ def metrics_timeouts(scheduler: GenerationRunScheduler) -> list[str]:
     return [
         name for name, _labels in metrics.counters if name.endswith("_timeouts_total")
     ]
+
+
+class _AdmittingExecutor:
+    """Executor fake that admits a second run while the first is draining."""
+
+    def __init__(self, scheduler_ref: list[GenerationRunScheduler]) -> None:
+        """Store the cell that will receive the scheduler."""
+        self._ref = scheduler_ref
+        self.started = asyncio.Event()
+        self.second_started = asyncio.Event()
+        self.calls = 0
+
+    async def __call__(
+        self,
+        run_id: uuid.UUID,
+        claim: object,
+    ) -> ExecutionOutcome:
+        """Start the sibling run once, then finish."""
+        _ = (run_id, claim)
+        self.calls += 1
+        if self.calls == 1:
+            self.started.set()
+            await asyncio.sleep(0.05)
+            await self._ref[0].launch(uuid.uuid4())
+            return ExecutionOutcome(outcome="completed")
+        self.second_started.set()
+        await asyncio.sleep(0.05)
+        return ExecutionOutcome(outcome="completed")
+
+
+@pytest.mark.asyncio
+async def test_normal_drain_covers_a_run_admitted_while_waiting() -> None:
+    """A run admitted during a normal drain is still awaited by it."""
+    ref: list[GenerationRunScheduler] = []
+    executor = _AdmittingExecutor(ref)
+    scheduler = dc.replace(
+        _scheduler(executor, _RecordingCancellation().record),
+        runtime=_SchedulerRuntime(),
+    )
+    ref.append(scheduler)
+
+    await scheduler.launch(uuid.uuid4())
+    await scheduler.drain()
+
+    assert executor.second_started.is_set(), "the second run never started"
+    assert executor.calls == 2, executor.calls
+    assert not scheduler.scheduled_run_count, scheduler.scheduled_run_count
