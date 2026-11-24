@@ -20,7 +20,7 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-0012-pronunciation-repository.md`](adrs/adr-0012-pronunciation-repository.md)
 - [`adr-0013-speech-synthesis-adapters.md`](adrs/adr-0013-speech-synthesis-adapters.md)
 - [`adr-0014-hexagonal-architecture-enforcement.md`](adrs/adr-0014-hexagonal-architecture-enforcement.md)
-- [`adr-0015-generation-run-port-split.md`](adrs/adr-0015-generation-run-port-split.md)
+- [`adr-0031-generation-run-port-split.md`](adrs/adr-0031-generation-run-port-split.md)
 - [`adr-0015-upload-and-idempotency-ports.md`](adrs/adr-0015-upload-and-idempotency-ports.md)
 - [`adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`][adr-017]
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)

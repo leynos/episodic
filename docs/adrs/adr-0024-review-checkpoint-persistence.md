@@ -9,7 +9,7 @@ Accepted, 2026-10-21.
 Roadmap item `2.6.2` asks for repository contracts and Alembic migrations for
 generation-run aggregates. Roadmap item `2.6.1` had already defined
 `Checkpoint` as a frozen domain entity and `GenerationCheckpointPort` as its
-port (ADR-015), but no adapter persisted one: the only implementation was the
+port (ADR-0031), but no adapter persisted one: the only implementation was the
 in-memory reference adapter, and the table did not exist.
 
 That gap is load-bearing rather than cosmetic. A human review checkpoint is the
@@ -29,7 +29,7 @@ and the `downgrade()` debt entirely, and given one source of truth for run
 history. It was rejected on three narrow grounds: `get_checkpoint` addresses a
 checkpoint by bare identifier with no run id, so the fold would need an
 expression or GIN index on `payload->>'checkpoint_id'`, a JSONB indexing
-pattern used nowhere in this repository; it partially reverses ADR-015's
+pattern used nowhere in this repository; it partially reverses ADR-0031's
 separation of `Checkpoint` from `WorkflowCheckpoint` and would therefore need
 an ADR *amendment*, not merely a new ADR; and `Checkpoint` is frozen for this
 slice. Reusing a mixin over the run store was also rejected — see the second
@@ -94,7 +94,7 @@ parent run, which is a base class reaching upward into its subclass. It would
 also re-declare `_session` and `_runtime` as bare annotations — a second
 declaration site that can silently drift from `__init__`.
 
-`AGENTS.md` says "use functions and composition". Further, ADR-015 argues
+`AGENTS.md` says "use functions and composition". Further, ADR-0031 argues
 against the mixin directly: its stated benefits are that "tests can fake only
 the sub-port they exercise" and that "the later SQL adapter can use different
 locking and uniqueness strategies for run state, events, and checkpoints". A
@@ -231,7 +231,7 @@ versioning and history strategy ADR[^5].
 [^1]: Roadmap item `2.6.2` in `docs/roadmap.md`
 [^2]: TUI API design: `docs/episodic-tui-api-design.md`
 [^3]: Generation-run port split:
-  `docs/adrs/adr-0015-generation-run-port-split.md`
+  `docs/adrs/adr-0031-generation-run-port-split.md`
 [^4]: Durable orchestration checkpoint ADR:
   `docs/adrs/adr-0007-durable-generation-checkpoints.md`
 [^5]: Explicit versioning and history strategy:

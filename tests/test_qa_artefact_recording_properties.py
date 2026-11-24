@@ -140,7 +140,7 @@ def test_projection_preserves_every_field(findings: list[PedanteFinding]) -> Non
 def test_only_the_documented_blocking_levels_make_a_result_non_compliant(
     support_levels: list[SupportLevel],
 ) -> None:
-    """The policy verdict follows the blocking set ADR 001 describes."""
+    """The policy verdict follows the blocking set ADR 0030 describes."""
     findings = [
         PedanteFinding(
             claim_id=f"claim-{index}",

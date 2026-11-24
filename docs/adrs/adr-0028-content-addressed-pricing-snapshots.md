@@ -300,7 +300,7 @@ a field never changes the hash of a version 1 row.
    `20261110_000017`.
 4. Add behavioural coverage, including a Vidai Mock scenario and the 7.5-cent
    correction to the shipped card.
-5. Update the design document, ADR-015, the users' guide, the developers'
+5. Update the design document, ADR-0032, the users' guide, the developers'
    guide, and the roadmap.
 
 Migration `20261110_000017` runs stop-the-world: operators scale launchers,
@@ -344,8 +344,8 @@ them, so no snapshot written now has to be rewritten later.
 ## References
 
 - Roadmap item `2.5.1`: `docs/roadmap.md`.
-- Cost accounting ports and pricing engine: ADR-015,
-  `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md`.
+- Cost accounting ports and pricing engine: ADR-0032,
+  `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md`.
 - Explicit versioning and history strategy: ADR-018,
   `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`.
 - Hexagonal architecture enforcement: ADR-014,

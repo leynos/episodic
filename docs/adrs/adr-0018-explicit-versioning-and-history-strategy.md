@@ -30,7 +30,7 @@ The evidence base for this record is the ExecPlan decision logs (
 [4.3.2 no-QA generation][4-3-2-no-qa-generation]), the migrations that
 introduced the schemas (`20260220_000002`, `20260624_000011`), and the ADR
 fragments that already cover individual mechanisms ([ADR-001][adr-001],
-[ADR-007][adr-007], [ADR-015][adr-015], [ADR-017][adr-017]).
+[ADR-007][adr-007], [ADR-0032][adr-0032], [ADR-017][adr-017]).
 
 ## Decision
 
@@ -91,7 +91,7 @@ Where downstream state depends on versioned inputs, the consumed version is
 pinned at consumption time: reference bindings pin one document revision
 (ADR-001 explicitly rejected latest-binding-wins because it breaks provenance
 for regenerated episodes), and generation runs pin one pricing snapshot per
-provider operation before recording costs (ADR-015), so suspended and resumed
+provider operation before recording costs (ADR-0032), so suspended and resumed
 work reprices identically.
 
 ## Rationale
@@ -135,7 +135,7 @@ semantics per aggregate.
 
 - [ADR-001: Reference binding resolution algorithm][adr-001-reference-binding-resolution-algorithm]
 - [ADR-007: Durable generation checkpoints][adr-007-durable-generation-checkpoints]
-- [ADR-015: Cost accounting ports and pricing engine][adr-015-cost-accounting-ports-and-pricing-engine]
+- [ADR-0032: Cost accounting ports and pricing engine][adr-0032-cost-accounting-ports-and-pricing-engine]
 - [ADR-017: No-QA generation execution and TEI persistence][adr-017-no-qa-generation-execution-and-tei-persistence]
 - Migrations `20260220_000002_add_profile_template_history_schema.py` and
   `20260624_000011_add_episode_tei_revisioning.py`
@@ -147,10 +147,10 @@ semantics per aggregate.
 [4-3-2-no-qa-generation]: ../execplans/4-3-2-no-qa-generation-runs-and-tei-p5-retrieval.md
 [adr-001]: adr-0001-reference-binding-resolution-algorithm.md
 [adr-007]: adr-0007-durable-generation-checkpoints.md
-[adr-015]: adr-0015-cost-accounting-ports-and-pricing-engine.md
+[adr-0032]: adr-0032-cost-accounting-ports-and-pricing-engine.md
 [adr-017]: adr-0017-no-qa-generation-run-execution-and-tei-persistence.md
 [adr-019]: adr-0019-episode-tei-revision-history.md
 [adr-001-reference-binding-resolution-algorithm]: adr-0001-reference-binding-resolution-algorithm.md
 [adr-007-durable-generation-checkpoints]: adr-0007-durable-generation-checkpoints.md
-[adr-015-cost-accounting-ports-and-pricing-engine]: adr-0015-cost-accounting-ports-and-pricing-engine.md
+[adr-0032-cost-accounting-ports-and-pricing-engine]: adr-0032-cost-accounting-ports-and-pricing-engine.md
 [adr-017-no-qa-generation-execution-and-tei-persistence]: adr-0017-no-qa-generation-run-execution-and-tei-persistence.md

@@ -310,7 +310,7 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   with zero findings after the PEP 695 alias and dataclass-state fixes.
 - 2026-06-14 15:20 Europe/Berlin: Rebasing onto `origin/main` stopped on a
   `docs/developers-guide.md` ADR-list conflict. Resolution kept both branch
-  ADR-015 (`generation-run-port-split`) and main ADR-015
+  ADR-0031 (`generation-run-port-split`) and main ADR-015
   (`upload-and-idempotency-ports`) links because both files exist and document
   distinct decisions. The first post-rebase `make test` then exposed a Hecate
   configuration merge issue: the five architecture groups had collapsed into
@@ -550,7 +550,7 @@ The delivered implementation matches the observable success criteria:
 - Hecate treats the new error and port modules as domain ports, while the
   reference adapter stays in the outbound-adapter group.
 - `docs/users-guide.md`, `docs/developers-guide.md`,
-  `docs/episodic-tui-api-design.md`, `docs/roadmap.md`, and ADR-015 now
+  `docs/episodic-tui-api-design.md`, `docs/roadmap.md`, and ADR-0031 now
   describe the implemented shape.
 
 The main follow-up for `2.6.2` is to preserve the same port semantics in the
@@ -1014,7 +1014,7 @@ Quality criteria — what *done* means:
 - Formatting: `make check-fmt` passes; `make markdownlint` passes; `make nixie`
   passes for any updated Mermaid diagrams.
 - Documentation: `docs/users-guide.md`, `docs/developers-guide.md`,
-  `docs/episodic-tui-api-design.md`, and the new `adr-015` reflect the
+  `docs/episodic-tui-api-design.md`, and the new `adr-0031` reflect the
   delivered shape.
 - CodeRabbit: `coderabbit review --agent` reports no unresolved concerns
   after iteration.
