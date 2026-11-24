@@ -2708,13 +2708,14 @@ the next launcher's compare-and-set. During shutdown, run tasks are bounded by
 the same deadline, because a unit of work's rollback or session close can stall
 after cancellation arrives; that case increments
 `generation_run_shutdown_task_timeouts_total`. A normal `drain()` remains
-unbounded and returns only once the work has finished. A transaction that
-stalls while holding the row lock is recovered by terminating its backend,
-which aborts the transaction and releases the row for the next claim. The
-launcher emits a `generation_run.execute` span and bounded terminal,
-draft-error, QA-bypass, and latency metrics; the API command span and stable
-failure categories provide the corresponding request and outcome trace without
-unbounded run identifiers in metric labels.
+unbounded, rechecking both registries until both are empty, and returns only
+once the work has finished. A transaction that stalls while holding the row
+lock is recovered by terminating its backend, which aborts the transaction and
+releases the row for the next claim. The launcher emits a
+`generation_run.execute` span and bounded terminal, draft-error, QA-bypass, and
+latency metrics; the API command span and stable failure categories provide the
+corresponding request and outcome trace without unbounded run identifiers in
+metric labels.
 
 ### Content-generation graph and quality routing
 

@@ -887,8 +887,9 @@ accepted in EP-M6. D13 records the review itself.
     `cancellation_write_timeout_seconds`, and the claimer uses
     `reconcile_timeout_seconds`. Both default to 10 seconds and are
     independent settings, so tightening one never changes the other. A normal
-    `drain()` stays unbounded, looping until its task registry is empty, so a
-    run admitted while it waits is still awaited.
+    `drain()` stays unbounded and rechecks both the task and cancellation-write
+    registries until both are empty, so a run admitted while it waits — on
+    either registry — is still awaited.
   - An unverified claim is never adopted: a reconciliation that misses the
     deadline leaves `claim.token` unset, so the run is not failed by an
     invocation whose ownership the database did not confirm.
@@ -2253,7 +2254,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,623 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
+  2,624 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2353,8 +2354,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,812
-  definitions and 2,623 passed, 7 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,813
+  definitions and 2,624 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

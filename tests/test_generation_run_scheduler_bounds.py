@@ -210,3 +210,31 @@ async def test_normal_drain_covers_a_run_admitted_while_waiting() -> None:
     assert executor.second_started.is_set(), "the second run never started"
     assert executor.calls == 2, executor.calls
     assert not scheduler.scheduled_run_count, scheduler.scheduled_run_count
+
+
+@pytest.mark.asyncio
+async def test_normal_drain_covers_a_run_admitted_while_awaiting_a_write() -> None:
+    """A run admitted while drain waits on a cancellation write is awaited."""
+    from episodic.generation.launcher_support import RunClaim
+
+    executor = _SlowExecutor(delay=0.01)
+    recorder = _StalledCancellation()
+    scheduler = dc.replace(
+        _scheduler(executor, recorder.record),
+        runtime=_SchedulerRuntime(),
+    )
+
+    writer = asyncio.create_task(
+        scheduler.record_cancellation_owned(uuid.uuid4(), RunClaim()),
+    )
+    await asyncio.wait_for(recorder.started.wait(), timeout=5)
+    drain = asyncio.create_task(scheduler.drain())
+    await asyncio.sleep(0)
+    await scheduler.launch(uuid.uuid4())
+
+    recorder.release.set()
+    await asyncio.wait_for(drain, timeout=5)
+    await asyncio.wait_for(writer, timeout=5)
+
+    assert executor.finished, "drain returned before the admitted run finished"
+    assert not scheduler.scheduled_run_count, scheduler.scheduled_run_count

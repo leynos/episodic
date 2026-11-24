@@ -177,6 +177,15 @@ class GenerationRunScheduler:
         call or unit-of-work exit must not hold process shutdown open.
         """
         deadline = self._shutdown_deadline()
+        if deadline is None:
+            # Recheck both registries until both are empty: a run admitted
+            # while this drain waits on a cancellation write was not in the
+            # task snapshot, so draining each registry once can return with
+            # that run still scheduled.
+            while self._tasks or self._cancellation_tasks:
+                await self._drain_tasks(deadline=None)
+                await self._drain_cancellation_writes(deadline=None)
+            return
         await self._drain_tasks(deadline=deadline)
         await self._drain_cancellation_writes(deadline=deadline)
 
