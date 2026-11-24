@@ -321,6 +321,11 @@ class GenerationRunClaimer:
             claim.token = token
         return ClaimedRunResult(run=run, token=token)
 
+    # The cancelled-commit path above is the only place this component writes
+    # the caller's claim. The returned ClaimedRunResult is the normal channel,
+    # and claim() copies the token onto the caller-supplied claim so a failure
+    # write has it.
+
     async def claim_for_failure(
         self,
         uow: CanonicalUnitOfWork,

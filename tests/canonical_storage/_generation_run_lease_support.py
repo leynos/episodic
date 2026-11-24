@@ -89,6 +89,9 @@ async def claim_run(
             current_node="draft",
             started_at=NOW,
             lease_expires_at=lease_expires_at,
+            # A real claim always stores its proof, so seeding one does too;
+            # reclamation must then satisfy the terminal-claim gate.
+            claim_token=uuid.uuid4(),
         ),
     )
     if claimed is None:
@@ -103,12 +106,16 @@ async def end_run(
 ) -> None:
     """Move one run to a terminal status through the lifecycle transition."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        # A claimed run may only be terminated by its own claim, so the test
+        # helper passes the stored proof, exactly as a real writer would.
+        proof = await uow.generation_runs.claim_token_for(run_id)
         await uow.generation_runs.update_run_status(
             run_id,
             update=GenerationRunStatusUpdate(
                 status=status,
                 current_node=None,
                 ended_at=NOW,
+                claim_token=proof,
             ),
         )
         await uow.commit()

@@ -8,6 +8,11 @@ import datetime as dt
 import typing as typ
 import uuid
 
+from episodic.canonical.adapters.generation_run_claim_store import (
+    InMemoryClaimTokens,
+    claimed_run,
+    log_claim,
+)
 from episodic.canonical.domain import (
     Checkpoint,
     GenerationEvent,
@@ -16,17 +21,14 @@ from episodic.canonical.domain import (
     JsonMapping,
     apply_status_update,
 )
-from episodic.canonical.generation_run_errors import (
-    RunAlreadyTerminal,
-    RunClaimMismatch,
-    RunNotFound,
-)
+from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import (
     EventSeq,
     GenerationRunStatusUpdate,
     event_page_minimum_sequence,
     event_seq,
 )
+from episodic.canonical.generation_run_terminal_claim import require_terminal_claim
 from episodic.logging import log_event as _log_event
 from episodic.runtime_providers import utc_now
 
@@ -68,7 +70,7 @@ class InMemoryGenerationRunStore(
         default_factory=dict
     )
     _lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
-    _claim_tokens: dict[uuid.UUID, uuid.UUID] = dc.field(default_factory=dict)
+    _claim_tokens: InMemoryClaimTokens = dc.field(default_factory=InMemoryClaimTokens)
 
     def _require_mutable_run(
         self,
@@ -218,12 +220,8 @@ class InMemoryGenerationRunStore(
         Returns
         -------
         GenerationRun
-            The updated run.
-
-        Raises
-        ------
-        RunClaimMismatch
-            If a terminal transition omits the token or names another claim.
+            The updated run. Terminating a claimed run without its token
+            raises ``RunClaimMismatch``; see ``require_terminal_claim``.
         """
         async with self._lock:
             run = self._require_mutable_run(
@@ -242,14 +240,11 @@ class InMemoryGenerationRunStore(
                     requested_status=update.status.value,
                 ),
             )
-            stored_claim = self._claim_tokens.get(run_id)
-            # A stored claim requires the matching token; an unclaimed run has
-            # no owner to check, so an internal path may still terminate it.
-            claim_mismatch = (
-                stored_claim is not None and stored_claim != update.claim_token
+            require_terminal_claim(
+                run_id,
+                update,
+                self._claim_tokens.tokens.get(run_id),
             )
-            if update.status.is_terminal() and claim_mismatch:
-                raise RunClaimMismatch(run_id)
             updated = dc.replace(
                 apply_status_update(run, update),
                 updated_at=self.time_provider(),
@@ -304,31 +299,16 @@ class InMemoryGenerationRunStore(
                     status=run.status.value,
                 )
                 return None
-            updated = dc.replace(
-                run,
-                status=GenerationRunStatus.RUNNING,
-                current_node=claim.current_node,
-                started_at=claim.started_at,
-                updated_at=self.time_provider(),
-            )
+            updated = claimed_run(run, claim, updated_at=self.time_provider())
             self._runs[run_id] = updated
-            if claim.claim_token is not None:
-                self._claim_tokens[run_id] = claim.claim_token
-            _log_event(
-                "info",
-                "generation_run_store.claim_run",
-                run_id=str(run_id),
-                current_node=claim.current_node,
-                lease_expires_at=claim.lease_expires_at.isoformat()
-                if claim.lease_expires_at is not None
-                else None,
-            )
+            self._claim_tokens.record(run_id, claim)
+            log_claim(run_id, claim)
             return updated
 
     async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
         """Return the token of the claim that owns a run, if any."""
         async with self._lock:
-            return self._claim_tokens.get(run_id)
+            return self._claim_tokens.tokens.get(run_id)
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def append_event(

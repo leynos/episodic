@@ -6,12 +6,12 @@ holds one or the component claims, or reconciles, the run inside the same
 transaction as the write. The token is retained only after the commit, so a
 rollback cannot leave authority no durable write backs.
 
-Scope of that authority: it is enforced here, by the launcher, not by the
-repository. ``update_run_status`` accepts no token; its locks and terminal
-checks are what protect concurrent writers, and the pending-to-running claim
-is the store-level guard. A holder of a token therefore names the *launcher
-invocation* that may write, which routes and audits ownership; it is not a
-store-enforced fence against a caller that bypasses this component.
+Scope of that authority: the launcher decides it, and the repository then
+enforces it. ``GenerationRunStatusUpdate.claim_token`` carries the proof, and
+both store adapters compare it with the stored value under the row lock, so a
+terminal write either names the claim that owns the run or is refused with
+``RunClaimMismatch``. A run with no stored claim has no owner to check and may
+be terminated by an internal path such as a launch failure or reclamation.
 """
 
 import dataclasses as dc
