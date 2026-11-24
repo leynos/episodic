@@ -2694,10 +2694,15 @@ abandoned rather than cancelled, and each miss increments
 never adopted, so recovery depends on the run's shape: a claimed run carries a
 lease from its failure claim and is recovered by expired-lease reclamation,
 while a run still pending is recovered by the next launcher's compare-and-set.
-The launcher emits a `generation_run.execute` span and bounded terminal,
-draft-error, QA-bypass, and latency metrics; the API command span and stable
-failure categories provide the corresponding request and outcome trace without
-unbounded run identifiers in metric labels.
+Run tasks are bounded by the same deadline, because a unit of work's rollback
+or session close can stall after cancellation arrives; that case increments
+`generation_run_shutdown_task_timeouts_total`. A transaction that stalls while
+holding the row lock is recovered by terminating its backend, which aborts the
+transaction and releases the row for the next claim. The launcher emits a
+`generation_run.execute` span and bounded terminal, draft-error, QA-bypass, and
+latency metrics; the API command span and stable failure categories provide the
+corresponding request and outcome trace without unbounded run identifiers in
+metric labels.
 
 ### Manual recovery of expired generation-run leases
 

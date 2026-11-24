@@ -17,6 +17,7 @@ import typing as typ
 import uuid
 
 import pytest
+import sqlalchemy as sa
 import sqlalchemy.exc as sa_exc
 from sqlalchemy.engine import make_url
 
@@ -260,3 +261,67 @@ def test_quoted_identifiers_double_embedded_quotes() -> None:
     """An identifier containing a quote is escaped for DDL."""
     quoted = quote_identifier('odd"name_test')
     assert quoted == '"odd""name_test"', quoted
+
+
+async def _terminate_backend(
+    session_factory: async_sessionmaker[AsyncSession],
+    pid: int,
+) -> None:
+    """Terminate one backend, aborting whatever transaction it holds."""
+    async with session_factory() as session:
+        await session.execute(
+            sa.text("SELECT pg_terminate_backend(:pid)"),
+            {"pid": pid},
+        )
+
+
+@pytest.mark.asyncio
+async def test_a_stalled_claim_transaction_is_recoverable(
+    postgres_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Terminating a stalled claim backend releases the row for the next claim."""
+    run = await pending_run(postgres_factory)
+    stalled_proof = uuid.uuid4()
+    recovery_proof = uuid.uuid4()
+
+    entered = asyncio.Event()
+    stop = asyncio.Event()
+    pids: list[int] = []
+
+    async def hold_claim() -> None:
+        """Claim and hold the transaction until the backend is terminated."""
+        try:
+            async with SqlAlchemyUnitOfWork(postgres_factory) as holder:
+                await holder.generation_runs.claim_run_for_execution(
+                    run.id,
+                    claim(stalled_proof),
+                )
+                pids.append(
+                    int(
+                        await holder._require_session().scalar(
+                            sa.text("SELECT pg_backend_pid()")
+                        )
+                    )
+                )
+                entered.set()
+                await stop.wait()
+        except sa_exc.OperationalError:
+            # The test terminates this backend on purpose.
+            return
+
+    holder = asyncio.create_task(hold_claim())
+    await asyncio.wait_for(entered.wait(), timeout=10)
+    competitor = asyncio.create_task(
+        competing_claim(postgres_factory, run.id, recovery_proof),
+    )
+    await wait_for_claim_lock_wait(postgres_factory)
+
+    await _terminate_backend(postgres_factory, pids[0])
+    assert await asyncio.wait_for(competitor, timeout=10) is True, (
+        "the next claim must proceed once the stalled backend is gone"
+    )
+    stop.set()
+    await asyncio.wait_for(holder, timeout=10)
+
+    stored_proof = await claim_token(postgres_factory, run.id)
+    assert stored_proof == recovery_proof, "the recovery claim's proof must be durable"

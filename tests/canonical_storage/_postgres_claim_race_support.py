@@ -339,6 +339,7 @@ def _claimer(
     runtime = types.SimpleNamespace(
         uow_factory=uow_factory,
         clock=lambda: dt.datetime.now(dt.UTC),
+        lease_seconds=60,
     )
     return GenerationRunClaimer(typ.cast("typ.Any", runtime))
 

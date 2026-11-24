@@ -329,3 +329,50 @@ async def test_shutdown_abandons_a_stalled_cancellation_write() -> None:
     assert not scheduler.scheduled_run_count, "the run task must be drained"
 
     recorder.release.set()
+
+
+class _StubbornExecutor:
+    """Executor fake that keeps blocking after its cancellation arrives."""
+
+    def __init__(self) -> None:
+        """Create the event that signals when execution has started."""
+        self.started = asyncio.Event()
+
+    async def __call__(
+        self,
+        run_id: uuid.UUID,
+        claim: object,
+    ) -> ExecutionOutcome:
+        """Ignore cancellation, simulating a stalled unit-of-work exit."""
+        _ = (run_id, claim)
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            await asyncio.Event().wait()
+        raise AssertionError
+
+
+@pytest.mark.asyncio
+async def test_shutdown_abandons_a_stalled_run_task() -> None:
+    """A run task that never finishes cannot hold shutdown open."""
+    metrics = _RecordingMetrics()
+    scheduler = dc.replace(
+        _scheduler(_StubbornExecutor(), _RecordingCancellation().record),
+        runtime=_SchedulerRuntime(
+            metrics=metrics,
+            cancellation_write_timeout_seconds=0.2,
+        ),
+    )
+    executor = typ.cast("_StubbornExecutor", scheduler.execute_run)
+
+    await scheduler.launch(uuid.uuid4())
+    await asyncio.wait_for(executor.started.wait(), timeout=5)
+    await asyncio.wait_for(scheduler.shutdown(), timeout=5)
+
+    timeouts = [
+        name
+        for name, _labels in metrics.counters
+        if name == "generation_run_shutdown_task_timeouts_total"
+    ]
+    assert timeouts, f"the stalled task must be counted: {metrics.counters}"

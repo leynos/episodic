@@ -849,9 +849,21 @@ accepted in EP-M6. D13 records the review itself.
     compare-and-set every launcher attempts. Each miss increments
     `generation_run_cancellation_write_timeouts_total`, so an operator can see
     that shutdown did not confirm the write.
+  - The run tasks themselves are bounded by the same deadline, because a
+    unit of work's rollback or session close can stall after the cancellation
+    arrives; `generation_run_shutdown_task_timeouts_total` records that case.
+  - A stalled transaction can hold the row lock while its run stays pending.
+    The recovery is operational and measured: terminate the stalled backend,
+    which aborts its transaction and releases the row, and the next claim
+    proceeds. `test_a_stalled_claim_transaction_is_recoverable` holds a claim
+    open on a real PostgreSQL connection, blocks the competitor, terminates
+    the holder's backend, and asserts the competitor then wins with its own
+    proof durable.
   - Tests: `test_shutdown_abandons_a_stalled_cancellation_write` proves the
-    bound and the counter, `test_stalled_reconciliation_is_bounded` proves an
-    unverified claim is not adopted, and
+    cancellation-write bound and its counter,
+    `test_shutdown_abandons_a_stalled_run_task` proves the task bound,
+    `test_stalled_reconciliation_is_bounded` proves an unverified claim is not
+    adopted, and
     `test_shutdown_waits_for_a_cancelled_cancellation_write` keeps proving
     that a write which does finish is awaited.
   - Date/Author: 2026-11-24, implementation agent, from a CodeRabbit finding.
@@ -2166,7 +2178,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,616 passed, 6 skipped and 84 snapshots. The INV-8 comparison is
+  2,617 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2266,8 +2278,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,787
-  definitions and 2,616 passed, 6 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,794
+  definitions and 2,617 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

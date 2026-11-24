@@ -36,6 +36,7 @@ DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS = 10.0
 _METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
 _METRIC_PENDING_DEPTH = "generation_run_pending_depth"
 _METRIC_CANCELLATION_TIMEOUT = "generation_run_cancellation_write_timeouts_total"
+_METRIC_TASK_TIMEOUT = "generation_run_shutdown_task_timeouts_total"
 
 logger = get_logger(__name__)
 
@@ -166,15 +167,27 @@ class GenerationRunScheduler:
     async def drain(self) -> None:
         """Wait for scheduled tasks, bounding the wait on cancellation writes.
 
-        Scheduled tasks are awaited without a bound because their own work is
-        already bounded by the graph and the evaluator timeouts. Cancellation
-        writes are shielded, so a stalled database call would otherwise hold
-        shutdown open indefinitely; each drain waits at most
-        ``cancellation_write_timeout_seconds`` for the pending writes and then
-        reports them as timed out.
+        A run task's own work is bounded by the graph and evaluator timeouts,
+        but its cleanup (a rollback, or closing a session) can still stall. Both
+        the scheduled tasks and the shielded cancellation writes are therefore
+        awaited for at most ``cancellation_write_timeout_seconds``; anything
+        left is reported as timed out rather than holding shutdown open.
         """
-        while self._tasks:
-            await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+        if self._tasks:
+            _done, still_pending = await asyncio.wait(
+                tuple(self._tasks),
+                timeout=self.runtime.cancellation_write_timeout_seconds,
+            )
+            if still_pending:
+                log_info(
+                    logger,
+                    "generation_run_launcher.shutdown_task_timeout pending=%s",
+                    len(still_pending),
+                )
+                self.runtime.metrics.increment_counter(
+                    _METRIC_TASK_TIMEOUT,
+                    labels={},
+                )
         await self._drain_cancellation_writes()
 
     async def _drain_cancellation_writes(self) -> None:
