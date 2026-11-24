@@ -173,38 +173,50 @@ class GenerationRunScheduler:
         ``cancellation_write_timeout_seconds``, because a stalled database
         call or unit-of-work exit must not hold process shutdown open.
         """
-        deadline = (
-            self.runtime.cancellation_write_timeout_seconds
-            if self._is_shutting_down
-            else None
-        )
-        if self._tasks:
-            if deadline is None:
-                await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
-            else:
-                _done, still_pending = await asyncio.wait(
-                    tuple(self._tasks),
-                    timeout=deadline,
-                )
-                if still_pending:
-                    log_info(
-                        logger,
-                        "generation_run_launcher.shutdown_task_timeout pending=%s",
-                        len(still_pending),
-                    )
-                    self.runtime.metrics.increment_counter(
-                        _METRIC_TASK_TIMEOUT,
-                        labels={},
-                    )
+        deadline = self._shutdown_deadline()
+        await self._drain_tasks(deadline=deadline)
         await self._drain_cancellation_writes(deadline=deadline)
+
+    def _shutdown_deadline(self) -> float | None:
+        """Return the shutdown deadline, or ``None`` outside shutdown."""
+        if self._is_shutting_down:
+            return self.runtime.cancellation_write_timeout_seconds
+        return None
+
+    async def _drain_tasks(self, *, deadline: float | None) -> None:
+        """Await scheduled run tasks, bounded only when shutting down."""
+        if not self._tasks:
+            return
+        if deadline is None:
+            await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+            return
+        _done, still_pending = await asyncio.wait(
+            tuple(self._tasks),
+            timeout=deadline,
+        )
+        if still_pending:
+            log_info(
+                logger,
+                "generation_run_launcher.shutdown_task_timeout pending=%s",
+                len(still_pending),
+            )
+            self.runtime.metrics.increment_counter(
+                _METRIC_TASK_TIMEOUT,
+                labels={},
+            )
 
     async def _drain_cancellation_writes(self, *, deadline: float | None) -> None:
         """Await pending cancellation writes, bounded during shutdown only.
 
         A write that misses the deadline is abandoned, not cancelled: it stays
-        shielded so it can still land, and the run it covers falls back to
-        lease reclamation. Each miss increments a counter so an operator can
-        see that shutdown did not confirm the write.
+        shielded so it can still land. If it never commits, recovery depends
+        on the durable row. A run claimed for the failure is ``running`` with
+        that claim's lease, so expired-lease reclamation covers it. A run whose
+        claim never committed is still ``pending`` while the stalled
+        transaction may hold its row lock; a fresh claim needs that transaction
+        released first, for example by terminating its backend. Each miss
+        increments a counter so an operator can see that shutdown did not
+        confirm the write.
         """
         pending = tuple(self._cancellation_tasks)
         if not pending:
@@ -321,8 +333,10 @@ class GenerationRunScheduler:
     def _report_cancellation_timeout(self, run_id: uuid.UUID | None) -> None:
         """Record that a cancellation write missed its deadline.
 
-        The write is left running: it is shielded, so it can still land, and
-        the run's durable claim and lease let reclamation cover it otherwise.
+        The write is left running: it is shielded, so it can still land. A
+        claimed run then falls back to expired-lease reclamation; a run whose
+        claim never committed stays pending, and any transaction still holding
+        its row lock must be released before a fresh claim can succeed.
         """
         log_info(
             logger,

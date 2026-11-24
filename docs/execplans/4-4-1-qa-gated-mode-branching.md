@@ -860,9 +860,10 @@ accepted in EP-M6. D13 records the review itself.
   - A write that misses the deadline is abandoned, not cancelled: it stays
     shielded so it can still land. Recovery covers both shapes. A run already
     claimed and running is recovered by expired-lease reclamation, because the
-    failure claim now writes a lease. A run still pending is recovered by the
-    next launcher, because an unverified claim left it pending with the same
-    compare-and-set every launcher attempts. Each miss increments
+    failure claim now writes a lease. A run whose claim never committed stays
+    pending; the next launcher's compare-and-set claims it once any transaction
+    still holding its row lock is released, for example by terminating that
+    backend. Each miss increments
     `generation_run_cancellation_write_timeouts_total`, so an operator can see
     that shutdown did not confirm the write.
   - The run tasks themselves are bounded by the same deadline *during
@@ -2298,7 +2299,7 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,805
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,807
   definitions and 2,621 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
