@@ -63,6 +63,11 @@ class _LauncherSchedulerRuntime:
         """The launcher's current pending-run capacity."""
         return self.launcher.max_pending_runs
 
+    @property
+    def cancellation_write_timeout_seconds(self) -> float:
+        """The launcher's current cancellation-write deadline."""
+        return self.launcher.cancellation_write_timeout_seconds
+
 
 @dc.dataclass(frozen=True, slots=True)
 class _LauncherPersistenceRuntime:

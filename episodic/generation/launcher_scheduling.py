@@ -29,8 +29,13 @@ if typ.TYPE_CHECKING:
 
 DEFAULT_MAX_CONCURRENCY = 4
 DEFAULT_MAX_PENDING_RUNS = 16
+#: How long shutdown waits for one cancellation write before giving up on it.
+#: A write that outlives this is abandoned, not cancelled: it stays shielded so
+#: it can still land, and lease reclamation covers the run if it never does.
+DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS = 10.0
 _METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
 _METRIC_PENDING_DEPTH = "generation_run_pending_depth"
+_METRIC_CANCELLATION_TIMEOUT = "generation_run_cancellation_write_timeouts_total"
 
 logger = get_logger(__name__)
 
@@ -77,6 +82,10 @@ class SchedulerRuntimeView(typ.Protocol):
     def max_pending_runs(self) -> int:
         """Maximum runs allowed to wait beyond the execution capacity."""
 
+    @property
+    def cancellation_write_timeout_seconds(self) -> float:
+        """Maximum time shutdown waits for one cancellation write."""
+
 
 @dc.dataclass(frozen=True, slots=True)
 class NoopSchedulerRuntimeView:
@@ -86,6 +95,9 @@ class NoopSchedulerRuntimeView:
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY
     max_pending_runs: int = DEFAULT_MAX_PENDING_RUNS
+    cancellation_write_timeout_seconds: float = (
+        DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS
+    )
 
 
 @dc.dataclass(slots=True)
@@ -152,13 +164,36 @@ class GenerationRunScheduler:
         log_info(logger, "generation_run_launcher.scheduled run_id=%s", run_id)
 
     async def drain(self) -> None:
-        """Wait for all scheduled tasks and cancellation writes to finish."""
-        while self._tasks or self._cancellation_tasks:
-            await asyncio.gather(
-                *tuple(self._tasks),
-                *tuple(self._cancellation_tasks),
-                return_exceptions=True,
-            )
+        """Wait for scheduled tasks, bounding the wait on cancellation writes.
+
+        Scheduled tasks are awaited without a bound because their own work is
+        already bounded by the graph and the evaluator timeouts. Cancellation
+        writes are shielded, so a stalled database call would otherwise hold
+        shutdown open indefinitely; each drain waits at most
+        ``cancellation_write_timeout_seconds`` for the pending writes and then
+        reports them as timed out.
+        """
+        while self._tasks:
+            await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+        await self._drain_cancellation_writes()
+
+    async def _drain_cancellation_writes(self) -> None:
+        """Await pending cancellation writes under the configured deadline.
+
+        A write that misses the deadline is abandoned, not cancelled: it stays
+        shielded so it can still land, and the run it covers falls back to
+        lease reclamation. Each miss increments a counter so an operator can
+        see that shutdown did not confirm the write.
+        """
+        pending = tuple(self._cancellation_tasks)
+        if not pending:
+            return
+        _done, still_pending = await asyncio.wait(
+            pending,
+            timeout=self.runtime.cancellation_write_timeout_seconds,
+        )
+        if still_pending:
+            self._report_cancellation_timeout(None)
 
     @property
     def scheduled_run_count(self) -> int:
@@ -251,9 +286,32 @@ class GenerationRunScheduler:
             self._pending_cancellation_ids.discard(run_id)
 
         write.add_done_callback(_done)
-        recorded = await asyncio.shield(write)
+        try:
+            recorded = await asyncio.wait_for(
+                asyncio.shield(write),
+                timeout=self.runtime.cancellation_write_timeout_seconds,
+            )
+        except TimeoutError:
+            self._report_cancellation_timeout(run_id)
+            return
         if recorded:
             self._cancelled_run_ids.add(run_id)
+
+    def _report_cancellation_timeout(self, run_id: uuid.UUID | None) -> None:
+        """Record that a cancellation write missed its deadline.
+
+        The write is left running: it is shielded, so it can still land, and
+        the run's durable claim and lease let reclamation cover it otherwise.
+        """
+        log_info(
+            logger,
+            "generation_run_launcher.cancellation_write_timeout run_id=%s",
+            run_id,
+        )
+        self.runtime.metrics.increment_counter(
+            _METRIC_CANCELLATION_TIMEOUT,
+            labels={},
+        )
 
     async def _record_cancellation_write(
         self,

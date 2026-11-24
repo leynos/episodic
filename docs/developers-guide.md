@@ -2685,11 +2685,16 @@ shutdown calls launcher shutdown, then closes the LLM provider, and only then
 disposes the database engine. After the drain, shutdown applies a fallback
 cancellation write for each task that was unfinished when cancellation began.
 This covers tasks cancelled before `_run_task` starts; terminal-state guards
-prevent duplicate failure events when the task handled cancellation itself. The
-launcher emits a `generation_run.execute` span and bounded terminal,
-draft-error, QA-bypass, and latency metrics; the API command span and stable
-failure categories provide the corresponding request and outcome trace without
-unbounded run identifiers in metric labels.
+prevent duplicate failure events when the task handled cancellation itself.
+Both waits are bounded by `cancellation_write_timeout_seconds` (default 10
+seconds, injected through the scheduler runtime view): a shielded write that
+does not finish is abandoned rather than cancelled, the run falls back to
+expired-lease reclamation, and
+`generation_run_cancellation_write_timeouts_total` records that shutdown did
+not confirm the write. The launcher emits a `generation_run.execute` span and
+bounded terminal, draft-error, QA-bypass, and latency metrics; the API command
+span and stable failure categories provide the corresponding request and
+outcome trace without unbounded run identifiers in metric labels.
 
 ### Manual recovery of expired generation-run leases
 

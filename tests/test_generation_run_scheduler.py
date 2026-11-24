@@ -58,6 +58,7 @@ class _SchedulerRuntime:
     tracer: RecordingTracer = dc.field(default_factory=RecordingTracer)
     max_concurrency: int = 4
     max_pending_runs: int = 16
+    cancellation_write_timeout_seconds: float = 10.0
 
 
 @dc.dataclass(slots=True)
@@ -280,3 +281,51 @@ def test_scheduler_rejects_invalid_limits() -> None:
             _scheduler(_RecordingExecutor(), _RecordingCancellation().record),
             runtime=_SchedulerRuntime(max_pending_runs=-1),
         )
+
+
+@dc.dataclass(slots=True)
+class _StalledCancellation:
+    """Cancellation recorder fake whose write never completes."""
+
+    started: asyncio.Event = dc.field(default_factory=asyncio.Event)
+    release: asyncio.Event = dc.field(default_factory=asyncio.Event)
+    calls: int = 0
+
+    async def record(self, run_id: uuid.UUID, claim: object) -> bool:
+        """Signal entry, then block until the test releases the write."""
+        _ = (run_id, claim)
+        self.calls += 1
+        self.started.set()
+        await self.release.wait()
+        return True
+
+
+@pytest.mark.asyncio
+async def test_shutdown_abandons_a_stalled_cancellation_write() -> None:
+    """A stalled cancellation write cannot hold shutdown open past its bound."""
+    recorder = _StalledCancellation()
+    metrics = _RecordingMetrics()
+    scheduler = dc.replace(
+        _scheduler(_BlockingExecutor(), recorder.record),
+        runtime=_SchedulerRuntime(
+            metrics=metrics,
+            cancellation_write_timeout_seconds=0.2,
+        ),
+    )
+    executor = typ.cast("_BlockingExecutor", scheduler.execute_run)
+
+    await scheduler.launch(uuid.uuid4())
+    await asyncio.wait_for(executor.started.wait(), timeout=5)
+    shutdown = asyncio.create_task(scheduler.shutdown())
+    await asyncio.wait_for(recorder.started.wait(), timeout=5)
+    await asyncio.wait_for(shutdown, timeout=5)
+
+    timeouts = [
+        name
+        for name, _labels in metrics.counters
+        if name == "generation_run_cancellation_write_timeouts_total"
+    ]
+    assert timeouts, f"the abandoned write must be counted: {metrics.counters}"
+    assert not scheduler.scheduled_run_count, "the run task must be drained"
+
+    recorder.release.set()

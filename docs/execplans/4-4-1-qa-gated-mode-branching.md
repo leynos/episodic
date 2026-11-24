@@ -287,6 +287,9 @@ inference budget on a branch that cannot pass.
   completeness assessment; see D17 and D18.
 - [x] (2026-11-23) Merged `main` at #438 and ported the QA-gated feature onto
   the injected launcher components; see D19 to D23 and the integration record.
+- [x] (2026-11-24) Sixth round: the bounded cancellation write (D24), the
+  claim-proof-preserving test helper, identifier escaping in the PostgreSQL
+  DDL, and the D7/D20 and INV-8/D15 record reconciliations.
 - [x] (2026-11-23) Fifth assessment round: Alembic's own offline downgrade is
   snapshotted (INV-11), the precedence envelopes are snapshotted including the
   accepted-gated rationale and unknown-mode cases (INV-12), the INV-1 seeded
@@ -541,13 +544,18 @@ accepted in EP-M6. D13 records the review itself.
          `enum`;
        - `draft_without_qa` without `skip_qa_rationale` returns 400 with
          constraint `required`.
-    2. **Inside `run_idempotent`'s `work()`**, an unaccepted mode returns the
-       unchanged `422 quality_mode_unsupported` envelope.
-    3. **Next, still inside `work()`**, a `qa_gated` body carrying
-       `skip_qa_rationale` returns
+    2. **An unaccepted mode** returns the unchanged
+       `422 quality_mode_unsupported` envelope. Where it runs depends on the
+       request: with no `Idempotency-Key` it runs before `run_idempotent`,
+       because no replay is possible; with a key it runs inside `work()`.
+    3. **Next**, a `qa_gated` body carrying `skip_qa_rationale` returns
        `400 validation_error(field="skip_qa_rationale",
        constraint="exclusive_with_quality_mode",
-       details.quality_mode="qa_gated")`.
+       details.quality_mode="qa_gated")`, in the same position as step 2.
+  - Amendment (D20): the original text placed both checks inside `work()`
+    unconditionally, which changed the keyless precedence and lost the
+    malformed-budget error. D20 restores the pre-4.4.1 order and applies the
+    keyed and keyless orders separately, as above.
   - Both errors raised inside `work()` release the idempotency key.
   - Replaying an accepted request still returns the stored `202` after the
     deployment withdraws the capability.
@@ -802,10 +810,11 @@ accepted in EP-M6. D13 records the review itself.
     `test_no_qa_missing_launcher_outranks_idempotency` (replay and conflict).
   - A no-QA request is validated and launcher-resolved before idempotency,
     matching the base: a removed launcher is a 503 rather than a replay or a
-    409. A QA-gated request, accepted or not, keeps D7's ordering: its checks
-    run in the work (or in the precondition for a conflict), so a rejection
-    releases the key and a stored 202 still replays after the capability is
-    withdrawn.
+    409. A QA-gated request keeps D7's ordering, which is key-dependent: with
+    no `Idempotency-Key` its checks run before `run_idempotent`, and with a
+    key they run in the work (or in the precondition for a conflict), so a
+    rejection releases the key and a stored 202 still replays after the
+    capability is withdrawn.
   - Date/Author: 2026-11-22, implementation agent.
 - **Decision D23: authorize and reconcile claims with a unique proof.**
   - The pending-to-running claim stores a per-attempt UUID in the nullable
@@ -821,6 +830,22 @@ accepted in EP-M6. D13 records the review itself.
     write; only `_cancelled_run_ids` (recorded writes) deduplicates
     unconditionally.
   - Date/Author: 2026-11-23, implementation agent.
+- **Decision D24: bound the cancellation write so shutdown cannot hang.**
+  - A cancellation write is shielded so a second cancellation cannot lose it,
+    which also means an unresponsive database call could hold `shutdown()`
+    open forever. `drain()` and `record_cancellation_owned` now both wait at
+    most `cancellation_write_timeout_seconds` (default 10 seconds, injected
+    through the scheduler runtime view).
+  - A write that misses the deadline is abandoned, not cancelled: it stays
+    shielded so it can still land, and the run's durable claim and lease make
+    expired-lease reclamation the recovery path. Each miss increments
+    `generation_run_cancellation_write_timeouts_total`, so an operator can see
+    that shutdown did not confirm the write.
+  - Tests: `test_shutdown_abandons_a_stalled_cancellation_write` proves the
+    bound and the counter, while
+    `test_shutdown_waits_for_a_cancelled_cancellation_write` keeps proving
+    that a write which does finish is awaited.
+  - Date/Author: 2026-11-24, implementation agent, from a CodeRabbit finding.
 - **Decision D16: own the graph task and name every node task.**
   - The runner creates the `ainvoke` task itself, names it
     `generation-run-{run_id}`, and on cancellation cancels and drains it and
@@ -1329,12 +1354,18 @@ These are trusted, not verified.
     has a shared node, and it must report the overlap. A focused test pins
     AXM-2.
 - **INV-8: no-QA behaviour is preserved.**
-  - Statement: INV-0's snapshots and every existing no-QA test pass
-    unmodified after EP-M2, EP-M4 and EP-M5.
+  - Statement: INV-0's snapshots and every existing no-QA test pass after
+    EP-M2, EP-M4 and EP-M5, apart from the two span attributes D15 records.
   - Method: regression against EP-M0.
-  - Evidence: `git diff --stat <EP-M0 commit> --
-    tests/__snapshots__/test_generation_run_launcher_no_qa_characterization.ambr
-    tests/features/no_qa_generation_slice.feature` shows no change.
+  - Evidence: over
+    `tests/features/no_qa_generation_slice.feature` and
+    `tests/__snapshots__/test_generation_run_launcher_no_qa_characterization.ambr`
+    since `d6876cba`, the feature file is unchanged and the snapshot differs
+    by exactly the two D9 span attributes plus the D15 record.
+  - Amendment (D15): the original statement required the snapshot to be
+    unmodified, which the two added span attributes in the same INV-0 snapshot
+    contradict. D15 records the deviation and this bullet carries it; the
+    feature file itself remains byte-identical.
   - Non-vacuity: INV-0's own assertions.
 - **INV-9: one writer per run, with ordered publication.**
   - Statement: the valid mode × outcome cells are:
@@ -2123,7 +2154,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,612 passed, 6 skipped and 84 snapshots. The INV-8 comparison is
+  2,614 passed, 6 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2223,8 +2254,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,771
-  definitions and 2,612 passed, 6 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,780
+  definitions and 2,614 passed, 6 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

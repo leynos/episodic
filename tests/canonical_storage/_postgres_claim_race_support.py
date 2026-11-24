@@ -146,17 +146,28 @@ async def _admin_connection(dsn: str) -> cabc.AsyncIterator[AsyncConnection]:
         await engine.dispose()
 
 
+def quote_identifier(name: str) -> str:
+    """Quote a PostgreSQL identifier, doubling any embedded quote.
+
+    Returns
+    -------
+    str
+        The identifier wrapped in double quotes, safe for DDL.
+    """
+    return '"' + name.replace('"', '""') + '"'
+
+
 async def create_database(dsn: str, name: str) -> None:
     """Create the database, refusing to touch one that already exists."""
     async with _admin_connection(dsn) as connection:
-        await connection.execute(sa.text(f'CREATE DATABASE "{name}"'))
+        await connection.execute(sa.text(f"CREATE DATABASE {quote_identifier(name)}"))
 
 
 async def drop_database(dsn: str, name: str) -> None:
     """Drop the database this invocation created."""
     async with _admin_connection(dsn) as connection:
         await connection.execute(
-            sa.text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+            sa.text(f"DROP DATABASE IF EXISTS {quote_identifier(name)} WITH (FORCE)")
         )
 
 

@@ -20,7 +20,7 @@ from episodic.canonical.domain import (
     SeriesProfile,
     TeiHeader,
 )
-from episodic.canonical.generation_claim import ExecutionClaim
+from episodic.canonical.generation_claim import ExecutionClaim  # ruff: ignore[typing-only-first-party-import] - re-exported for test importers
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
@@ -164,14 +164,7 @@ async def claim_run_in_independent_uow(
 ) -> GenerationRun | None:
     """Claim a run within a separately committed unit of work."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        claimed = await uow.generation_runs.claim_run_for_execution(
-            run_id,
-            ExecutionClaim(
-                current_node=claim.current_node,
-                started_at=claim.started_at,
-                lease_expires_at=claim.lease_expires_at,
-            ),
-        )
+        claimed = await uow.generation_runs.claim_run_for_execution(run_id, claim)
         await uow.commit()
         return claimed
 

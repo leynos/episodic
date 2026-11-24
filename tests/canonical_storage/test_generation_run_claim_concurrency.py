@@ -38,6 +38,7 @@ from tests.canonical_storage._postgres_claim_race_support import (
     load_events,
     pending_run,
     postgres_factory,
+    quote_identifier,
     require_dsn,
     wait_for_claim_lock_wait,
 )
@@ -253,3 +254,9 @@ async def test_concurrent_invocations_keep_separate_databases() -> None:
     assert first != second, (first, second)
     assert await database_exists(dsn, first) is False, first
     assert await database_exists(dsn, second) is False, second
+
+
+def test_quoted_identifiers_double_embedded_quotes() -> None:
+    """An identifier containing a quote is escaped for DDL."""
+    quoted = quote_identifier('odd"name_test')
+    assert quoted == '"odd""name_test"', quoted

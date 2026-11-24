@@ -56,6 +56,7 @@ from episodic.generation.launcher_runtime_views import (
     _LauncherSchedulerRuntime,
 )
 from episodic.generation.launcher_scheduling import (
+    DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS,
     DEFAULT_MAX_CONCURRENCY,
     DEFAULT_MAX_PENDING_RUNS,
     ExecutionOutcome,
@@ -166,6 +167,9 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         Maximum runs allowed to execute concurrently.
     max_pending_runs : int
         Maximum runs allowed to wait beyond the execution capacity.
+    cancellation_write_timeout_seconds : float
+        Maximum time shutdown waits for one cancellation write. A write that
+        outlives it is abandoned to lease reclamation and counted.
     lease_seconds : int
         Claim lease duration recorded with each started run.
     source_limits : GenerationSourceLimits
@@ -189,6 +193,9 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     provider_operation: str = "chat_completions"
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY
     max_pending_runs: int = DEFAULT_MAX_PENDING_RUNS
+    cancellation_write_timeout_seconds: float = (
+        DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS
+    )
     lease_seconds: int = DEFAULT_LEASE_SECONDS
     source_limits: GenerationSourceLimits = dc.field(
         default_factory=GenerationSourceLimits
