@@ -857,8 +857,11 @@ accepted in EP-M6. D13 records the review itself.
     `reconcile_claim` authority. It compares the durable
     `claim_token_for(run_id)` with the attempt's proof inside the caller's
     unit of work, so a failure write runs no nested unit of work and no hidden
-    I/O inside its own open transaction. The proof rule is unchanged: only the
-    attempt whose proof is stored may write.
+    I/O inside its own open transaction. The proof rule applies to the
+    tokenless path: an attempt with no token writes only when the stored proof
+    matches. An attempt that already holds a token for this run is trusted
+    without re-reading the proof, because the launcher set that token only
+    after the claim committed (D19's scope note).
   - `_LauncherRunSession` records QA outcome metrics after
     `persist_success` commits and after `record_failure` reports a written
     escalation, so a refused or failed write emits no QA verdict metrics.
