@@ -331,8 +331,10 @@ class GenerationRunClaimer:
             ExecutionClaim(
                 current_node=None,
                 started_at=started_at,
-                lease_expires_at=started_at
-                + dt.timedelta(seconds=self.runtime.lease_seconds),
+                # No lease: this claim and the terminal write that authorizes
+                # it commit in one transaction, so a lease would never become
+                # durable without the failure that already ends the run.
+                lease_expires_at=None,
                 claim_token=claim.proof,
             ),
         )

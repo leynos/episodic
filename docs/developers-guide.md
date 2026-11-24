@@ -2686,17 +2686,18 @@ disposes the database engine. After the drain, shutdown applies a fallback
 cancellation write for each task that was unfinished when cancellation began.
 This covers tasks cancelled before `_run_task` starts; terminal-state guards
 prevent duplicate failure events when the task handled cancellation itself.
-Both waits are bounded by `cancellation_write_timeout_seconds` (default 10
-seconds, injected through the scheduler runtime view and read by the claimer as
-`reconcile_timeout_seconds`). A shielded write that does not finish is
-abandoned rather than cancelled, and each miss increments
+Both shutdown waits are bounded by `cancellation_write_timeout_seconds`
+(default 10 seconds, injected through the scheduler runtime view and read by
+the claimer as `reconcile_timeout_seconds`). A shielded write that does not
+finish is abandoned rather than cancelled, and each miss increments
 `generation_run_cancellation_write_timeouts_total`. The failure component
 reconciles inside the caller's unit of work rather than opening a second one,
 and QA outcome metrics are published only after the terminal write succeeds. An
 unverified claim is never adopted, so recovery depends on the run's shape: a
-claimed run carries a lease from its failure claim and is recovered by
-expired-lease reclamation, while a run still pending is recovered by the next
-launcher's compare-and-set. During shutdown, run tasks are bounded by the same
+run whose earlier execution claim committed is running with that claim's lease
+and is recovered by expired-lease reclamation, while a failure-only claim
+commits with its terminal write and a stalled one leaves the run pending for
+the next launcher's compare-and-set. During shutdown, run tasks are bounded by the same
 deadline, because a unit of work's rollback or session close can stall after
 cancellation arrives; that case increments
 `generation_run_shutdown_task_timeouts_total`. A normal `drain()` remains

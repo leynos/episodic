@@ -210,13 +210,14 @@ class GenerationRunScheduler:
 
         A write that misses the deadline is abandoned, not cancelled: it stays
         shielded so it can still land. If it never commits, recovery depends
-        on the durable row. A run claimed for the failure is ``running`` with
-        that claim's lease, so expired-lease reclamation covers it. A run whose
-        claim never committed is still ``pending`` while the stalled
-        transaction may hold its row lock; a fresh claim needs that transaction
-        released first, for example by terminating its backend. Each miss
-        increments a counter so an operator can see that shutdown did not
-        confirm the write.
+        on the durable row. A run whose execution claim committed earlier is
+        ``running`` with that claim's lease, so expired-lease reclamation
+        covers it. A run whose failure-only claim never committed is still
+        ``pending``: the claim and its terminal write share one transaction, so
+        no separate running state is durable, and the stalled transaction may
+        hold the row lock until it is released, for example by terminating its
+        backend. Each miss increments a counter so an operator can see that
+        shutdown did not confirm the write.
         """
         pending = tuple(self._cancellation_tasks)
         if not pending:
@@ -333,9 +334,10 @@ class GenerationRunScheduler:
     def _report_cancellation_timeout(self, run_id: uuid.UUID | None) -> None:
         """Record that a cancellation write missed its deadline.
 
-        The write is left running: it is shielded, so it can still land. A
-        claimed run then falls back to expired-lease reclamation; a run whose
-        claim never committed stays pending, and any transaction still holding
+        The write is left running: it is shielded, so it can still land. A run
+        whose earlier execution claim committed falls back to expired-lease
+        reclamation. A failure-only claim commits with its terminal write, so a
+        stalled one leaves the run pending, and any transaction still holding
         its row lock must be released before a fresh claim can succeed.
         """
         log_info(

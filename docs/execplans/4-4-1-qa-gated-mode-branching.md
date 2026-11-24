@@ -849,21 +849,24 @@ accepted in EP-M6. D13 records the review itself.
 - **Decision D24: bound the cancellation and reconciliation waits.**
   - A cancellation write is shielded so a second cancellation cannot lose it,
     which also means an unresponsive database call could hold `shutdown()`
-    open forever. `drain()`, `record_cancellation_owned` and the claim
-    cancellation path (`_claim_and_start`'s shielded reconciliation) now wait
-    at most `cancellation_write_timeout_seconds` (default 10 seconds, injected
-    through the scheduler runtime view; the claimer reads it as
-    `reconcile_timeout_seconds`).
+    open forever. During shutdown, `drain()`, `record_cancellation_owned` and
+    the claim cancellation path (`_claim_and_start`'s shielded reconciliation)
+    wait at most `cancellation_write_timeout_seconds` (default 10 seconds,
+    injected through the scheduler runtime view; the claimer reads it as
+    `reconcile_timeout_seconds`). A normal `drain()` stays unbounded so its
+    documented contract holds.
   - An unverified claim is never adopted: a reconciliation that misses the
     deadline leaves `claim.token` unset, so the run is not failed by an
     invocation whose ownership the database did not confirm.
   - A write that misses the deadline is abandoned, not cancelled: it stays
-    shielded so it can still land. Recovery covers both shapes. A run already
-    claimed and running is recovered by expired-lease reclamation, because the
-    failure claim now writes a lease. A run whose claim never committed stays
-    pending; the next launcher's compare-and-set claims it once any transaction
-    still holding its row lock is released, for example by terminating that
-    backend. Each miss increments
+    shielded so it can still land. Recovery covers both shapes. A run whose
+    earlier execution claim committed is running with that claim's lease and
+    is recovered by expired-lease reclamation. A failure-only claim commits
+    with the terminal write it authorizes, so it never leaves a separate
+    running state: a stalled one leaves the run pending, and the next
+    launcher's compare-and-set claims it once any transaction still holding its
+    row lock is released, for example by terminating that backend. Each miss
+    increments
     `generation_run_cancellation_write_timeouts_total`, so an operator can see
     that shutdown did not confirm the write.
   - The run tasks themselves are bounded by the same deadline *during
