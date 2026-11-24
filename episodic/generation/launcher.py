@@ -78,6 +78,7 @@ from episodic.generation.launcher_support import (
     GenerationSourceLimits,
     RunClaim,
     SequentialDraftIds,
+    SourceDocumentLoader,
     classify_failure,
     source_from_document,
 )
@@ -187,6 +188,10 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         Sink for the per-run execution span.
     monotonic_clock : MonotonicClockPort
         Clock used to measure draft-generation latency.
+    source_document_loader : SourceDocumentLoader | None
+        Loader the claim stage uses for each canonical document. ``None``
+        resolves this module's ``source_from_document`` seam at call time,
+        which keeps the pre-split patch point for tests that replace it.
     """
 
     uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
@@ -211,6 +216,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
+    source_document_loader: SourceDocumentLoader | None = None
     _scheduler: GenerationRunScheduler = dc.field(init=False)
 
     def __post_init__(self) -> None:

@@ -71,8 +71,10 @@ class GenerationRunFailurePersistence:
     ) -> FailureWriteResult:
         """Record a terminal failed run state.
 
-        Authority is checked by this launcher component against the caller's
-        claim token, not by ``update_run_status``, which takes no token.
+        The command is three explicit steps: decide authority, write the
+        failure in one transaction, then observe the committed result. The
+        authority decision is returned as data rather than written back, so a
+        caller can act on it without inspecting hidden state.
 
         Parameters
         ----------
@@ -81,9 +83,9 @@ class GenerationRunFailurePersistence:
         failure : Failure
             Stable failure details, including an optional QA escalation.
         claim : RunClaim
-            This invocation's claim record. When it holds no token, the write
-            proceeds only if the authority callables can reconcile or claim
-            the run.
+            This invocation's claim record, used for its proof. Its token is
+            set only after a committed write, so a rollback leaves no
+            authority behind.
         draft : DraftScriptResult | None
             Draft that consumed inference, when the failure is an escalation.
 
@@ -91,6 +93,29 @@ class GenerationRunFailurePersistence:
         -------
         FailureWriteResult
             Whether the failure was written, and the token that authorized it.
+        """
+        token = await self._write_failure(run_id, failure, claim=claim, draft=draft)
+        if token is None:
+            return FailureWriteResult(written=False)
+        claim.token = token
+        self._observe_written_failure(run_id, failure)
+        return FailureWriteResult(written=True, token=token)
+
+    async def _write_failure(
+        self,
+        run_id: uuid.UUID,
+        failure: Failure,
+        *,
+        claim: RunClaim,
+        draft: DraftScriptResult | None,
+    ) -> ClaimToken | None:
+        """Write the failure transactionally and return its authority token.
+
+        Returns
+        -------
+        ClaimToken | None
+            The authorizing token when the write committed, or ``None`` when
+            this invocation does not own the run or it is already terminal.
 
         Raises
         ------
@@ -101,7 +126,7 @@ class GenerationRunFailurePersistence:
             try:
                 token = await self._failure_authority(uow, run_id, claim)
                 if token is None:
-                    return FailureWriteResult(written=False)
+                    return None
                 await self._append_failure_events(uow, run_id, failure)
                 if draft is not None:
                     if self.record_costs is None:
@@ -117,15 +142,14 @@ class GenerationRunFailurePersistence:
                         error_message=failure.message,
                         error_category=failure.category,
                         qa_status=failure.qa_status,
+                        claim_token=token.proof,
                     ),
                 )
                 await uow.commit()
             except RunAlreadyTerminal, RunNotFound:
                 await uow.rollback()
-                return FailureWriteResult(written=False)
-        claim.token = token
-        self._record_failure_observation(run_id, failure)
-        return FailureWriteResult(written=True, token=token)
+                return None
+        return token
 
     async def _failure_authority(
         self,
@@ -159,7 +183,7 @@ class GenerationRunFailurePersistence:
         # transaction. The proof comparison is the same rule the claimer uses.
         stored = await uow.generation_runs.claim_token_for(run_id)
         if stored == claim.proof:
-            return ClaimToken(run_id)
+            return ClaimToken(run_id, proof=claim.proof)
         if self.claim_for_failure is None:
             return None
         try:
@@ -174,12 +198,12 @@ class GenerationRunFailurePersistence:
             )
         return token
 
-    def _record_failure_observation(
+    def _observe_written_failure(
         self,
         run_id: uuid.UUID,
         failure: Failure,
     ) -> None:
-        """Record the metrics and log line for a written failure."""
+        """Record the metrics and log line for a committed failure."""
         self.runtime.metrics.increment_counter(
             _METRIC_TERMINAL_STATES,
             labels={

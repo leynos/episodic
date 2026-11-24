@@ -18,6 +18,7 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.generation_run_errors import (
     RunAlreadyTerminal,
+    RunClaimMismatch,
     RunNotFound,
 )
 from episodic.canonical.generation_run_ports import (
@@ -209,7 +210,21 @@ class InMemoryGenerationRunStore(
         *,
         update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
-        """Update lifecycle fields for a run."""
+        """Update lifecycle fields for a run.
+
+        A terminal transition must name the run's stored claim token, which is
+        compared here under the adapter's lock, matching the SQL adapter.
+
+        Returns
+        -------
+        GenerationRun
+            The updated run.
+
+        Raises
+        ------
+        RunClaimMismatch
+            If a terminal transition omits the token or names another claim.
+        """
         async with self._lock:
             run = self._require_mutable_run(
                 run_id,
@@ -227,6 +242,14 @@ class InMemoryGenerationRunStore(
                     requested_status=update.status.value,
                 ),
             )
+            stored_claim = self._claim_tokens.get(run_id)
+            # A stored claim requires the matching token; an unclaimed run has
+            # no owner to check, so an internal path may still terminate it.
+            claim_mismatch = (
+                stored_claim is not None and stored_claim != update.claim_token
+            )
+            if update.status.is_terminal() and claim_mismatch:
+                raise RunClaimMismatch(run_id)
             updated = dc.replace(
                 apply_status_update(run, update),
                 updated_at=self.time_provider(),

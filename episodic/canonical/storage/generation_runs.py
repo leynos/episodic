@@ -12,8 +12,15 @@ from episodic.canonical.domain import (
     JsonMapping,
     apply_status_update,
 )
-from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import event_page_minimum_sequence
+from episodic.canonical.generation_run_errors import (
+    RunAlreadyTerminal,
+    RunClaimMismatch,
+    RunNotFound,
+)
+from episodic.canonical.generation_run_ports import (
+    GenerationRunStatusUpdate,
+    event_page_minimum_sequence,
+)
 from episodic.logging import log_event as _log_event
 
 from .generation_run_lease_reclamation import (
@@ -28,6 +35,30 @@ from .generation_run_mappers import (
 from .generation_run_models import GenerationEventRecord, GenerationRunRecord
 from .generation_run_storage_runtime import generation_run_storage_runtime
 
+
+def _require_matching_claim(
+    record: GenerationRunRecord,
+    run_id: uuid.UUID,
+    update: GenerationRunStatusUpdate,
+) -> None:
+    """Reject a terminal write that does not name the locked run's claim.
+
+    A run that holds a stored claim may only be terminated by that claim. A
+    run that was never claimed (a launch failure before any claim, or a
+    reclamation candidate with no token) has no owner to check against, so an
+    explicit token is optional there.
+
+    Raises
+    ------
+    RunClaimMismatch
+        If the run holds a claim and the update names a different one.
+    """
+    if record.claim_token is None:
+        return
+    if update.claim_token != record.claim_token:
+        raise RunClaimMismatch(run_id)
+
+
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
@@ -36,10 +67,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.generation_claim import ExecutionClaim
-    from episodic.canonical.generation_run_ports import (
-        EventSeq,
-        GenerationRunStatusUpdate,
-    )
+    from episodic.canonical.generation_run_ports import EventSeq
     from episodic.canonical.storage.generation_run_storage_runtime import (
         GenerationRunStorageRuntime,
     )
@@ -192,8 +220,21 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         *,
         update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
-        """Update lifecycle fields for a run."""
+        """Update lifecycle fields for a run.
+
+        A terminal transition must name the claim that owns the run: the
+        stored ``claim_token`` is compared inside the row-locked transaction,
+        so a caller cannot terminate a run another invocation claimed.
+
+        Returns
+        -------
+        GenerationRun
+            The updated run. A terminal transition that omits the token, or
+            names another claim, raises ``RunClaimMismatch`` instead.
+        """
         record = await self._require_mutable_run(run_id, lock=True)
+        if update.status.is_terminal():
+            _require_matching_claim(record, run_id, update)
         resolved = apply_status_update(run_from_record(record), update)
         record.status = resolved.status
         record.current_node = resolved.current_node

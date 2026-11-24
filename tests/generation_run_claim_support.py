@@ -19,7 +19,7 @@ from episodic.generation.draft_script import (
     DraftScriptSource,
 )
 from episodic.generation.launcher_claim import ClaimerContext, GenerationRunClaimer
-from episodic.generation.launcher_support import ClaimedRun
+from episodic.generation.launcher_support import ClaimedRun, ClaimToken
 from episodic.llm import LLMUsage
 
 if typ.TYPE_CHECKING:
@@ -119,11 +119,13 @@ def draft_result() -> DraftScriptResult:
 
 def claimed_run_value() -> ClaimedRun:
     """Return a claimed-run value for generation-only tests."""
+    run = running_run()
     return ClaimedRun(
-        run=running_run(),
+        run=run,
         episode=episode(),
         sources=(source(),),
         presenter_profiles=(),
+        token=ClaimToken(run.id, proof=uuid.uuid4()),
     )
 
 

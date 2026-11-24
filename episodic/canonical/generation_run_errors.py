@@ -25,6 +25,15 @@ class RunAlreadyTerminal(GenerationRunError):  # ruff: ignore[error-suffix-on-ex
         super().__init__(msg)
 
 
+class RunClaimMismatch(GenerationRunError):  # ruff: ignore[error-suffix-on-exception-name] - stable ExecPlan contract.
+    """Raised when a terminal write names a claim the run does not hold."""
+
+    def __init__(self, run_id: uuid.UUID) -> None:
+        """Initialize an error for a claim that does not match the stored one."""
+        msg = f"generation run claim does not match: {run_id}"
+        super().__init__(msg)
+
+
 class StaleEventSequence(GenerationRunError):  # ruff: ignore[error-suffix-on-exception-name] - stable ExecPlan contract.
     """Raised when an event sequence conflicts with the current stream."""
 

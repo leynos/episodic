@@ -287,6 +287,11 @@ inference budget on a branch that cannot pass.
   completeness assessment; see D17 and D18.
 - [x] (2026-11-23) Merged `main` at #438 and ported the QA-gated feature onto
   the injected launcher components; see D19 to D23 and the integration record.
+- [x] (2026-11-24) Eighth round: the two CodeRabbit pre-merge rows accepted
+  and implemented — a store-level claim-token gate on every terminal write, a
+  private reconciliation deadline, an injectable source loader, narrow
+  per-stage runtime protocols, an explicit claim-token return, and a split
+  failure command.
 - [x] (2026-11-24) Seventh round, from CodeRabbit's pre-merge rows at
   `788119cf`..`bfd4aa78`: bounded shutdown (D24) with a normal-drain contract,
   in-transaction failure reconciliation and post-write QA metrics (D25), the
@@ -783,10 +788,9 @@ accepted in EP-M6. D13 records the review itself.
     comparing its stored proof, because the launcher set it only after the
     claim committed. The store's row lock does not check ownership, so this
     guard belongs at the launcher boundary.
-  - A store-level token gate on every terminal write (success, failure,
-    cancellation, reclamation) would be a separate change: it needs a token
-    parameter on the terminal command, comparison inside the locked
-    transaction, and contract tests for wrong and absent tokens.
+  - The gate is now implemented: every terminal write names its claim proof,
+    both adapters compare it under the row lock, and contract tests cover a
+    wrong token, a missing token and an unclaimed run.
   - Date/Author: 2026-11-24, implementation agent, from CodeRabbit's Domain
     Architecture warning.
 - **Decision D20: restore the pre-4.4.1 request-error precedence.**
@@ -1595,23 +1599,37 @@ These are trusted, not verified.
 - `accepted_quality_modes` always contains `draft_without_qa`, so a
   deployment policy that forbids it is not supported. Revisit this with the
   approval workflow (4.2.x).
-- Two stakeholder decisions remain open as CodeRabbit's pre-merge rows record
-  them. Each needs acceptance or a separate change; neither is a defect the
-  implementation can settle on its own.
-  1. **Store-level token gate (Domain Architecture, a warning).** The claim
-     token is enforced by the launcher, not compared by `update_run_status`.
-     A gate on every terminal write needs a token parameter on the terminal
-     command, comparison inside the locked transaction, and contract tests
-     for wrong and absent tokens; it changes the contract the success path,
-     cancellation and lease reclamation share. D19's scope note records the
-     boundary as it stands.
-  2. **Design-shaped Unit Architecture items (that row, failing).** The
-     patch-point lookup in `_LauncherSourceLoadRuntime`, the whole-launcher
-     back-references in the runtime views, the mutable `RunClaim` authority,
-     and the combined responsibilities in `GenerationRunFailurePersistence`
-     and `_LauncherRunSession` are the shapes #438's component split chose.
-     Narrowing any of them is a structural change of its own, and the live
-     views exist so a replaced sink is still observed.
+- The two CodeRabbit pre-merge rows are accepted and implemented, not deferred.
+- **Store-level token gate (Domain Architecture).** Every terminal write names
+  the claim that owns the run. `GenerationRunStatusUpdate` carries an optional
+  `claim_token`; both store adapters compare it with the stored value inside
+  the same locked transaction and raise `RunClaimMismatch` on an absent or
+  different token. A run with no stored claim — a launch failure before any
+  claim, or a reclamation candidate — has no owner to check, so an internal
+  path may still terminate it. Tests:
+  `test_a_terminal_write_requires_the_ matching_claim` (missing and wrong
+  tokens rejected, correct token accepted) and
+  `test_an_unclaimed_run_needs_no_token`. `ClaimToken` now carries the
+  per-attempt `proof`, which is the value the store compares.
+- **Unit Architecture structural items.**
+  1. Claim reconciliation has its own `reconcile_timeout_seconds`; it no longer
+     borrows the cancellation-write deadline.
+  2. The source-document loader is an injectable launcher dependency
+     (`source_document_loader`), used when supplied; the module-level seam is
+     only the default, because existing tests replace it.
+  3. Each runtime view is typed against a narrow per-stage Protocol
+     (`_SchedulerHost`, `_ClaimerHost`, `_PersistenceHost`, `_SourceLoadHost`)
+     rather than the whole launcher, so a stage's dependency is explicit in
+     the type while reads still go through the host at use time, which keeps
+     the live-replacement contract.
+  4. `_claim_and_start` returns a `ClaimedRunResult` carrying the token;
+     `ClaimedRun` also carries it, so the success and failure paths name their
+     authority instead of relying on hidden state. The one documented
+     exception is the cancelled-commit path, which cannot return a value and
+     therefore still adopts the token in place.
+  5. `GenerationRunFailurePersistence.record_failure` is split into
+     authority-plus-transaction (`_write_failure`) and post-commit
+     observation (`_observe_written_failure`).
 
 ## Plan of work
 
@@ -2254,7 +2272,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,624 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
+  2,626 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2354,8 +2372,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,813
-  definitions and 2,624 passed, 7 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,852
+  definitions and 2,626 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

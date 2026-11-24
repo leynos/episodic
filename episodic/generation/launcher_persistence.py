@@ -261,6 +261,7 @@ class GenerationRunPersistence:
                 current_node=None,
                 ended_at=self.runtime.clock(),
                 qa_status=(UNCHANGED if qa.status is QaStatus.SKIPPED else qa.status),
+                claim_token=claimed.token.proof,
             ),
         )
 

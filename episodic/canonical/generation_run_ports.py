@@ -56,6 +56,11 @@ class GenerationRunStatusUpdate:
     qa_status : QaStatus | Unchanged
         QA status to record; :data:`UNCHANGED` keeps the persisted value. A
         failure write must not silently erase a QA outcome still being decided.
+    claim_token : uuid.UUID | None
+        Proof the writer holds the run's claim. A terminal transition to
+        ``FAILED`` or ``SUCCEEDED`` must supply the stored token, which the
+        store compares inside its locked transaction. Non-terminal
+        transitions leave it ``None``.
     """
 
     status: GenerationRunStatus
@@ -64,6 +69,7 @@ class GenerationRunStatusUpdate:
     error_message: str | None = None
     error_category: str | None = None
     qa_status: QaStatus | Unchanged = UNCHANGED
+    claim_token: uuid.UUID | None = None
 
 
 def event_seq(value: int) -> EventSeq:

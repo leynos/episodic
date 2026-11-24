@@ -20,6 +20,7 @@ from episodic.canonical.generation_quality import QualityMode
 from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
+    ClaimedRunResult,
     ClaimToken,
     Clock,
     GenerationSourceLimitError,
@@ -41,7 +42,6 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from episodic.canonical.domain import GenerationRun
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import (
         DraftScriptGenerator,
@@ -178,8 +178,9 @@ class GenerationRunClaimer:
         run_id : uuid.UUID
             Identifier of the pending generation run to claim.
         claim : RunClaim | None
-            Per-invocation claim record. When supplied, its token is set as
-            soon as the claim commits so a later failure knows it owns the run.
+            Per-invocation claim record. Its token is set as soon as the claim
+            commits, which also carries authority out of a cancelled claim;
+            ``_claim_and_start`` reports the same token in its result.
 
         Returns
         -------
@@ -192,9 +193,12 @@ class GenerationRunClaimer:
         GenerationSourceLimitError.source_count
             If the run's source bundle exceeds the configured source count.
         """
-        run = await self._claim_and_start(run_id, claim or RunClaim())
-        if run is None:
+        claim = claim or RunClaim()
+        result = await self._claim_and_start(run_id, claim)
+        if result is None:
             return None
+        run = result.run
+        claim.token = result.token
         async with self.runtime.uow_factory() as uow:
             episode = await require_episode(uow, run.episode_id)
             documents = await uow.source_documents.list_for_job(run.source_bundle_id)
@@ -218,6 +222,7 @@ class GenerationRunClaimer:
             episode=episode,
             sources=sources,
             presenter_profiles=presenter_profiles,
+            token=result.token,
         )
 
     async def generate(self, claimed: ClaimedRun) -> DraftScriptResult:
@@ -262,19 +267,23 @@ class GenerationRunClaimer:
         self,
         run_id: uuid.UUID,
         claim: RunClaim,
-    ) -> GenerationRun | None:
+    ) -> ClaimedRunResult | None:
         """Linearize a claim and make its started event durable before hydration.
 
         Returns
         -------
-        GenerationRun | None
-            The claimed run, or ``None`` when another invocation owns it.
+        ClaimedRunResult | None
+            The claimed run and the token that authorizes later writes, or
+            ``None`` when another invocation owns it.
 
         Raises
         ------
         asyncio.CancelledError
             If cancelled; the claim is reconciled against the durable row
-            first so a committed claim keeps an owner.
+            first so a committed claim keeps an owner. This is the one path
+            that must adopt the token in place, because the record has to
+            carry authority out of a call that never returns; the claim's
+            token is therefore also set here.
         """
         async with self.runtime.uow_factory() as uow:
             started_at = self.runtime.clock()
@@ -306,8 +315,11 @@ class GenerationRunClaimer:
                         timeout=self.runtime.reconcile_timeout_seconds,
                     )
                 raise
-            claim.token = ClaimToken(run.id)
-        return run
+            token = ClaimToken(run.id, proof=claim.proof)
+            # Cancellation cannot return a value, so the claim carries the
+            # token out of this call; every returning path also reports it.
+            claim.token = token
+        return ClaimedRunResult(run=run, token=token)
 
     async def claim_for_failure(
         self,
@@ -338,7 +350,7 @@ class GenerationRunClaimer:
                 claim_token=claim.proof,
             ),
         )
-        return None if run is None else ClaimToken(run_id)
+        return None if run is None else ClaimToken(run_id, proof=claim.proof)
 
     async def reconcile(
         self,
@@ -358,8 +370,9 @@ class GenerationRunClaimer:
             stored = await uow.generation_runs.claim_token_for(run_id)
         if stored != claim.proof:
             return None
-        claim.token = ClaimToken(run_id)
-        return claim.token
+        token = ClaimToken(run_id, proof=claim.proof)
+        claim.token = token
+        return token
 
 
 __all__ = ["ClaimerContext", "ClaimerRuntime", "GenerationRunClaimer"]

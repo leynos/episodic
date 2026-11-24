@@ -67,6 +67,7 @@ __all__ = [
     "BoundedSourceLoader",
     "ClaimToken",
     "ClaimedRun",
+    "ClaimedRunResult",
     "Clock",
     "CostRecorderFactory",
     "DraftIdFactoryFactory",
@@ -115,20 +116,39 @@ class SequentialDraftIds:
 
 
 @dc.dataclass(frozen=True, slots=True)
+class ClaimToken:
+    """Proof that one invocation won a run's pending-to-running claim.
+
+    ``proof`` is the per-attempt value stored as the run's ``claim_token``; the
+    store compares it on every terminal write, so a token is also the writer's
+    key to terminate the run. ``run_id`` names the run it belongs to.
+    """
+
+    run_id: uuid.UUID
+    proof: uuid.UUID | None = None
+
+
+@dc.dataclass(frozen=True, slots=True)
 class ClaimedRun:
-    """Generation input loaded after claiming one run."""
+    """Generation input loaded after claiming one run.
+
+    ``token`` is the authority this invocation won with; terminal writes name
+    it so the store can confirm the writer owns the run.
+    """
 
     run: GenerationRun
     episode: CanonicalEpisode
     sources: tuple[DraftScriptSource, ...]
     presenter_profiles: tuple[DraftPresenterProfile, ...]
+    token: ClaimToken
 
 
 @dc.dataclass(frozen=True, slots=True)
-class ClaimToken:
-    """Proof that one invocation won a run's pending-to-running claim."""
+class ClaimedRunResult:
+    """One won claim reported as data: the run and its authority token."""
 
-    run_id: uuid.UUID
+    run: GenerationRun
+    token: ClaimToken
 
 
 @dc.dataclass(slots=True)

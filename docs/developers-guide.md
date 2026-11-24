@@ -2748,11 +2748,14 @@ the same graph can be driven by the launcher or by a test double.
   matrix test's expectations. No graph change is needed.
 - **Claims.** `episodic.canonical.generation_claim.ExecutionClaim` is the
   pending-to-running command: the node it starts, the lease bounds, and a
-  per-attempt `claim_token`. `ClaimToken` is the launcher's proof that this
-  attempt won that transition; it authorizes the failure write and is retained
-  only after the claim commits. The repository does not compare it (see D19's
-  scope note in the 4.4.1 plan); the launcher enforces it, and a token naming a
-  different run is refused.
+  per-attempt `claim_token`. `ClaimToken(run_id, proof)` is the launcher's
+  proof that this attempt won that transition. Every terminal write names it:
+  `GenerationRunStatusUpdate.claim_token` carries the proof, and both store
+  adapters compare it with the stored value under the row lock, raising
+  `RunClaimMismatch` for an absent or different token. A run with no stored
+  claim — a launch failure before any claim, or a reclamation candidate — has
+  no owner to check, so an internal path may still terminate it. A
+  launcher-side guard also refuses a token naming a different run.
 - **Capability gate.** `ContentGenerationGraphPort.accepted_quality_modes()`
   feeds `ApiDependencies.accepted_quality_modes` and
   `GenerationRunsResourceConfig`. The REST layer applies, in order: parser body
