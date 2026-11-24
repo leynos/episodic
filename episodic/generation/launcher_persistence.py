@@ -27,12 +27,10 @@ from episodic.cost.pricing_snapshot import PricedService
 from episodic.cost.recorder import CostProviderOperation
 from episodic.generation.launcher_quality import QaOutcome, qa_result_payload
 from episodic.generation.launcher_support import (
-    ClaimToken,
     Clock,
     CostRecorderFactory,
     PersistedTei,
     ProviderCallRecordRequest,
-    RunClaim,
     draft_generated_payload,
     provider_call_record,
 )
@@ -59,16 +57,6 @@ class _SuccessOutcome:
     result: DraftScriptResult
     persisted_tei: PersistedTei
     qa: QaOutcome
-
-
-type ClaimAuthority = cabc.Callable[
-    [CanonicalUnitOfWork, uuid.UUID, RunClaim],
-    cabc.Awaitable[ClaimToken | None],
-]
-type ReconcileAuthority = cabc.Callable[
-    [uuid.UUID, RunClaim],
-    cabc.Awaitable[ClaimToken | None],
-]
 
 
 class PersistenceRuntime(typ.Protocol):
@@ -143,8 +131,6 @@ class GenerationRunPersistence:
     """
 
     runtime: PersistenceRuntime
-    claim_for_failure: ClaimAuthority | None = None
-    reconcile_claim: ReconcileAuthority | None = None
 
     async def record_draft_generated(
         self,

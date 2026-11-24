@@ -215,17 +215,19 @@ class _LauncherRunSession:
         """Persist the draft and record the successful terminal."""
         claimed = self._require_claimed()
         draft = self._require_draft()
+        await self.persistence.persist_success(
+            claimed,
+            draft,
+            qa=QaOutcome(qa_status, evaluations),
+        )
+        # Record the QA outcome only after the terminal write commits, so a
+        # failed persistence cannot emit a passing verdict.
         if qa_status is QaStatus.PASSED:
             record_qa_metrics(
                 self.metrics,
                 QualityVerdict.PASSED,
                 evaluations,
             )
-        await self.persistence.persist_success(
-            claimed,
-            draft,
-            qa=QaOutcome(qa_status, evaluations),
-        )
 
     async def escalate(
         self,
@@ -234,7 +236,6 @@ class _LauncherRunSession:
     ) -> None:
         """Record the escalated terminal without persisting TEI."""
         draft = self._require_draft()
-        record_qa_metrics(self.metrics, verdict, evaluations)
         token = self._require_token()
         self.claim.token = token
         result = await self.failures.record_failure(
@@ -250,6 +251,8 @@ class _LauncherRunSession:
         if not result.written:
             msg = f"generation run {self.run_id} refused the escalation write"
             raise RunNotClaimedError(msg)
+        # The escalation is durable now, so its QA outcome metrics are real.
+        record_qa_metrics(self.metrics, verdict, evaluations)
 
     def _require_token(self) -> ClaimToken:
         """Return this session's claim token, or fail loudly without one."""

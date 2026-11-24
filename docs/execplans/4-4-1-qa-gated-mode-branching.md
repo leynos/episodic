@@ -830,6 +830,22 @@ accepted in EP-M6. D13 records the review itself.
     write; only `_cancelled_run_ids` (recorded writes) deduplicates
     unconditionally.
   - Date/Author: 2026-11-23, implementation agent.
+- **Decision D25: reconcile inside the failure transaction and publish QA
+  metrics only after the write.**
+  - `GenerationRunFailurePersistence` no longer takes a separate
+    `reconcile_claim` authority. It compares the durable
+    `claim_token_for(run_id)` with the attempt's proof inside the caller's
+    unit of work, so a failure write runs no nested unit of work and no hidden
+    I/O inside its own open transaction. The proof rule is unchanged: only the
+    attempt whose proof is stored may write.
+  - `_LauncherRunSession` records QA outcome metrics after
+    `persist_success` commits and after `record_failure` reports a written
+    escalation, so a refused or failed write emits no QA verdict metrics.
+  - Tests: `test_refused_escalation_records_no_qa_metrics`, the unchanged
+    same-unit-of-work test, and the existing escalation metric assertions in
+    the INV-9 matrix.
+  - Date/Author: 2026-11-24, implementation agent, from CodeRabbit's Unit
+    Architecture pre-merge row.
 - **Decision D24: bound the cancellation and reconciliation waits.**
   - A cancellation write is shielded so a second cancellation cannot lose it,
     which also means an unresponsive database call could hold `shutdown()`
@@ -2178,7 +2194,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,617 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
+  2,620 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2278,8 +2294,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,794
-  definitions and 2,617 passed, 7 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,799
+  definitions and 2,620 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

@@ -291,7 +291,6 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         failures = GenerationRunFailurePersistence(
             runtime=_LauncherPersistenceRuntime(self),
             claim_for_failure=claimer.claim_for_failure,
-            reconcile_claim=claimer.reconcile,
             record_costs=persistence.record_costs,
         )
         return claimer, persistence, failures

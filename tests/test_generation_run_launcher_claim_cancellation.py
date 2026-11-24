@@ -11,12 +11,23 @@ import contextlib
 import dataclasses as dc
 import types
 import typing as typ
+import uuid
 
 import pytest
 
 from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
-from episodic.generation.launcher_support import ClaimToken, RunClaim
+from episodic.canonical.generation_routing import QualityVerdict
+from episodic.generation.launcher_session import (
+    RunNotClaimedError,
+    _LauncherRunSession,
+)
+from episodic.generation.launcher_support import (
+    ClaimToken,
+    FailureWriteResult,
+    RunClaim,
+)
+from tests.generation_run_launcher_observation_support import RecordingMetrics
 from tests.generation_run_launcher_read_fault_support import (
     CommitFault,
     CommitFaultUnitOfWork,
@@ -33,10 +44,10 @@ from tests.test_generation_run_launcher_claim_authority import _launcher, _load
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.launcher_claim import GenerationRunClaimer
 
 
@@ -79,12 +90,12 @@ async def test_shutdown_waits_for_a_cancelled_cancellation_write(
 
 
 @pytest.mark.asyncio
-async def test_blocked_reconciliation_then_second_cancellation(
+async def test_blocked_authority_then_second_cancellation(
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Cancelling the task during blocked reconciliation still records once."""
-    from episodic.generation.launcher_claim import GenerationRunClaimer
+    """Cancelling the task during a blocked authority read still records once."""
+    from episodic.generation.launcher_failure import GenerationRunFailurePersistence
 
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
@@ -92,24 +103,25 @@ async def test_blocked_reconciliation_then_second_cancellation(
     await run_launcher._components()[0].claim(run_id, claim)
     claim.token = None
 
-    original = GenerationRunClaimer.reconcile
+    original = GenerationRunFailurePersistence._failure_authority
     gate = asyncio.Event()
     release = asyncio.Event()
 
-    async def blocked_reconcile(
-        self: GenerationRunClaimer,
+    async def blocked_authority(
+        self: GenerationRunFailurePersistence,
+        uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
-        candidate: RunClaim,
+        claim: RunClaim,
     ) -> ClaimToken | None:
-        """Block reconciliation until the test releases it."""
+        """Block the authority read until the test releases it."""
         gate.set()
         await release.wait()
-        return await original(self, run_id, candidate)
+        return await original(self, uow, run_id, claim)
 
     monkeypatch.setattr(
-        GenerationRunClaimer,
-        "reconcile",
-        blocked_reconcile,
+        GenerationRunFailurePersistence,
+        "_failure_authority",
+        blocked_authority,
     )
 
     first = asyncio.create_task(
@@ -117,7 +129,7 @@ async def test_blocked_reconciliation_then_second_cancellation(
     )
     await asyncio.wait_for(gate.wait(), timeout=5)
     # Cancel the task that started the shielded write, then issue a second
-    # cancellation while the write is still blocked in reconciliation.
+    # cancellation while the write is still blocked in its authority read.
     first.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await first
@@ -286,3 +298,41 @@ async def test_a_timed_out_cancellation_leaves_the_run_claimable(
     fresh = _launcher(session_factory)
     won = await fresh._components()[0].claim(run_id, RunClaim())
     assert won is not None, "the next launcher must be able to claim the run"
+
+
+@pytest.mark.asyncio
+async def test_refused_escalation_records_no_qa_metrics() -> None:
+    """A refused escalation write leaves no QA outcome metrics behind."""
+    run_id = uuid.uuid4()
+    metrics = RecordingMetrics()
+
+    class _Refusing:
+        """Failure component whose writes are always refused."""
+
+        async def record_failure(self, *args: object, **kwargs: object) -> object:
+            """Refuse the write."""
+            _ = (args, kwargs)
+            return FailureWriteResult(written=False)
+
+    session = _LauncherRunSession(
+        claimer=typ.cast("typ.Any", _Refusing()),
+        persistence=typ.cast("typ.Any", _Refusing()),
+        failures=typ.cast("typ.Any", _Refusing()),
+        uow_factory=typ.cast("typ.Any", lambda: None),
+        clock=typ.cast("typ.Any", lambda: None),
+        metrics=metrics,
+        run_id=run_id,
+        claim=RunClaim(token=ClaimToken(uuid.uuid4())),
+    )
+    session.draft = draft_result(valid_tei())
+
+    with pytest.raises(RunNotClaimedError, match="refused the escalation"):
+        await session.escalate(QualityVerdict.FAILED, ())
+
+    qa_metrics = [
+        observation.name
+        for observation in metrics.observations
+        if observation.kind == "counter"
+        and observation.name.startswith("generation_run_qa_")
+    ]
+    assert not qa_metrics, f"a refused write must not emit QA metrics: {qa_metrics}"

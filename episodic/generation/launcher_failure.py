@@ -40,10 +40,6 @@ type ClaimAuthority = cabc.Callable[
     [CanonicalUnitOfWork, uuid.UUID, RunClaim],
     cabc.Awaitable[ClaimToken | None],
 ]
-type ReconcileAuthority = cabc.Callable[
-    [uuid.UUID, RunClaim],
-    cabc.Awaitable[ClaimToken | None],
-]
 type RecordCostsAuthority = cabc.Callable[
     [CanonicalUnitOfWork, uuid.UUID, DraftScriptResult],
     cabc.Awaitable[None],
@@ -56,7 +52,6 @@ class GenerationRunFailurePersistence:
 
     runtime: PersistenceRuntime
     claim_for_failure: ClaimAuthority | None = None
-    reconcile_claim: ReconcileAuthority | None = None
     record_costs: RecordCostsAuthority | None = None
 
     async def record_failure(
@@ -138,10 +133,12 @@ class GenerationRunFailurePersistence:
         """
         if claim.token is not None:
             return claim.token
-        if self.reconcile_claim is not None:
-            token = await self.reconcile_claim(run_id, claim)
-            if token is not None:
-                return token
+        # Reconcile through the caller's unit of work, not a second one: a
+        # nested unit of work would run hidden I/O inside this command's open
+        # transaction. The proof comparison is the same rule the claimer uses.
+        stored = await uow.generation_runs.claim_token_for(run_id)
+        if stored == claim.proof:
+            return ClaimToken(run_id)
         if self.claim_for_failure is None:
             return None
         try:

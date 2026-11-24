@@ -13,7 +13,7 @@ import uuid
 import pytest
 import sqlalchemy as sa
 
-from episodic.api.episode_access import read_owned_episode
+from episodic.api.episode_access import read_owned_episode, read_owned_episode_and_run
 from episodic.canonical.domain import (
     EpisodeTeiUpdate,
     GenerationRun,
@@ -104,3 +104,26 @@ async def test_read_owned_episode_does_not_flush_staged_work(
         assert await session.scalar(sa.text("SELECT 1")) == 1, (
             "the session stopped working after the ownership reads"
         )
+
+
+@pytest.mark.asyncio
+async def test_read_owned_episode_and_run_returns_the_producing_run(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The producing run is returned only to its own actor."""
+    episode_id = await _episode_with_launcher_run(session_factory)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        owned = await read_owned_episode_and_run(uow, episode_id, _ACTOR)
+        other_actor = await read_owned_episode_and_run(uow, episode_id, "principal-b")
+        anonymous = await read_owned_episode_and_run(uow, episode_id, None)
+        missing = await read_owned_episode_and_run(uow, uuid.uuid7(), _ACTOR)
+
+    assert owned is not None, "the owning actor must resolve the episode and run"
+    episode, run = owned
+    assert episode.id == episode_id, episode.id
+    assert run.episode_id == episode_id, run.episode_id
+    assert run.actor == _ACTOR, run.actor
+    assert other_actor is None, "another actor must not resolve the run"
+    assert anonymous is None, "an unauthenticated request must not resolve the run"
+    assert missing is None, "an unknown episode must not resolve"
