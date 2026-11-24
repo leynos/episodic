@@ -287,6 +287,13 @@ inference budget on a branch that cannot pass.
   completeness assessment; see D17 and D18.
 - [x] (2026-11-23) Merged `main` at #438 and ported the QA-gated feature onto
   the injected launcher components; see D19 to D23 and the integration record.
+- [x] (2026-11-24) Seventh round, from CodeRabbit's pre-merge rows at
+  `788119cf`..`bfd4aa78`: bounded shutdown (D24) with a normal-drain contract,
+  in-transaction failure reconciliation and post-write QA metrics (D25), the
+  foreign-run token guard, `claim_token_for` and `read_owned_episode_and_run`
+  direct tests, and the honest scope of the claim token. CodeRabbit reports no
+  new functional defect at `bfd4aa78`; the remaining blockers are the
+  stakeholder decisions listed under Residual gaps.
 - [x] (2026-11-24) Sixth round: the bounded cancellation write (D24), the
   claim-proof-preserving test helper, identifier escaping in the PostgreSQL
   DDL, and the D7/D20 and INV-8/D15 record reconciliations.
@@ -1584,6 +1591,23 @@ These are trusted, not verified.
 - `accepted_quality_modes` always contains `draft_without_qa`, so a
   deployment policy that forbids it is not supported. Revisit this with the
   approval workflow (4.2.x).
+- Two stakeholder decisions remain open as CodeRabbit's pre-merge rows record
+  them. Each needs acceptance or a separate change; neither is a defect the
+  implementation can settle on its own.
+  1. **Store-level token gate (Domain Architecture, a warning).** The claim
+     token is enforced by the launcher, not compared by `update_run_status`.
+     A gate on every terminal write needs a token parameter on the terminal
+     command, comparison inside the locked transaction, and contract tests
+     for wrong and absent tokens; it changes the contract the success path,
+     cancellation and lease reclamation share. D19's scope note records the
+     boundary as it stands.
+  2. **Design-shaped Unit Architecture items (that row, failing).** The
+     patch-point lookup in `_LauncherSourceLoadRuntime`, the whole-launcher
+     back-references in the runtime views, the mutable `RunClaim` authority,
+     and the combined responsibilities in `GenerationRunFailurePersistence`
+     and `_LauncherRunSession` are the shapes #438's component split chose.
+     Narrowing any of them is a structural change of its own, and the live
+     views exist so a replaced sink is still observed.
 
 ## Plan of work
 
