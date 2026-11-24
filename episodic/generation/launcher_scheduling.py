@@ -31,7 +31,10 @@ DEFAULT_MAX_CONCURRENCY = 4
 DEFAULT_MAX_PENDING_RUNS = 16
 #: How long shutdown waits for one cancellation write before giving up on it.
 #: A write that outlives this is abandoned, not cancelled: it stays shielded so
-#: it can still land, and lease reclamation covers the run if it never does.
+#: it can still land. If it never lands, a run whose earlier execution claim
+#: committed falls back to lease reclamation; an uncommitted failure-only claim
+#: leaves the run pending with its row possibly locked until that transaction
+#: is released.
 DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS = 10.0
 _METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
 _METRIC_PENDING_DEPTH = "generation_run_pending_depth"
