@@ -165,3 +165,26 @@ async def test_failure_write_without_a_claim_is_rejected(
 
     with pytest.raises(TypeError):
         await untyped(run_id, Failure("no claim", "unexpected"))
+
+
+@pytest.mark.asyncio
+async def test_a_token_for_another_run_cannot_fail_this_run(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A cached token naming another run must not authorize this failure."""
+    this_run, _ = await prepare_pending_qa_gated_run(session_factory)
+    other_run_id = uuid.uuid4()
+    run_launcher = _launcher(session_factory)
+    handed_over = RunClaim(token=ClaimToken(other_run_id))
+
+    result = await run_launcher._components()[2].record_failure(
+        this_run,
+        Failure("foreign token", "unexpected"),
+        claim=handed_over,
+    )
+
+    assert result.written is False, result
+    run, kinds = await _load(session_factory, this_run)
+    assert run.status is GenerationRunStatus.PENDING, kinds
+    assert "run.failed" not in kinds, kinds
+    assert run.error_category is None, run.error_category

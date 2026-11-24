@@ -768,6 +768,10 @@ accepted in EP-M6. D13 records the review itself.
     write, which routes and audits ownership rather than fencing the store
     itself. `launcher_failure`'s docstrings state that boundary explicitly
     instead of implying the repository compares the token.
+  - A cached token names exactly one run: `_failure_authority` refuses a
+    token whose `run_id` differs from the run being failed, so a caller
+    cannot fail a run it never claimed. The store's row lock does not check
+    ownership, so this guard belongs at the launcher boundary.
   - A store-level token gate on every terminal write (success, failure,
     cancellation, reclamation) would be a separate change: it needs a token
     parameter on the terminal command, comparison inside the locked
@@ -2215,7 +2219,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,621 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
+  2,622 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2315,8 +2319,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,807
-  definitions and 2,621 passed, 7 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,808
+  definitions and 2,622 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

@@ -139,9 +139,20 @@ class GenerationRunFailurePersistence:
         -------
         ClaimToken | None
             The existing token, a reconciled or freshly claimed one, or
-            ``None`` when another launcher owns the run.
+            ``None`` when another launcher owns the run or the cached token
+            names a different run.
         """
         if claim.token is not None:
+            if claim.token.run_id != run_id:
+                # A token names one run. Accepting another run's token would
+                # let a caller fail a run this invocation never claimed, and
+                # the store's row lock does not check ownership.
+                log_info(
+                    logger,
+                    "generation_run_launcher.foreign_claim_token run_id=%s",
+                    run_id,
+                )
+                return None
             return claim.token
         # Reconcile through the caller's unit of work, not a second one: a
         # nested unit of work would run hidden I/O inside this command's open
