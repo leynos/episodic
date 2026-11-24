@@ -2687,14 +2687,17 @@ cancellation write for each task that was unfinished when cancellation began.
 This covers tasks cancelled before `_run_task` starts; terminal-state guards
 prevent duplicate failure events when the task handled cancellation itself.
 Both waits are bounded by `cancellation_write_timeout_seconds` (default 10
-seconds, injected through the scheduler runtime view): a shielded write that
-does not finish is abandoned rather than cancelled, the run falls back to
-expired-lease reclamation, and
-`generation_run_cancellation_write_timeouts_total` records that shutdown did
-not confirm the write. The launcher emits a `generation_run.execute` span and
-bounded terminal, draft-error, QA-bypass, and latency metrics; the API command
-span and stable failure categories provide the corresponding request and
-outcome trace without unbounded run identifiers in metric labels.
+seconds, injected through the scheduler runtime view and read by the claimer as
+`reconcile_timeout_seconds`). A shielded write that does not finish is
+abandoned rather than cancelled, and each miss increments
+`generation_run_cancellation_write_timeouts_total`. An unverified claim is
+never adopted, so recovery depends on the run's shape: a claimed run carries a
+lease from its failure claim and is recovered by expired-lease reclamation,
+while a run still pending is recovered by the next launcher's compare-and-set.
+The launcher emits a `generation_run.execute` span and bounded terminal,
+draft-error, QA-bypass, and latency metrics; the API command span and stable
+failure categories provide the corresponding request and outcome trace without
+unbounded run identifiers in metric labels.
 
 ### Manual recovery of expired generation-run leases
 

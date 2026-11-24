@@ -830,19 +830,28 @@ accepted in EP-M6. D13 records the review itself.
     write; only `_cancelled_run_ids` (recorded writes) deduplicates
     unconditionally.
   - Date/Author: 2026-11-23, implementation agent.
-- **Decision D24: bound the cancellation write so shutdown cannot hang.**
+- **Decision D24: bound the cancellation and reconciliation waits.**
   - A cancellation write is shielded so a second cancellation cannot lose it,
     which also means an unresponsive database call could hold `shutdown()`
-    open forever. `drain()` and `record_cancellation_owned` now both wait at
-    most `cancellation_write_timeout_seconds` (default 10 seconds, injected
-    through the scheduler runtime view).
+    open forever. `drain()`, `record_cancellation_owned` and the claim
+    cancellation path (`_claim_and_start`'s shielded reconciliation) now wait
+    at most `cancellation_write_timeout_seconds` (default 10 seconds, injected
+    through the scheduler runtime view; the claimer reads it as
+    `reconcile_timeout_seconds`).
+  - An unverified claim is never adopted: a reconciliation that misses the
+    deadline leaves `claim.token` unset, so the run is not failed by an
+    invocation whose ownership the database did not confirm.
   - A write that misses the deadline is abandoned, not cancelled: it stays
-    shielded so it can still land, and the run's durable claim and lease make
-    expired-lease reclamation the recovery path. Each miss increments
+    shielded so it can still land. Recovery covers both shapes. A run already
+    claimed and running is recovered by expired-lease reclamation, because the
+    failure claim now writes a lease. A run still pending is recovered by the
+    next launcher, because an unverified claim left it pending with the same
+    compare-and-set every launcher attempts. Each miss increments
     `generation_run_cancellation_write_timeouts_total`, so an operator can see
     that shutdown did not confirm the write.
   - Tests: `test_shutdown_abandons_a_stalled_cancellation_write` proves the
-    bound and the counter, while
+    bound and the counter, `test_stalled_reconciliation_is_bounded` proves an
+    unverified claim is not adopted, and
     `test_shutdown_waits_for_a_cancelled_cancellation_write` keeps proving
     that a write which does finish is awaited.
   - Date/Author: 2026-11-24, implementation agent, from a CodeRabbit finding.
@@ -1417,11 +1426,14 @@ These are trusted, not verified.
         still durable.
     - Launcher-level faults cover the same race without a second connection:
       `tests/test_generation_run_launcher_quality_ownership.py` (the
-      `claim-exit` fault matrix and refused cancellation) and
+      `claim-exit` fault matrix and refused cancellation),
       `tests/test_generation_run_launcher_claim_reconciliation.py` (lost
-      acknowledgement, cancellation of the claim task during shielded
-      reconciliation, reconciliation blocked while a cancellation task is
-      cancelled, same-unit-of-work authority and append, proof mismatch).
+      acknowledgement, same-unit-of-work authority and append, proof
+      mismatch) and
+      `tests/test_generation_run_launcher_claim_cancellation.py`
+      (cancellation of the claim task during shielded reconciliation,
+      blocked reconciliation, the bounded stalled reconciliation, and a
+      stalled cancellation write that shutdown abandons).
   - Artefact: `tests/test_generation_run_launcher_quality_modes.py`.
   - Non-vacuity:
     - Each cell asserts its specific terminal kind and category.
@@ -2154,7 +2166,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,614 passed, 6 skipped and 84 snapshots. The INV-8 comparison is
+  2,616 passed, 6 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2254,8 +2266,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,780
-  definitions and 2,614 passed, 6 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,787
+  definitions and 2,616 passed, 6 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

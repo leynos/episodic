@@ -177,6 +177,11 @@ class _LauncherClaimerRuntime:
         return self.launcher.draft_id_factory_factory
 
     @property
+    def reconcile_timeout_seconds(self) -> float:
+        """The launcher's current cancelled-claim reconciliation deadline."""
+        return self.launcher.cancellation_write_timeout_seconds
+
+    @property
     def lease_seconds(self) -> int:
         """The launcher's current lease duration."""
         return self.launcher.lease_seconds

@@ -10,6 +10,7 @@ and each collaborator is read at its use site rather than snapshotted.
 """
 
 import asyncio
+import contextlib
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -52,6 +53,10 @@ if typ.TYPE_CHECKING:
     )
 
 DEFAULT_LEASE_SECONDS = 900
+#: How long a cancelled claim commit waits for its shielded reconciliation.
+#: Shutdown must not hang on a stalled read, and an unverified claim is not
+#: adopted: the durable row either carries this attempt's proof or it does not.
+DEFAULT_RECONCILE_TIMEOUT_SECONDS = 10.0
 _METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
 _METRIC_DRAFT_LATENCY = "generation_run_draft_latency_ms"
 
@@ -99,6 +104,10 @@ class ClaimerRuntime(typ.Protocol):
     def lease_seconds(self) -> int:
         """Claim lease duration recorded with the started run."""
 
+    @property
+    def reconcile_timeout_seconds(self) -> float:
+        """Maximum time a cancelled claim waits for reconciliation."""
+
 
 @dc.dataclass(frozen=True, slots=True)
 class ClaimerContext:
@@ -137,6 +146,7 @@ class ClaimerContext:
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     draft_id_factory_factory: DraftIdFactoryFactory = SequentialDraftIds
     lease_seconds: int = DEFAULT_LEASE_SECONDS
+    reconcile_timeout_seconds: float = DEFAULT_RECONCILE_TIMEOUT_SECONDS
 
 
 @dc.dataclass(slots=True)
@@ -290,7 +300,11 @@ class GenerationRunClaimer:
             try:
                 await uow.commit()
             except asyncio.CancelledError:
-                await asyncio.shield(self.reconcile(run_id, claim))
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(
+                        asyncio.shield(self.reconcile(run_id, claim)),
+                        timeout=self.runtime.reconcile_timeout_seconds,
+                    )
                 raise
             claim.token = ClaimToken(run.id)
         return run
@@ -311,12 +325,14 @@ class GenerationRunClaimer:
         ClaimToken | None
             This invocation's token, or ``None`` when another owns the run.
         """
+        started_at = self.runtime.clock()
         run = await uow.generation_runs.claim_run_for_execution(
             run_id,
             ExecutionClaim(
                 current_node=None,
-                started_at=self.runtime.clock(),
-                lease_expires_at=None,
+                started_at=started_at,
+                lease_expires_at=started_at
+                + dt.timedelta(seconds=self.runtime.lease_seconds),
                 claim_token=claim.proof,
             ),
         )

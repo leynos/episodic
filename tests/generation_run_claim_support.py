@@ -342,6 +342,7 @@ def claimer_context(
         source_loader=loader,
         clock=clock,
         monotonic_clock=SteppingMonotonicClock(iter((100.0, 100.25))),
+        reconcile_timeout_seconds=0.2,
     )
 
 
