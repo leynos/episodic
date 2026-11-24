@@ -368,7 +368,7 @@ Success is observable as follows:
   `docs/adrs/adr-0028-content-addressed-pricing-snapshots.md`, status
   `Accepted on 2026-11-11`; it was renumbered from 024 because
   `adr-024-review-checkpoint-persistence.md` already held that number (see
-  `Surprises & discoveries` and the decision log). ADR-015 gained an amendment
+  `Surprises & discoveries` and the decision log). ADR-0032 gained an amendment
   note, a corrected Neutral TTS bullet, and a 2026-11-11 addendum recording
   that ADR-028 supersedes its 2026-10-10 snapshot representation. The design
   document now lists ADR-028, describes `PricingSnapshotRepository`, and
@@ -382,7 +382,7 @@ Success is observable as follows:
   `PricingSnapshotCollisionError` paragraph and gained a "Cost accounting and
   pricing snapshots" section covering the repository, integrity check,
   telemetry, canonical form, metric vocabulary, and test fixtures.
-  `docs/contents.md` now indexes ADR-028, the cost ADR-015, the `2.4.4`
+  `docs/contents.md` now indexes ADR-028, the cost ADR-0032, the `2.4.4`
   ExecPlan, and this ExecPlan; `docs/repository-layout.md` adds `config/` and
   `episodic/cost/`; `docs/roadmap.md` marks `2.5.1` done and hands the rounding
   rule to `2.5.3` and `2.5.4`. Every documented claim was checked against the
@@ -581,7 +581,7 @@ Success is observable as follows:
      `not connection.in_transaction()` while the connection is still open, so
      the persisted-state checks cannot pass on the strength of close-time
      rollback alone.
-  4. ADR immutability (Developer Documentation pre-merge warning): ADR-015's
+  4. ADR immutability (Developer Documentation pre-merge warning): ADR-0032's
      `## Status` and original Neutral TTS bullet are restored as accepted, and
      the amendment plus the revised TTS consequence move into the
      `## Addendum (2026-11-11)`. EP-M5 item 1 records the corrected placement.
@@ -818,7 +818,7 @@ Success is observable as follows:
   decision records with one number. Renumbering costs one file move and a
   mechanical reference update; a duplicate number would persist indefinitely in
   the index, the design document, and the catalogue's conversion guidance.
-  ADR-015's amendment note, the design document, the developers' guide,
+  ADR-0032's amendment note, the design document, the developers' guide,
   `docs/contents.md`, `episodic/cost/pricing_catalogue/_document.py`, and
   `tests/test_cost_pricing_snapshot_hash.py` all point at 028.
 - Decision (2026-11-10, EP-M2): snapshot persistence and reads get their own
@@ -1419,7 +1419,7 @@ Read these before implementing; each entry says why.
 - `docs/episodic-podcast-generation-system-design.md` §"Cost accounting and
   budget enforcement" (from line 1476) and §"Data Model and Storage" (from line
   1626): the design this plan amends.
-- `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md` (including
+- `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md` (including
   the 2026-10-10 addendum): current port and persistence decisions.
 - `docs/adrs/adr-0018-explicit-versioning-and-history-strategy.md`: the
   versioning rules this plan must follow.
@@ -1488,7 +1488,7 @@ Upstream identifiers used for tracing:
   rate cards …".
 - `TDD-COST-SLA`: design document §"Future service-oriented pricing
   contracts".
-- `ADR-015`: cost-accounting ports and pricing engine (plus addendum).
+- `ADR-0032`: cost-accounting ports and pricing engine (plus addendum).
 - `ADR-018-INV-IMM`: "Immutable content is content-addressed or append-only,
   not permission-protected."
 - `ADR-018-INV-PIN`: "Consumers pin versions rather than resolving latest."
@@ -1892,7 +1892,7 @@ passes all scenarios; all gates pass.
 
 ### EP-M5: documentation, roadmap, and final gates
 
-1. ADR-028 status `Accepted` with the date; ADR-015 records the amendment in
+1. ADR-028 status `Accepted` with the date; ADR-0032 records the amendment in
    its `## Addendum (2026-11-11)` ("Amended by ADR-028: content-addressed
    identity, exact rates, TTS and helper documents; billing period removed from
    snapshots") and states the revised TTS consequence there. The ADR's
@@ -1911,7 +1911,7 @@ passes all scenarios; all gates pass.
 4. `docs/developers-guide.md`: `PricingSnapshotRepository`, the integrity
    check, the v1 canonical form (pointing to ADR-028), metric naming and
    recommended vocabulary including TTS metrics, units, and test fixtures.
-5. `docs/contents.md`: ADR-028, this ExecPlan, the missing cost ADR-015 entry,
+5. `docs/contents.md`: ADR-028, this ExecPlan, the missing cost ADR-0032 entry,
    and the missing `2.4.4` ExecPlan entry. `docs/repository-layout.md`: the
    `episodic/cost/` package and `config/pricing-snapshots/`.
 6. `docs/roadmap.md`: mark `2.5.1` done; add hand-off bullets to `2.5.3`

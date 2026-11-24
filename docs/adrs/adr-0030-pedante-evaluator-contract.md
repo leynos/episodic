@@ -1,4 +1,6 @@
-# Architecture Decision Record (ADR) 001: Pedante evaluator contract
+# Architecture Decision Record (ADR) 0030: Pedante evaluator contract
+
+Renumbered from 0001 on 2026-11-23 (duplicate number).
 
 ## Status
 

@@ -174,7 +174,7 @@ def test_compliance_status_is_compliant_for_an_empty_result() -> None:
 
 
 def test_pedante_contract_version_starts_at_one() -> None:
-    """The contract whose shape ADR 001 fixes is its first stable version."""
+    """The contract whose shape ADR 0030 fixes is its first stable version."""
     assert PEDANTE_CONTRACT_VERSION == "1", (
         "the first stable Pedante contract should be version 1"
     )

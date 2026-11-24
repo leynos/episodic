@@ -949,7 +949,7 @@ slice:
   — which TEI elements count as spoken script (`<sp>`, `<u>`, `<p>`, `<l>`,
   `<ab>`, `<seg>`; `<speaker>`/`<stage>`/`<note>` excluded). This fixes the
   shape the generator must emit and Chrono will later consume.
-- [ADR 015: Generation-run port split](../adrs/adr-0015-generation-run-port-split.md)
+- [ADR 0031: Generation-run port split](../adrs/adr-0031-generation-run-port-split.md)
   and
   [ADR 015: Upload and idempotency ports](../adrs/adr-0015-upload-and-idempotency-ports.md).
 - [ADR 014: Hexagonal architecture enforcement](../adrs/adr-0014-hexagonal-architecture-enforcement.md).

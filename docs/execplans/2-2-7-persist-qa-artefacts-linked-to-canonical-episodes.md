@@ -955,7 +955,7 @@ Stop and escalate when any of these is reached.
     a *Command-line interface* section; `docs/users-guide.md` names both
     retrieval routes and gives a CLI worked example; `docs/roadmap.md` marks
     `2.2.7` `[x]` with the delivered outcome in the neighbouring style.
-    ADR 025 also names ADR 001's follow-on obligation for versioning guarantees
+    ADR 025 also names ADR 0030's follow-on obligation for versioning guarantees
     as discharged.
   - Conformance check, run against the tree at `b246a428` plus the
     documentation repair above:
@@ -965,7 +965,7 @@ Stop and escalate when any of these is reached.
       are recorded in `docs/developers-guide.md`, which the milestones named.
     - Every trace link in `Conformance basis` resolves: each listed test module,
       feature file, ADR, and design-document section exists at the path given.
-    - ADR 001's open item — record versioning and compatibility guarantees in a
+    - ADR 0030's open item — record versioning and compatibility guarantees in a
       follow-on ADR if evaluator results are persisted or exposed — is
       discharged by ADR 025, which now says so and links back.
     - `docs/roadmap.md` item `2.2.7` is `[x]`, and the design document's *Data
@@ -1056,7 +1056,7 @@ Stop and escalate when any of these is reached.
     - F1 (upheld, repaired): `docs/contents.md` did not index this ExecPlan. It
       now lists it under `execplans/`, before the `2.2.7` REST-endpoints entry.
     - F2 and F3 (partly upheld, repaired): the prerequisite list said ADR 018
-      discharges ADR 001's closing item. ADR 018 is the reference-binding
+      discharges ADR 0030's closing item. ADR 018 is the reference-binding
       versioning record and does not mention that item; ADR 025 records itself
       as the follow-on, so the reference now says ADR 025. The same finding
       asked for the colliding ADR 015 documents to be renumbered. Rejected as
@@ -1065,7 +1065,7 @@ Stop and escalate when any of these is reached.
       resolves.
     - F4 (upheld, repaired): `INV-BLOCKING-SET` claimed the blocking set is
       "documented in ADR 001", while its own non-vacuity note recorded that
-      ADR 001 does not enumerate it. The invariant now names the Pedante
+      ADR 0030 does not enumerate it. The invariant now names the Pedante
       taxonomy and the recorded compliance policy as its provenance.
   - Post-delivery CodeRabbit CLI review round 15 at `bf5bc24a` (`coderabbit`
     0.9.2, exit 0, `review_completed`, 79 changed paths, no rate limit). The
@@ -1745,7 +1745,7 @@ Stop and escalate when any of these is reached.
     none stale); `typecheck`; `test` (2114 passed, 1 skipped, 0 failed);
     `markdownlint`; `nixie`; and `check-migrations` with no drift. Logs are
     `/tmp/<gate>-episodic-2-2-7-commit4b.out`.
-  - `23cc343c` **Correct the ExecPlan's conformance references.** ADR 001's
+  - `23cc343c` **Correct the ExecPlan's conformance references.** ADR 0030's
     open item is discharged by ADR 026, not ADR 025, and the conformance trace
     table named a test the branch does not carry:
     `test_documented_blocking_set_matches_the_production_set` is the one that
@@ -1924,10 +1924,10 @@ Stop and escalate when any of these is reached.
   Impact: the exhaustive parameterized obligation and the Hypothesis domain in
   `INV-BLOCKING-SET` and `INV-COMPLIANCE-BLOCKING` iterate 13 members.
   Corrected in this revision; the blocking set is unaffected.
-- Observation (execution, 2026-10-29): ADR 001 does not enumerate the blocking
+- Observation (execution, 2026-10-29): ADR 0030 does not enumerate the blocking
   support-level set, so the earlier claim that `INV-BLOCKING-SET`'s literal is
   "transcribed from ADR 001" was unsupportable. Evidence: grep of
-  `docs/adrs/adr-0001-pedante-evaluator-contract.md` finds only generic
+  `docs/adrs/adr-0030-pedante-evaluator-contract.md` finds only generic
   references to "a support-level taxonomy value". Impact: the test still
   carries an independently written literal, but its provenance is the taxonomy
   plus the recorded compliance policy, and it also asserts exact equality with
@@ -2290,7 +2290,7 @@ Stop and escalate when any of these is reached.
 - Decision: `INV-BLOCKING-SET`'s literal set is authored from the Pedante
   taxonomy and the compliance policy, and the test asserts exact equality with
   `_BLOCKING_SUPPORT_LEVELS` in addition to per-member membership. Rationale:
-  ADR 001 does not enumerate the blocking subset, so a "transcribed from ADR
+  ADR 0030 does not enumerate the blocking subset, so a "transcribed from ADR
   001" claim would be false; the equality assertion restores the
   transcription-check property the original wording intended. Date/Author:
   2026-10-29, implementation agent. **Deviation status: accepted** — the
@@ -2769,11 +2769,11 @@ REST API and a first-party CLI.
 - The design document's *Data Model and Storage* bullet names
   `qa_evaluations` and its `qa_findings` children, replacing the two
   placeholder tables the design originally carried.
-- ADR 001's open item — record the versioning and compatibility guarantees
+- ADR 0030's open item — record the versioning and compatibility guarantees
   that apply once evaluator results are persisted or exposed — is discharged by
   ADR 026, which names the two version columns, the reader-side schema check,
   and the single errored-supersession exception as those guarantees and links
-  back to ADR 001.
+  back to ADR 0030.
 - `docs/roadmap.md` item `2.2.7` is `[x]`.
 - Every trace link in `Conformance basis` resolves, and every deviation in the
   `Decision log` is recorded in an ADR, the design document, or the developers'
@@ -3026,14 +3026,14 @@ Repository documents that are prerequisites, not optional reading:
   limit.
 - `docs/episodic-podcast-generation-system-design.md` — the Quality Assurance
   Stack and Data Model and Storage sections.
-- `docs/adrs/adr-0001-pedante-evaluator-contract.md` — in particular its closing
+- `docs/adrs/adr-0030-pedante-evaluator-contract.md` — in particular its closing
   item: "If evaluator results are persisted or exposed through an external API,
   record any versioning or compatibility guarantees in a follow-on ADR." ADR
   024 discharges this.
 - `docs/adrs/adr-0006-chrono-spoken-text-semantics.md`,
   `docs/adrs/adr-0009-source-to-script-rest-vertical-slice.md`,
   `docs/adrs/adr-0014-hexagonal-architecture-enforcement.md`,
-  `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md`,
+  `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md`,
   `docs/adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`.
 - `docs/async-sqlalchemy-with-pg-and-falcon.md`,
   `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`,
@@ -3060,7 +3060,7 @@ writing (commit `5af0638`, "No-QA generation runs and TEI-P5 retrieval
   Assurance Stack* (`TDD-QA`), *Data Model and Storage* (`TDD-DATA`), *Client
   Experience Layer* (`TDD-CLIENT`), and *QA, Compliance, and Approvals*
   (`TDD-FLOW-QA`).
-- `docs/adrs/adr-0001-pedante-evaluator-contract.md` (`ADR-001`), open item on
+- `docs/adrs/adr-0030-pedante-evaluator-contract.md` (`ADR-0030`), open item on
   persistence and versioning guarantees.
 - `docs/adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md`
   (`ADR-017`), which fixes `QaStatus.SKIPPED` semantics for the no-QA slice.
@@ -3082,7 +3082,7 @@ RM-2.2.7-a  -> TDD-DATA -> EP-M2 -> tests/canonical_storage/test_qa_artefacts.py
 RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_records_pedante_result
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)
 RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_cli_retrieval.feature (CLI scenarios)
-ADR-001(open item) -> EP-M6 -> docs/adrs/adr-0026-qa-artefact-persistence-contract.md
+ADR-0030(open item) -> EP-M6 -> docs/adrs/adr-0026-qa-artefact-persistence-contract.md
 TDD-DATA(deviation, accepted 2026-08-23) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
 ```
 
@@ -3099,7 +3099,7 @@ resets per test *function*, not per example.
 
 **INV-BLOCKING-SET.** The set of `SupportLevel` members treated as blocking is
 exactly the set defined by the Pedante taxonomy together with the recorded
-compliance policy. ADR 001 names the taxonomy but does not enumerate the
+compliance policy. ADR 0030 names the taxonomy but does not enumerate the
 blocking subset.
 
 - Method: parameterized test over all 13 `SupportLevel` members, comparing
@@ -3113,10 +3113,10 @@ blocking subset.
 - Evidence: `uv run pytest tests/test_qa_artefact_domain.py -q`.
 - Non-vacuity: the literal set is written out in the test module and checked
   for exact equality with `_BLOCKING_SUPPORT_LEVELS` (8 members), which makes
-  the pair a transcription check as well as a membership check. ADR 001 names
+  the pair a transcription check as well as a membership check. ADR 0030 names
   the taxonomy but does not enumerate the blocking subset, so the literal's
   provenance is the taxonomy plus the recorded compliance policy, not a
-  transcription of ADR 001. Negative control: flip one member's membership in
+  transcription of ADR 0030. Negative control: flip one member's membership in
   the production frozenset and confirm exactly one parameterized case fails.
 
 **INV-COMPLIANCE-BLOCKING.** For any `PedanteEvaluationResult` `r`, the derived
@@ -3750,7 +3750,7 @@ fenced blocks.
   `INV-MAPPING-FIDELITY`, `INV-KEY-DETERMINISM`.
 - Files added or changed:
   - `episodic/qa/pedante/types.py` — add `PEDANTE_CONTRACT_VERSION`, citing
-    ADR 001 as its source of truth.
+    ADR 0030 as its source of truth.
   - `episodic/canonical/qa_artefact_recording.py` — pure mapping functions and
     the idempotency-key minter.
   - `episodic/canonical/qa_artefact_compliance.py` — the compliance policy, as
@@ -3894,7 +3894,7 @@ fenced blocks.
 
 - Identifier and outcome: `EP-M6`. The decisions are recorded, the guides
   describe the new behaviour, and the roadmap entry is marked done.
-- Requirements and gaps: `ADR-001` open item; `TDD-DATA` deviation.
+- Requirements and gaps: `ADR-0030` open item; `TDD-DATA` deviation.
 - Files added or changed:
   - `docs/adrs/adr-0026-qa-artefact-persistence-contract.md` — new, following
     the
@@ -4938,7 +4938,7 @@ Revision 6, 2026-10-29. Implementation began; no design change. Status moves
 from `DRAFT` to `ACTIVE` because the plan was approved for implementation.
 Three premise corrections found by reading the code were recorded in
 `Surprises & discoveries` and accepted in `Decision log`: `SupportLevel` has 13
-members, not 14; ADR 001 does not enumerate the blocking subset, so
+members, not 14; ADR 0030 does not enumerate the blocking subset, so
 `INV-BLOCKING-SET`'s literal is authored from the taxonomy and cross-checked
 against `_BLOCKING_SUPPORT_LEVELS`; and the item's ADRs are numbered 024 and
 025 because 018 and 019 are already taken. `EP-M0` is complete: the

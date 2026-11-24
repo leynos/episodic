@@ -199,7 +199,7 @@ Update this list with every stopping point. Add timestamps.
 
 - [x] Milestone A — research and design alignment (no code changes beyond
   this ExecPlan). Completed 2026-06-04: user approval to proceed moved this
-  plan into execution, ADR-015 was drafted in Proposed status, and the system
+  plan into execution, ADR-0032 was drafted in Proposed status, and the system
   design now documents provider-rate-card pricing snapshots plus
   `run_pricing_pins`.
 - [x] Milestone B — domain DTOs, ports, and pricing engine, plus Hecate
@@ -229,7 +229,7 @@ Update this list with every stopping point. Add timestamps.
 - [x] Milestone E — Alembic migration, py-pglite-backed integration tests,
   documentation updates, CodeRabbit review, roadmap tick. Completed 2026-06-04:
   the migration and py-pglite tests were completed in earlier milestones to
-  satisfy migration gates; Stage E accepted ADR-015, updated operator and
+  satisfy migration gates; Stage E accepted ADR-0032, updated operator and
   maintainer documentation, recorded the system-design cross-reference, ticked
   roadmap item `2.4.4`, passed the final gates, and completed the final
   CodeRabbit review with zero findings.
@@ -251,14 +251,14 @@ observation, evidence, and impact.
   document before production implementation so the data model and ADR align.
 
 - Observation: CodeRabbit Stage A review found four minor Oxford spelling
-  issues in ADR-015: three headings using "Normalized metrics" and one
+  issues in ADR-0032: three headings using "Normalized metrics" and one
   "normalization" instance. Evidence: `coderabbit review --agent` completed on
   2026-06-04 with four minor findings, all in
-  `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md`. Impact: the
+  `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md`. Impact: the
   ADR now uses Oxford-preferred `-ize` spelling: "Normalized metrics" and
   "normalization".
 
-- Observation: the follow-up CodeRabbit review reported ADR-015 hard-wrap
+- Observation: the follow-up CodeRabbit review reported ADR-0032 hard-wrap
   concerns in sections that were already wrapped by the current formatted
   working tree, plus one long footnote anchor path. Evidence: local
   `awk 'length($0) > 80'` output showed only the design-document footnote path
@@ -690,7 +690,7 @@ Fill in at each milestone close and at completion.
   through `CostRecorder`, pins run pricing by provider/model/operation, and
   writes task roll-ups after direct generation runs complete.
 
-- Stage E completed on 2026-06-04. ADR-015 is accepted, the users' and
+- Stage E completed on 2026-06-04. ADR-0032 is accepted, the users' and
   developers' guides describe the implemented cost-accounting behaviour, the
   roadmap marks item `2.4.4` complete, all final gates passed, and the final
   CodeRabbit review completed with zero findings.
@@ -782,11 +782,11 @@ Constraints sections above, and updates the cost-accounting and orchestration
 sections of `docs/episodic-podcast-generation-system-design.md` to reference
 this plan and the new `run_pricing_pins` table. No production source changes.
 The deliverable is this ExecPlan in `APPROVED` status and a stub
-`docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md` in `Proposed`
+`docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md` in `Proposed`
 status.
 
 The author then drafts the canonical metric vocabulary and the
-`PricingSnapshot.source_kind` discriminator in ADR-015, with explicit worked
+`PricingSnapshot.source_kind` discriminator in ADR-0032, with explicit worked
 examples for OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages
 usage payloads.
 
@@ -1148,8 +1148,8 @@ LangGraph generation graph.
 
    - `docs/episodic-podcast-generation-system-design.md` — minor edits in
      the "Cost accounting and budget enforcement" section pointing to
-     ADR-015 and the `run_pricing_pins` table.
-   - `docs/adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md` —
+     ADR-0032 and the `run_pricing_pins` table.
+   - `docs/adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md` —
      status flips from `Proposed` to `Accepted` at the end of this
      stage. Records the port shape, the canonical metric vocabulary, the
      idempotency-key composition, the run-pin strategy, and the streaming
@@ -1238,7 +1238,7 @@ The change is acceptable when all of the following hold:
   against Vidai Mock and `psql` against `cost_ledger_entries` to see the
   expected row shape, with `computed_cost_minor` parity between the task
   roll-up row and the sum of its child `provider_call` rows.
-- ADR-015 is committed and referenced from the design document.
+- ADR-0032 is committed and referenced from the design document.
 - The roadmap entry `2.4.4` is checked off only after every gate above
   has passed and CodeRabbit has cleared its concerns.
 
@@ -1436,7 +1436,7 @@ the new code.
   `docs/cost-management-in-langgraph-agentic-systems.md`.
 - Hexagonal layering rules
   `docs/langgraph-and-celery-in-hexagonal-architecture.md`.
-- ADR-014 (hexagonal architecture enforcement, prior art for ADR-015).
+- ADR-014 (hexagonal architecture enforcement, prior art for ADR-0032).
 - Skills: `hexagonal-architecture`, `execplans`,
   `testing-sqlalchemy-with-pytest-and-py-pglite`, `vidai-mock`,
   `en-gb-oxendict`, `documentation-style-guide`.

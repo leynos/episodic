@@ -75,7 +75,7 @@ or delivery planning.
 
 ## Decision records
 
-- [ADR 001: Pedante evaluator contract](adrs/adr-0001-pedante-evaluator-contract.md)
+- [ADR 0030: Pedante evaluator contract](adrs/adr-0030-pedante-evaluator-contract.md)
   - evaluator contract decision retained at the historical top-level ADR path.
 - [ADR 001: Reference binding resolution algorithm](adrs/adr-0001-reference-binding-resolution-algorithm.md)
   - accepted reference binding resolution algorithm.
@@ -107,7 +107,9 @@ or delivery planning.
   - import-boundary enforcement model.
 - [ADR 015: Upload and idempotency ports](adrs/adr-0015-upload-and-idempotency-ports.md)
   - source-intake upload storage and idempotency port decisions.
-- [ADR 015: Cost accounting ports and pricing engine](adrs/adr-0015-cost-accounting-ports-and-pricing-engine.md)
+- [ADR 0031: Generation-run port split](adrs/adr-0031-generation-run-port-split.md)
+  - generation-run port split decision.
+- [ADR 0032: Cost accounting ports and pricing engine](adrs/adr-0032-cost-accounting-ports-and-pricing-engine.md)
   - cost-accounting port family, canonical usage metrics, snapshot pinning, and
     deterministic pricing rules.
 - [ADR 016: Adopt Skylos dead-code detection](adrs/adr-0016-adopt-skylos-dead-code-detection.md)

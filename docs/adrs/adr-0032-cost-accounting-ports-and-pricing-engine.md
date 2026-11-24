@@ -1,4 +1,6 @@
-# ADR-015: Cost accounting ports and pricing engine
+# ADR-0032: Cost accounting ports and pricing engine
+
+Renumbered from 0015 on 2026-11-23 (duplicate number).
 
 ## Status
 

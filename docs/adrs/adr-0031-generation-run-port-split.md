@@ -1,4 +1,6 @@
-# ADR-015: Generation-run port split
+# ADR-0031: Generation-run port split
+
+Renumbered from 0015 on 2026-11-23 (duplicate number).
 
 ## Status
 
