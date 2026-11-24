@@ -761,6 +761,19 @@ accepted in EP-M6. D13 records the review itself.
     uninvolved launcher. That is the correct trade: the alternative overwrites
     a live writer.
   - Date/Author: 2026-11-22, implementation agent.
+- **D19 scope note: the claim token is launcher-enforced, not store-enforced.**
+  - `update_run_status` takes no token. Its row lock and terminal checks
+    protect concurrent writers, and the atomic pending-to-running claim is
+    the store-level guard; the token names the launcher invocation that may
+    write, which routes and audits ownership rather than fencing the store
+    itself. `launcher_failure`'s docstrings state that boundary explicitly
+    instead of implying the repository compares the token.
+  - A store-level token gate on every terminal write (success, failure,
+    cancellation, reclamation) would be a separate change: it needs a token
+    parameter on the terminal command, comparison inside the locked
+    transaction, and contract tests for wrong and absent tokens.
+  - Date/Author: 2026-11-24, implementation agent, from CodeRabbit's Domain
+    Architecture warning.
 - **Decision D20: restore the pre-4.4.1 request-error precedence.**
   - The base parser read the capability 422 first, then `budget_hints`, then
     the no-QA rationale. The 4.4.1 parser moved the budget read into the

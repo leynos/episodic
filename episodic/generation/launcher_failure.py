@@ -1,10 +1,17 @@
-"""Record a generation run's terminal failure with explicit authority.
+"""Record a generation run's terminal failure with explicit launcher authority.
 
 :class:`GenerationRunFailurePersistence` owns failure writes. Authority is a
 :class:`~episodic.generation.launcher_support.ClaimToken`: a caller either
 holds one or the component claims, or reconciles, the run inside the same
 transaction as the write. The token is retained only after the commit, so a
 rollback cannot leave authority no durable write backs.
+
+Scope of that authority: it is enforced here, by the launcher, not by the
+repository. ``update_run_status`` accepts no token; its locks and terminal
+checks are what protect concurrent writers, and the pending-to-running claim
+is the store-level guard. A holder of a token therefore names the *launcher
+invocation* that may write, which routes and audits ownership; it is not a
+store-enforced fence against a caller that bypasses this component.
 """
 
 import dataclasses as dc
@@ -63,6 +70,9 @@ class GenerationRunFailurePersistence:
         draft: DraftScriptResult | None = None,
     ) -> FailureWriteResult:
         """Record a terminal failed run state.
+
+        Authority is checked by this launcher component against the caller's
+        claim token, not by ``update_run_status``, which takes no token.
 
         Parameters
         ----------
