@@ -332,6 +332,10 @@ async def test_claim_token_for_reports_missing_and_unclaimed_runs(
         await uow.generation_runs.create_run(run)
         await uow.commit()
 
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        unclaimed = await uow.generation_runs.claim_token_for(run.id)
+    assert unclaimed is None, unclaimed
+
     proof = uuid.uuid4()
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.generation_runs.claim_run_for_execution(

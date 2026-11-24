@@ -165,33 +165,41 @@ class GenerationRunScheduler:
         log_info(logger, "generation_run_launcher.scheduled run_id=%s", run_id)
 
     async def drain(self) -> None:
-        """Wait for scheduled tasks, bounding the wait on cancellation writes.
+        """Wait for scheduled tasks and cancellation writes.
 
-        A run task's own work is bounded by the graph and evaluator timeouts,
-        but its cleanup (a rollback, or closing a session) can still stall. Both
-        the scheduled tasks and the shielded cancellation writes are therefore
-        awaited for at most ``cancellation_write_timeout_seconds``; anything
-        left is reported as timed out rather than holding shutdown open.
+        During normal operation every wait is unbounded, matching the
+        documented contract that ``drain`` returns only once the work has
+        finished. Shutdown bounds both waits by
+        ``cancellation_write_timeout_seconds``, because a stalled database
+        call or unit-of-work exit must not hold process shutdown open.
         """
+        deadline = (
+            self.runtime.cancellation_write_timeout_seconds
+            if self._is_shutting_down
+            else None
+        )
         if self._tasks:
-            _done, still_pending = await asyncio.wait(
-                tuple(self._tasks),
-                timeout=self.runtime.cancellation_write_timeout_seconds,
-            )
-            if still_pending:
-                log_info(
-                    logger,
-                    "generation_run_launcher.shutdown_task_timeout pending=%s",
-                    len(still_pending),
+            if deadline is None:
+                await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+            else:
+                _done, still_pending = await asyncio.wait(
+                    tuple(self._tasks),
+                    timeout=deadline,
                 )
-                self.runtime.metrics.increment_counter(
-                    _METRIC_TASK_TIMEOUT,
-                    labels={},
-                )
-        await self._drain_cancellation_writes()
+                if still_pending:
+                    log_info(
+                        logger,
+                        "generation_run_launcher.shutdown_task_timeout pending=%s",
+                        len(still_pending),
+                    )
+                    self.runtime.metrics.increment_counter(
+                        _METRIC_TASK_TIMEOUT,
+                        labels={},
+                    )
+        await self._drain_cancellation_writes(deadline=deadline)
 
-    async def _drain_cancellation_writes(self) -> None:
-        """Await pending cancellation writes under the configured deadline.
+    async def _drain_cancellation_writes(self, *, deadline: float | None) -> None:
+        """Await pending cancellation writes, bounded during shutdown only.
 
         A write that misses the deadline is abandoned, not cancelled: it stays
         shielded so it can still land, and the run it covers falls back to
@@ -201,10 +209,10 @@ class GenerationRunScheduler:
         pending = tuple(self._cancellation_tasks)
         if not pending:
             return
-        _done, still_pending = await asyncio.wait(
-            pending,
-            timeout=self.runtime.cancellation_write_timeout_seconds,
-        )
+        if deadline is None:
+            await asyncio.gather(*pending, return_exceptions=True)
+            return
+        _done, still_pending = await asyncio.wait(pending, timeout=deadline)
         if still_pending:
             self._report_cancellation_timeout(None)
 
