@@ -1354,19 +1354,21 @@ The enforced groups are:
   Falcon API modules and worker topology.
 - `logging_internals`: private logger backend protocols used by the port. This
   group has no dependency on the femtologging backend.
-- `domain_ports`: canonical domain types, canonical ports, ingestion ports,
-  canonical constraint names, LLM ports, and the cost domain. The cost modules
-  belong here because each states a domain rule or a port rather than an
-  adapter: `episodic.cost.primitives` holds the value types,
-  `episodic.cost.ports` the ledger and usage contracts, `episodic.cost.engine`
-  the pricing arithmetic, `episodic.cost.pricing_snapshot` and its `_hash`,
-  `_ports`, and `_values` siblings the snapshot identity and integrity rules,
-  and `episodic.json_canonicalization` the shared canonical encoding those
-  hashes depend on. `tests/test_production_hecate_cost_config.py` is the
-  regression guard: it asserts each of those modules is still grouped as
-  `domain_ports`, that the group may depend only on itself and `logging_port`,
-  that it is matched before `outbound_adapter`, and that every cost module —
-  adapters and the catalogue included — keeps its intended group.
+- `domain_ports`: canonical domain types, canonical ports
+  (`episodic.canonical.generation_graph_ports`, `generation_routing` and
+  `generation_claim` among them), ingestion ports, canonical constraint names,
+  LLM ports, and the cost domain. The cost modules belong here because each
+  states a domain rule or a port rather than an adapter:
+  `episodic.cost.primitives` holds the value types, `episodic.cost.ports` the
+  ledger and usage contracts, `episodic.cost.engine` the pricing arithmetic,
+  `episodic.cost.pricing_snapshot` and its `_hash`, `_ports`, and `_values`
+  siblings the snapshot identity and integrity rules, and
+  `episodic.json_canonicalization` the shared canonical encoding those hashes
+  depend on. `tests/test_production_hecate_cost_config.py` is the regression
+  guard: it asserts each of those modules is still grouped as `domain_ports`,
+  that the group may depend only on itself and `logging_port`, that it is
+  matched before `outbound_adapter`, and that every cost module — adapters and
+  the catalogue included — keeps its intended group.
 - `application`: canonical services, profile/template workflows,
   reference-document workflows, generation services, and the QA evaluator
   runtimes (`episodic.qa.chrono` with its LangGraph adapters), which adapt
@@ -1378,9 +1380,12 @@ The enforced groups are:
   `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
 - `orchestration_nodes`: `episodic.orchestration._graph_nodes`,
   `episodic.orchestration._graph_protocols`,
-  `episodic.orchestration._graph_state`, and `episodic.orchestration._usage`.
-  This group may depend on the `orchestration_checkpoint` DTO group and
-  `domain_ports`, and must be ordered before the broader `orchestration` group.
+  `episodic.orchestration._graph_state`,
+  `episodic.orchestration._content_graph_nodes`,
+  `episodic.orchestration._content_graph_state`, and
+  `episodic.orchestration._usage`. This group may depend on the
+  `orchestration_checkpoint` DTO group and `domain_ports`, and must be ordered
+  before the broader `orchestration` group.
 - `orchestration_checkpoint`: `episodic.orchestration._dto`,
   `episodic.orchestration._action_result_dto`,
   `episodic.orchestration._result_dto`,
@@ -1389,10 +1394,11 @@ The enforced groups are:
   `episodic.orchestration._payload_dto`, the provider-neutral checkpoint
   payload DTO and serialization modules.
 - `orchestration`: LangGraph builders, planning orchestration, tool execution
-  policy, and `episodic.orchestration.langgraph_costs`, which records provider
-  costs for the direct generation path. This broad group excludes the dedicated
-  node group and may depend on `orchestration_nodes` because graph builders and
-  the public facade assemble and expose those nodes.
+  policy, `episodic.orchestration.content_generation` (the content-generation
+  graph runner), and `episodic.orchestration.langgraph_costs`, which records
+  provider costs for the direct generation path. This broad group excludes the
+  dedicated node group and may depend on `orchestration_nodes` because graph
+  builders and the public facade assemble and expose those nodes.
 - `orchestration_tasks`: Celery task entrypoints.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
@@ -2709,6 +2715,47 @@ launcher emits a `generation_run.execute` span and bounded terminal,
 draft-error, QA-bypass, and latency metrics; the API command span and stable
 failure categories provide the corresponding request and outcome trace without
 unbounded run identifiers in metric labels.
+
+### Content-generation graph and quality routing
+
+`episodic.orchestration.content_generation.LangGraphContentGenerationGraph`
+implements `ContentGenerationGraphPort`. Its `run` takes a
+`ContentGenerationRequest` (run id and quality mode) plus a
+`ContentGenerationSteps` implementation, and returns the terminal name. The
+graph owns topology only: every side effect arrives through the steps port, so
+the same graph can be driven by the launcher or by a test double.
+
+- **Ports.** `QualityEvaluatorPort` is the evaluator seam; a
+  `QualityEvaluatorSet` carries the configured evaluators and their timeout.
+  `ContentGenerationSteps` exposes `initialize`, `generate_draft`, `evaluate`,
+  `complete_with_draft` and `escalate`. The launcher's `_LauncherRunSession`
+  implements that port over the claim, persistence and failure components.
+- **Topology.** A shared `initialize` node runs once, then a conditional edge
+  routes on the quality mode: `draft_without_qa` goes straight to the
+  persist-without-QA terminal, while `qa_gated` goes through `generate_draft`
+  and `evaluate` to either the persisted or the escalated terminal. The
+  conditional edge's targets are exactly its declared `path_map`, and the
+  topology test pins that.
+- **Routing policy.** `episodic.canonical.generation_routing.route_quality_mode`
+  and `QualityVerdict` decide the branch. `aggregate_verdicts` is fail-closed:
+  any failed evaluation fails the gate, and an error-tagged pass is treated as
+  inconclusive rather than passing.
+- **Adding an evaluator.** Implement `QualityEvaluatorPort`, include it in the
+  `QualityEvaluatorSet` the composition root builds, and add it to the QA-gated
+  matrix test's expectations. No graph change is needed.
+- **Claims.** `episodic.canonical.generation_claim.ExecutionClaim` is the
+  pending-to-running command: the node it starts, the lease bounds, and a
+  per-attempt `claim_token`. `ClaimToken` is the launcher's proof that this
+  attempt won that transition; it authorizes the failure write and is retained
+  only after the claim commits. The repository does not compare it (see D19's
+  scope note in the 4.4.1 plan); the launcher enforces it, and a token naming a
+  different run is refused.
+- **Capability gate.** `ContentGenerationGraphPort.accepted_quality_modes()`
+  feeds `ApiDependencies.accepted_quality_modes` and
+  `GenerationRunsResourceConfig`. The REST layer applies, in order: parser body
+  rules, the capability `422`, the gated-rationale `400`, then the
+  missing-launcher `503`; with an idempotency key the capability and rationale
+  checks run inside the idempotent work so a stored `202` still replays.
 
 ### Manual recovery of expired generation-run leases
 
