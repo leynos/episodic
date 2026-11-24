@@ -2728,13 +2728,15 @@ the same graph can be driven by the launcher or by a test double.
 
 - **Ports.** `QualityEvaluatorPort` is the evaluator seam; a
   `QualityEvaluatorSet` carries the configured evaluators and their timeout.
-  `ContentGenerationSteps` exposes `initialize`, `generate_draft`, `evaluate`,
-  `complete_with_draft` and `escalate`. The launcher's `_LauncherRunSession`
-  implements that port over the claim, persistence and failure components.
+  `ContentGenerationSteps` exposes `initialize`, `generate_draft`,
+  `begin_evaluation`, `evaluation_subject`, `complete_with_draft` and
+  `escalate`. The launcher's `_LauncherRunSession` implements that port over
+  the claim, persistence and failure components.
 - **Topology.** A shared `initialize` node runs once, then a conditional edge
-  routes on the quality mode: `draft_without_qa` goes straight to the
-  persist-without-QA terminal, while `qa_gated` goes through `generate_draft`
-  and `evaluate` to either the persisted or the escalated terminal. The
+  routes on the quality mode. Both branches generate a draft:
+  `draft_without_qa` generates one and goes straight to the persist-without-QA
+  terminal, while `qa_gated` generates a candidate, records `begin_evaluation`,
+  evaluates, and reaches either the persisted or the escalated terminal. The
   conditional edge's targets are exactly its declared `path_map`, and the
   topology test pins that.
 - **Routing policy.** `episodic.canonical.generation_routing.route_quality_mode`
@@ -2754,9 +2756,12 @@ the same graph can be driven by the launcher or by a test double.
 - **Capability gate.** `ContentGenerationGraphPort.accepted_quality_modes()`
   feeds `ApiDependencies.accepted_quality_modes` and
   `GenerationRunsResourceConfig`. The REST layer applies, in order: parser body
-  rules, the capability `422`, the gated-rationale `400`, then the
-  missing-launcher `503`; with an idempotency key the capability and rationale
-  checks run inside the idempotent work so a stored `202` still replays.
+  rules, then the capability `422`, the budget check and the gated-rationale
+  `400`. A no-QA request validates and resolves its launcher **before**
+  idempotency, with or without a key, so a removed launcher is a `503`. For a
+  QA-gated request, acquired work validates the request; a conflict or
+  in-flight outcome also runs the check as a precondition, while a stored
+  replay skips it and returns the recorded `202`.
 
 ### Manual recovery of expired generation-run leases
 
