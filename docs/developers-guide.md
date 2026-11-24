@@ -2697,9 +2697,9 @@ unverified claim is never adopted, so recovery depends on the run's shape: a
 run whose earlier execution claim committed is running with that claim's lease
 and is recovered by expired-lease reclamation, while a failure-only claim
 commits with its terminal write and a stalled one leaves the run pending for
-the next launcher's compare-and-set. During shutdown, run tasks are bounded by the same
-deadline, because a unit of work's rollback or session close can stall after
-cancellation arrives; that case increments
+the next launcher's compare-and-set. During shutdown, run tasks are bounded by
+the same deadline, because a unit of work's rollback or session close can stall
+after cancellation arrives; that case increments
 `generation_run_shutdown_task_timeouts_total`. A normal `drain()` remains
 unbounded and returns only once the work has finished. A transaction that
 stalls while holding the row lock is recovered by terminating its backend,
