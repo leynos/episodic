@@ -82,6 +82,8 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
                 .select(GenerationRunRecord)
                 .where(GenerationRunRecord.id == run_id)
                 .with_for_update()
+                # Refresh an identity-mapped row: a stale copy could hide a claim.
+                .execution_options(populate_existing=True)
             )
             record = result.scalar_one_or_none()
         else:

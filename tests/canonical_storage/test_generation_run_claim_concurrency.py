@@ -12,6 +12,7 @@ the database rather than on a sleep.
 """
 
 import asyncio
+import datetime as dt
 import os
 import typing as typ
 import uuid
@@ -22,7 +23,11 @@ import sqlalchemy.exc as sa_exc
 from sqlalchemy.engine import make_url
 
 from episodic.canonical.domain import GenerationRunStatus
-from episodic.canonical.generation_run_errors import RunAlreadyTerminal
+from episodic.canonical.generation_run_errors import (
+    RunAlreadyTerminal,
+    RunClaimMismatch,
+)
+from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from tests.canonical_storage._postgres_claim_race_support import (
     DSN_VARIABLE,
@@ -325,3 +330,43 @@ async def test_a_stalled_claim_transaction_is_recoverable(
 
     stored_proof = await claim_token(postgres_factory, run.id)
     assert stored_proof == recovery_proof, "the recovery claim's proof must be durable"
+
+
+@pytest.mark.asyncio
+async def test_a_stale_session_cannot_bypass_the_claim_gate(
+    postgres_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A session holding a pre-claim copy still sees the claim when it writes."""
+    run = await pending_run(postgres_factory)
+
+    async with SqlAlchemyUnitOfWork(postgres_factory) as stale:
+        # Load the row while it is pending and unclaimed, so this session's
+        # identity map holds a copy with no claim token.
+        loaded = await stale.generation_runs.get_run(run.id)
+        assert loaded is not None, "the pending run must be readable"
+        stored_before = await stale.generation_runs.claim_token_for(run.id)
+        assert stored_before is None, "the run must start unclaimed"
+
+        proof = uuid.uuid4()
+        async with SqlAlchemyUnitOfWork(postgres_factory) as other:
+            await other.generation_runs.claim_run_for_execution(
+                run.id,
+                claim(proof),
+            )
+            await other.commit()
+
+        with pytest.raises(RunClaimMismatch):
+            await stale.generation_runs.update_run_status(
+                run.id,
+                update=GenerationRunStatusUpdate(
+                    status=GenerationRunStatus.SUCCEEDED,
+                    current_node=None,
+                    ended_at=dt.datetime.now(dt.UTC),
+                ),
+            )
+        await stale.rollback()
+
+    async with SqlAlchemyUnitOfWork(postgres_factory) as uow:
+        stored = await uow.generation_runs.get_run(run.id)
+    assert stored is not None, "the run must survive the refused write"
+    assert stored.status is GenerationRunStatus.RUNNING, stored.status

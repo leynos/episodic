@@ -786,11 +786,11 @@ accepted in EP-M6. D13 records the review itself.
     token. A run with no stored claim has no owner to check, so an internal
     path (a launch failure, or reclamation) may still terminate it.
   - A cached token names exactly one run: `_failure_authority` refuses a
-    token whose `run_id` differs from the run being failed. That rejects a
-    *different* run's token; a token naming the same run is trusted without
-    comparing its stored proof, because the launcher set it only after the
-    claim committed. The store's row lock does not check ownership, so this
-    guard belongs at the launcher boundary.
+    token whose `run_id` differs from the run being failed. That is a
+    launcher-side guard against a *different* run's token; separately, the
+    store compares the same-run proof under its row lock and raises
+    `RunClaimMismatch`, so the two checks are complementary rather than one
+    substituting for the other.
   - The gate is now implemented: every terminal write names its claim proof,
     both adapters compare it under the row lock, and contract tests cover a
     wrong token, a missing token and an unclaimed run.
@@ -2070,9 +2070,11 @@ with `tee` to `/tmp/$ACTION-episodic-4-4-1-qa-gated-mode-branching.out`. Run
 gates sequentially, never in parallel. Prefer delegating full gate runs to the
 `scrutineer` agent.
 
-At each milestone, run:
+At each milestone, run. `set -o pipefail` is required: without it a pipeline
+reports `tee`'s status, so a failing `make` would still record a passing gate.
 
 ```shell
+set -o pipefail
 make fmt
 make check-fmt 2>&1 | tee /tmp/check-fmt-episodic-4-4-1-qa-gated-mode-branching.out
 make typecheck 2>&1 | tee /tmp/typecheck-episodic-4-4-1-qa-gated-mode-branching.out
@@ -2390,7 +2392,7 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,976
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,977
   definitions and 2,765 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:

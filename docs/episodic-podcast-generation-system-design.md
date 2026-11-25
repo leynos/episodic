@@ -2560,11 +2560,14 @@ stateDiagram-v2
    Roadmap items `4.4.2` to `4.4.4` widen this: Pedante, Bromide, Chiltern,
    Anthem, and Caesura execute in parallel as graph nodes, with Chrono
    supplying runtime estimates, producing structured findings.
-5. Conditional edges route based on aggregated evaluation scores:
-   - Passing scores advance content to the approval checkpoint.
+5. Conditional edges route based on aggregated evaluation scores. The
+   implemented slice in `4.4.1` persists a passing draft or escalates a
+   non-passing one; the routing below is planned for `4.4.2` to `4.4.4`:
+   - Passing scores advance content to the approval checkpoint (planned).
    - Failing scores trigger refinement: the graph constructs targeted prompts
-     from QA findings and re-enters generation.
-   - Repeated failures escalate to human review with accumulated context.
+     from QA findings and re-enters generation (planned).
+   - Repeated failures escalate to human review with accumulated context
+     (planned; `4.4.1` escalates immediately on a non-passing verdict).
 6. Generated artefacts persist alongside confidence scores, iteration counts,
    and content hashes.
 7. Human-in-the-loop checkpoints pause the graph for editorial review; editors
