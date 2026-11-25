@@ -47,6 +47,7 @@ type ClaimAuthority = cabc.Callable[
     [CanonicalUnitOfWork, uuid.UUID, RunClaim],
     cabc.Awaitable[ClaimToken | None],
 ]
+type FailureObserver = cabc.Callable[[uuid.UUID, Failure], None]
 type RecordCostsAuthority = cabc.Callable[
     [CanonicalUnitOfWork, uuid.UUID, DraftScriptResult],
     cabc.Awaitable[None],
@@ -55,11 +56,18 @@ type RecordCostsAuthority = cabc.Callable[
 
 @dc.dataclass(slots=True)
 class GenerationRunFailurePersistence:
-    """Write a run's terminal failure and its observation."""
+    """Write a run's terminal failure, then report the committed result.
+
+    Persistence decides authority and performs one transaction. Metrics and
+    logging stay here as the default observation, and an injected
+    ``observe`` callback receives the committed result so a caller can react
+    without this component reaching into hidden state.
+    """
 
     runtime: PersistenceRuntime
     claim_for_failure: ClaimAuthority | None = None
     record_costs: RecordCostsAuthority | None = None
+    observe: FailureObserver | None = None
 
     async def record_failure(
         self,
@@ -99,6 +107,9 @@ class GenerationRunFailurePersistence:
             return FailureWriteResult(written=False)
         claim.token = token
         self._observe_written_failure(run_id, failure)
+        # The write is durable; hand the committed result to any observer.
+        if self.observe is not None:
+            self.observe(run_id, failure)
         return FailureWriteResult(written=True, token=token)
 
     async def _write_failure(

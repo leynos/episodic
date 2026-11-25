@@ -1602,6 +1602,16 @@ These are trusted, not verified.
 - `accepted_quality_modes` always contains `draft_without_qa`, so a
   deployment policy that forbids it is not supported. Revisit this with the
   approval workflow (4.2.x).
+- Two further Unit Architecture suggestions were assessed and declined, with
+  reasons recorded rather than left unaddressed:
+  - **Splitting `launcher_scheduling.py`.** At 384 lines it is under the
+    400-line limit and its admission, drain and cancellation logic shares the
+    same registries. The split the review proposed would also rename the
+    internal sets that `test_generation_run_launcher_claim_cancellation` and
+    `test_generation_run_launcher_claim_reconciliation` inspect to prove the
+    single-writer rule, so it would reduce test strength for no behavioural
+    gain. The cancellation-write logic already lives behind one method
+    (`record_cancellation_owned`), which is the seam a future split would use.
 - The remaining Domain Architecture item — `apply_status_update` importing its
   `GenerationRunStatusUpdate` DTO from the ports module — is recorded rather
   than changed. Moving the DTO into `domain_generation` was attempted and
@@ -2392,7 +2402,7 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,977
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,978
   definitions and 2,765 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:

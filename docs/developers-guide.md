@@ -2780,9 +2780,12 @@ the same graph can be driven by the launcher or by a test double.
 - **Adding an evaluator.** Implement `QualityEvaluatorPort`, include it in the
   `QualityEvaluatorSet` the composition root builds, and add it to the QA-gated
   matrix test's expectations. No graph change is needed.
-- **Claims.** `episodic.canonical.generation_claim.ExecutionClaim` is the
-  pending-to-running command: the node it starts, the lease bounds, and a
-  per-attempt `claim_token`. `ClaimToken(run_id, proof)` is the launcher's
+- **Claims.** A `RunClaim` takes an optional `proof_factory`, defaulting to
+  `uuid.uuid4`, so a test can supply a deterministic per-attempt proof; the
+  launcher injects its `source_document_loader` the same way, defaulting to the
+  module's patchable seam. `episodic.canonical.generation_claim.ExecutionClaim`
+  is the pending-to-running command: the node it starts, the lease bounds, and
+  a per-attempt `claim_token`. `ClaimToken(run_id, proof)` is the launcher's
   proof that this attempt won that transition. Every terminal write names it:
   `GenerationRunStatusUpdate.claim_token` carries the proof, and both store
   adapters compare it with the stored value under the row lock, raising

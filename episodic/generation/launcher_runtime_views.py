@@ -112,8 +112,8 @@ class _ClaimerHost(typ.Protocol):
         """Store used to read uploaded source content."""
 
     @property
-    def source_document_loader(self) -> SourceDocumentLoader | None:
-        """Explicitly injected source-document loader, if any."""
+    def source_document_loader(self) -> SourceDocumentLoader:
+        """Injected source-document loader."""
 
 
 @typ.runtime_checkable
@@ -158,8 +158,8 @@ class _SourceLoadHost(typ.Protocol):
         """Bounds applied to each source document."""
 
     @property
-    def source_document_loader(self) -> SourceDocumentLoader | None:
-        """Explicitly injected source-document loader, if any."""
+    def source_document_loader(self) -> SourceDocumentLoader:
+        """Injected source-document loader."""
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -249,13 +249,8 @@ class _LauncherSourceLoadRuntime:
 
     @property
     def load_document(self) -> SourceDocumentLoader:
-        """The explicitly injected loader, or the module's patchable default."""
-        injected = self.launcher.source_document_loader
-        if injected is not None:
-            return injected
-        from episodic.generation import launcher as launcher_module
-
-        return launcher_module._load_source_document
+        """The launcher's injected source-document loader."""
+        return self.launcher.source_document_loader
 
 
 @dc.dataclass(frozen=True, slots=True)

@@ -78,6 +78,7 @@ __all__ = [
     "GenerationSourceLimits",
     "GenerationSourceLoader",
     "PersistedTei",
+    "ProofFactory",
     "ProviderCallRecordRequest",
     "RunClaim",
     "SequentialDraftIds",
@@ -151,17 +152,29 @@ class ClaimedRunResult:
     token: ClaimToken
 
 
+#: Source of a per-attempt claim proof. Injecting it lets a test supply a
+#: deterministic proof instead of relying on ambient randomness.
+type ProofFactory = cabc.Callable[[], uuid.UUID]
+
+
 @dc.dataclass(slots=True)
 class RunClaim:
     """The claim token one launcher invocation holds for the run it drives.
 
     ``proof`` is a unique per-attempt value stored with the claim, so a lost
     commit acknowledgement is reconciled against an exact attempt rather than
-    a timestamp another attempt could share.
+    a timestamp another attempt could share. ``proof_factory`` supplies it, so
+    a caller can make the proof deterministic.
     """
 
     token: ClaimToken | None = None
-    proof: uuid.UUID = dc.field(default_factory=uuid.uuid4)
+    proof: uuid.UUID | None = None
+    proof_factory: ProofFactory = uuid.uuid4
+
+    def __post_init__(self) -> None:
+        """Generate the proof from the factory when none was supplied."""
+        if self.proof is None:
+            self.proof = self.proof_factory()
 
 
 @dc.dataclass(frozen=True, slots=True)
