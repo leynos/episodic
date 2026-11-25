@@ -1607,13 +1607,16 @@ These are trusted, not verified.
   than changed. Moving the DTO into `domain_generation` was attempted and
   reverted: `domain_validation` imports `GenerationRunStatus` only under
   `TYPE_CHECKING`, so the dataclass fails at class-creation time under PEP 649
-  when the module is imported before `domain_enums`. The DTO therefore stays in
-  `generation_run_ports`, which imports both its enum and the sentinel at
-  runtime; the domain module's dependency on it is a type-level coupling to a
-  frozen dataclass of domain-shaped fields, not hidden state. The graph nodes'
-  `asyncio.current_task().cancelling()` check stays too: it is the documented
-  translation for LangGraph's `NodeCancelledError` (AXM-2), and the surrounding
-  module is otherwise framework-free.
+  when the module is imported before `domain_enums`. `generation_run_ports`
+  imports `GenerationRunStatus` under `TYPE_CHECKING` as well, so the move
+  would have to relocate the enum, which is a wider refactor than the finding
+  asks for. The domain module's dependency on the DTO is therefore a type-level
+  coupling to a frozen dataclass of domain-shaped fields, not hidden state. The
+  graph nodes' `asyncio.current_task().cancelling()` check stays as well: AXM-6
+  records the asyncio cancellation semantics it relies on, and the runner
+  translates LangGraph's `NodeCancelledError`. The check is what distinguishes
+  an external cancellation from an evaluator-raised `CancelledError`, and the
+  node module is otherwise framework-free.
 - The two CodeRabbit pre-merge rows are accepted and implemented, not deferred.
 - **Store-level token gate (Domain Architecture).** Every terminal write names
   the claim that owns the run. `GenerationRunStatusUpdate` carries an optional
