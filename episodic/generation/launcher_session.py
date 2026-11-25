@@ -236,8 +236,8 @@ class _LauncherRunSession:
     ) -> None:
         """Record the escalated terminal without persisting TEI."""
         draft = self._require_draft()
-        token = self._require_token()
-        self.claim.token = token
+        # The session already holds a token; assert it rather than re-assign.
+        self._require_token()
         result = await self.failures.record_failure(
             self.run_id,
             Failure.escalation_failure(
