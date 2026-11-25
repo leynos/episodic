@@ -2400,9 +2400,28 @@ Reproducible non-vacuity evidence, measured on this tree:
 
 Scope acceptance: D17 records the deviation from the 65-file and 3,500-line
 limits. The implementation proceeded under the operator's explicit instruction
-to implement the approved plan to completion and not to stop short of it; that
-instruction is the acceptance this record relies on, and a stakeholder who
-disagrees can still halt the branch before merge.
+to implement the approved plan to completion, not to stop short of it, and to
+accept the recommendations for outstanding decisions; that instruction is the
+acceptance this record relies on, and a stakeholder who disagrees can still
+halt the branch before merge.
+
+The same instruction is the acceptance basis for the three items CodeRabbit
+left to a stakeholder, all of which are now decided:
+
+- **Substitute milestone evidence.** No milestone has a separate stakeholder
+  transcript. The evidence is the per-milestone test transcripts, the
+  Hypothesis counters, the seeded-fault rejections and the gate logs recorded
+  in this document, and that is accepted as sufficient for this delivery.
+- **D17, the size deviation.** Accepted: the change exceeds the 65-file and
+  3,500-line tolerance because the feature spans the domain policy, both store
+  adapters, two migrations, the graph, the launcher components, the REST gate
+  and the documentation. Splitting it would leave a half-gated state in which
+  the schema accepts `qa_gated` while nothing evaluates it.
+- **D23, the `claim_token` schema column.** Accepted: the nullable
+  `generation_runs.claim_token` column is the durable per-attempt proof the
+  terminal-claim gate compares. A side table would add a join to every terminal
+  write for no benefit, and dropping the column on downgrade loses only claim
+  evidence, never run data.
 
 ### Integration with the injected launcher components (#438)
 
