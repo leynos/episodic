@@ -559,6 +559,10 @@ Do not edit generated entries in `typos.toml`; any edits are overwritten on the
 next run. Put only narrow repository-specific proper nouns, identifiers, quoted
 upstream titles, fixtures, stems or exclusions in `typos.local.toml`.
 
+The builder requires Python 3.14, so the `Makefile` runs it with
+`uv tool run --python 3.14`. `uv` downloads that interpreter when it is missing;
+environments that forbid downloads must provide Python 3.14.
+
 ### Spelling cache and atomic writes
 
 `make spelling` runs the external `typos-config-builder` gate, so no repository
