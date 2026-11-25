@@ -22,8 +22,9 @@ from femtologging import basicConfig
 from femtologging import get_logger as _get_femtologger
 
 from episodic._logging_types import (
-    _ConvenienceMethod,
     _LogCall,
+    _LogWrapperConfig,
+    _method_rejects_logging_call,
     _SupportsConvenienceLog,
 )
 
@@ -140,15 +141,6 @@ class _LogWrapper(typ.Protocol):
         """Emit one formatted message through the logging port."""
 
 
-class _LogWrapperConfig(typ.NamedTuple):
-    """Bind the public name and backend dispatch for one logging wrapper."""
-
-    name: str
-    level: int
-    convenience_method: _ConvenienceMethod
-    default_exc_info: object | None = None
-
-
 def get_logger(name: str) -> LoggerHandle:
     """Return an opaque logging-port handle for *name*.
 
@@ -177,7 +169,7 @@ def _emit(
     logger: LoggerHandle,
     log_call: _LogCall,
 ) -> None:
-    """Format and dispatch one log request through the wrapped backend."""
+    """Dispatch logs; retry only signature-mismatch DEBUG ``TypeError`` failures."""
     level = log_call.level
     convenience_method = log_call.convenience_method
     message = _format_message(log_call.template, log_call.args)
@@ -194,8 +186,24 @@ def _emit(
             exc_info=exc_info,
             stack_info=False,
         )
-    else:
+        return
+    try:
         method(message, exc_info=exc_info, stack_info=False)
+    except TypeError:
+        # Limit the DEBUG compatibility retry to signature mismatches so an
+        # internal TypeError after emission cannot duplicate a record.
+        if level != logging.DEBUG or not _method_rejects_logging_call(
+            method,
+            message,
+            exc_info=exc_info,
+        ):
+            raise
+        log_method = getattr(backend, "log", None)
+        if not callable(log_method):
+            raise
+    else:
+        return
+    log_method(level, message, exc_info=exc_info, stack_info=False)
 
 
 def _make_log_wrapper(
