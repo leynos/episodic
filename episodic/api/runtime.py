@@ -8,6 +8,7 @@ import psycopg
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from episodic.asyncio_tasks import configure_task_validation_metrics
 from episodic.canonical.storage import (
     FilesystemObjectStore,
     SqlAlchemyUnitOfWork,
@@ -274,6 +275,7 @@ def create_app_from_env() -> asgi.App:
     metrics, tracer = configure_structured_observability(
         os.environ.get("EPISODIC_LOG_LEVEL")
     )
+    configure_task_validation_metrics(metrics)
     config = _load_runtime_config()
     database_probe, uow_factory, shutdown_hook = _build_database_probe(
         config.database_url,
