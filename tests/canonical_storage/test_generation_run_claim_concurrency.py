@@ -29,6 +29,7 @@ from episodic.canonical.generation_run_errors import (
 )
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage.generation_run_models import GenerationRunRecord
 from tests.canonical_storage._postgres_claim_race_support import (
     DSN_VARIABLE,
     CommitGate,
@@ -339,13 +340,17 @@ async def test_a_stale_session_cannot_bypass_the_claim_gate(
     """A session holding a pre-claim copy still sees the claim when it writes."""
     run = await pending_run(postgres_factory)
 
+    retained: list[object] = []
     async with SqlAlchemyUnitOfWork(postgres_factory) as stale:
-        # Load the row while it is pending and unclaimed, so this session's
-        # identity map holds a copy with no claim token.
-        loaded = await stale.generation_runs.get_run(run.id)
-        assert loaded is not None, "the pending run must be readable"
-        stored_before = await stale.generation_runs.claim_token_for(run.id)
-        assert stored_before is None, "the run must start unclaimed"
+        # Retain the *mapped record* while the run is pending and unclaimed, so
+        # the session's identity map holds a copy with no claim token. Holding
+        # it here also stops SQLAlchemy's weak reference from collecting it,
+        # which is what makes the stale-copy case real rather than incidental.
+        session = stale._require_session()
+        record = await session.get(GenerationRunRecord, run.id)
+        assert record is not None, "the pending run must be mapped"
+        assert record.claim_token is None, "the run must start unclaimed"
+        retained.append(record)
 
         proof = uuid.uuid4()
         async with SqlAlchemyUnitOfWork(postgres_factory) as other:
@@ -366,6 +371,7 @@ async def test_a_stale_session_cannot_bypass_the_claim_gate(
             )
         await stale.rollback()
 
+    assert retained[0] is not None, "the stale record must stay referenced"
     async with SqlAlchemyUnitOfWork(postgres_factory) as uow:
         stored = await uow.generation_runs.get_run(run.id)
     assert stored is not None, "the run must survive the refused write"
