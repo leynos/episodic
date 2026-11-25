@@ -28,17 +28,11 @@ TASK_METADATA_KWARG = "episodic_task_metadata"
 _TASK_METADATA_KEYS = frozenset({"operation_name", "correlation_id", "priority_hint"})
 _METRIC_VALIDATION_FAILURES = "episodic.task_validation.failures"
 _UNNAMED_TASK = "<unnamed>"
-# Failures a logging or metrics adapter may raise while reporting. They are
-# suppressed so telemetry can never replace the validation error itself.
-_TELEMETRY_SINK_FAILURES = (
-    AttributeError,
-    IndexError,
-    KeyError,
-    OSError,
-    RuntimeError,
-    TypeError,
-    ValueError,
-)
+# A logging or metrics adapter may raise any ordinary exception while
+# reporting. Telemetry is best-effort, so those failures are suppressed and
+# can never replace the validation error itself. Process-control exceptions
+# (``BaseException`` subclasses) still propagate.
+_TELEMETRY_SINK_FAILURES = (Exception,)
 
 
 class TaskMetadata(typ.TypedDict, total=False):

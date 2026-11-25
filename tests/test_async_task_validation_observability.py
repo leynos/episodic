@@ -8,152 +8,25 @@ import pytest
 
 from episodic import asyncio_tasks
 from episodic.asyncio_tasks import (
-    TaskCreateKwargs,
-    TaskMetadata,
     configure_task_validation_metrics,
     create_task,
     create_task_in_group,
 )
 from episodic.logging import LoggerHandle, LogLevel
 from tests.fixtures.async_task_factory_observability import (
+    METRIC_NAME,
+    TASK_NAME,
+    UNSUPPORTED_KWARGS_CASE,
+    UNSUPPORTED_TASK_KWARGS,
+    VALIDATION_CASES,
     FailingTaskValidationMetrics,
     FakeTaskValidationMetrics,
     SpyLogger,
+    ValidationCase,
 )
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-_METRIC_NAME = "episodic.task_validation.failures"
-_TASK_NAME = "observability-task"
-_UNSUPPORTED_KWARGS: typ.Final = typ.cast(
-    "TaskCreateKwargs",
-    {"unsupported_kwarg": "value"},
-)
-
-
-def _with_unsupported_kwargs(
-    coro: cabc.Coroutine[object, object, object],
-    task_name: str,
-) -> object:
-    """Create a task with an unsupported keyword argument."""
-    return create_task(coro, name=task_name, **_UNSUPPORTED_KWARGS)
-
-
-def _with_unsupported_metadata_key(
-    coro: cabc.Coroutine[object, object, object],
-    task_name: str,
-) -> object:
-    """Create a task with an unsupported metadata key."""
-    metadata = typ.cast("TaskMetadata", {"unsupported_key": "nope"})
-    return create_task(coro, name=task_name, metadata=metadata)
-
-
-def _with_non_string_operation_name(
-    coro: cabc.Coroutine[object, object, object],
-    task_name: str,
-) -> object:
-    """Create a task whose operation name has the wrong type."""
-    metadata = typ.cast("TaskMetadata", {"operation_name": 123})
-    return create_task(coro, name=task_name, metadata=metadata)
-
-
-def _with_empty_operation_name(
-    coro: cabc.Coroutine[object, object, object],
-    task_name: str,
-) -> object:
-    """Create a task whose operation name is empty."""
-    return create_task(coro, name=task_name, metadata={"operation_name": ""})
-
-
-def _with_non_integer_priority_hint(
-    coro: cabc.Coroutine[object, object, object],
-    task_name: str,
-) -> object:
-    """Create a task whose priority hint has the wrong type."""
-    metadata = typ.cast("TaskMetadata", {"priority_hint": "high"})
-    return create_task(coro, name=task_name, metadata=metadata)
-
-
-class ValidationCase(typ.NamedTuple):
-    """Describe one validation failure and its expected diagnostics."""
-
-    make_call: cabc.Callable[[cabc.Coroutine[object, object, object], str], object]
-    expected_error: type[Exception]
-    exception_pattern: str
-    log_fields: dict[str, object]
-    metric_labels: dict[str, str]
-
-
-_UNSUPPORTED_KWARGS_CASE = ValidationCase(
-    make_call=_with_unsupported_kwargs,
-    expected_error=TypeError,
-    exception_pattern="unsupported_kwarg",
-    log_fields={
-        "validation_kind": "unsupported_task_kwargs",
-        "unexpected_keys": "unsupported_kwarg",
-    },
-    metric_labels={
-        "error_type": "TypeError",
-        "validation_kind": "unsupported_task_kwargs",
-    },
-)
-_UNSUPPORTED_METADATA_CASE = ValidationCase(
-    make_call=_with_unsupported_metadata_key,
-    expected_error=ValueError,
-    exception_pattern="unsupported_key",
-    log_fields={
-        "validation_kind": "unsupported_metadata_keys",
-        "unexpected_keys": "'unsupported_key'",
-    },
-    metric_labels={
-        "error_type": "ValueError",
-        "validation_kind": "unsupported_metadata_keys",
-    },
-)
-_NON_STRING_FIELD_CASE = ValidationCase(
-    make_call=_with_non_string_operation_name,
-    expected_error=TypeError,
-    exception_pattern="operation_name",
-    log_fields={
-        "validation_kind": "metadata_field_type",
-        "field_name": "operation_name",
-        "expected_type": "str",
-        "actual_type": "int",
-    },
-    metric_labels={"error_type": "TypeError", "field_name": "operation_name"},
-)
-_EMPTY_FIELD_CASE = ValidationCase(
-    make_call=_with_empty_operation_name,
-    expected_error=ValueError,
-    exception_pattern="non-empty string",
-    log_fields={
-        "validation_kind": "metadata_field_empty",
-        "field_name": "operation_name",
-        "expected_type": "non-empty str",
-        "actual_type": "empty str",
-    },
-    metric_labels={"error_type": "ValueError", "field_name": "operation_name"},
-)
-_NON_INTEGER_PRIORITY_CASE = ValidationCase(
-    make_call=_with_non_integer_priority_hint,
-    expected_error=TypeError,
-    exception_pattern="priority_hint",
-    log_fields={
-        "validation_kind": "metadata_field_type",
-        "field_name": "priority_hint",
-        "expected_type": "int",
-        "actual_type": "str",
-    },
-    metric_labels={"error_type": "TypeError", "field_name": "priority_hint"},
-)
-_VALIDATION_CASES = [
-    pytest.param(_UNSUPPORTED_KWARGS_CASE, id="unsupported_task_kwargs"),
-    pytest.param(_UNSUPPORTED_METADATA_CASE, id="unsupported_metadata_keys"),
-    pytest.param(_NON_STRING_FIELD_CASE, id="non_string_metadata_field"),
-    pytest.param(_EMPTY_FIELD_CASE, id="empty_metadata_field"),
-    pytest.param(_NON_INTEGER_PRIORITY_CASE, id="non_integer_priority_hint"),
-]
 
 
 @pytest.fixture
@@ -173,7 +46,7 @@ def validation_metrics() -> cabc.Iterator[FakeTaskValidationMetrics]:
     configure_task_validation_metrics(None)
 
 
-def _trigger(case: ValidationCase, *, task_name: str = _TASK_NAME) -> None:
+def _trigger(case: ValidationCase, *, task_name: str = TASK_NAME) -> None:
     """Invoke one validation failure and close the unstarted coroutine."""
     coro = asyncio.sleep(0)
     try:
@@ -189,7 +62,7 @@ def _single_log_payload(spy: SpyLogger) -> dict[str, object]:
     return typ.cast("dict[str, object]", json.loads(spy.calls[0][1]))
 
 
-@pytest.mark.parametrize("case", _VALIDATION_CASES)
+@pytest.mark.parametrize("case", VALIDATION_CASES)
 def test_validation_failure_emits_one_error_record(
     case: ValidationCase,
     spy_logger: SpyLogger,
@@ -209,8 +82,8 @@ def test_validation_failure_emits_one_error_record(
     assert payload["event"] == "task_validation_failed", (
         f"expected the task_validation_failed event, got {payload!r}"
     )
-    assert payload["task_name"] == _TASK_NAME, (
-        f"expected task_name {_TASK_NAME!r}, got {payload['task_name']!r}"
+    assert payload["task_name"] == TASK_NAME, (
+        f"expected task_name {TASK_NAME!r}, got {payload['task_name']!r}"
     )
     assert payload["error_type"] == case.expected_error.__name__, (
         f"expected error_type {case.expected_error.__name__!r}, "
@@ -223,7 +96,7 @@ def test_validation_failure_emits_one_error_record(
         )
 
 
-@pytest.mark.parametrize("case", _VALIDATION_CASES)
+@pytest.mark.parametrize("case", VALIDATION_CASES)
 def test_validation_failure_increments_categorised_counter(
     case: ValidationCase,
     validation_metrics: FakeTaskValidationMetrics,
@@ -231,7 +104,7 @@ def test_validation_failure_increments_categorised_counter(
     """Each validation failure increments the counter with its category."""
     _trigger(case)
 
-    assert validation_metrics.counters == [(_METRIC_NAME, case.metric_labels)], (
+    assert validation_metrics.counters == [(METRIC_NAME, case.metric_labels)], (
         f"expected one counter increment for {case.metric_labels!r}, "
         f"got {validation_metrics.counters!r}"
     )
@@ -245,7 +118,7 @@ def test_validation_record_names_unnamed_tasks(
     coro = asyncio.sleep(0)
     try:
         with pytest.raises(TypeError, match="unsupported_kwarg"):
-            create_task(coro, **_UNSUPPORTED_KWARGS)
+            create_task(coro, **UNSUPPORTED_TASK_KWARGS)
     finally:
         coro.close()
 
@@ -266,19 +139,19 @@ def test_task_group_creation_records_validation_failure(
             create_task_in_group(
                 asyncio.TaskGroup(),
                 coro,
-                name=_TASK_NAME,
-                **_UNSUPPORTED_KWARGS,
+                name=TASK_NAME,
+                **UNSUPPORTED_TASK_KWARGS,
             )
     finally:
         coro.close()
 
     payload = _single_log_payload(spy_logger)
-    assert payload["task_name"] == _TASK_NAME, (
-        f"expected task_name {_TASK_NAME!r}, got {payload['task_name']!r}"
+    assert payload["task_name"] == TASK_NAME, (
+        f"expected task_name {TASK_NAME!r}, got {payload['task_name']!r}"
     )
     assert validation_metrics.counters == [
         (
-            _METRIC_NAME,
+            METRIC_NAME,
             {"error_type": "TypeError", "validation_kind": "unsupported_task_kwargs"},
         )
     ], f"expected one counter increment, got {validation_metrics.counters!r}"
@@ -314,10 +187,10 @@ def test_configure_task_validation_metrics_installs_and_clears_sink(
     metrics = FakeTaskValidationMetrics()
     configure_task_validation_metrics(metrics)
     try:
-        _trigger(_UNSUPPORTED_KWARGS_CASE)
+        _trigger(UNSUPPORTED_KWARGS_CASE)
         assert metrics.counters == [
             (
-                _METRIC_NAME,
+                METRIC_NAME,
                 {
                     "error_type": "TypeError",
                     "validation_kind": "unsupported_task_kwargs",
@@ -326,7 +199,7 @@ def test_configure_task_validation_metrics_installs_and_clears_sink(
         ], f"expected one counter increment, got {metrics.counters!r}"
 
         configure_task_validation_metrics(None)
-        _trigger(_UNSUPPORTED_KWARGS_CASE)
+        _trigger(UNSUPPORTED_KWARGS_CASE)
     finally:
         configure_task_validation_metrics(None)
 
@@ -335,9 +208,23 @@ def test_configure_task_validation_metrics_installs_and_clears_sink(
     )
 
 
+class _CustomSinkError(Exception):
+    """Stand-in for an adapter-specific telemetry failure."""
+
+
+class _ProcessControlError(BaseException):
+    """Stand-in for a process-control exception that must propagate."""
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [OSError, AssertionError, _CustomSinkError],
+    ids=["os_error", "assertion_error", "custom_error"],
+)
 def test_validation_error_survives_logging_sink_failure(
     monkeypatch: pytest.MonkeyPatch,
     validation_metrics: FakeTaskValidationMetrics,
+    error_type: type[Exception],
 ) -> None:
     """A failing log sink must not replace the validation error."""
 
@@ -345,31 +232,65 @@ def test_validation_error_survives_logging_sink_failure(
         """Raise as a broken logging backend would."""
         del logger, template, args
         msg = "log sink unavailable"
-        raise OSError(msg)
+        raise error_type(msg)
 
     monkeypatch.setattr(asyncio_tasks, "log_error", _fail)
 
-    _trigger(_UNSUPPORTED_KWARGS_CASE)
+    _trigger(UNSUPPORTED_KWARGS_CASE)
 
     assert validation_metrics.counters == [
         (
-            _METRIC_NAME,
+            METRIC_NAME,
             {"error_type": "TypeError", "validation_kind": "unsupported_task_kwargs"},
         )
     ], "a logging failure must not suppress the counter increment"
 
 
+@pytest.mark.parametrize(
+    "error_type",
+    [OSError, AssertionError, _CustomSinkError],
+    ids=["os_error", "assertion_error", "custom_error"],
+)
 def test_validation_error_survives_metrics_sink_failure(
     spy_logger: SpyLogger,
+    error_type: type[Exception],
 ) -> None:
     """A failing metrics sink must not replace the validation error."""
-    configure_task_validation_metrics(FailingTaskValidationMetrics())
+    configure_task_validation_metrics(
+        FailingTaskValidationMetrics(error_type=error_type)
+    )
     try:
-        _trigger(_UNSUPPORTED_KWARGS_CASE)
+        _trigger(UNSUPPORTED_KWARGS_CASE)
     finally:
         configure_task_validation_metrics(None)
 
     payload = _single_log_payload(spy_logger)
-    assert payload["task_name"] == _TASK_NAME, (
+    assert payload["task_name"] == TASK_NAME, (
         "a metrics failure must not suppress the ERROR log record"
+    )
+
+
+def test_telemetry_sink_process_control_errors_propagate(
+    monkeypatch: pytest.MonkeyPatch,
+    validation_metrics: FakeTaskValidationMetrics,
+) -> None:
+    """Process-control failures from a sink are never swallowed."""
+
+    def _interrupt(logger: object, template: str, *args: object) -> None:
+        """Raise as an interrupted process would."""
+        del logger, template, args
+        msg = "interrupted while logging"
+        raise _ProcessControlError(msg)
+
+    monkeypatch.setattr(asyncio_tasks, "log_error", _interrupt)
+
+    coro = asyncio.sleep(0)
+    try:
+        with pytest.raises(_ProcessControlError):
+            create_task(coro, name=TASK_NAME, **UNSUPPORTED_TASK_KWARGS)
+    finally:
+        coro.close()
+
+    assert validation_metrics.counters == [], (
+        "a process-control failure must stop the telemetry path"
     )
