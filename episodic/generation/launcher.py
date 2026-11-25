@@ -331,6 +331,9 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             ),
             claim=claim,
         )
+        if result.written and result.token is not None:
+            # The write committed; adopt its authority for any later path.
+            claim.token = result.token
         return result.written
 
 

@@ -105,7 +105,6 @@ class GenerationRunFailurePersistence:
         token = await self._write_failure(run_id, failure, claim=claim, draft=draft)
         if token is None:
             return FailureWriteResult(written=False)
-        claim.token = token
         self._observe_written_failure(run_id, failure)
         # The write is durable; hand the committed result to any observer.
         if self.observe is not None:

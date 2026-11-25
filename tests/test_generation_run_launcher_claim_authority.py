@@ -188,3 +188,53 @@ async def test_a_token_for_another_run_cannot_fail_this_run(
     assert run.status is GenerationRunStatus.PENDING, kinds
     assert "run.failed" not in kinds, kinds
     assert run.error_category is None, run.error_category
+
+
+@pytest.mark.asyncio
+async def test_the_observer_runs_once_after_a_committed_failure(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The observe callback runs once, after the write commits."""
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    run_launcher = _launcher(session_factory)
+    failures = run_launcher._components()[2]
+    seen: list[tuple[uuid.UUID, Failure]] = []
+    failure = Failure("observed", "unexpected")
+    failures.observe = lambda observed_id, observed_failure: seen.append(
+        (observed_id, observed_failure),
+    )
+
+    result = await failures.record_failure(run_id, failure, claim=RunClaim())
+
+    assert result.written is True, result
+    assert seen == [(run_id, failure)], seen
+
+
+@pytest.mark.asyncio
+async def test_the_observer_does_not_run_for_a_refused_write(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A refused write commits nothing, so the observer never runs."""
+    this_run, _ = await prepare_pending_qa_gated_run(session_factory)
+    run_launcher = _launcher(session_factory)
+    failures = run_launcher._components()[2]
+    seen: list[uuid.UUID] = []
+    failures.observe = lambda observed_id, _failure: seen.append(observed_id)
+
+    result = await failures.record_failure(
+        this_run,
+        Failure("foreign token", "unexpected"),
+        claim=RunClaim(token=ClaimToken(uuid.uuid4())),
+    )
+
+    assert result.written is False, result
+    assert not seen, seen
+
+
+def test_an_injected_proof_factory_supplies_the_proof() -> None:
+    """A caller-supplied proof factory decides the claim proof."""
+    fixed = uuid.uuid4()
+
+    claim = RunClaim(proof_factory=lambda: fixed)
+
+    assert claim.proof == fixed, claim.proof

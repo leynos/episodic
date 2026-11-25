@@ -251,6 +251,9 @@ class _LauncherRunSession:
         if not result.written:
             msg = f"generation run {self.run_id} refused the escalation write"
             raise RunNotClaimedError(msg)
+        if result.token is not None:
+            # The escalation committed; keep the authority it returned.
+            self.claim.token = result.token
         # The escalation is durable now, so its QA outcome metrics are real.
         record_qa_metrics(self.metrics, verdict, evaluations)
 
