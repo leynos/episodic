@@ -16,6 +16,7 @@ from episodic.asyncio_tasks import (
 )
 from episodic.logging import LoggerHandle, LogLevel
 from tests.fixtures.async_task_factory_observability import (
+    FailingTaskValidationMetrics,
     FakeTaskValidationMetrics,
     SpyLogger,
 )
@@ -331,4 +332,44 @@ def test_configure_task_validation_metrics_installs_and_clears_sink(
 
     assert len(metrics.counters) == 1, (
         "a cleared metrics sink must not receive further increments"
+    )
+
+
+def test_validation_error_survives_logging_sink_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    validation_metrics: FakeTaskValidationMetrics,
+) -> None:
+    """A failing log sink must not replace the validation error."""
+
+    def _fail(logger: object, template: str, *args: object) -> None:
+        """Raise as a broken logging backend would."""
+        del logger, template, args
+        msg = "log sink unavailable"
+        raise OSError(msg)
+
+    monkeypatch.setattr(asyncio_tasks, "log_error", _fail)
+
+    _trigger(_UNSUPPORTED_KWARGS_CASE)
+
+    assert validation_metrics.counters == [
+        (
+            _METRIC_NAME,
+            {"error_type": "TypeError", "validation_kind": "unsupported_task_kwargs"},
+        )
+    ], "a logging failure must not suppress the counter increment"
+
+
+def test_validation_error_survives_metrics_sink_failure(
+    spy_logger: SpyLogger,
+) -> None:
+    """A failing metrics sink must not replace the validation error."""
+    configure_task_validation_metrics(FailingTaskValidationMetrics())
+    try:
+        _trigger(_UNSUPPORTED_KWARGS_CASE)
+    finally:
+        configure_task_validation_metrics(None)
+
+    payload = _single_log_payload(spy_logger)
+    assert payload["task_name"] == _TASK_NAME, (
+        "a metrics failure must not suppress the ERROR log record"
     )

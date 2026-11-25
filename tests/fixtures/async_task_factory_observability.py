@@ -62,3 +62,18 @@ class FakeTaskValidationMetrics(NoopMetrics):
     ) -> None:
         """Capture one counter increment."""
         self.counters.append((name, dict(labels)))
+
+
+@dc.dataclass(frozen=True, slots=True)
+class FailingTaskValidationMetrics(NoopMetrics):
+    """Metrics sink that fails every counter increment."""
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Raise an I/O failure as a broken backend would."""
+        msg = f"metrics sink unavailable for {name} ({dict(labels)!r})"
+        raise OSError(msg)

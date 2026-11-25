@@ -3511,6 +3511,10 @@ validation failed:
   `unsupported_metadata_keys`) or `field_name` (`operation_name`,
   `correlation_id`, or `priority_hint`).
 
+Telemetry is best-effort: each emission is isolated, so a failing logging or
+metrics sink can never replace the `TypeError` or `ValueError` the caller
+expects.
+
 `TaskValidationMetricsPort` narrows the canonical
 `episodic.observability.MetricsPort` without adding methods, so a composition
 root can share one sink across features. Call

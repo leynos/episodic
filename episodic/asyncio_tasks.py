@@ -11,6 +11,7 @@ A composition root installs the sink it wants failures reported to through
 """
 
 import asyncio
+import contextlib
 import dataclasses as dc
 import typing as typ
 
@@ -27,6 +28,17 @@ TASK_METADATA_KWARG = "episodic_task_metadata"
 _TASK_METADATA_KEYS = frozenset({"operation_name", "correlation_id", "priority_hint"})
 _METRIC_VALIDATION_FAILURES = "episodic.task_validation.failures"
 _UNNAMED_TASK = "<unnamed>"
+# Failures a logging or metrics adapter may raise while reporting. They are
+# suppressed so telemetry can never replace the validation error itself.
+_TELEMETRY_SINK_FAILURES = (
+    AttributeError,
+    IndexError,
+    KeyError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 
 class TaskMetadata(typ.TypedDict, total=False):
@@ -101,20 +113,24 @@ def _abort_validation(
 ) -> typ.NoReturn:
     """Record one task-validation failure, then raise its exception."""
     error_type = type(exception).__name__
-    log_error(
-        logger,
-        "%s",
-        format_log_event(
-            "task_validation_failed",
-            task_name=_display_task_name(task_name),
-            error_type=error_type,
-            **fields,
-        ),
-    )
-    _metrics.increment_counter(
-        _METRIC_VALIDATION_FAILURES,
-        labels={"error_type": error_type, **labels},
-    )
+    # Telemetry is best-effort: a failing sink must not replace the validation
+    # error callers rely on, so each emission is isolated.
+    with contextlib.suppress(*_TELEMETRY_SINK_FAILURES):
+        log_error(
+            logger,
+            "%s",
+            format_log_event(
+                "task_validation_failed",
+                task_name=_display_task_name(task_name),
+                error_type=error_type,
+                **fields,
+            ),
+        )
+    with contextlib.suppress(*_TELEMETRY_SINK_FAILURES):
+        _metrics.increment_counter(
+            _METRIC_VALIDATION_FAILURES,
+            labels={"error_type": error_type, **labels},
+        )
     raise exception
 
 
