@@ -1,6 +1,8 @@
-"""Persist canonical state at no-QA draft-generation boundaries.
+"""Persist canonical state at generation-run draft boundaries.
 
-Services ``materialise_episode_from_ingestion`` and ``persist_draft_script``,
+The persisted draft records the run's QA status (``skipped`` for a no-QA run,
+``passed`` for a gated run that cleared evaluation). Services
+``materialise_episode_from_ingestion`` and ``persist_draft_script``,
 their request types, and typed persistence errors are exported. Callers provide
 a ``CanonicalUnitOfWork``; this module never creates or disposes one. A ready
 :class:`IngestionJob` becomes a deterministic placeholder: pages load before

@@ -1,15 +1,17 @@
-"""Schedule and execute bounded no-QA generation runs in the API process.
+"""Schedule and execute bounded generation runs in the API process.
 
 The public :class:`GenerationRunLauncher` port and
 :class:`InProcessGenerationRunLauncher` service connect the generation-run API
-resource to canonical run persistence. The launcher claims a
-:class:`~episodic.canonical.domain.GenerationRun`, loads its episode, source
-documents, and resolved presenter bindings through fresh
-:class:`~episodic.canonical.unit_of_work_protocols.CanonicalUnitOfWork`
-instances, then delegates draft creation to :class:`DraftScriptGenerator`.
-It records ordered lifecycle events, persists the generated TEI through
-``persist_draft_script``, records optional provider costs, and applies the
-immutable ``GenerationRunStatusUpdate`` command for terminal state changes.
+resource to canonical run persistence. Every run executes through the injected
+:class:`~episodic.canonical.generation_graph_ports.ContentGenerationGraphPort`
+(``content_graph``): the graph's nodes drive draft generation, evaluation and
+the terminal branch, and they reach their side effects through the per-run
+session in :mod:`episodic.generation.launcher_session`, which owns TEI
+persistence (``persist_draft_script``) and the ordered lifecycle events.
+Terminal failures are written by
+:class:`~episodic.generation.launcher_failure.GenerationRunFailurePersistence`;
+successes by
+:class:`~episodic.generation.launcher_persistence.GenerationRunPersistence`.
 
 Admission is bounded before an asyncio task is allocated, and strong task
 references support draining or cancellation. The launcher exposes metrics and
@@ -22,9 +24,11 @@ background task.
 The launcher is the orchestration boundary. Task admission and lifecycle live
 in :class:`~episodic.generation.launcher_scheduling.GenerationRunScheduler`,
 claim-and-hydrate logic lives in
-:class:`~episodic.generation.launcher_claim.GenerationRunClaimer`, and outcome
-persistence lives in
-:class:`~episodic.generation.launcher_persistence.GenerationRunPersistence`.
+:class:`~episodic.generation.launcher_claim.GenerationRunClaimer`, success
+persistence in
+:class:`~episodic.generation.launcher_persistence.GenerationRunPersistence`,
+and terminal failure writes in
+:class:`~episodic.generation.launcher_failure.GenerationRunFailurePersistence`.
 Each component takes its collaborators as constructor arguments; the launcher
 composes them once in ``__post_init__`` and translates a classified failure
 into the persisted terminal record.

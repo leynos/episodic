@@ -1,4 +1,8 @@
-"""Falcon resources for no-QA generation-run creation and polling."""
+"""Falcon resources for generation-run creation and polling.
+
+Creation accepts ``qa_gated`` only when ``accepted_quality_modes`` includes
+it; otherwise the historical ``422`` stands.
+"""
 
 import dataclasses as dc
 import typing as typ
@@ -111,15 +115,11 @@ def _accepted_response(run: GenerationRun) -> IdempotentResponse:
 
 
 class GenerationRunsResource:
-    """Create no-QA generation runs for authenticated ingestion-job owners.
+    """Create generation runs for authenticated ingestion-job owners.
 
     The resource materialises the caller-owned ready ingestion job, persists a
-    durable generation-run checkpoint, and schedules detached execution.
-
-    Notes
-    -----
-    The authenticated principal becomes the durable run actor; request
-    payloads cannot select another actor.
+    durable checkpoint, and schedules detached execution. The authenticated
+    principal becomes the durable run actor; payloads cannot select another.
     """
 
     def __init__(
@@ -142,7 +142,7 @@ class GenerationRunsResource:
         resp: falcon.Response,
         ingestion_job_id: str,
     ) -> None:
-        """Materialise and schedule a no-QA generation run.
+        """Materialise and schedule a generation run.
 
         Parameters
         ----------
@@ -150,7 +150,7 @@ class GenerationRunsResource:
             Path identifier for the ready ingestion job owned by the
             authenticated principal.
         req
-            Falcon request containing the no-QA command and idempotency key.
+            Falcon request containing the run command and idempotency key.
         resp
             Falcon response populated with the accepted run representation.
 

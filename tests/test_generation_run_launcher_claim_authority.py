@@ -190,24 +190,80 @@ async def test_a_token_for_another_run_cannot_fail_this_run(
     assert run.error_category is None, run.error_category
 
 
+@dc.dataclass(slots=True)
+class _CommitWatch:
+    """Record whether a unit of work has committed."""
+
+    committed: bool = False
+
+
+class _WatchingUnitOfWork(SqlAlchemyUnitOfWork):
+    """Unit of work that records when its commit returns."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        watch: _CommitWatch,
+    ) -> None:
+        """Open the real unit of work with the supplied commit watch."""
+        super().__init__(session_factory)
+        self._watch = watch
+
+    async def commit(self) -> None:
+        """Commit, then record that the write is durable."""
+        await super().commit()
+        self._watch.committed = True
+
+
+class _RaisingCommitUnitOfWork(SqlAlchemyUnitOfWork):
+    """Unit of work whose first commit raises before it reaches the database."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        watch: _CommitWatch,
+    ) -> None:
+        """Open the real unit of work with the supplied watch."""
+        super().__init__(session_factory)
+        self._watch = watch
+        self._should_raise = True
+
+    async def commit(self) -> None:
+        """Raise once, then commit normally."""
+        if self._should_raise:
+            self._should_raise = False
+            msg = "commit fault"
+            raise RuntimeError(msg)
+        await super().commit()
+        self._watch.committed = True
+
+
 @pytest.mark.asyncio
 async def test_the_observer_runs_once_after_a_committed_failure(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The observe callback runs once, after the write commits."""
+    """The observer runs once, and only after the commit has returned.
+
+    The callback records the commit watch at the moment it runs, so moving the
+    call before the commit fails this test.
+    """
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
-    run_launcher = _launcher(session_factory)
+    watch = _CommitWatch()
+    run_launcher = dc.replace(
+        _launcher(session_factory),
+        uow_factory=lambda: _WatchingUnitOfWork(session_factory, watch),
+    )
     failures = run_launcher._components()[2]
-    seen: list[tuple[uuid.UUID, Failure]] = []
+    seen: list[tuple[uuid.UUID, Failure, bool]] = []
     failure = Failure("observed", "unexpected")
     failures.observe = lambda observed_id, observed_failure: seen.append(
-        (observed_id, observed_failure),
+        (observed_id, observed_failure, watch.committed),
     )
 
     result = await failures.record_failure(run_id, failure, claim=RunClaim())
 
     assert result.written is True, result
-    assert seen == [(run_id, failure)], seen
+    assert seen == [(run_id, failure, True)], seen
 
 
 @pytest.mark.asyncio
@@ -229,6 +285,34 @@ async def test_the_observer_does_not_run_for_a_refused_write(
 
     assert result.written is False, result
     assert not seen, seen
+
+
+@pytest.mark.asyncio
+async def test_the_observer_never_runs_when_the_commit_raises(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A write that raises before committing calls no observer and persists nothing."""
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    watch = _CommitWatch()
+    run_launcher = dc.replace(
+        _launcher(session_factory),
+        uow_factory=lambda: _RaisingCommitUnitOfWork(session_factory, watch),
+    )
+    failures = run_launcher._components()[2]
+    seen: list[uuid.UUID] = []
+    failures.observe = lambda observed_id, _failure: seen.append(observed_id)
+
+    with pytest.raises(RuntimeError, match="commit fault"):
+        await failures.record_failure(
+            run_id,
+            Failure("uncommitted", "unexpected"),
+            claim=RunClaim(),
+        )
+
+    assert watch.committed is False, "the fault must precede the commit"
+    assert not seen, seen
+    _run, kinds = await _load(session_factory, run_id)
+    assert "run.failed" not in kinds, kinds
 
 
 def test_an_injected_proof_factory_supplies_the_proof() -> None:
