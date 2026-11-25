@@ -1602,6 +1602,18 @@ These are trusted, not verified.
 - `accepted_quality_modes` always contains `draft_without_qa`, so a
   deployment policy that forbids it is not supported. Revisit this with the
   approval workflow (4.2.x).
+- The remaining Domain Architecture item — `apply_status_update` importing its
+  `GenerationRunStatusUpdate` DTO from the ports module — is recorded rather
+  than changed. Moving the DTO into `domain_generation` was attempted and
+  reverted: `domain_validation` imports `GenerationRunStatus` only under
+  `TYPE_CHECKING`, so the dataclass fails at class-creation time under PEP 649
+  when the module is imported before `domain_enums`. The DTO therefore stays in
+  `generation_run_ports`, which imports both its enum and the sentinel at
+  runtime; the domain module's dependency on it is a type-level coupling to a
+  frozen dataclass of domain-shaped fields, not hidden state. The graph nodes'
+  `asyncio.current_task().cancelling()` check stays too: it is the documented
+  translation for LangGraph's `NodeCancelledError` (AXM-2), and the surrounding
+  module is otherwise framework-free.
 - The two CodeRabbit pre-merge rows are accepted and implemented, not deferred.
 - **Store-level token gate (Domain Architecture).** Every terminal write names
   the claim that owns the run. `GenerationRunStatusUpdate` carries an optional
