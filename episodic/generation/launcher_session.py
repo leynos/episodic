@@ -19,7 +19,7 @@ from episodic.canonical.generation_graph_ports import (
     QualityEvaluation,
 )
 from episodic.canonical.generation_persistence import InvalidDraftTeiError
-from episodic.canonical.generation_quality import QaStatus
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_routing import QualityVerdict
 from episodic.canonical.tei import parse_tei_header
 from episodic.generation.launcher_quality import QaOutcome, record_qa_metrics
@@ -30,6 +30,8 @@ from episodic.generation.launcher_support import (
     FailureWriteResult,
     RunClaim,
 )
+
+_METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -161,6 +163,12 @@ class _LauncherRunSession:
             msg = f"generation run {self.run_id} was not claimed"
             raise RunNotClaimedError(msg)
         self.claimed = claimed
+        if claimed.run.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
+            # The bypass counter is a per-run observation, not a claim rule.
+            self.metrics.increment_counter(
+                _METRIC_QA_BYPASS,
+                labels={"quality_mode": claimed.run.quality_mode.value},
+            )
 
     async def generate_draft(self) -> None:
         """Generate one draft, record it, and validate it as TEI.

@@ -16,7 +16,6 @@ import datetime as dt
 import typing as typ
 
 from episodic.canonical.generation_claim import ExecutionClaim
-from episodic.canonical.generation_quality import QualityMode
 from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
@@ -57,7 +56,6 @@ DEFAULT_LEASE_SECONDS = 900
 #: Shutdown must not hang on a stalled read, and an unverified claim is not
 #: adopted: the durable row either carries this attempt's proof or it does not.
 DEFAULT_RECONCILE_TIMEOUT_SECONDS = 10.0
-_METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
 _METRIC_DRAFT_LATENCY = "generation_run_draft_latency_ms"
 
 
@@ -212,11 +210,6 @@ class GenerationRunClaimer:
                 )
             )
         sources = await self.runtime.source_loader.load(documents)
-        if run.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
-            self.runtime.metrics.increment_counter(
-                _METRIC_QA_BYPASS,
-                labels={"quality_mode": run.quality_mode.value},
-            )
         return ClaimedRun(
             run=run,
             episode=episode,

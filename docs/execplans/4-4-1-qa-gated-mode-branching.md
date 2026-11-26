@@ -1602,6 +1602,16 @@ These are trusted, not verified.
 - `accepted_quality_modes` always contains `draft_without_qa`, so a
   deployment policy that forbids it is not supported. Revisit this with the
   approval workflow (4.2.x).
+- A later Unit Architecture pass required three more separations, now made.
+  `read_owned_episode_and_run`'s test wraps both repositories in a proxy that
+  records every call that is not a `get*` read, and asserts the session has no
+  `new`, `dirty` or `deleted` instances. The cancellation-write bookkeeping,
+  its deadline and its timeout counter moved out of the scheduler into
+  `episodic/generation/launcher_cancellation_writes.CancellationWrites`, which
+  the scheduler delegates to (the scheduler also exposes read-only properties
+  with the old attribute names, so the tests that inspect them still work). The
+  QA-bypass counter moved from the claimer to the per-run session's
+  `initialize`, where per-run observations belong.
 - The Unit Architecture row's five items were implemented at `HEAD` as
   follows. `_LauncherRunSession.begin_evaluation` now calls
   `GenerationRunPersistence.record_evaluation_started`, so every run-state

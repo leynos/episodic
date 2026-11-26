@@ -131,8 +131,45 @@ async def test_read_owned_episode_and_run_returns_the_producing_run(
     assert missing is None, "an unknown episode must not resolve"
 
 
+_WRITE_NAMES = frozenset({"add", "update", "create_run", "flush", "commit", "rollback"})
+_READ_PREFIX = "get"
+
+
+class _RecordingProxy:
+    """Wrap a collaborator and record every non-read attribute call.
+
+    A repository is only read-only if *every* call it receives is a read, so
+    the proxy records anything whose name is a known write or does not start
+    with ``get``, not just a fixed allow-list of write methods.
+    """
+
+    def __init__(self, inner: object, label: str, calls: list[str]) -> None:
+        """Wrap ``inner``, recording attempts as ``label.name``."""
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "_label", label)
+        object.__setattr__(self, "_calls", calls)
+
+    def __getattr__(self, name: str) -> object:
+        """Return a callable that records the call unless it is a read."""
+        inner = object.__getattribute__(self, "_inner")
+        label = object.__getattribute__(self, "_label")
+        calls = object.__getattribute__(self, "_calls")
+        target = getattr(inner, name)
+        if not callable(target):
+            return target
+        is_write = name in _WRITE_NAMES or not name.startswith(_READ_PREFIX)
+
+        def call(*args: object, **kwargs: object) -> object:
+            """Record a non-read call, then delegate it."""
+            if is_write:
+                calls.append(f"{label}.{name}")
+            return typ.cast("typ.Any", target)(*args, **kwargs)
+
+        return call
+
+
 class _RecordingReadOnlyUnitOfWork:
-    """Unit of work that records any write, flush, or commit attempt."""
+    """Unit of work that records any write at the store or session level."""
 
     def __init__(self, inner: SqlAlchemyUnitOfWork) -> None:
         """Wrap the real unit of work and start the call log."""
@@ -158,10 +195,13 @@ class _RecordingReadOnlyUnitOfWork:
         )
 
     def __getattr__(self, name: str) -> object:
-        """Delegate an attribute, recording write-side names."""
+        """Delegate an attribute, wrapping stores and recording writes."""
         if name in {"flush", "commit", "rollback", "add"}:
             return self._recorder(name)
-        return getattr(self._inner, name)
+        target = getattr(self._inner, name)
+        if name in {"episodes", "generation_runs"}:
+            return _RecordingProxy(target, name, self.calls)
+        return target
 
     def _recorder(self, name: str) -> object:
         """Return a callable that records an attempted write-side call."""
@@ -182,7 +222,9 @@ async def test_read_owned_episode_and_run_issues_no_writes(
     """The ownership query performs reads only."""
     episode_id = await _episode_with_launcher_run(session_factory)
 
-    async with SqlAlchemyUnitOfWork(session_factory) as inner:
+    session = session_factory()
+    inner = SqlAlchemyUnitOfWork(lambda: session)
+    async with inner:
         recording = _RecordingReadOnlyUnitOfWork(inner)
         owned = await read_owned_episode_and_run(
             typ.cast("CanonicalUnitOfWork", recording),
@@ -190,5 +232,7 @@ async def test_read_owned_episode_and_run_issues_no_writes(
             _ACTOR,
         )
 
-    assert owned is not None, "the owning actor must resolve the episode and run"
-    assert not recording.calls, f"the query wrote: {recording.calls}"
+        assert owned is not None, "the owning actor must resolve the episode and run"
+        assert not recording.calls, f"the query wrote: {recording.calls}"
+        staged = (len(session.new), len(session.dirty), len(session.deleted))
+        assert staged == (0, 0, 0), f"the query staged instances: {staged}"

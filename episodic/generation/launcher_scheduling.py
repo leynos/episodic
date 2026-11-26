@@ -14,6 +14,7 @@ import asyncio
 import dataclasses as dc
 import typing as typ
 
+from episodic.generation.launcher_cancellation_writes import CancellationWrites
 from episodic.generation.launcher_support import RunClaim
 from episodic.logging import get_logger, log_info
 from episodic.observability import (
@@ -38,7 +39,6 @@ DEFAULT_MAX_PENDING_RUNS = 16
 DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS = 10.0
 _METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
 _METRIC_PENDING_DEPTH = "generation_run_pending_depth"
-_METRIC_CANCELLATION_TIMEOUT = "generation_run_cancellation_write_timeouts_total"
 _METRIC_TASK_TIMEOUT = "generation_run_shutdown_task_timeouts_total"
 
 logger = get_logger(__name__)
@@ -129,15 +129,7 @@ class GenerationRunScheduler:
     )
     _semaphore: asyncio.Semaphore = dc.field(init=False)
     _admitted_run_count: int = dc.field(default=0, init=False)
-    _cancelled_run_ids: set[uuid.UUID] = dc.field(default_factory=set, init=False)
-    _pending_cancellation_ids: set[uuid.UUID] = dc.field(
-        default_factory=set,
-        init=False,
-    )
-    _cancellation_tasks: set[asyncio.Task[bool]] = dc.field(
-        default_factory=set,
-        init=False,
-    )
+    _writes: CancellationWrites = dc.field(init=False)
     _is_shutting_down: bool = dc.field(default=False, init=False)
 
     def __post_init__(self) -> None:
@@ -149,6 +141,26 @@ class GenerationRunScheduler:
             msg = "max_pending_runs must be non-negative."
             raise ValueError(msg)
         self._semaphore = asyncio.Semaphore(self.runtime.max_concurrency)
+        self._writes = CancellationWrites(
+            record_cancellation=self.record_cancellation,
+            metrics=self.runtime.metrics,
+            timeout_seconds=self.runtime.cancellation_write_timeout_seconds,
+        )
+
+    @property
+    def _cancelled_run_ids(self) -> set[uuid.UUID]:
+        """Runs whose cancellation write landed (delegated)."""
+        return self._writes.cancelled_run_ids
+
+    @property
+    def _pending_cancellation_ids(self) -> set[uuid.UUID]:
+        """Runs with a cancellation write in flight (delegated)."""
+        return self._writes.pending_run_ids
+
+    @property
+    def _cancellation_tasks(self) -> set[asyncio.Task[bool]]:
+        """Shielded cancellation writes still in flight (delegated)."""
+        return self._writes.tasks
 
     async def launch(self, run_id: uuid.UUID) -> None:
         """Schedule a background task for one generation run."""
@@ -222,28 +234,8 @@ class GenerationRunScheduler:
             )
 
     async def _drain_cancellation_writes(self, *, deadline: float | None) -> None:
-        """Await pending cancellation writes, bounded during shutdown only.
-
-        A write that misses the deadline is abandoned, not cancelled: it stays
-        shielded so it can still land. If it never commits, recovery depends
-        on the durable row. A run whose execution claim committed earlier is
-        ``running`` with that claim's lease, so expired-lease reclamation
-        covers it. A run whose failure-only claim never committed is still
-        ``pending``: the claim and its terminal write share one transaction, so
-        no separate running state is durable, and the stalled transaction may
-        hold the row lock until it is released, for example by terminating its
-        backend. Each miss increments a counter so an operator can see that
-        shutdown did not confirm the write.
-        """
-        pending = tuple(self._cancellation_tasks)
-        if not pending:
-            return
-        if deadline is None:
-            await asyncio.gather(*pending, return_exceptions=True)
-            return
-        _done, still_pending = await asyncio.wait(pending, timeout=deadline)
-        if still_pending:
-            self._report_cancellation_timeout(None)
+        """Await pending cancellation writes, bounded during shutdown only."""
+        await self._writes.drain(deadline=deadline)
 
     @property
     def scheduled_run_count(self) -> int:
@@ -319,60 +311,7 @@ class GenerationRunScheduler:
         claim: RunClaim,
     ) -> None:
         """Record a cancellation from a task named for the run (INV-9)."""
-        if run_id in self._cancelled_run_ids:
-            return
-        if claim.token is None and run_id in self._pending_cancellation_ids:
-            return
-        self._pending_cancellation_ids.add(run_id)
-        write = asyncio.create_task(
-            self._record_cancellation_write(run_id, claim),
-            name=f"generation-run-{run_id}",
-        )
-        self._cancellation_tasks.add(write)
-
-        def _done(task: asyncio.Task[bool]) -> None:
-            """Forget a finished cancellation write."""
-            self._cancellation_tasks.discard(task)
-            self._pending_cancellation_ids.discard(run_id)
-
-        write.add_done_callback(_done)
-        try:
-            recorded = await asyncio.wait_for(
-                asyncio.shield(write),
-                timeout=self.runtime.cancellation_write_timeout_seconds,
-            )
-        except TimeoutError:
-            self._report_cancellation_timeout(run_id)
-            return
-        if recorded:
-            self._cancelled_run_ids.add(run_id)
-
-    def _report_cancellation_timeout(self, run_id: uuid.UUID | None) -> None:
-        """Record that a cancellation write missed its deadline.
-
-        The write is left running: it is shielded, so it can still land. A run
-        whose earlier execution claim committed falls back to expired-lease
-        reclamation. A failure-only claim commits with its terminal write, so a
-        stalled one leaves the run pending, and any transaction still holding
-        its row lock must be released before a fresh claim can succeed.
-        """
-        log_info(
-            logger,
-            "generation_run_launcher.cancellation_write_timeout run_id=%s",
-            run_id,
-        )
-        self.runtime.metrics.increment_counter(
-            _METRIC_CANCELLATION_TIMEOUT,
-            labels={},
-        )
-
-    async def _record_cancellation_write(
-        self,
-        run_id: uuid.UUID,
-        claim: RunClaim,
-    ) -> bool:
-        """Perform one cancellation write and report whether it landed."""
-        return await self.record_cancellation(run_id, claim)
+        await self._writes.record_owned(run_id, claim)
 
     def _record_pending_depth(self) -> None:
         """Report bounded work waiting beyond the execution capacity."""

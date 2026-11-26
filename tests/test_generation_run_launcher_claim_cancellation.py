@@ -288,7 +288,7 @@ async def test_a_timed_out_cancellation_leaves_the_run_claimable(
         await stalled.wait()
         return False
 
-    run_launcher._scheduler.record_cancellation = never_writes
+    run_launcher._scheduler._writes.record_cancellation = never_writes
     await asyncio.wait_for(
         run_launcher._scheduler.record_cancellation_owned(run_id, RunClaim()),
         timeout=5,
