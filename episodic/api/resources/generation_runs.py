@@ -192,17 +192,17 @@ class GenerationRunsResource:
         # a rejection must release the key.
         launcher: GenerationRunLauncher | None = None
         prepared: _CreateGenerationRun | None = None
-        # One validation function, called once per submission: keyless
-        # requests validate up front, and keyed ones inside the idempotent
-        # work or the conflict precondition.
+        # Memoized so a keyed draft_without_qa request that meets a conflict
+        # reuses the prepared result instead of validating twice.
 
         def validate() -> _CreateGenerationRun:
-            """Apply the request rules once for this submission."""
-            return _validate_quality_request(
-                request,
-                payload,
-                self._accepted_quality_modes,
-            )
+            """Apply the request rules once, memoizing the prepared result."""
+            nonlocal prepared
+            if prepared is None:
+                prepared = _validate_quality_request(
+                    request, payload, self._accepted_quality_modes
+                )
+            return prepared
 
         def precondition() -> None:
             """Apply the same rules before a conflict is reported."""
@@ -222,7 +222,7 @@ class GenerationRunsResource:
 
             async def work() -> IdempotentResponse:
                 """Create and schedule the run, then build its 202 response."""
-                validated = prepared if prepared is not None else validate()
+                validated = validate()
                 resolved_launcher = (
                     self._require_launcher() if launcher is None else launcher
                 )

@@ -292,6 +292,12 @@ inference budget on a branch that cannot pass.
   private reconciliation deadline, an injectable source loader, narrow
   per-stage runtime protocols, an explicit claim-token return, and a split
   failure command.
+- [x] (2026-11-26) Ninth round: the 2026-11-26 CodeRabbit findings. The
+  keyed-conflict precondition now reuses the submission's prepared validation
+  (`GenerationRunsResource._submit` memoizes it), the recording-unit-of-work
+  test gained a delegated-write negative control that proves the call log
+  detects it, and the plan's gate blocks state `set -o pipefail` for both the
+  correctness and documentation milestones.
 - [x] (2026-11-24) Seventh round, from CodeRabbit's pre-merge rows at
   `788119cf`..`bfd4aa78`: bounded shutdown (D24) with a normal-drain contract,
   in-transaction failure reconciliation and post-write QA metrics (D25), the
@@ -1611,20 +1617,23 @@ These are trusted, not verified.
   the scheduler delegates to (the scheduler also exposes read-only properties
   with the old attribute names, so the tests that inspect them still work). The
   QA-bypass counter moved from the claimer to the per-run session's
-  `initialize`, where per-run observations belong.
+  `initialize`, where per-run observations belong. A negative control writes
+  through a wrapped repository and shows the proxy records it, so the read-only
+  assertion cannot pass while a delegated write goes unseen.
 - The Unit Architecture row's five items were implemented at `HEAD` as
   follows. `_LauncherRunSession.begin_evaluation` now calls
   `GenerationRunPersistence.record_evaluation_started`, so every run-state
   write goes through one persistence path. Metrics and logging moved out of the
   failure component into the module-level `record_failure_observation`, which
-  runs only after the commit. `_LauncherRunSession`'s quality validation is a
-  single `validate()` per submission, used directly or as the conflict
-  precondition. `read_owned_episode_and_run` has a recording-unit-of-work test
-  that fails on any write, flush, commit or rollback. The claimer, persistence
-  and failure components are composed once in `__post_init__`. Draft-cost
-  recording stays inside the failure transaction, deliberately: those rows must
-  commit with the terminal state they document, or an escalation would be
-  recorded without the inference it consumed.
+  runs only after the commit. `GenerationRunsResource._submit` validates a
+  request once per submission: its memoized `validate()` serves the work
+  directly and the keyed-conflict precondition reuses the same prepared result,
+  so no path applies the rules twice. `read_owned_episode_and_run` has a
+  recording-unit-of-work test that fails on any write, flush, commit or
+  rollback. The claimer, persistence and failure components are composed once in
+  `__post_init__`. Draft-cost recording stays inside the failure transaction,
+  deliberately: those rows must commit with the terminal state they document,
+  or an escalation would be recorded without the inference it consumed.
 - Two further Unit Architecture suggestions were assessed and declined, with
   reasons recorded rather than left unaddressed:
   - **Splitting `launcher_scheduling.py`.** At 384 lines it is under the
@@ -2140,9 +2149,11 @@ qa_escalated_timeout, qa_unavailable, fault@initialize, fault@generate, fault@be
 fault@complete_with_draft, fault@escalate
 ```
 
-For the documentation milestone, run:
+For the documentation milestone, run in the same shell session, so the
+`pipefail` set above still applies:
 
 ```shell
+set -o pipefail
 make fmt
 make markdownlint 2>&1 | tee /tmp/markdownlint-episodic-4-4-1-qa-gated-mode-branching.out
 make nixie 2>&1 | tee /tmp/nixie-episodic-4-4-1-qa-gated-mode-branching.out

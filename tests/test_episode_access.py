@@ -236,3 +236,22 @@ async def test_read_owned_episode_and_run_issues_no_writes(
         assert not recording.calls, f"the query wrote: {recording.calls}"
         staged = (len(session.new), len(session.dirty), len(session.deleted))
         assert staged == (0, 0, 0), f"the query staged instances: {staged}"
+
+
+class _WritableRepository:
+    """Stand-in repository that accepts a write without a database."""
+
+    async def update(self, *args: object, **kwargs: object) -> None:
+        """Accept one delegated write."""
+        _ = (args, kwargs)
+
+
+@pytest.mark.asyncio
+async def test_the_recording_proxy_detects_a_delegated_write() -> None:
+    """A delegated write reaches the call log, so the read-only check fails."""
+    calls: list[str] = []
+    proxy = _RecordingProxy(_WritableRepository(), "generation_runs", calls)
+
+    await typ.cast("typ.Any", proxy).update(uuid.uuid4(), update=object())
+
+    assert calls == ["generation_runs.update"], calls

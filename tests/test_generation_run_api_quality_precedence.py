@@ -10,6 +10,7 @@ import typing as typ
 
 import pytest
 
+from episodic.api.resources import generation_runs
 from episodic.canonical.generation_quality import QualityMode
 from tests.fixtures.generation_run_api import create_ready_ingestion_job
 from tests.test_generation_run_api import _assert_error_envelope, _ExpectedError
@@ -22,6 +23,8 @@ from tests.test_generation_run_api_quality_modes import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -152,6 +155,54 @@ async def test_reused_key_still_reports_the_body_error(
             details={"field": "budget_hints", "constraint": "object"},
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_a_keyed_conflict_validates_the_request_once(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The conflict precondition reuses the submission's prepared validation."""
+    calls: list[object] = []
+    original = typ.cast(
+        "cabc.Callable[..., object]",
+        generation_runs._validate_quality_request,
+    )
+
+    def counting(*args: object, **kwargs: object) -> object:
+        """Record one validation and delegate to the real rule set."""
+        calls.append(args)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(generation_runs, "_validate_quality_request", counting)
+    headers = {**_HEADERS, "Idempotency-Key": "single-validation"}
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        endpoint = _GATED_ENDPOINT.format(job=job)
+        first = await client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "quality_mode": "draft_without_qa",
+                "skip_qa_rationale": "First attempt.",
+            },
+        )
+        second = await client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "quality_mode": "draft_without_qa",
+                "skip_qa_rationale": "Second attempt.",
+            },
+        )
+
+    assert first.status_code == 202, first.text
+    assert second.status_code == 409, second.text
+    # One call per HTTP request: the conflict's precondition reuses the
+    # prepared result rather than applying the rules a second time.
+    assert len(calls) == 2, calls
 
 
 @pytest.mark.asyncio
