@@ -2394,6 +2394,14 @@ Reproducible non-vacuity evidence, measured on this tree:
     (`assert_off_task_append_is_rejected`, called by the matrix);
   - the ten-cell INV-9 matrix, where each cell has its own terminal,
     category, QA status, cost and metric expectations;
+  - the observer's commit ordering: moving the `observe` call above
+    `_write_failure` fails all three observer tests, including the
+    refused-write one, because a refused token then emits a callback;
+  - the proof factory: making `RunClaim` ignore `proof_factory` fails
+    `test_an_injected_proof_factory_supplies_the_proof`;
+  - the stale-session test: removing `populate_existing=True` from the locked
+    read fails `test_a_stale_session_cannot_bypass_the_claim_gate`, and
+    restoring it passes, both measured against PostgreSQL 17.11;
   - the INV-1 seeded mutation: deleting the `qa_gated` rationale rule from
     `quality_metadata_violation` makes
     `tests/test_generation_quality_policy.py` report 22 failed and 165
