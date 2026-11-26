@@ -222,10 +222,29 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     source_document_loader: SourceDocumentLoader = _load_source_document
+    #: Claim, success and failure components, composed once in __post_init__.
+    _components: tuple[
+        GenerationRunClaimer,
+        GenerationRunPersistence,
+        GenerationRunFailurePersistence,
+    ] = dc.field(init=False)
     _scheduler: GenerationRunScheduler = dc.field(init=False)
 
     def __post_init__(self) -> None:
-        """Compose the long-lived scheduler over the launcher's ports."""
+        """Compose the long-lived components over the launcher's ports."""
+        claimer = GenerationRunClaimer(runtime=_LauncherClaimerRuntime(self))
+        persistence = GenerationRunPersistence(
+            runtime=_LauncherPersistenceRuntime(self)
+        )
+        self._components = (
+            claimer,
+            persistence,
+            GenerationRunFailurePersistence(
+                runtime=_LauncherPersistenceRuntime(self),
+                claim_for_failure=claimer.claim_for_failure,
+                record_costs=persistence.record_costs,
+            ),
+        )
         self._scheduler = GenerationRunScheduler(
             execute_run=self._execute_run,
             record_cancellation=self._record_cancellation,
@@ -255,7 +274,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         claim: RunClaim,
     ) -> ExecutionOutcome:
         """Execute one generation run through the content-generation graph."""
-        claimer, persistence, failures = self._components()
+        claimer, persistence, failures = self._components
         session = _LauncherRunSession(
             claimer=claimer,
             persistence=persistence,
@@ -295,25 +314,6 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             terminal=terminal.value,
         )
 
-    def _components(
-        self,
-    ) -> tuple[
-        GenerationRunClaimer,
-        GenerationRunPersistence,
-        GenerationRunFailurePersistence,
-    ]:
-        """Compose the per-run claim, success and failure components."""
-        claimer = GenerationRunClaimer(runtime=_LauncherClaimerRuntime(self))
-        persistence = GenerationRunPersistence(
-            runtime=_LauncherPersistenceRuntime(self)
-        )
-        failures = GenerationRunFailurePersistence(
-            runtime=_LauncherPersistenceRuntime(self),
-            claim_for_failure=claimer.claim_for_failure,
-            record_costs=persistence.record_costs,
-        )
-        return claimer, persistence, failures
-
     async def _read_quality_mode(self, run_id: uuid.UUID) -> QualityMode | None:
         """Read a run's requested quality mode before the graph forks on it."""
         async with self.uow_factory() as uow:
@@ -326,7 +326,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         claim: RunClaim,
     ) -> bool:
         """Record cancellation consistently before or during execution."""
-        _claimer, _persistence, failures = self._components()
+        _claimer, _persistence, failures = self._components
         result = await failures.record_failure(
             run_id,
             Failure(

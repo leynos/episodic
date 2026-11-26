@@ -161,6 +161,48 @@ class GenerationRunPersistence:
             )
             await uow.commit()
 
+    async def record_evaluation_started(
+        self,
+        run_id: uuid.UUID,
+        *,
+        evaluator_names: tuple[str, ...],
+        content_hash: str,
+    ) -> None:
+        """Record that evaluation started and the run moved to its node.
+
+        Opening the unit of work here keeps every run-state write behind this
+        component, so the per-run session has a single write path.
+
+        Parameters
+        ----------
+        run_id : uuid.UUID
+            Identifier of the run entering evaluation.
+        evaluator_names : tuple[str, ...]
+            Evaluators about to run, in the order the graph will call them.
+        content_hash : str
+            Content hash of the draft under evaluation.
+        """
+        async with self.runtime.uow_factory() as uow:
+            await uow.generation_runs.append_event(
+                run_id,
+                kind="qa.evaluation_started",
+                payload={
+                    "current_node": "evaluate",
+                    "evaluators": list(evaluator_names),
+                    "content_hash": content_hash,
+                },
+                occurred_at=self.runtime.clock(),
+            )
+            await uow.generation_runs.update_run_status(
+                run_id,
+                update=GenerationRunStatusUpdate(
+                    status=GenerationRunStatus.RUNNING,
+                    current_node="evaluate",
+                    ended_at=None,
+                ),
+            )
+            await uow.commit()
+
     async def persist_success(
         self,
         claimed: ClaimedRun,

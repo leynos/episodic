@@ -15,7 +15,6 @@ from episodic.api.resources.generation_runs_create_support import (
     RequestRuleOrder,
     _CreateGenerationRun,
     _parse_create_request,
-    _quality_precondition,
     _request_rule_order,
     _Submission,
     _validate_quality_request,
@@ -193,14 +192,27 @@ class GenerationRunsResource:
         # a rejection must release the key.
         launcher: GenerationRunLauncher | None = None
         prepared: _CreateGenerationRun | None = None
-        if _request_rule_order(request, idempotency_key) is (
-            RequestRuleOrder.BEFORE_IDEMPOTENCY
-        ):
-            prepared = _validate_quality_request(
+        # One validation function, called once per submission: keyless
+        # requests validate up front, and keyed ones inside the idempotent
+        # work or the conflict precondition.
+
+        def validate() -> _CreateGenerationRun:
+            """Apply the request rules once for this submission."""
+            return _validate_quality_request(
                 request,
                 payload,
                 self._accepted_quality_modes,
             )
+
+        def precondition() -> None:
+            """Apply the same rules before a conflict is reported."""
+            validate()
+
+        run_rules_before = _request_rule_order(request, idempotency_key) is (
+            RequestRuleOrder.BEFORE_IDEMPOTENCY
+        )
+        if run_rules_before:
+            prepared = validate()
             launcher = self._require_launcher()
 
         with self._tracer.start_span(
@@ -210,15 +222,7 @@ class GenerationRunsResource:
 
             async def work() -> IdempotentResponse:
                 """Create and schedule the run, then build its 202 response."""
-                validated = (
-                    prepared
-                    if prepared is not None
-                    else _validate_quality_request(
-                        request,
-                        payload,
-                        self._accepted_quality_modes,
-                    )
-                )
+                validated = prepared if prepared is not None else validate()
                 resolved_launcher = (
                     self._require_launcher() if launcher is None else launcher
                 )
@@ -242,11 +246,7 @@ class GenerationRunsResource:
                     body_hash=json_body_hash(payload),
                 ),
                 work=work,
-                precondition=_quality_precondition(
-                    request,
-                    payload,
-                    self._accepted_quality_modes,
-                ),
+                precondition=precondition,
             )
             span.set_attribute("outcome", "accepted")
         return result

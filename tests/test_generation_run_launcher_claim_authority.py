@@ -83,10 +83,10 @@ async def test_failure_write_authority_comes_from_the_claim(
     )
 
     holder = RunClaim()
-    await run_launcher._components()[0].claim(run_id, holder)
+    await run_launcher._components[0].claim(run_id, holder)
     assert holder.token is not None, "a won claim must produce a token"
 
-    refused = await run_launcher._components()[2].record_failure(
+    refused = await run_launcher._components[2].record_failure(
         run_id,
         Failure("not mine", "unexpected"),
         claim=RunClaim(),
@@ -96,7 +96,7 @@ async def test_failure_write_authority_comes_from_the_claim(
     assert kinds == ["run.started"], kinds
     assert run.status is GenerationRunStatus.RUNNING, run.status
 
-    written = await run_launcher._components()[2].record_failure(
+    written = await run_launcher._components[2].record_failure(
         run_id,
         Failure("mine", "unexpected"),
         claim=holder,
@@ -129,10 +129,10 @@ async def test_refused_write_records_no_metric_or_failure_log(
     )
     run_launcher.metrics = metrics
     holder = RunClaim()
-    await run_launcher._components()[0].claim(run_id, holder)
+    await run_launcher._components[0].claim(run_id, holder)
 
     with caplog.at_level("ERROR"):
-        result = await run_launcher._components()[2].record_failure(
+        result = await run_launcher._components[2].record_failure(
             run_id,
             Failure("not mine", "unexpected"),
             claim=RunClaim(),
@@ -160,7 +160,7 @@ async def test_failure_write_without_a_claim_is_rejected(
         RecordingDraftGenerator(draft_result(valid_tei())),
         options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
     )
-    failures = run_launcher._components()[2]
+    failures = run_launcher._components[2]
     untyped = typ.cast("typ.Any", failures.record_failure)
 
     with pytest.raises(TypeError):
@@ -177,7 +177,7 @@ async def test_a_token_for_another_run_cannot_fail_this_run(
     run_launcher = _launcher(session_factory)
     handed_over = RunClaim(token=ClaimToken(other_run_id))
 
-    result = await run_launcher._components()[2].record_failure(
+    result = await run_launcher._components[2].record_failure(
         this_run,
         Failure("foreign token", "unexpected"),
         claim=handed_over,
@@ -253,7 +253,7 @@ async def test_the_observer_runs_once_after_a_committed_failure(
         _launcher(session_factory),
         uow_factory=lambda: _WatchingUnitOfWork(session_factory, watch),
     )
-    failures = run_launcher._components()[2]
+    failures = run_launcher._components[2]
     seen: list[tuple[uuid.UUID, Failure, bool]] = []
     failure = Failure("observed", "unexpected")
     failures.observe = lambda observed_id, observed_failure: seen.append(
@@ -273,7 +273,7 @@ async def test_the_observer_does_not_run_for_a_refused_write(
     """A refused write commits nothing, so the observer never runs."""
     this_run, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
-    failures = run_launcher._components()[2]
+    failures = run_launcher._components[2]
     seen: list[uuid.UUID] = []
     failures.observe = lambda observed_id, _failure: seen.append(observed_id)
 
@@ -298,7 +298,7 @@ async def test_the_observer_never_runs_when_the_commit_raises(
         _launcher(session_factory),
         uow_factory=lambda: _RaisingCommitUnitOfWork(session_factory, watch),
     )
-    failures = run_launcher._components()[2]
+    failures = run_launcher._components[2]
     seen: list[uuid.UUID] = []
     failures.observe = lambda observed_id, _failure: seen.append(observed_id)
 

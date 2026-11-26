@@ -1602,6 +1602,19 @@ These are trusted, not verified.
 - `accepted_quality_modes` always contains `draft_without_qa`, so a
   deployment policy that forbids it is not supported. Revisit this with the
   approval workflow (4.2.x).
+- The Unit Architecture row's five items were implemented at `HEAD` as
+  follows. `_LauncherRunSession.begin_evaluation` now calls
+  `GenerationRunPersistence.record_evaluation_started`, so every run-state
+  write goes through one persistence path. Metrics and logging moved out of the
+  failure component into the module-level `record_failure_observation`, which
+  runs only after the commit. `_LauncherRunSession`'s quality validation is a
+  single `validate()` per submission, used directly or as the conflict
+  precondition. `read_owned_episode_and_run` has a recording-unit-of-work test
+  that fails on any write, flush, commit or rollback. The claimer, persistence
+  and failure components are composed once in `__post_init__`. Draft-cost
+  recording stays inside the failure transaction, deliberately: those rows must
+  commit with the terminal state they document, or an escalation would be
+  recorded without the inference it consumed.
 - Two further Unit Architecture suggestions were assessed and declined, with
   reasons recorded rather than left unaddressed:
   - **Splitting `launcher_scheduling.py`.** At 384 lines it is under the
@@ -2302,7 +2315,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,775 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
+  2,776 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2413,8 +2426,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,999
-  definitions and 2,775 passed, 7 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 8,008
+  definitions and 2,776 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`

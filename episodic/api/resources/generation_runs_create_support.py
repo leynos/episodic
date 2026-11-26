@@ -17,7 +17,6 @@ from episodic.api.source_intake_support import require_str
 from episodic.canonical.generation_quality import QualityMode, is_blank_text
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import uuid
 
     from episodic.api.types import JsonPayload
@@ -215,17 +214,3 @@ def _request_rule_order(
     if request.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
         return RequestRuleOrder.BEFORE_IDEMPOTENCY
     return RequestRuleOrder.IN_IDEMPOTENT_WORK
-
-
-def _quality_precondition(
-    request: _CreateGenerationRun,
-    payload: JsonPayload,
-    accepted_quality_modes: frozenset[QualityMode],
-) -> cabc.Callable[[], None]:
-    """Return the body-rule check applied before a conflict is reported."""
-
-    def precondition() -> None:
-        """Reject a malformed body before reporting the conflict."""
-        _validate_quality_request(request, payload, accepted_quality_modes)
-
-    return precondition

@@ -55,10 +55,10 @@ async def test_lost_commit_acknowledgement_is_reconciled(
     claim = RunClaim()
 
     with pytest.raises(asyncio.CancelledError):
-        await run_launcher._components()[0].claim(run_id, claim)
+        await run_launcher._components[0].claim(run_id, claim)
 
     assert claim.token is not None, "the durable claim must be re-adopted"
-    result = await run_launcher._components()[2].record_failure(
+    result = await run_launcher._components[2].record_failure(
         run_id,
         Failure("after lost ack", "unexpected"),
         claim=claim,
@@ -79,7 +79,6 @@ async def test_failure_claim_and_write_share_one_transaction(
     from episodic.generation.launcher_failure import GenerationRunFailurePersistence
 
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
-    run_launcher = _launcher(session_factory)
     seen: dict[str, object] = {}
 
     original_claim = GenerationRunClaimer.claim_for_failure
@@ -105,6 +104,8 @@ async def test_failure_claim_and_write_share_one_transaction(
         seen["write"] = uow
         await original_write(self, uow, failed_run_id, failure)
 
+    # The components are composed once, in __post_init__, so the spies are
+    # installed before the launcher is constructed.
     monkeypatch.setattr(
         GenerationRunClaimer,
         "claim_for_failure",
@@ -115,8 +116,8 @@ async def test_failure_claim_and_write_share_one_transaction(
         "_append_failure_events",
         write_failure,
     )
-
-    failures = run_launcher._components()[2]
+    run_launcher = _launcher(session_factory)
+    failures = run_launcher._components[2]
     result = await failures.record_failure(
         run_id,
         Failure("transactional", "unexpected"),
@@ -181,12 +182,12 @@ async def test_reconcile_rejects_another_attempts_claim(
     winner_launcher = _launcher(session_factory)
     loser_launcher = _launcher(session_factory)
     winner = RunClaim()
-    await winner_launcher._components()[0].claim(run_id, winner)
+    await winner_launcher._components[0].claim(run_id, winner)
 
     loser = RunClaim()
-    lost = await loser_launcher._components()[0].claim(run_id, loser)
+    lost = await loser_launcher._components[0].claim(run_id, loser)
     assert lost is None, lost
-    reconciled = await loser_launcher._components()[0].reconcile(run_id, loser)
+    reconciled = await loser_launcher._components[0].reconcile(run_id, loser)
     assert reconciled is None, reconciled
     assert loser.token is None, loser.token
 
@@ -199,7 +200,7 @@ async def test_pending_tokenless_marker_does_not_suppress_a_token_holder(
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
     claim = RunClaim()
-    await run_launcher._components()[0].claim(run_id, claim)
+    await run_launcher._components[0].claim(run_id, claim)
 
     # Simulate a tokenless duplicate that registered a marker and then could
     # not write. The claimant's token must still be honoured.

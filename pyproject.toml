@@ -523,11 +523,17 @@ full_name = [
     "episodic.generation.launcher.InProcessGenerationRunLauncher._record_cancellation",
     "episodic.generation.launcher_failure.GenerationRunFailurePersistence._append_failure_events",
     "episodic.generation.launcher_failure.GenerationRunFailurePersistence._failure_authority",
-    "episodic.generation.launcher_failure.GenerationRunFailurePersistence._observe_written_failure",
     "episodic.generation.launcher_failure.GenerationRunFailurePersistence._write_failure",
     "episodic.generation.launcher_failure.GenerationRunFailurePersistence.record_failure",
 ]
-reason = "GenerationRunFailurePersistence.record_failure is called by InProcessGenerationRunLauncher._execute_run and _record_cancellation; it delegates to _write_failure and _observe_written_failure. Skylos does not follow calls made from a class entrypoint. The launcher methods are called from _execute_run on the same class."
+reason = "GenerationRunFailurePersistence.record_failure is called by InProcessGenerationRunLauncher._execute_run and _record_cancellation, and it delegates to _write_failure. Skylos does not follow calls made from a class entrypoint. The launcher methods are called from _execute_run on the same class."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.generation.launcher_failure.record_failure_observation",
+]
+reason = "record_failure_observation is called by GenerationRunFailurePersistence.record_failure; Skylos does not follow calls made from a class entrypoint."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "parameter"

@@ -14,7 +14,6 @@ artefact.
 import dataclasses as dc
 import typing as typ
 
-from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.generation_graph_ports import (
     EvaluationSubject,
     QualityEvaluation,
@@ -22,7 +21,6 @@ from episodic.canonical.generation_graph_ports import (
 from episodic.canonical.generation_persistence import InvalidDraftTeiError
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.generation_routing import QualityVerdict
-from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.tei import parse_tei_header
 from episodic.generation.launcher_quality import QaOutcome, record_qa_metrics
 from episodic.generation.launcher_support import (
@@ -83,6 +81,16 @@ class SessionPersistenceSteps(typ.Protocol):
         result: DraftScriptResult,
     ) -> None:
         """Record that generation returned a draft."""
+        ...
+
+    async def record_evaluation_started(
+        self,
+        run_id: uuid.UUID,
+        *,
+        evaluator_names: tuple[str, ...],
+        content_hash: str,
+    ) -> None:
+        """Record that evaluation started and the run moved to its node."""
         ...
 
     async def persist_success(
@@ -175,26 +183,11 @@ class _LauncherRunSession:
     async def begin_evaluation(self, evaluator_names: tuple[str, ...]) -> None:
         """Record that evaluation started and expose the current node."""
         draft = self._require_draft()
-        async with self.uow_factory() as uow:
-            await uow.generation_runs.append_event(
-                self.run_id,
-                kind="qa.evaluation_started",
-                payload={
-                    "current_node": "evaluate",
-                    "evaluators": list(evaluator_names),
-                    "content_hash": draft.content_hash,
-                },
-                occurred_at=self.clock(),
-            )
-            await uow.generation_runs.update_run_status(
-                self.run_id,
-                update=GenerationRunStatusUpdate(
-                    status=GenerationRunStatus.RUNNING,
-                    current_node="evaluate",
-                    ended_at=None,
-                ),
-            )
-            await uow.commit()
+        await self.persistence.record_evaluation_started(
+            self.run_id,
+            evaluator_names=evaluator_names,
+            content_hash=draft.content_hash,
+        )
 
     def evaluation_subject(self) -> EvaluationSubject:
         """Return the generated draft as an evaluation subject."""

@@ -31,6 +31,8 @@ from tests.canonical_storage._qa_artefact_support import (
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+
 _ACTOR = "principal-a"
 
 
@@ -127,3 +129,66 @@ async def test_read_owned_episode_and_run_returns_the_producing_run(
     assert other_actor is None, "another actor must not resolve the run"
     assert anonymous is None, "an unauthenticated request must not resolve the run"
     assert missing is None, "an unknown episode must not resolve"
+
+
+class _RecordingReadOnlyUnitOfWork:
+    """Unit of work that records any write, flush, or commit attempt."""
+
+    def __init__(self, inner: SqlAlchemyUnitOfWork) -> None:
+        """Wrap the real unit of work and start the call log."""
+        self._inner = inner
+        self.calls: list[str] = []
+
+    async def __aenter__(self) -> _RecordingReadOnlyUnitOfWork:
+        """Enter the wrapped unit of work."""
+        await self._inner.__aenter__()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object,
+    ) -> None:
+        """Leave the wrapped unit of work."""
+        await self._inner.__aexit__(
+            exc_type,
+            exc,
+            typ.cast("typ.Any", traceback),
+        )
+
+    def __getattr__(self, name: str) -> object:
+        """Delegate an attribute, recording write-side names."""
+        if name in {"flush", "commit", "rollback", "add"}:
+            return self._recorder(name)
+        return getattr(self._inner, name)
+
+    def _recorder(self, name: str) -> object:
+        """Return a callable that records an attempted write-side call."""
+
+        def record(*args: object, **kwargs: object) -> object:
+            """Record the attempt, then delegate it."""
+            _ = (args, kwargs)
+            self.calls.append(name)
+            return getattr(self._inner, name)(*args, **kwargs)
+
+        return record
+
+
+@pytest.mark.asyncio
+async def test_read_owned_episode_and_run_issues_no_writes(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The ownership query performs reads only."""
+    episode_id = await _episode_with_launcher_run(session_factory)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as inner:
+        recording = _RecordingReadOnlyUnitOfWork(inner)
+        owned = await read_owned_episode_and_run(
+            typ.cast("CanonicalUnitOfWork", recording),
+            episode_id,
+            _ACTOR,
+        )
+
+    assert owned is not None, "the owning actor must resolve the episode and run"
+    assert not recording.calls, f"the query wrote: {recording.calls}"

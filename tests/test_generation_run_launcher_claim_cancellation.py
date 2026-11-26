@@ -67,7 +67,7 @@ async def test_shutdown_waits_for_a_cancelled_cancellation_write(
         uow_factory=lambda: CommitFaultUnitOfWork(session_factory, fault),
     )
     claim = RunClaim()
-    await run_launcher._components()[0].claim(run_id, claim)
+    await run_launcher._components[0].claim(run_id, claim)
 
     fault.block = True
     write_task = asyncio.create_task(
@@ -100,7 +100,7 @@ async def test_blocked_authority_then_second_cancellation(
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
     claim = RunClaim()
-    await run_launcher._components()[0].claim(run_id, claim)
+    await run_launcher._components[0].claim(run_id, claim)
     claim.token = None
 
     original = GenerationRunFailurePersistence._failure_authority
@@ -194,7 +194,7 @@ async def test_claim_task_cancellation_recovers_its_claim(
     )
 
     claim_task = asyncio.create_task(
-        run_launcher._components()[0].claim(run_id, claim),
+        run_launcher._components[0].claim(run_id, claim),
     )
     await asyncio.wait_for(control.gate.wait(), timeout=5)
     # The commit raised CancelledError, so the claim task is inside the
@@ -238,7 +238,7 @@ async def test_stalled_reconciliation_is_bounded(
         uow_factory=lambda: CommitFaultUnitOfWork(session_factory, fault),
         reconcile_timeout_seconds=0.2,
     )
-    claimer = run_launcher._components()[0]
+    claimer = run_launcher._components[0]
     entered = asyncio.Event()
 
     async def stalled_reconcile(
@@ -299,7 +299,7 @@ async def test_a_timed_out_cancellation_leaves_the_run_claimable(
     assert run.started_at is None, "an unlanded claim must not start the run"
 
     fresh = _launcher(session_factory)
-    won = await fresh._components()[0].claim(run_id, RunClaim())
+    won = await fresh._components[0].claim(run_id, RunClaim())
     assert won is not None, "the next launcher must be able to claim the run"
 
 

@@ -35,6 +35,7 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import DraftScriptResult
+    from episodic.observability import ValueMetricsPort
 
     from .launcher_persistence import PersistenceRuntime
 
@@ -105,7 +106,7 @@ class GenerationRunFailurePersistence:
         token = await self._write_failure(run_id, failure, claim=claim, draft=draft)
         if token is None:
             return FailureWriteResult(written=False)
-        self._observe_written_failure(run_id, failure)
+        record_failure_observation(self.runtime.metrics, run_id, failure)
         # The write is durable; hand the committed result to any observer.
         if self.observe is not None:
             self.observe(run_id, failure)
@@ -208,32 +209,6 @@ class GenerationRunFailurePersistence:
             )
         return token
 
-    def _observe_written_failure(
-        self,
-        run_id: uuid.UUID,
-        failure: Failure,
-    ) -> None:
-        """Record the metrics and log line for a committed failure."""
-        self.runtime.metrics.increment_counter(
-            _METRIC_TERMINAL_STATES,
-            labels={
-                "status": GenerationRunStatus.FAILED.value,
-                "error_category": failure.category,
-            },
-        )
-        if failure.is_draft_error:
-            self.runtime.metrics.increment_counter(
-                _METRIC_DRAFT_ERRORS,
-                labels={"error_category": failure.category},
-            )
-        log_failure = log_error if failure.is_draft_error else log_info
-        log_failure(
-            logger,
-            "generation_run_launcher.failed run_id=%s category=%s",
-            run_id,
-            failure.category,
-        )
-
     async def _append_failure_events(
         self,
         uow: CanonicalUnitOfWork,
@@ -276,3 +251,34 @@ class GenerationRunFailurePersistence:
             },
             occurred_at=self.runtime.clock(),
         )
+
+
+def record_failure_observation(
+    metrics: ValueMetricsPort,
+    run_id: uuid.UUID,
+    failure: Failure,
+) -> None:
+    """Record the terminal metric and log line for a committed failure.
+
+    Observation is a separate step from the transactional write: it runs only
+    after the commit, so a rolled-back write emits nothing.
+    """
+    metrics.increment_counter(
+        _METRIC_TERMINAL_STATES,
+        labels={
+            "status": GenerationRunStatus.FAILED.value,
+            "error_category": failure.category,
+        },
+    )
+    if failure.is_draft_error:
+        metrics.increment_counter(
+            _METRIC_DRAFT_ERRORS,
+            labels={"error_category": failure.category},
+        )
+    log_failure = log_error if failure.is_draft_error else log_info
+    log_failure(
+        logger,
+        "generation_run_launcher.failed run_id=%s category=%s",
+        run_id,
+        failure.category,
+    )

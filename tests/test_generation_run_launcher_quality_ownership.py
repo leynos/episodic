@@ -224,7 +224,7 @@ async def test_rolled_back_failure_claim_is_not_reused(
     )
     claim = RunClaim()
 
-    failures = flaky._components()[2]
+    failures = flaky._components[2]
     with pytest.raises(asyncio.CancelledError):
         await failures.record_failure(
             run_id,
