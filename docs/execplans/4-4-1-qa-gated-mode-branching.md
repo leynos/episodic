@@ -2302,7 +2302,7 @@ Record the following here as each milestone completes:
   ambrleaks, Skylos, df12-duplication), `make test` (2,448 passed, 1 skipped,
   82 snapshots), `make check-migrations`, `make markdownlint` and `make nixie`.
   At the current head (see the integration record below) the suite reports
-  2,769 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
+  2,775 passed, 7 skipped and 84 snapshots. The INV-8 comparison is
   `git diff --stat` over the characterization snapshot and
   `tests/features/no_qa_generation_slice.feature` since `d6876cba`: the feature
   file is unchanged, and the snapshot differs only by the two D9 span
@@ -2402,6 +2402,9 @@ Reproducible non-vacuity evidence, measured on this tree:
   - the stale-session test: removing `populate_existing=True` from the locked
     read fails `test_a_stale_session_cannot_bypass_the_claim_gate`, and
     restoring it passes, both measured against PostgreSQL 17.11;
+  - the in-memory terminal gate: removing `require_terminal_claim` from
+    `InMemoryGenerationRunStore.update_run_status` fails both refusal cases in
+    `tests/test_generation_run_in_memory_terminal_claim.py`;
   - the INV-1 seeded mutation: deleting the `qa_gated` rationale rule from
     `quality_metadata_violation` makes
     `tests/test_generation_quality_policy.py` report 22 failed and 165
@@ -2410,8 +2413,8 @@ Reproducible non-vacuity evidence, measured on this tree:
     187 passed.
 - Coverage counters: at `eac73e3b`, `make lint`'s interrogate stage reported
   100% docstring coverage over 7,364 definitions and pytest reported 2,448
-  passed, 1 skipped and 82 snapshots. At the current head it reports 7,989
-  definitions and 2,769 passed, 7 skipped and 84 snapshots. The extra skips are
+  passed, 1 skipped and 82 snapshots. At the current head it reports 7,999
+  definitions and 2,775 passed, 7 skipped and 84 snapshots. The extra skips are
   the DSN-gated real-PostgreSQL claim races.
 - INV-8:
   `git diff --stat d6876cba HEAD -- tests/features/no_qa_generation_slice.feature`
