@@ -2848,6 +2848,13 @@ the same graph can be driven by the launcher or by a test double.
   `verdict`) counts the aggregate gate verdict recorded after the terminal
   write commits; `generation_run_qa_evaluator_errors_total` (label `evaluator`)
   counts evaluator faults that produced an inconclusive result.
+  `generation_run_qa_evaluation_latency_ms` (labels `evaluator` and `verdict`)
+  observes each evaluator once, whatever its outcome, so a slow or failing
+  evaluator is visible separately from the aggregate gate. Alert on its p95
+  against the configured `evaluator_timeout_seconds`: a p95 approaching that
+  timeout predicts inconclusive results and QA escalations, and a rising
+  `verdict="inconclusive"` share alongside it points at the evaluator rather
+  than at draft quality.
 
 ### Manual recovery of expired generation-run leases
 
