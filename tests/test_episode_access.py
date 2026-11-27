@@ -31,6 +31,8 @@ from tests.canonical_storage._qa_artefact_support import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
@@ -142,30 +144,44 @@ class _RecordingProxy:
 
     A repository is only read-only if *every* call it receives is a read, so
     the proxy records anything whose name is a known write or does not start
-    with ``get``, not just a fixed allow-list of write methods.
+    with ``get``, not just a fixed allow-list of write methods. An optional
+    ``interleave`` hook runs inside a delegated read, so a test can model a
+    repository that writes while it reads.
     """
 
-    def __init__(self, inner: object, label: str, calls: list[str]) -> None:
+    def __init__(
+        self,
+        inner: object,
+        label: str,
+        calls: list[str],
+        *,
+        interleave: cabc.Callable[[], cabc.Awaitable[None]] | None = None,
+    ) -> None:
         """Wrap ``inner``, recording attempts as ``label.name``."""
         object.__setattr__(self, "_inner", inner)
         object.__setattr__(self, "_label", label)
         object.__setattr__(self, "_calls", calls)
+        object.__setattr__(self, "_interleave", interleave)
 
     def __getattr__(self, name: str) -> object:
         """Return a callable that records the call unless it is a read."""
         inner = object.__getattribute__(self, "_inner")
         label = object.__getattribute__(self, "_label")
         calls = object.__getattribute__(self, "_calls")
+        interleave = object.__getattribute__(self, "_interleave")
         target = getattr(inner, name)
         if not callable(target):
             return target
         is_write = name in _WRITE_NAMES or not name.startswith(_READ_PREFIX)
+        stage_first = None if is_write else interleave
 
-        def call(*args: object, **kwargs: object) -> object:
-            """Record a non-read call, then delegate it."""
+        async def call(*args: object, **kwargs: object) -> object:
+            """Run the interleaved write, record a write, then delegate."""
+            if stage_first is not None:
+                await stage_first()
             if is_write:
                 calls.append(f"{label}.{name}")
-            return typ.cast("typ.Any", target)(*args, **kwargs)
+            return await typ.cast("typ.Any", target)(*args, **kwargs)
 
         return call
 
@@ -179,10 +195,17 @@ class _RecordingReadOnlyUnitOfWork:
     through it however it was reached.
     """
 
-    def __init__(self, inner: SqlAlchemyUnitOfWork, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        inner: SqlAlchemyUnitOfWork,
+        session: AsyncSession,
+        *,
+        episodes_interleave: cabc.Callable[[], cabc.Awaitable[None]] | None = None,
+    ) -> None:
         """Wrap the real unit of work and start the call log."""
         self._inner = inner
         self.calls: list[str] = []
+        self._episodes_interleave = episodes_interleave
         event.listen(session.sync_session, "before_flush", self._on_flush)
 
     def _on_flush(self, *_args: object) -> None:
@@ -212,7 +235,14 @@ class _RecordingReadOnlyUnitOfWork:
         if name in {"flush", "commit", "rollback", "add"}:
             return self._recorder(name)
         target = getattr(self._inner, name)
-        if name in {"episodes", "generation_runs"}:
+        if name == "episodes":
+            return _RecordingProxy(
+                target,
+                name,
+                self.calls,
+                interleave=self._episodes_interleave,
+            )
+        if name == "generation_runs":
             return _RecordingProxy(target, name, self.calls)
         return target
 
@@ -278,9 +308,9 @@ async def test_the_flush_listener_detects_a_flush_inside_a_delegated_read(
 
     The proxy over the stores cannot see work a repository does internally,
     which is why the recording unit of work also listens to ``before_flush``.
-    This stages a valid row, flushes it from inside a delegated ``get``, and
-    requires the listener to have recorded the flush even though the session's
-    collections end up empty.
+    The interleave hook stages a valid row and flushes it inside the delegated
+    ``episodes.get``, and the listener must record that flush even though the
+    session's collections are empty once it returns.
     """
     episode_id = await _episode_with_launcher_run(session_factory)
     series = episode_records(episode_id=uuid.uuid7())[0]
@@ -288,19 +318,22 @@ async def test_the_flush_listener_detects_a_flush_inside_a_delegated_read(
     session = session_factory()
     inner = SqlAlchemyUnitOfWork(lambda: session)
     async with inner:
-        recording = _RecordingReadOnlyUnitOfWork(inner, session)
 
-        async def read_after_staging_flush() -> object:
-            """Stage a valid row, flush it, and then perform the real read."""
+        async def stage_and_flush() -> None:
+            """Stage a valid row and flush it from inside the read."""
             await inner.series_profiles.add(series)
             await inner.flush()
-            return await read_owned_episode_and_run(
-                typ.cast("CanonicalUnitOfWork", recording),
-                episode_id,
-                _ACTOR,
-            )
 
-        owned = await read_after_staging_flush()
+        recording = _RecordingReadOnlyUnitOfWork(
+            inner,
+            session,
+            episodes_interleave=stage_and_flush,
+        )
+        owned = await read_owned_episode_and_run(
+            typ.cast("CanonicalUnitOfWork", recording),
+            episode_id,
+            _ACTOR,
+        )
 
         assert owned is not None, "the ownership read must still resolve"
         assert not session.new, "the flush left nothing staged to detect"

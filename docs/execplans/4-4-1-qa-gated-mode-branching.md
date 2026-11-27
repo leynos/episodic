@@ -1620,9 +1620,10 @@ These are trusted, not verified.
   `initialize`, where per-run observations belong. Two negative controls guard
   the recording boundary: one writes through a wrapped repository and requires
   the proxy to record it, and one stages a valid row and flushes it from inside
-  a delegated read, which the unit of work's `before_flush` listener must
-  record even though the session's collections are empty afterwards. Both fail
-  when their instrumentation is removed.
+  the delegated `episodes.get` (the proxy's interleave hook runs before the
+  real read), which the unit of work's `before_flush` listener must record even
+  though the session's collections are empty afterwards. Both fail when their
+  instrumentation is removed.
 - The Unit Architecture row's five items were implemented at `HEAD` as
   follows. `_LauncherRunSession.begin_evaluation` now calls
   `GenerationRunPersistence.record_evaluation_started`, so every run-state
