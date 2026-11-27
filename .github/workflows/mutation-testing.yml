@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
       id-token: write # OIDC workflow-source resolution
-    uses: leynos/shared-actions/.github/workflows/mutation-mutmut.yml@7d751eded578e48dacf43ab173d5820e6437c474
+    uses: leynos/shared-actions/.github/workflows/mutation-mutmut.yml@bd052c68a4792e92c3272fb1b6ea3b594f3ab7f3
     with:
       # Flat package layout: the mutable source lives in episodic/, not src/.
       paths: "episodic/"
