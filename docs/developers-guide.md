@@ -3493,3 +3493,32 @@ payload.
 Accepted keys are those defined in `TaskCreateKwargs`: `name`, `context`,
 `eager_start`, and `metadata` (see `TaskMetadata` for the metadata field
 schema). Passing an unrecognized key raises `TypeError`.
+
+### Task-validation diagnostics
+
+Every rejected task-creation request is reported before its exception
+propagates, so a deployment does not need to reproduce the call to learn why
+validation failed:
+
+- The module logger emits one ERROR record with the `task_validation_failed`
+  event. The structured payload names the caller's task (`<unnamed>` when the
+  `name` kwarg is absent), the exception type, the rejected metadata field or
+  unexpected keys, and the expected and actual types. Metadata values are not
+  logged; only type names and key names appear.
+- The configured `TaskValidationMetricsPort` receives one increment of
+  `episodic.task_validation.failures`. Labels stay bounded: `error_type` plus
+  either `validation_kind` (`unsupported_task_kwargs` or
+  `unsupported_metadata_keys`) or `field_name` (`operation_name`,
+  `correlation_id`, or `priority_hint`).
+
+Telemetry is best-effort: each emission is isolated, so a failing logging or
+metrics sink can never replace the `TypeError` or `ValueError` the caller
+expects.
+
+`TaskValidationMetricsPort` narrows the canonical
+`episodic.observability.MetricsPort` without adding methods, so a composition
+root can share one sink across features. Call
+`configure_task_validation_metrics(metrics)` once during start-up. The API
+composition root in `create_app_from_env` does this with the sink it builds for
+its adapters. Passing `None` restores the no-op default, which keeps library
+embedding quiet.

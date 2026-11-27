@@ -2306,7 +2306,11 @@ Normalization fan-out now uses metadata-aware asyncio task creation through
 metadata (`operation_name`, `correlation_id`, `priority_hint`) that is
 forwarded to custom loop task factories when present. This keeps business logic
 independent of event-loop internals while enabling centralized diagnostics for
-concurrent ingestion flows.
+concurrent ingestion flows. Rejected task-creation kwargs are reported through
+one structured ERROR record and one increment of the bounded
+`episodic.task_validation.failures` counter, so deployments can distinguish
+unsupported kwargs, unsupported metadata keys, and invalid metadata field types
+without reproducing the request.
 
 The public HTTP boundary still needs a dedicated request-correlation workstream
 before the source-to-script API can satisfy its end-to-end observability

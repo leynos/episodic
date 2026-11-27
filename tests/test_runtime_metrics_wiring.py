@@ -80,7 +80,7 @@ def _compose_runtime_observability_dependencies(
     tmp_path: Path,
     *,
     log_level: str = "INFO",
-) -> tuple[ApiDependencies, dict[str, object], dict[str, object]]:
+) -> tuple[ApiDependencies, dict[str, object], dict[str, object], mock.Mock]:
     """Capture runtime adapter arguments while composing the production app."""
     _configure_runtime_environment(monkeypatch, tmp_path, log_level=log_level)
 
@@ -119,6 +119,10 @@ def _compose_runtime_observability_dependencies(
         ) as observability_configurer,
         mock.patch.object(
             runtime_module,
+            "configure_task_validation_metrics",
+        ) as task_validation_configurer,
+        mock.patch.object(
+            runtime_module,
             "create_app",
             side_effect=capture_dependencies,
         ),
@@ -148,7 +152,12 @@ def _compose_runtime_observability_dependencies(
         unit_of_work_kwargs = typ.cast("dict[str, object]", unit_of_work_call.kwargs)
 
     assert captured_dependencies is not None, "expected captured dependencies, got None"
-    return captured_dependencies, adapter_kwargs, unit_of_work_kwargs
+    return (
+        captured_dependencies,
+        adapter_kwargs,
+        unit_of_work_kwargs,
+        task_validation_configurer,
+    )
 
 
 @pytest.mark.asyncio
@@ -160,7 +169,7 @@ async def test_create_app_from_env_shares_production_observability(
     from episodic.generation import InProcessGenerationRunLauncher
     from episodic.observability import StructuredLogMetrics, StructuredLogTracer
 
-    dependencies, adapter_kwargs, uow_kwargs = (
+    dependencies, adapter_kwargs, uow_kwargs, task_validation_configurer = (
         _compose_runtime_observability_dependencies(monkeypatch, tmp_path)
     )
     assert isinstance(dependencies.launcher, InProcessGenerationRunLauncher), (
@@ -173,6 +182,7 @@ async def test_create_app_from_env_shares_production_observability(
     assert isinstance(dependencies.tracer, StructuredLogTracer), (
         "the composition root must install structured-log tracing"
     )
+    task_validation_configurer.assert_called_once_with(dependencies.metrics)
     assert dependencies.launcher.metrics is dependencies.metrics, (
         "the launcher must share the composition root's metrics sink"
     )
@@ -205,7 +215,7 @@ async def test_runtime_disables_info_telemetry_above_info_level(
     """Warning-level runtime logging keeps API errors without INFO telemetry."""
     from episodic.observability import NoopMetrics, NoopTracer
 
-    dependencies, _, _ = _compose_runtime_observability_dependencies(
+    dependencies, _, _, _ = _compose_runtime_observability_dependencies(
         monkeypatch,
         tmp_path,
         log_level="WARNING",

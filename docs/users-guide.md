@@ -484,6 +484,14 @@ details. A warning with `unknown_error` also includes a 12-character diagnostic
 identifier derived from the exception type; it does not log the type name or
 exception message. Metrics continue to use only the bounded category label.
 
+Rejected asyncio task-creation requests increment the
+`episodic.task_validation.failures` counter through the same metrics sink. The
+counter carries `error_type` plus either `validation_kind`
+(`unsupported_task_kwargs` or `unsupported_metadata_keys`) or `field_name`
+(`operation_name`, `correlation_id`, or `priority_hint`). Task names appear in
+the accompanying ERROR log record, never in metric labels, so cardinality stays
+bounded.
+
 ### Migration note for the next minor release
 
 Before upgrading to the next minor release, apply the new Alembic revisions.
