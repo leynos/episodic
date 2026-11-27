@@ -315,3 +315,40 @@ async def test_generation_run_store_logs_claim_outcomes(
         lease_expires_at=lease_expires_at,
     )
     _assert_claim_outcome_logs(events, expected)
+
+
+@pytest.mark.asyncio
+async def test_claim_token_for_reports_missing_and_unclaimed_runs(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """``claim_token_for`` returns None for a missing run and for no token."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        missing = await uow.generation_runs.claim_token_for(uuid.uuid7())
+    assert missing is None, missing
+
+    run = make_generation_run()
+    await persist_generation_run_prerequisites(session_factory, run)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.generation_runs.create_run(run)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        unclaimed = await uow.generation_runs.claim_token_for(run.id)
+    assert unclaimed is None, unclaimed
+
+    proof = uuid.uuid4()
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.generation_runs.claim_run_for_execution(
+            run.id,
+            ExecutionClaim(
+                current_node=None,
+                started_at=dt.datetime.now(dt.UTC),
+                lease_expires_at=None,
+                claim_token=proof,
+            ),
+        )
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        stored = await uow.generation_runs.claim_token_for(run.id)
+    assert stored == proof, stored

@@ -151,6 +151,10 @@ or delivery planning.
   snapshots](adrs/adr-0028-content-addressed-pricing-snapshots.md)
   - content-addressed snapshot identity, the schema-version-1 canonical form,
     exact rates, and helper-document storage.
+- [ADR 029: QA-gated mode branching and the content-generation
+  graph](adrs/adr-0029-qa-gated-mode-branching-and-content-generation-graph.md)
+  - quality-branch routing, the QA-status lifecycle, fail-closed evaluation,
+    and the capability-gated REST rule.
 
 [adr-017]: adrs/adr-0017-no-qa-generation-run-execution-and-tei-persistence.md
 

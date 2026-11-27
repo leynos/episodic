@@ -10,10 +10,14 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
     JsonMapping,
-    _validate_terminal_run_lifecycle,
+    apply_status_update,
 )
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import event_page_minimum_sequence
+from episodic.canonical.generation_run_ports import (
+    GenerationRunStatusUpdate,
+    event_page_minimum_sequence,
+)
+from episodic.canonical.generation_run_terminal_claim import require_terminal_claim
 from episodic.logging import log_event as _log_event
 
 from .generation_run_lease_reclamation import (
@@ -35,10 +39,8 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from episodic.canonical.generation_run_ports import (
-        EventSeq,
-        GenerationRunStatusUpdate,
-    )
+    from episodic.canonical.generation_claim import ExecutionClaim
+    from episodic.canonical.generation_run_ports import EventSeq
     from episodic.canonical.storage.generation_run_storage_runtime import (
         GenerationRunStorageRuntime,
     )
@@ -54,7 +56,7 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
 
     def __init__(
         self,
-        session: "AsyncSession",  # ruff: ignore[quoted-annotation]  # Imported only during type checking.
+        session: AsyncSession,
         *,
         runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:
@@ -80,6 +82,8 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
                 .select(GenerationRunRecord)
                 .where(GenerationRunRecord.id == run_id)
                 .with_for_update()
+                # Refresh an identity-mapped row: a stale copy could hide a claim.
+                .execution_options(populate_existing=True)
             )
             record = result.scalar_one_or_none()
         else:
@@ -191,18 +195,27 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
         *,
         update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
-        """Update lifecycle fields for a run."""
+        """Update lifecycle fields for a run.
+
+        A terminal transition must name the claim that owns the run: the
+        stored ``claim_token`` is compared inside the row-locked transaction,
+        so a caller cannot terminate a run another invocation claimed.
+
+        Returns
+        -------
+        GenerationRun
+            The updated run. A terminal transition that omits the token, or
+            names another claim, raises ``RunClaimMismatch`` instead.
+        """
         record = await self._require_mutable_run(run_id, lock=True)
-        _validate_terminal_run_lifecycle(
-            status=update.status,
-            current_node=update.current_node,
-            ended_at=update.ended_at,
-        )
-        record.status = update.status
-        record.current_node = update.current_node
-        record.ended_at = update.ended_at
-        record.error_message = update.error_message
-        record.error_category = update.error_category
+        require_terminal_claim(run_id, update, record.claim_token)
+        resolved = apply_status_update(run_from_record(record), update)
+        record.status = resolved.status
+        record.current_node = resolved.current_node
+        record.ended_at = resolved.ended_at
+        record.error_message = resolved.error_message
+        record.error_category = resolved.error_category
+        record.qa_status = resolved.qa_status
         record.updated_at = self._runtime.clock()
         await self._session.flush()
         await self._session.refresh(record)
@@ -218,10 +231,7 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
     async def claim_run_for_execution(
         self,
         run_id: uuid.UUID,
-        *,
-        current_node: str | None,
-        started_at: dt.datetime,
-        lease_expires_at: dt.datetime | None,
+        claim: ExecutionClaim,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
         now = self._runtime.clock()
@@ -234,9 +244,10 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
             )
             .values(
                 status=GenerationRunStatus.RUNNING,
-                current_node=current_node,
-                started_at=started_at,
-                lease_expires_at=lease_expires_at,
+                current_node=claim.current_node,
+                started_at=claim.started_at,
+                lease_expires_at=claim.lease_expires_at,
+                claim_token=claim.claim_token,
                 updated_at=now,
             )
         )
@@ -249,9 +260,9 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
                 "info",
                 "sql_generation_run_store.claim_run",
                 run_id=str(run_id),
-                current_node=current_node,
-                lease_expires_at=lease_expires_at.isoformat()
-                if lease_expires_at is not None
+                current_node=claim.current_node,
+                lease_expires_at=claim.lease_expires_at.isoformat()
+                if claim.lease_expires_at is not None
                 else None,
             )
             return run_from_record(record)
@@ -279,6 +290,11 @@ class SqlAlchemyGenerationRunStore(GenerationRunLeaseReclamationMixin):
             status=record.status.value,
         )
         return None
+
+    async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the token of the claim that owns a run, if any."""
+        record = await self._get_record(run_id)
+        return None if record is None else record.claim_token
 
     async def append_event(
         self,

@@ -84,12 +84,9 @@ async def test_claim_hydrates_episode_and_sources() -> None:
     assert loader.calls == [[source_document()]], loader.calls
     assert claimed.sources == (source(),), claimed.sources
     assert claimed.presenter_profiles == (), claimed.presenter_profiles
-    assert metrics.counters == [
-        (
-            "generation_run_qa_bypass_total",
-            {"quality_mode": QualityMode.DRAFT_WITHOUT_QA.value},
-        )
-    ], metrics.counters
+    # The QA-bypass counter is a per-run observation recorded by the run
+    # session, not a claim rule, so the claimer records no counters itself.
+    assert not metrics.counters, metrics.counters
 
 
 @pytest.mark.asyncio

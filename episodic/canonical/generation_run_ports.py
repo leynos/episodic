@@ -15,6 +15,7 @@ async def use_runs(port: GenerationRunPort) -> None:
 import dataclasses as dc
 import typing as typ
 
+from .generation_quality import UNCHANGED, Unchanged
 from .generation_run_lease_ports import GenerationRunLeaseReclamationPort
 
 if typ.TYPE_CHECKING:
@@ -30,6 +31,8 @@ if typ.TYPE_CHECKING:
         GenerationRunStatus,
         JsonMapping,
     )
+    from .generation_claim import ExecutionClaim
+    from .generation_quality import QaStatus
 
 EventSeq = typ.NewType("EventSeq", int)
 
@@ -49,8 +52,15 @@ class GenerationRunStatusUpdate:
     error_message : str | None
         Failure detail. An omitted value clears the persisted field.
     error_category : str | None
-        Stable failure classification. An omitted value clears the persisted
-        field.
+        Stable failure classification; an omitted value clears the field.
+    qa_status : QaStatus | Unchanged
+        QA status to record; :data:`UNCHANGED` keeps the persisted value. A
+        failure write must not silently erase a QA outcome still being decided.
+    claim_token : uuid.UUID | None
+        Proof the writer holds the run's claim. A terminal transition to
+        ``FAILED`` or ``SUCCEEDED`` must supply the stored token, which the
+        store compares inside its locked transaction. Non-terminal
+        transitions leave it ``None``.
     """
 
     status: GenerationRunStatus
@@ -58,6 +68,8 @@ class GenerationRunStatusUpdate:
     ended_at: dt.datetime | None
     error_message: str | None = None
     error_category: str | None = None
+    qa_status: QaStatus | Unchanged = UNCHANGED
+    claim_token: uuid.UUID | None = None
 
 
 def event_seq(value: int) -> EventSeq:
@@ -148,13 +160,13 @@ class GenerationRunRepository(typ.Protocol):
     async def claim_run_for_execution(
         self,
         run_id: uuid.UUID,
-        *,
-        current_node: str | None,
-        started_at: dt.datetime,
-        lease_expires_at: dt.datetime | None,
+        claim: ExecutionClaim,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
         raise NotImplementedError
+
+    async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the owning claim's token, if any."""
 
 
 @typ.runtime_checkable

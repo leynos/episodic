@@ -9,6 +9,7 @@ import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
+from episodic.canonical.generation_quality import QualityMode
 from episodic.canonical.validation import (
     validate_async_callable,
     validate_sync_callable,
@@ -82,6 +83,39 @@ class ReadinessProbe:
         validate_async_callable(self.check, "ReadinessProbe.check")
 
 
+def _validate_accepted_quality_modes(dependencies: ApiDependencies) -> None:
+    """Normalize and validate the accepted quality-mode capability set."""
+    modes = frozenset(dependencies.accepted_quality_modes)
+    object.__setattr__(dependencies, "accepted_quality_modes", modes)
+    if QualityMode.DRAFT_WITHOUT_QA not in modes:
+        msg = "ApiDependencies.accepted_quality_modes must include draft_without_qa."
+        raise ValueError(msg)
+
+
+def _validate_health_observer(observer: object) -> None:
+    """Require a supplied health observer to expose ``observe``."""
+    if observer is not None and not hasattr(observer, "observe"):
+        msg = "ApiDependencies.health_observer must define observe()."
+        raise TypeError(msg)
+
+
+def _normalize_and_validate_hooks(dependencies: ApiDependencies) -> None:
+    """Freeze the hook tuples and validate each entry."""
+    object.__setattr__(
+        dependencies, "readiness_probes", tuple(dependencies.readiness_probes)
+    )
+    object.__setattr__(
+        dependencies, "shutdown_hooks", tuple(dependencies.shutdown_hooks)
+    )
+    for probe in dependencies.readiness_probes:
+        _validate_readiness_probe(probe)
+    for shutdown_hook in dependencies.shutdown_hooks:
+        validate_async_callable(
+            shutdown_hook,
+            "ApiDependencies.shutdown_hooks entries",
+        )
+
+
 @dc.dataclass(frozen=True, slots=True)
 class ApiDependencies:
     """Group the ports and probes required by the Falcon API adapter.
@@ -116,6 +150,9 @@ class ApiDependencies:
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
+    accepted_quality_modes: frozenset[QualityMode] = frozenset({
+        QualityMode.DRAFT_WITHOUT_QA
+    })
     unmapped_error_emitter: UnmappedErrorEmitter | None = None
 
     def __post_init__(self) -> None:
@@ -129,21 +166,9 @@ class ApiDependencies:
             allow_none=True,
         )
         _validate_authorization_port(self.authorization)
-        object.__setattr__(self, "readiness_probes", tuple(self.readiness_probes))
-        object.__setattr__(self, "shutdown_hooks", tuple(self.shutdown_hooks))
-        for probe in self.readiness_probes:
-            _validate_readiness_probe(probe)
-        if self.health_observer is not None and not hasattr(
-            self.health_observer,
-            "observe",
-        ):
-            msg = "ApiDependencies.health_observer must define observe()."
-            raise TypeError(msg)
-        for shutdown_hook in self.shutdown_hooks:
-            validate_async_callable(
-                shutdown_hook,
-                "ApiDependencies.shutdown_hooks entries",
-            )
+        _validate_accepted_quality_modes(self)
+        _validate_health_observer(self.health_observer)
+        _normalize_and_validate_hooks(self)
 
     def readiness_observer(self) -> HealthObserver:
         """Return the domain health observer used by the readiness resource."""

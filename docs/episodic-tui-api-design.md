@@ -280,11 +280,40 @@ POST   /v1/generation-runs/{run_id}/checkpoint
        payload (notes, patch)
 ```
 
-`quality_mode` is required for the source-to-script vertical slice. The first
-supported value is `draft_without_qa`; runs created with this value skip QA
-evaluator nodes, record `qa_status=skipped`, and require `skip_qa_rationale`
-plus actor metadata. Later QA-gated workflows may add `qa_gated` without
-changing the run resource shape.
+`quality_mode` is required. The accepted set is a deployment capability, not a
+client choice:
+
+- `draft_without_qa` is accepted everywhere. It skips evaluation, records
+  `qa_status=skipped`, and requires `skip_qa_rationale`.
+- `qa_gated` is accepted only where at least one QA evaluator is configured.
+  It must not carry `skip_qa_rationale`, starts with `qa_status=pending`, and
+  ends `succeeded` with `qa_status=passed` or `failed` with `qa_status=failed`.
+  A run that fails before any QA decision ends `failed` with
+  `qa_status=pending`: that covers a draft error, an evaluator set that is
+  unavailable at execution time, and a shutdown cancellation. Completed QA
+  decisions keep the succeeded/passed or failed/failed pairing.
+
+Errors are checked in this order:
+
+1. Before any idempotency work, a missing or unknown `quality_mode` returns
+   `400 validation_error` with constraint `enum`, and `draft_without_qa` without
+   `skip_qa_rationale` returns `400` with constraint `required`.
+2. Inside the idempotent work, an unaccepted mode returns the unchanged
+   `422 quality_mode_unsupported` with `details.quality_mode`.
+3. Next, a `qa_gated` body carrying `skip_qa_rationale` returns
+   `400 validation_error` with `details.field="skip_qa_rationale"`,
+   `details.constraint="exclusive_with_quality_mode"`, and
+   `details.quality_mode="qa_gated"`.
+
+Both errors raised inside the work release the idempotency key, so a corrected
+retry with the same key succeeds. A stored `202` replays even after the
+deployment withdraws the capability.
+
+`qa_status` values are `skipped`, `pending`, `passed`, and `failed`. A gated
+run keeps `pending` while it runs and after a shutdown cancellation; only a
+committed terminal changes it. Roadmap item `4.4.4` makes `paused` reachable
+for an escalated run that awaits human review; `paused` runs carry no
+`error_category`.
 
 ### Script projection and editing
 
@@ -636,18 +665,20 @@ kinds are defined:
 
 _Table: Run event kinds streamed via WebSocket with their descriptions._
 
-| Kind                 | Description                                                |
-| -------------------- | ---------------------------------------------------------- |
-| `node.started`       | Graph node execution has begun                             |
-| `node.progress`      | Progress update within a node (percentage, partial output) |
-| `node.completed`     | Graph node execution has finished                          |
-| `token.delta`        | Incremental token output (optional, can be high frequency) |
-| `qa.result`          | Evaluator scores and remediation hints                     |
-| `budget.warning`     | Budget threshold approached                                |
-| `budget.exceeded`    | Budget cap reached; run may be paused                      |
-| `checkpoint.created` | Human input required                                       |
-| `artefact.updated`   | Draft script, show notes, or chapters updated              |
-| `log`                | Structured log record suitable for UI display              |
+| Kind                    | Description                                                |
+| ----------------------- | ---------------------------------------------------------- |
+| `node.started`          | Graph node execution has begun                             |
+| `node.progress`         | Progress update within a node (percentage, partial output) |
+| `node.completed`        | Graph node execution has finished                          |
+| `token.delta`           | Incremental token output (optional, can be high frequency) |
+| `qa.evaluation_started` | Evaluation began; names the evaluators and content hash    |
+| `qa.result`             | Aggregate verdict and per-evaluator results                |
+| `qa.escalated`          | QA did not pass; the run escalates and no TEI is written   |
+| `budget.warning`        | Budget threshold approached                                |
+| `budget.exceeded`       | Budget cap reached; run may be paused                      |
+| `checkpoint.created`    | Human input required                                       |
+| `artefact.updated`      | Draft script, show notes, or chapters updated              |
+| `log`                   | Structured log record suitable for UI display              |
 
 ### Backpressure
 

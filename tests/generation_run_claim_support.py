@@ -19,12 +19,13 @@ from episodic.generation.draft_script import (
     DraftScriptSource,
 )
 from episodic.generation.launcher_claim import ClaimerContext, GenerationRunClaimer
-from episodic.generation.launcher_support import ClaimedRun
+from episodic.generation.launcher_support import ClaimedRun, ClaimToken
 from episodic.llm import LLMUsage
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from episodic.canonical.generation_claim import ExecutionClaim
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 NOW = dt.datetime(2026, 9, 1, 9, 30, tzinfo=dt.UTC)
@@ -118,11 +119,13 @@ def draft_result() -> DraftScriptResult:
 
 def claimed_run_value() -> ClaimedRun:
     """Return a claimed-run value for generation-only tests."""
+    run = running_run()
     return ClaimedRun(
-        run=running_run(),
+        run=run,
         episode=episode(),
         sources=(source(),),
         presenter_profiles=(),
+        token=ClaimToken(run.id, proof=uuid.uuid4()),
     )
 
 
@@ -139,19 +142,23 @@ class RecordingGenerationRuns:
     async def claim_run_for_execution(
         self,
         run_id: uuid.UUID,
-        *,
-        current_node: str | None,
-        started_at: dt.datetime,
-        lease_expires_at: dt.datetime | None,
+        claim: ExecutionClaim,
     ) -> GenerationRun | None:
         """Record the claim request and return the configured run."""
         self.claims.append({
             "run_id": run_id,
-            "current_node": current_node,
-            "started_at": started_at,
-            "lease_expires_at": lease_expires_at,
+            "current_node": claim.current_node,
+            "started_at": claim.started_at,
+            "lease_expires_at": claim.lease_expires_at,
+            "claim_token": claim.claim_token,
         })
         return self.run
+
+    @staticmethod
+    async def claim_token_for(run_id: uuid.UUID) -> uuid.UUID | None:
+        """Report that no claim token is stored for any run."""
+        _ = run_id
+        return None
 
     async def append_event(
         self,
@@ -337,6 +344,7 @@ def claimer_context(
         source_loader=loader,
         clock=clock,
         monotonic_clock=SteppingMonotonicClock(iter((100.0, 100.25))),
+        reconcile_timeout_seconds=0.2,
     )
 
 

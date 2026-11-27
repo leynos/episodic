@@ -132,6 +132,7 @@ extend-ignore = [
 # `**/test_*.py` ignores and needs `assert` declared the same way.
 "tests/generation_run_contract_scenarios.py" = ["assert"]
 "tests/generation_run_checkpoint_listing_scenarios.py" = ["assert"]
+"tests/_content_graph_ownership.py" = ["assert"]
 
 [tool.ruff.lint.flake8-import-conventions]
 # Declare the banned `from` imports.
@@ -495,6 +496,52 @@ python = "3.14"
 [tool.skylos.gate]
 strict = true
 
+
+
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = ["episodic.generation.launcher._load_source_document"]
+reason = "Referenced through _LauncherSourceLoadRuntime.load_document, which preserves the module patch point; Skylos does not follow property-returned callables."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "class"
+full_name = [
+    "episodic.generation.launcher._LauncherClaimerRuntime",
+    "episodic.generation.launcher._LauncherPersistenceRuntime",
+    "episodic.generation.launcher._LauncherSchedulerRuntime",
+    "episodic.generation.launcher._LauncherSourceLoadRuntime",
+]
+reason = "Live runtime views constructed by InProcessGenerationRunLauncher._components and __post_init__; Skylos does not follow construction inside a class entrypoint."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.generation.launcher.InProcessGenerationRunLauncher._components",
+    "episodic.generation.launcher.InProcessGenerationRunLauncher._execute_run",
+    "episodic.generation.launcher.InProcessGenerationRunLauncher._read_quality_mode",
+    "episodic.generation.launcher.InProcessGenerationRunLauncher._record_cancellation",
+    "episodic.generation.launcher_failure.GenerationRunFailurePersistence._append_failure_events",
+    "episodic.generation.launcher_failure.GenerationRunFailurePersistence._failure_authority",
+    "episodic.generation.launcher_failure.GenerationRunFailurePersistence._write_failure",
+    "episodic.generation.launcher_failure.GenerationRunFailurePersistence.record_failure",
+]
+reason = "GenerationRunFailurePersistence.record_failure is called by InProcessGenerationRunLauncher._execute_run and _record_cancellation, and it delegates to _write_failure. Skylos does not follow calls made from a class entrypoint. The launcher methods are called from _execute_run on the same class."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "class"
+full_name = [
+    "episodic.generation.launcher_failure.CommittedFailure",
+]
+reason = "CommittedFailure is constructed by GenerationRunFailurePersistence.record_failure and handed to notify_committed_failure; Skylos does not follow calls made from a class entrypoint."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.generation.launcher_failure.notify_committed_failure",
+]
+reason = "notify_committed_failure is called by GenerationRunFailurePersistence.record_failure; Skylos does not follow calls made from a class entrypoint."
+
 [[tool.skylos.dead_code.entrypoints]]
 type = "parameter"
 full_name = [
@@ -566,8 +613,12 @@ full_name = [
     "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_enums",
     "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_qa_evaluations_table",
     "alembic.versions.20261031_000016_add_qa_artefact_tables._drop_qa_findings_table",
+    "alembic.versions.20261122_000018_add_qa_gated_quality_mode._new_label_usage_sql",
+    "alembic.versions.20261122_000018_add_qa_gated_quality_mode._quoted",
+    "alembic.versions.20261122_000018_add_qa_gated_quality_mode._offline_downgrade_statement",
+    "alembic.versions.20261122_000018_add_qa_gated_quality_mode._require_no_new_label_rows",
 ]
-reason = "Alembic invokes these downgrade helpers when an operator rolls migration revisions back."
+reason = "Alembic invokes these downgrade helpers and their rendering helpers when an operator rolls migration revisions back."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "class"
@@ -602,6 +653,17 @@ reason = "The generated `episodic` console script calls `main`, and cyclopts inv
 type = "method"
 full_name = ["episodic.cli.app.CliApplication.run"]
 reason = "episodic.cli.entrypoint.main calls CliApplication.run to dispatch the parsed command."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.canonical.generation_graph_ports._validate_evaluator_set",
+    "episodic.canonical.generation_graph_ports._validate_evaluator_names",
+    "episodic.api.dependencies._validate_accepted_quality_modes",
+    "episodic.api.dependencies._validate_health_observer",
+    "episodic.api.dependencies._normalize_and_validate_hooks",
+]
+reason = "dataclasses invokes __post_init__ when QualityEvaluatorSet or ApiDependencies is constructed, and those hooks call these validators."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -697,31 +759,6 @@ full_name = [
     "episodic.canonical.domain_reference_documents.ReferenceBinding._validate_effective_from_constraint",
 ]
 reason = "Canonical value objects call these validation methods from dataclass post-initialization hooks."
-
-[[tool.skylos.dead_code.entrypoints]]
-type = "method"
-full_name = [
-    "episodic.generation.launcher.InProcessGenerationRunLauncher._execute_run",
-    "episodic.generation.launcher.InProcessGenerationRunLauncher._record_cancellation",
-]
-reason = "GenerationRunScheduler invokes both as injected callbacks (`execute_run` from _run_task and `record_cancellation` from the task runner and shutdown path)."
-
-[[tool.skylos.dead_code.entrypoints]]
-type = "class"
-full_name = [
-    "episodic.generation.launcher._LauncherClaimerRuntime",
-    "episodic.generation.launcher._LauncherPersistenceRuntime",
-    "episodic.generation.launcher._LauncherSchedulerRuntime",
-    "episodic.generation.launcher._LauncherSourceLoadRuntime",
-]
-reason = "InProcessGenerationRunLauncher composes these live views for its claimer, persistence, scheduler and source loader; Skylos does not traverse the runtime-selected callbacks or dataclass post-initialization hook that install them."
-
-[[tool.skylos.dead_code.entrypoints]]
-type = "function"
-full_name = [
-    "episodic.generation.launcher._load_source_document",
-]
-reason = "InProcessGenerationRunLauncher._build_claimer installs this loader so source_from_document is resolved at hydration time; Skylos does not traverse the runtime-selected callback that builds the claimer."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
@@ -949,6 +986,10 @@ top = 0
 [tool.duplication_gate]
 
 [[tool.duplication_gate.allow]]
+members = ["episodic/generation/launcher_claim.py", "episodic/orchestration/_content_graph_state.py", "episodic/orchestration/content_generation.py"]
+reason = "Each module imports the observability names its own signatures forward: the claimer measures latency, and the graph runner and its context both pass the metrics sink and monotonic clock to the evaluation node. A shared import module would hide which layer owns the dependency."
+
+[[tool.duplication_gate.allow]]
 unit = "episodic/api/resources/*.py::__init__"
 reason = "Two-line resource constructors that store the injected unit-of-work factory; the repetition is the dependency-injection seam Falcon resources need."
 
@@ -1033,7 +1074,7 @@ members = ["episodic/canonical/storage/qa_artefact_storage_runtime.py", "episodi
 reason = "The observability port and default-adapter import block is a port surface, not logic: the QA storage runtime, the CLI client, and the OpenAI adapter each bind the no-op and production adapters their own runtime composes. Re-exporting the same names through an indirection module would add a hop every reader must follow without removing behaviour."
 
 [[tool.duplication_gate.allow]]
-members = ["episodic/api/dependencies.py", "episodic/api/handlers.py", "episodic/api/serializers.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/ingestion_service.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/canonical/profile_templates/helpers.py", "episodic/canonical/profile_templates/types.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/canonical/storage/uow.py", "episodic/canonical/unit_of_work_protocols.py", "episodic/canonical/upload_protocols.py", "episodic/cost/storage/metering.py", "episodic/operation_observation.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/orchestration/langgraph_costs.py"]
+members = ["episodic/api/dependencies.py", "episodic/api/handlers.py", "episodic/api/serializers.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/ingestion_service.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/canonical/profile_templates/helpers.py", "episodic/canonical/profile_templates/types.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/canonical/storage/uow.py", "episodic/canonical/unit_of_work_protocols.py", "episodic/canonical/upload_protocols.py", "episodic/cost/storage/metering.py", "episodic/generation/launcher_host.py", "episodic/operation_observation.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/orchestration/langgraph_costs.py"]
 reason = "Annotation-only TYPE_CHECKING import blocks: each module imports the domain, port and observability names its own signatures use. An import list cannot be factored into a helper, and a re-export facade would add a hop every reader must follow."
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/resources/episode_tei.py", "episodic/api/resources/generation_runs_events.py", "episodic/api/resources/qa_artefacts.py"]
@@ -1045,8 +1086,8 @@ reason = "Protocol classes for different aggregates share only the async abstrac
 members = ["episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/adapters/generation_runs.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/review_checkpoints.py"]
 reason = "The in-memory adapters and the SQLAlchemy stores implement the same generation-run port twice. The matching signatures and validation preludes are the port contract, enforced by the shared contract scenarios; one side filters a list and the other builds a query."
 [[tool.duplication_gate.allow]]
-members = ["episodic/api/resources/qa_artefacts.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/generation/launcher_support.py", "episodic/orchestration/_planning_orchestrator.py"]
-reason = "Annotation-only import blocks of five modules, each naming its own types; import lists cannot be shared."
+members = ["episodic/api/resources/qa_artefacts.py", "episodic/canonical/qa_artefact_service.py", "episodic/canonical/storage/generation_runs.py", "episodic/canonical/storage/history_repositories.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/generation/launcher.py", "episodic/generation/launcher_session.py", "episodic/generation/launcher_support.py", "episodic/orchestration/_planning_orchestrator.py"]
+reason = "Annotation-only import blocks of nine modules, each naming its own types; import lists cannot be shared."
 [[tool.duplication_gate.allow]]
 members = ["episodic/api/resources/generation_runs_events.py", "episodic/api/resources/qa_artefacts.py"]
 reason = "Constructor and span envelope as for the Falcon resource family; the QA evaluation resource reads one evaluation with its findings while the events resource pages a cursor, with different not-found categories."
@@ -1180,8 +1221,8 @@ reason = "Each adapter logs under its own event name and tests a different termi
 members = ["episodic/canonical/__init__.py", "episodic/canonical/unit_of_work_protocols.py"]
 reason = "The package surface and the unit-of-work protocols name the same repository protocols."
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/generation_persistence.py", "episodic/canonical/storage/review_checkpoints.py", "episodic/generation/launcher.py", "episodic/generation/launcher_persistence.py"]
-reason = "Annotation-only imports of different modules: the canonical persistence services, the SQLAlchemy checkpoint store, and the launcher plus its persistence component each import the domain, port and observability names their own signatures use."
+members = ["episodic/canonical/generation_persistence.py", "episodic/canonical/storage/review_checkpoints.py", "episodic/generation/launcher_persistence.py"]
+reason = "Annotation-only imports of different modules."
 [[tool.duplication_gate.allow]]
 members = ["episodic/canonical/ingestion_service.py::_build_conflict_metadata", "episodic/canonical/ingestion_service.py::_build_ingestion_request"]
 reason = "Both build a dict from outcome and weighting data but with different keys and sources."
@@ -1315,8 +1356,14 @@ reason = "The same shared validator called on different fields."
 members = ["episodic/runtime_providers.py::utc_now", "episodic/cost/pricing_catalogue/file_loader.py::_default_now"]
 reason = "Two one-line clock defaults at different layers: the service-runtime providers expose the production clock for injected collaborators, and the file catalogue keeps a local default so it can be constructed without a runtime composition root."
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/storage/repositories.py", "episodic/generation/launcher.py", "episodic/api/runtime.py"]
-reason = "Annotation-only TYPE_CHECKING import blocks: each module names the domain, port and observability types its own signatures use; an import list cannot be factored into a shared helper."
+members = ["episodic/orchestration/_content_graph_nodes.py::generate_draft_without_qa", "episodic/orchestration/_content_graph_nodes.py::generate_qa_candidate"]
+reason = "Each branch must own its generate node so the topology states branch ownership; both delegate to the same run-session step, which is the whole point."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/generation_quality.py", "episodic/canonical/generation_routing.py"]
+reason = "A one-line docstring terminator coincidence in two pure policy modules; their contents are unrelated."
+[[tool.duplication_gate.allow]]
+members = ["episodic/canonical/unit_of_work_protocols.py", "episodic/api/serializers.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/storage/generation_runs.py", "episodic/orchestration/_planning_orchestrator.py", "episodic/generation/launcher_claim.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/canonical/upload_protocols.py", "episodic/api/handlers.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/api/resources/qa_artefacts.py", "episodic/api/resources/generation_runs_scheduling.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/operation_observation.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/profile_templates/types.py", "episodic/cost/storage/metering.py", "episodic/generation/launcher_failure.py", "episodic/generation/launcher_session.py", "episodic/generation/launcher_cancellation_writes.py", "episodic/api/resources/episode_tei.py", "episodic/canonical/qa_artefact_service.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/history_repositories.py", "episodic/canonical/storage/uow.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/orchestration/langgraph_costs.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/profile_templates/helpers.py", "episodic/generation/launcher_quality.py", "episodic/generation/launcher_runtime_views.py"]
+reason = "Annotation-only TYPE_CHECKING import blocks: each module imports the domain, port and observability names its own signatures use. An import list cannot be factored into a helper, and a re-export facade would add a hop every reader must follow."
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"
@@ -1407,10 +1454,12 @@ prefixes = [
     "episodic.canonical.ingestion_ports",
     "episodic.canonical.entity_protocols",
     "episodic.canonical.episode_errors",
+    "episodic.canonical.generation_graph_ports",
     "episodic.canonical.generation_quality",
     "episodic.canonical.generation_run_errors",
     "episodic.canonical.generation_run_lease_ports",
     "episodic.canonical.generation_run_ports",
+    "episodic.canonical.generation_routing",
     "episodic.canonical.history_protocols",
     "episodic.canonical.health",
     "episodic.canonical.hashing",
@@ -1463,6 +1512,8 @@ allowed = [
 [[tool.hecate.groups]]
 name = "orchestration_nodes"
 prefixes = [
+    "episodic.orchestration._content_graph_nodes",
+    "episodic.orchestration._content_graph_state",
     "episodic.orchestration._graph_nodes",
     "episodic.orchestration._graph_protocols",
     "episodic.orchestration._graph_state",

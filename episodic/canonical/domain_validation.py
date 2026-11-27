@@ -7,8 +7,12 @@ depend on them without importing from another dataclass module.
 """
 
 import copy
+import typing as typ
 
-from .generation_quality import QaStatus, QualityMode
+from .generation_quality import QaStatus, QualityMode, quality_metadata_violation
+
+if typ.TYPE_CHECKING:
+    from .domain_enums import GenerationRunStatus
 
 
 def _require_positive_integer(value: object, field_name: str) -> None:
@@ -46,23 +50,22 @@ def _validate_optional_text(value: str | None, field_name: str) -> None:
         _validate_non_empty_text(value, field_name)
 
 
-def _validate_draft_without_qa_metadata(
+def _validate_quality_metadata(
     *,
     quality_mode: QualityMode,
+    status: GenerationRunStatus,
     qa_status: QaStatus | None,
     skip_qa_rationale: str | None,
 ) -> None:
-    """Validate the no-QA slice's required audit metadata."""
-    if quality_mode is not QualityMode.DRAFT_WITHOUT_QA:
-        msg = f"Unsupported quality_mode: {quality_mode!s}."
-        raise ValueError(msg)
-    if qa_status is not QaStatus.SKIPPED:
-        msg = "qa_status must be skipped for draft_without_qa runs."
-        raise ValueError(msg)
-    if skip_qa_rationale is None:
-        msg = "skip_qa_rationale must be a non-empty string."
-        raise ValueError(msg)
-    _validate_non_empty_text(skip_qa_rationale, "skip_qa_rationale")
+    """Reject quality metadata the requested policy forbids."""
+    violation = quality_metadata_violation(
+        quality_mode=quality_mode,
+        status=status,
+        qa_status=qa_status,
+        skip_qa_rationale=skip_qa_rationale,
+    )
+    if violation is not None:
+        raise ValueError(violation)
 
 
 def _copy_json_mapping(owner: object, field_name: str) -> None:

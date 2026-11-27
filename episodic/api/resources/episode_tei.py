@@ -6,7 +6,7 @@ import typing as typ
 
 import falcon
 
-from episodic.api.episode_access import read_owned_episode
+from episodic.api.episode_access import read_owned_episode_and_run
 from episodic.api.errors import http_error
 from episodic.api.helpers import parse_uuid
 from episodic.api.serializers import serialize_tei_envelope
@@ -18,6 +18,7 @@ if typ.TYPE_CHECKING:
 
     from episodic.api.types import UowFactory
     from episodic.canonical.domain import CanonicalEpisode
+    from episodic.canonical.generation_quality import QualityMode
     from episodic.observability import TracerPort
 
 _JSON_MEDIA_TYPE = "application/json"
@@ -87,11 +88,14 @@ class EpisodeTeiResource:
                 raise
             actor = principal_id(req)
             async with self._uow_factory() as uow:
-                episode = await read_owned_episode(uow, parsed_episode_id, actor)
-            if episode is None or not _has_generated_draft(episode):
+                resolved = await read_owned_episode_and_run(
+                    uow, parsed_episode_id, actor
+                )
+            if resolved is None or not _has_generated_draft(resolved[0]):
                 span.set_attribute("outcome", "not_found")
                 span.set_attribute("failure_category", "episode.not_found")
                 raise _tei_not_found(parsed_episode_id)
+            episode, run = resolved
             try:
                 media_type = negotiate_tei_media_type(req.accept)
             except falcon.HTTPNotAcceptable:
@@ -102,7 +106,7 @@ class EpisodeTeiResource:
             if media_type == _TEI_MEDIA_TYPE:
                 _apply_tei_attachment(req, resp, episode)
             else:
-                _apply_tei_json(req, resp, episode)
+                _apply_tei_json(req, resp, episode, quality_mode=run.quality_mode)
             span.set_attribute("outcome", "success")
 
 
@@ -158,9 +162,12 @@ def _apply_tei_json(
     req: falcon.Request,
     resp: falcon.Response,
     episode: CanonicalEpisode,
+    *,
+    quality_mode: QualityMode,
 ) -> None:
     """Set the JSON metadata representation of the episode's TEI on *resp*."""
-    content = json.dumps(serialize_tei_envelope(episode), ensure_ascii=False).encode()
+    envelope = serialize_tei_envelope(episode, quality_mode=quality_mode)
+    content = json.dumps(envelope, ensure_ascii=False).encode()
     _apply_representation(req, resp, content=content, media_type=_JSON_MEDIA_TYPE)
 
 

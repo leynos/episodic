@@ -18,7 +18,7 @@ from episodic.generation.launcher_persistence import (
     GenerationRunPersistence,
     PersistenceContext,
 )
-from episodic.generation.launcher_support import ClaimedRun
+from episodic.generation.launcher_support import ClaimedRun, ClaimToken
 from tests.generation_run_launcher_support import draft_result, valid_tei
 
 if typ.TYPE_CHECKING:
@@ -80,11 +80,13 @@ def episode() -> CanonicalEpisode:
 
 def claimed_run_value() -> ClaimedRun:
     """Return a claimed run carrying the pre-persistence episode revision."""
+    run = running_run()
     return ClaimedRun(
-        run=running_run(),
+        run=run,
         episode=episode(),
         sources=(),
         presenter_profiles=(),
+        token=ClaimToken(run.id, proof=uuid.uuid4()),
     )
 
 

@@ -1,4 +1,22 @@
-"""Falcon resources for no-QA generation-run creation and polling."""
+"""Falcon resources for generation-run creation and polling.
+
+Creation accepts ``qa_gated`` only when ``accepted_quality_modes`` includes
+it; otherwise the historical ``422`` stands.
+
+The request rules run on exactly one of two named paths, chosen by the
+idempotency key and the requested mode:
+
+| Key     | Mode             | Path                   | Why                          |
+| ------- | ---------------- | ---------------------- | ---------------------------- |
+| absent  | any              | before idempotency     | no replay; nothing is masked |
+| present | draft_without_qa | before idempotency     | a key cannot hide a 400      |
+| present | qa_gated         | in the idempotent work | a stored 202 still replays   |
+
+A path validates once: the before-idempotency path passes its prepared result
+into the work, and the in-work path validates inside it. Neither path
+re-validates after a conflict, so a keyed gated conflict reports its ``409``
+without a second rules pass.
+"""
 
 import dataclasses as dc
 import typing as typ
@@ -8,19 +26,27 @@ import falcon
 from episodic.api.errors import http_error, map_source_intake_error
 from episodic.api.helpers import parse_uuid, require_payload_dict
 from episodic.api.resources.generation_runs_create_support import (
+    PreparedRequest,
+    RequestRuleOrder,
     _CreateGenerationRun,
     _parse_create_request,
+    _request_rule_order,
+    _Submission,
+    prepare_request,
 )
 from episodic.api.resources.generation_runs_errors import (
     _RETRY_AFTER,
     _generation_input_error,
-    _generation_overloaded,
     _ingestion_job_not_found,
     _owns_ingestion_job,
 )
 from episodic.api.resources.generation_runs_events import (
     GenerationRunEventsResource,
     GenerationRunResource,
+)
+from episodic.api.resources.generation_runs_scheduling import (
+    SchedulingContext,
+    create_and_schedule_run,
 )
 from episodic.api.serializers import serialize_generation_run
 from episodic.api.source_idempotency import (
@@ -38,20 +64,17 @@ from episodic.canonical.generation_persistence import (
     materialise_episode_from_ingestion,
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
-from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.source_intake_service import SourceIntakeError
-from episodic.generation.launcher import GenerationRunAdmissionError
 from episodic.observability import NoopTracer
 from episodic.runtime_providers import Clock, UuidFactory, utc_now, uuid7
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import uuid
 
     from episodic.api.types import UowFactory
     from episodic.generation.launcher import GenerationRunLauncher
     from episodic.observability import SpanHandle, TracerPort
+
 
 __all__ = [
     "GenerationRunEventsResource",
@@ -79,6 +102,9 @@ class GenerationRunsResourceConfig:
         Optional limit for source materialisation.
     tracer : TracerPort | None
         Optional tracing port used by the resource.
+    accepted_quality_modes : frozenset[QualityMode]
+        Quality modes this deployment can execute. ``draft_without_qa`` must
+        always be present; ``qa_gated`` is added only when evaluators exist.
     """
 
     launcher: GenerationRunLauncher | None
@@ -86,18 +112,36 @@ class GenerationRunsResourceConfig:
     uuid_factory: UuidFactory = uuid7
     max_source_count: int | None = None
     tracer: TracerPort | None = None
+    accepted_quality_modes: frozenset[QualityMode] = frozenset({
+        QualityMode.DRAFT_WITHOUT_QA
+    })
+
+
+def _accepted_response(run: GenerationRun) -> IdempotentResponse:
+    """Build the 202 response for a scheduled generation run."""
+    return IdempotentResponse(
+        falcon.HTTP_202,
+        serialize_generation_run(run),
+        location=f"/v1/generation-runs/{run.id}",
+        retry_after=_RETRY_AFTER,
+    )
+
+
+def _idempotency_context(submission: _Submission) -> IdempotencyContext:
+    """Build the idempotency context for one submission."""
+    return IdempotencyContext(
+        req=submission.req,
+        operation=_GENERATION_RUN_OPERATION,
+        body_hash=json_body_hash(submission.payload),
+    )
 
 
 class GenerationRunsResource:
-    """Create no-QA generation runs for authenticated ingestion-job owners.
+    """Create generation runs for authenticated ingestion-job owners.
 
     The resource materialises the caller-owned ready ingestion job, persists a
-    durable generation-run checkpoint, and schedules detached execution.
-
-    Notes
-    -----
-    The authenticated principal becomes the durable run actor; request
-    payloads cannot select another actor.
+    durable checkpoint, and schedules detached execution. The authenticated
+    principal becomes the durable run actor; payloads cannot select another.
     """
 
     def __init__(
@@ -112,6 +156,7 @@ class GenerationRunsResource:
         self._uuid_factory = config.uuid_factory
         self._max_source_count = config.max_source_count
         self._tracer = NoopTracer() if config.tracer is None else config.tracer
+        self._accepted_quality_modes = frozenset(config.accepted_quality_modes)
 
     async def on_post(
         self,
@@ -119,7 +164,7 @@ class GenerationRunsResource:
         resp: falcon.Response,
         ingestion_job_id: str,
     ) -> None:
-        """Materialise and schedule a no-QA generation run.
+        """Materialise and schedule a generation run.
 
         Parameters
         ----------
@@ -127,7 +172,7 @@ class GenerationRunsResource:
             Path identifier for the ready ingestion job owned by the
             authenticated principal.
         req
-            Falcon request containing the no-QA command and idempotency key.
+            Falcon request containing the run command and idempotency key.
         resp
             Falcon response populated with the accepted run representation.
 
@@ -145,92 +190,118 @@ class GenerationRunsResource:
         source_bundle_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         payload = require_payload_dict(await req.get_media())
         request = _parse_create_request(payload)
-        launcher = self._require_launcher()
-        idempotency_key = req.get_header("Idempotency-Key")
         actor = principal_id(req)
         if actor is None:
             raise _ingestion_job_not_found(source_bundle_id)
+        submission = _Submission(
+            req=req,
+            payload=payload,
+            request=request,
+            source_bundle_id=source_bundle_id,
+            actor=actor,
+        )
+        apply_response(resp, await self._submit(submission))
 
-        async def work() -> IdempotentResponse:
-            """Create and schedule the run, then build its 202 response."""
-            run = await self._create_and_schedule_run(
-                self._create_run(
-                    source_bundle_id,
-                    request,
-                    actor=actor,
+    async def _submit(self, submission: _Submission) -> IdempotentResponse:
+        """Choose the request-rule path and submit the creation work."""
+        idempotency_key = submission.req.get_header("Idempotency-Key")
+        if _request_rule_order(submission.request, idempotency_key) is (
+            RequestRuleOrder.BEFORE_IDEMPOTENCY
+        ):
+            return await self._submit_before_idempotency(submission)
+        return await self._submit_in_idempotent_work(submission)
+
+    async def _submit_before_idempotency(
+        self,
+        submission: _Submission,
+    ) -> IdempotentResponse:
+        """Validate first, then create under the key if one was supplied."""
+        idempotency_key = submission.req.get_header("Idempotency-Key")
+        prepared = prepare_request(
+            submission,
+            accepted_quality_modes=self._accepted_quality_modes,
+            resolve_launcher=self._require_launcher,
+        )
+        with self._command_span() as span:
+
+            async def work() -> IdempotentResponse:
+                """Create and schedule the run from the prepared request."""
+                return await self._create_and_respond(
+                    submission,
+                    prepared,
                     idempotency_key=idempotency_key,
-                ),
-                launcher,
-                span,
-            )
-            location = f"/v1/generation-runs/{run.id}"
-            return IdempotentResponse(
-                falcon.HTTP_202,
-                serialize_generation_run(run),
-                location=location,
-                retry_after=_RETRY_AFTER,
-            )
+                    span=span,
+                )
 
-        with self._tracer.start_span(
-            "generation_run.command",
-            attributes={"operation": _GENERATION_RUN_OPERATION},
-        ) as span:
             result = await run_idempotent(
                 self._uow_factory,
-                context=IdempotencyContext(
-                    req=req,
-                    operation=_GENERATION_RUN_OPERATION,
-                    body_hash=json_body_hash(payload),
-                ),
+                context=_idempotency_context(submission),
                 work=work,
             )
             span.set_attribute("outcome", "accepted")
-        apply_response(resp, result)
+        return result
 
-    async def _create_and_schedule_run(
+    async def _submit_in_idempotent_work(
         self,
-        create_run: cabc.Awaitable[GenerationRun],
-        launcher: GenerationRunLauncher,
+        submission: _Submission,
+    ) -> IdempotentResponse:
+        """Validate inside the idempotent work, so a rejection releases the key."""
+        idempotency_key = submission.req.get_header("Idempotency-Key")
+        with self._command_span() as span:
+
+            async def work() -> IdempotentResponse:
+                """Validate, create and schedule the run inside the work."""
+                prepared = prepare_request(
+                    submission,
+                    accepted_quality_modes=self._accepted_quality_modes,
+                    resolve_launcher=self._require_launcher,
+                )
+                return await self._create_and_respond(
+                    submission,
+                    prepared,
+                    idempotency_key=idempotency_key,
+                    span=span,
+                )
+
+            result = await run_idempotent(
+                self._uow_factory,
+                context=_idempotency_context(submission),
+                work=work,
+            )
+            span.set_attribute("outcome", "accepted")
+        return result
+
+    async def _create_and_respond(
+        self,
+        submission: _Submission,
+        prepared: PreparedRequest,
+        *,
+        idempotency_key: str | None,
         span: SpanHandle,
-    ) -> GenerationRun:
-        """Persist and schedule a run, recording terminal scheduling failures.
+    ) -> IdempotentResponse:
+        """Persist and schedule one prepared request, then build its 202."""
+        launcher = (
+            self._require_launcher() if prepared.launcher is None else prepared.launcher
+        )
+        run = await create_and_schedule_run(
+            self._create_run(
+                submission.source_bundle_id,
+                prepared.request,
+                actor=submission.actor,
+                idempotency_key=idempotency_key,
+            ),
+            launcher,
+            span,
+            SchedulingContext(self._uow_factory, self._clock),
+        )
+        return _accepted_response(run)
 
-        Creation failures propagate unchanged. Scheduling failures first mark
-        the persisted run terminal before propagating.
-
-        Returns
-        -------
-        GenerationRun
-            The persisted run after its launcher accepts scheduling.
-
-        Raises
-        ------
-        _generation_overloaded
-            If bounded launcher admission rejects the persisted run.
-        """
-        run = await create_run
-        span.set_attribute("run_id", str(run.id))
-        try:
-            await launcher.launch(run.id)
-        except GenerationRunAdmissionError as exc:
-            span.set_attribute("outcome", "rejected")
-            span.set_attribute("failure_category", "launcher.overloaded")
-            await self._mark_launch_failed(
-                run.id,
-                error_message=str(exc),
-                error_category="launcher.overloaded",
-            )
-            raise _generation_overloaded() from exc
-        except Exception as exc:
-            span.set_attribute("outcome", "failed")
-            span.set_attribute("failure_category", "launcher.scheduling")
-            await self._mark_launch_failed(
-                run.id,
-                error_message=str(exc),
-                error_category="launcher.scheduling",
-            )
-            raise
-        return run
+    def _command_span(self) -> SpanHandle:
+        """Start the command span every submission path shares."""
+        return self._tracer.start_span(
+            "generation_run.command",
+            attributes={"operation": _GENERATION_RUN_OPERATION},
+        )
 
     def _require_launcher(self) -> GenerationRunLauncher:
         """Return the configured launcher or raise a 503 error if absent."""
@@ -292,8 +363,12 @@ class GenerationRunsResource:
                 started_at=None,
                 ended_at=None,
                 error_message=None,
-                quality_mode=QualityMode.DRAFT_WITHOUT_QA,
-                qa_status=QaStatus.SKIPPED,
+                quality_mode=request.quality_mode,
+                qa_status=(
+                    QaStatus.PENDING
+                    if request.quality_mode is QualityMode.QA_GATED
+                    else QaStatus.SKIPPED
+                ),
                 skip_qa_rationale=request.skip_qa_rationale,
             )
             run = await uow.generation_runs.create_run(
@@ -303,29 +378,3 @@ class GenerationRunsResource:
             )
             await uow.commit()
             return run
-
-    async def _mark_launch_failed(
-        self,
-        run_id: uuid.UUID,
-        *,
-        error_message: str,
-        error_category: str,
-    ) -> None:
-        """Mark a run failed, ignoring runs that are terminal or missing."""
-        now = self._clock()
-        async with self._uow_factory() as uow:
-            try:
-                await uow.generation_runs.update_run_status(
-                    run_id,
-                    update=GenerationRunStatusUpdate(
-                        status=GenerationRunStatus.FAILED,
-                        current_node=None,
-                        ended_at=now,
-                        error_message=error_message,
-                        error_category=error_category,
-                    ),
-                )
-            except RunAlreadyTerminal, RunNotFound:
-                await uow.rollback()
-            else:
-                await uow.commit()

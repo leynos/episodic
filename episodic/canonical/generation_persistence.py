@@ -1,6 +1,8 @@
-"""Persist canonical state at no-QA draft-generation boundaries.
+"""Persist canonical state at generation-run draft boundaries.
 
-Services ``materialise_episode_from_ingestion`` and ``persist_draft_script``,
+The persisted draft records the run's QA status (``skipped`` for a no-QA run,
+``passed`` for a gated run that cleared evaluation). Services
+``materialise_episode_from_ingestion`` and ``persist_draft_script``,
 their request types, and typed persistence errors are exported. Callers provide
 a ``CanonicalUnitOfWork``; this module never creates or disposes one. A ready
 :class:`IngestionJob` becomes a deterministic placeholder: pages load before
@@ -43,7 +45,6 @@ from episodic.canonical.generation_persistence_types import (
     # Re-exported service contract.
     DraftScriptPersistenceError as DraftScriptPersistenceError,
 )
-from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.hashing import sha256_text
 from episodic.canonical.source_intake_errors import IngestionJobNotFoundError
 from episodic.canonical.tei import parse_tei_header
@@ -190,7 +191,7 @@ async def persist_draft_script(
         request.episode_id,
         update=EpisodeTeiUpdate(
             tei_xml=request.result.tei_xml,
-            qa_status=QaStatus.SKIPPED,
+            qa_status=request.qa_status,
             last_generation_run_id=request.generation_run_id,
             expected_revision=request.expected_revision,
             updated_at=request.clock(),

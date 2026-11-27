@@ -10,11 +10,12 @@ from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.cost.ports import BillingPeriodKey
 from episodic.cost.pricing_snapshot import PricedService
+from episodic.generation.launcher_failure import GenerationRunFailurePersistence
 from episodic.generation.launcher_persistence import (
     GenerationRunPersistence,
     PersistenceContext,
 )
-from episodic.generation.launcher_support import Failure
+from episodic.generation.launcher_support import ClaimToken, Failure, RunClaim
 from tests.generation_run_launcher_support import valid_tei
 from tests.generation_run_persistence_support import (
     EPISODE_ID,
@@ -175,7 +176,7 @@ async def test_record_failure_writes_failure_events_and_terminal_status() -> Non
     """An invalid-TEI failure should record both events and a failed status."""
     uow = unit_of_work()
     metrics = RecordingMetrics()
-    run_persistence = GenerationRunPersistence(
+    run_persistence = GenerationRunFailurePersistence(
         runtime=dc.replace(persistence_context(uow), metrics=metrics)
     )
     failure = Failure(
@@ -184,7 +185,11 @@ async def test_record_failure_writes_failure_events_and_terminal_status() -> Non
         should_emit_invalid_tei=True,
     )
 
-    await run_persistence.record_failure(RUN_ID, failure)
+    await run_persistence.record_failure(
+        RUN_ID,
+        failure,
+        claim=RunClaim(token=ClaimToken(RUN_ID)),
+    )
 
     assert [(run_id, kind) for run_id, kind, _, _ in uow.generation_runs.events] == [
         (RUN_ID, "tei.invalid"),
@@ -223,13 +228,14 @@ async def test_record_failure_ignores_runs_that_are_not_writable(
     """A terminal or missing run should roll back without recording metrics."""
     uow = unit_of_work(status_error=error)
     metrics = RecordingMetrics()
-    run_persistence = GenerationRunPersistence(
+    run_persistence = GenerationRunFailurePersistence(
         runtime=dc.replace(persistence_context(uow), metrics=metrics)
     )
 
     await run_persistence.record_failure(
         RUN_ID,
         Failure(message="Provider failed.", category="provider.transient"),
+        claim=RunClaim(token=ClaimToken(RUN_ID)),
     )
 
     assert [kind for _, kind, _, _ in uow.generation_runs.events] == ["run.failed"], (

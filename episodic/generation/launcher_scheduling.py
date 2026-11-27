@@ -14,6 +14,8 @@ import asyncio
 import dataclasses as dc
 import typing as typ
 
+from episodic.generation.launcher_cancellation_writes import CancellationWrites
+from episodic.generation.launcher_support import RunClaim
 from episodic.logging import get_logger, log_info
 from episodic.observability import (
     NoopTracer,
@@ -26,10 +28,25 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from episodic.generation.launcher_support import ClaimToken
+
+type CancellationRecorder = cabc.Callable[
+    [uuid.UUID, RunClaim],
+    cabc.Awaitable[ClaimToken | None],
+]
+
 DEFAULT_MAX_CONCURRENCY = 4
 DEFAULT_MAX_PENDING_RUNS = 16
+#: How long shutdown waits for one cancellation write before giving up on it.
+#: A write that outlives this is abandoned, not cancelled: it stays shielded so
+#: it can still land. If it never lands, a run whose earlier execution claim
+#: committed falls back to lease reclamation; an uncommitted failure-only claim
+#: leaves the run pending with its row possibly locked until that transaction
+#: is released.
+DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS = 10.0
 _METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
 _METRIC_PENDING_DEPTH = "generation_run_pending_depth"
+_METRIC_TASK_TIMEOUT = "generation_run_shutdown_task_timeouts_total"
 
 logger = get_logger(__name__)
 
@@ -46,6 +63,8 @@ class ExecutionOutcome:
 
     outcome: str
     failure_category: str | None = None
+    quality_branch: str | None = None
+    terminal: str | None = None
 
 
 class SchedulerRuntimeView(typ.Protocol):
@@ -74,6 +93,10 @@ class SchedulerRuntimeView(typ.Protocol):
     def max_pending_runs(self) -> int:
         """Maximum runs allowed to wait beyond the execution capacity."""
 
+    @property
+    def cancellation_write_timeout_seconds(self) -> float:
+        """Maximum time shutdown waits for one cancellation write."""
+
 
 @dc.dataclass(frozen=True, slots=True)
 class NoopSchedulerRuntimeView:
@@ -83,6 +106,9 @@ class NoopSchedulerRuntimeView:
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY
     max_pending_runs: int = DEFAULT_MAX_PENDING_RUNS
+    cancellation_write_timeout_seconds: float = (
+        DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS
+    )
 
 
 @dc.dataclass(slots=True)
@@ -94,14 +120,15 @@ class GenerationRunScheduler:
     execute_run : cabc.Callable[[uuid.UUID], cabc.Awaitable[ExecutionOutcome]]
         Execute one admitted run under a concurrency permit and report its
         terminal outcome.
-    record_cancellation : cabc.Callable[[uuid.UUID], cabc.Awaitable[None]]
-        Persist cancellation as a terminal failure for one run.
+    record_cancellation : CancellationRecorder
+        Persist cancellation as a terminal failure and report the authority
+        the committed write used, or ``None`` when it did not land.
     runtime : SchedulerRuntimeView
         Live view of the metrics, tracer and admission limits.
     """
 
-    execute_run: cabc.Callable[[uuid.UUID], cabc.Awaitable[ExecutionOutcome]]
-    record_cancellation: cabc.Callable[[uuid.UUID], cabc.Awaitable[None]]
+    execute_run: cabc.Callable[[uuid.UUID, RunClaim], cabc.Awaitable[ExecutionOutcome]]
+    record_cancellation: CancellationRecorder
     runtime: SchedulerRuntimeView = dc.field(default_factory=NoopSchedulerRuntimeView)
     _tasks: TaskSet = dc.field(default_factory=set, init=False)
     _task_run_ids: dict[asyncio.Task[None], uuid.UUID] = dc.field(
@@ -110,7 +137,7 @@ class GenerationRunScheduler:
     )
     _semaphore: asyncio.Semaphore = dc.field(init=False)
     _admitted_run_count: int = dc.field(default=0, init=False)
-    _cancelled_run_ids: set[uuid.UUID] = dc.field(default_factory=set, init=False)
+    _writes: CancellationWrites = dc.field(init=False)
     _is_shutting_down: bool = dc.field(default=False, init=False)
 
     def __post_init__(self) -> None:
@@ -122,6 +149,28 @@ class GenerationRunScheduler:
             msg = "max_pending_runs must be non-negative."
             raise ValueError(msg)
         self._semaphore = asyncio.Semaphore(self.runtime.max_concurrency)
+        self._writes = CancellationWrites(
+            record_cancellation=self.record_cancellation,
+            metrics=self.runtime.metrics,
+            # A getter, so a timeout changed after construction still bounds
+            # the next write; the drain deadline already reads it live.
+            timeout_seconds=lambda: self.runtime.cancellation_write_timeout_seconds,
+        )
+
+    @property
+    def _cancelled_run_ids(self) -> set[uuid.UUID]:
+        """Runs whose cancellation write landed (delegated)."""
+        return self._writes.cancelled_run_ids
+
+    @property
+    def _pending_cancellation_ids(self) -> set[uuid.UUID]:
+        """Runs with a cancellation write in flight (delegated)."""
+        return self._writes.pending_run_ids
+
+    @property
+    def _cancellation_tasks(self) -> set[asyncio.Task[ClaimToken | None]]:
+        """Shielded cancellation writes still in flight (delegated)."""
+        return self._writes.tasks
 
     async def launch(self, run_id: uuid.UUID) -> None:
         """Schedule a background task for one generation run."""
@@ -141,9 +190,62 @@ class GenerationRunScheduler:
         log_info(logger, "generation_run_launcher.scheduled run_id=%s", run_id)
 
     async def drain(self) -> None:
-        """Wait for all currently scheduled tasks to finish."""
-        while self._tasks:
-            await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+        """Wait for scheduled tasks and cancellation writes.
+
+        During normal operation every wait is unbounded, matching the
+        documented contract that ``drain`` returns only once the work has
+        finished. Shutdown bounds both waits by
+        ``cancellation_write_timeout_seconds``, because a stalled database
+        call or unit-of-work exit must not hold process shutdown open.
+        """
+        deadline = self._shutdown_deadline()
+        if deadline is None:
+            # Recheck both registries until both are empty: a run admitted
+            # while this drain waits on a cancellation write was not in the
+            # task snapshot, so draining each registry once can return with
+            # that run still scheduled.
+            while self._tasks or self._cancellation_tasks:
+                await self._drain_tasks(deadline=None)
+                await self._drain_cancellation_writes(deadline=None)
+            return
+        await self._drain_tasks(deadline=deadline)
+        await self._drain_cancellation_writes(deadline=deadline)
+
+    def _shutdown_deadline(self) -> float | None:
+        """Return the shutdown deadline, or ``None`` outside shutdown."""
+        if self._is_shutting_down:
+            return self.runtime.cancellation_write_timeout_seconds
+        return None
+
+    async def _drain_tasks(self, *, deadline: float | None) -> None:
+        """Await scheduled run tasks, bounded only when shutting down."""
+        if deadline is None:
+            # Loop until the registry is empty: a run admitted while this
+            # drain is waiting was not in the snapshot it awaited, so one
+            # pass could return with that run still scheduled.
+            while self._tasks:
+                await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+            return
+        if not self._tasks:
+            return
+        _done, still_pending = await asyncio.wait(
+            tuple(self._tasks),
+            timeout=deadline,
+        )
+        if still_pending:
+            log_info(
+                logger,
+                "generation_run_launcher.shutdown_task_timeout pending=%s",
+                len(still_pending),
+            )
+            self.runtime.metrics.increment_counter(
+                _METRIC_TASK_TIMEOUT,
+                labels={},
+            )
+
+    async def _drain_cancellation_writes(self, *, deadline: float | None) -> None:
+        """Await pending cancellation writes, bounded during shutdown only."""
+        await self._writes.drain(deadline=deadline)
 
     @property
     def scheduled_run_count(self) -> int:
@@ -160,9 +262,8 @@ class GenerationRunScheduler:
             task.cancel()
         await self.drain()
         for task, run_id in cancelled_tasks:
-            if task.cancelled() and run_id not in self._cancelled_run_ids:
-                await asyncio.shield(self.record_cancellation(run_id))
-                self._cancelled_run_ids.add(run_id)
+            if task.cancelled() and run_id not in self._pending_cancellation_ids:
+                await self.record_cancellation_owned(run_id, RunClaim())
 
     def _discard_task(self, task: asyncio.Task[None]) -> None:
         """Remove finished tasks from the strong-reference registry."""
@@ -197,18 +298,41 @@ class GenerationRunScheduler:
             "generation_run.execute",
             attributes={"operation": "generation_run.execute", "run_id": str(run_id)},
         ) as span:
+            claim = RunClaim()
             try:
                 async with self._semaphore:
-                    outcome = await self.execute_run(run_id)
+                    outcome = await self.execute_run(run_id, claim)
             except asyncio.CancelledError:
                 span.set_attribute("outcome", "cancelled")
                 span.set_attribute("failure_category", "launcher.shutdown")
-                await asyncio.shield(self.record_cancellation(run_id))
-                self._cancelled_run_ids.add(run_id)
+                token = await self.record_cancellation_owned(run_id, claim)
+                if token is not None:
+                    # The scheduling task is the claim's one owner, so it,
+                    # not a component, decides to keep this authority.
+                    claim.adopt(token)
                 raise
             span.set_attribute("outcome", outcome.outcome)
             if outcome.failure_category is not None:
                 span.set_attribute("failure_category", outcome.failure_category)
+            if outcome.quality_branch is not None:
+                span.set_attribute("quality_branch", outcome.quality_branch)
+            if outcome.terminal is not None:
+                span.set_attribute("terminal", outcome.terminal)
+
+    async def record_cancellation_owned(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
+        """Record a cancellation from a task named for the run (INV-9).
+
+        Returns
+        -------
+        ClaimToken | None
+            The authority the committed write used, or ``None`` when the
+            write did not land or was already recorded.
+        """
+        return await self._writes.record_owned(run_id, claim)
 
     def _record_pending_depth(self) -> None:
         """Report bounded work waiting beyond the execution capacity."""

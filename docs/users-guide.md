@@ -176,6 +176,43 @@ file. The response includes an entity tag and attachment filename. This path
 deliberately bypasses QA: the run and TEI revision are marked `skipped`, and
 the output remains an editorial draft until a later review and approval flow.
 
+#### Generate a QA-gated draft
+
+QA-gated runs are available only where the deployment configures QA evaluators.
+Production keeps the existing `422 quality_mode_unsupported` until Chrono is
+bound in roadmap item 4.4.2, so a request can never spend inference on a branch
+that cannot pass.
+
+Where evaluators exist, create a run with `quality_mode` set to `qa_gated` and
+no `skip_qa_rationale`; the server rejects a rationale with `400` and constraint
+`exclusive_with_quality_mode`. The `202 Accepted` representation reports
+`qa_status` as `pending`.
+
+Poll the run until it is terminal:
+
+- `succeeded` with `qa_status=passed` means every evaluator passed and the TEI
+  was written. The TEI envelope reports `quality_mode` as `qa_gated` and
+  `qa_status` as `passed`.
+- `failed` with `qa_status=failed` and `error_category=qa.escalation_required`
+  means evaluation did not pass. No TEI is written, so episode TEI retrieval
+  returns `404`, but the run's inference cost is still recorded.
+- A run that fails before any QA decision keeps `qa_status=pending`: a draft
+  error (`provider.*` or `tei.invalid`), an evaluator set that is unavailable
+  at execution time (`qa.unavailable`), and a shutdown cancellation
+  (`launcher.shutdown`) all end `failed` with `pending`, because no verdict was
+  ever reached.
+
+The `qa.escalated` event is the stable signal that a run escalated; the
+`qa.escalation_required` category is specific to this release. Evaluator errors
+and timeouts are recorded as inconclusive verdicts with an error type on
+`qa.result`, and they count toward the evaluator-error metric rather than the
+draft-error metric. Treat a rising evaluator-error rate as an adapter problem,
+not as QA rejecting drafts.
+
+Roadmap item 4.4.4 will make `paused` a reachable run status for an escalated
+run that awaits human review. Client code that polls until a terminal status
+should already treat `paused` as "action needed" rather than waiting forever.
+
 #### Show notes and chapter markers
 
 Show notes are the episode summaries and topic lists that appear alongside a
@@ -485,6 +522,9 @@ identifier derived from the exception type; it does not log the type name or
 exception message. Metrics continue to use only the bounded category label.
 
 ### Migration note for the next minor release
+
+See [Migrating to Episodic 0.2.0](migration-0.2.0.md) for the release upgrade
+steps, including the QA-gated generation changes.
 
 Before upgrading to the next minor release, apply the new Alembic revisions.
 Production API clients must configure the bearer token and principal settings
@@ -975,6 +1015,9 @@ the snapshot.
 A missing pinned snapshot or a stored row that no longer matches its content
 hash fails the generation under the stable `cost.pricing_snapshot` category. An
 invalid card stops the process at startup with an error naming the file.
+
+See [Migrating to Episodic 0.2.0](migration-0.2.0.md) for the release upgrade
+steps, including the QA-gated generation changes.
 
 Upgrading a deployment that holds `2.4.4` rows is stop-the-world. Stop every
 writer first: scale launchers, workers, and API pods to zero, and wait for

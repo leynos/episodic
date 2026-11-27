@@ -278,6 +278,10 @@ class GenerationRunLeaseReclamationMixin(_MixinBase):
                 ended_at=now,
                 error_message=_LEASE_ERROR_MESSAGE,
                 error_category=_LEASE_ERROR_CATEGORY,
+                # The candidate select ran under the same row lock, so the
+                # stored claim is what authorizes this terminal write. Passing
+                # it satisfies the store's terminal-claim gate.
+                claim_token=record.claim_token,
             ),
         )
         record.updated_at = now

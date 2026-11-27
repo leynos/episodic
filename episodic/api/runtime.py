@@ -47,6 +47,24 @@ from .runtime_config import (
 if typ.TYPE_CHECKING:
     from falcon import asgi
 
+    from episodic.canonical.generation_graph_ports import (
+        ContentGenerationGraphPort,
+    )
+    from episodic.canonical.object_store import ObjectStorePort
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+    from episodic.llm import LLMPort
+    from episodic.observability import MetricsPort, TracerPort, ValueMetricsPort
+
+    from .types import UowFactory
+
+
+from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
+from episodic.orchestration import LangGraphContentGenerationGraph
+
+"""Granian runtime composition root for the Falcon ASGI service."""
+if typ.TYPE_CHECKING:
+    from falcon import asgi
+
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.llm import LLMPort
@@ -61,6 +79,7 @@ class _GenerationLauncherRuntime:
 
     metrics: ValueMetricsPort
     tracer: TracerPort
+    content_graph: ContentGenerationGraphPort
     object_store: ObjectStorePort | None = None
 
 
@@ -177,6 +196,7 @@ def _build_generation_launcher(
 
     return InProcessGenerationRunLauncher(
         uow_factory=uow_factory,
+        content_graph=runtime.content_graph,
         draft_generator=LLMDraftScriptGenerator(
             llm=llm_port,
             config=LLMDraftScriptGeneratorConfig(
@@ -269,7 +289,7 @@ def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
     return probe_kwargs
 
 
-def create_app_from_env() -> asgi.App:
+def create_app_from_env() -> asgi.App:  # ruff: ignore[too-many-locals]  # Composition root wiring.
     """Build the Falcon ASGI service from environment configuration."""
     metrics, tracer = configure_structured_observability(
         os.environ.get("EPISODIC_LOG_LEVEL")
@@ -282,6 +302,7 @@ def create_app_from_env() -> asgi.App:
     )
     object_store = FilesystemObjectStore(config.source_intake_object_store_root)
     llm_port = _build_llm_port(config, tracer=tracer, metrics=metrics)
+    content_graph = LangGraphContentGenerationGraph(QualityEvaluatorSet(()))
     if llm_port is None:
         launcher = None
         shutdown_hooks = (shutdown_hook,)
@@ -292,6 +313,7 @@ def create_app_from_env() -> asgi.App:
             _GenerationLauncherRuntime(
                 metrics=metrics,
                 tracer=tracer,
+                content_graph=content_graph,
                 object_store=object_store,
             ),
             config=config,
@@ -320,5 +342,6 @@ def create_app_from_env() -> asgi.App:
                 token=config.authorization_bearer_token,
                 principal_id=config.authorization_principal_id,
             ),
+            accepted_quality_modes=content_graph.accepted_quality_modes(),
         )
     )

@@ -209,6 +209,42 @@ through `tests/conftest.py`.
   bootstrap unless py-pglite compatibility has been re-verified for the current
   dependency set.
 
+### Real-PostgreSQL tests for multi-connection behaviour
+
+py-pglite serves one connection at a time: a second session fails to connect
+with `psycopg.errors.ConnectionTimeout` even while the first is idle. Any test
+that needs two concurrent transactions therefore has to run against a real
+server. `tests/canonical_storage/test_generation_run_claim_concurrency.py` is
+the worked example. It runs only when `EPISODIC_TEST_POSTGRES_DSN` names a
+disposable server whose base database ends in `_test`, and skips otherwise. The
+DSN must select the psycopg async driver, for example
+`postgresql+psycopg://user:secret@127.0.0.1:5432/episodic_test`.
+
+The fixture in `tests/canonical_storage/_postgres_claim_race_support.py` does
+not touch the base database's schema. Every fixture invocation creates its own
+`<database>_w<worker>_<pid>_<nonce>` database, migrates it, and drops only that
+database at teardown. The nonce makes the name unique per invocation, so two
+independent pytest runs on the same server cannot select the same database, and
+parallel xdist workers cannot reset each other's schema. The name is truncated
+by UTF-8 bytes, not characters, so the suffix survives a multibyte base name
+inside PostgreSQL's 63-byte identifier limit. Creation never drops an existing
+database: a name collision fails the test rather than destroying data.
+
+Every server-backed test and fixture goes through `require_dsn`, which skips
+when the variable is unset and fails when the base database does not end in
+`_test`, so the guard protects every path that creates or drops a database. The
+DSN user must be allowed to create and drop databases. Because Alembic's
+environment context is process-global, migrations started from one process are
+serialized with an `asyncio.Lock`; separate processes still migrate in parallel
+against their own databases. A test runs two invocations concurrently and
+asserts each owns a distinct database that survives until its own teardown.
+
+The tests synchronize on the database, not on a sleep: after starting the
+competing claim they poll `pg_stat_activity` until a backend reports a lock
+wait, which proves the competitor reached PostgreSQL and was refused the row
+lock. They are evidence for row-locking behaviour, not a replacement for the
+py-pglite suite that `make test` runs by default.
+
 ## 8. Maintenance guidance
 
 When changing the database-test approach, keep these files in sync:

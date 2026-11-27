@@ -1000,63 +1000,61 @@ persistence land in later roadmap items.
 
 ### Content Generation Graph
 
-The content generation workflow operates as a cyclic StateGraph with the
-following node structure:
+The content generation workflow is a compiled LangGraph `StateGraph`. Roadmap
+item `4.4.1` implements its first slice: a quality branch immediately after
+`initialize` that either persists a no-QA draft directly or evaluates a
+QA-gated candidate before persistence or escalation. ADR 0029 records the
+decisions.
 
-1. **Initialize:** Load series profile, episode template, and canonical TEI
-   sources; construct the initial prompt scaffold; validate the requested
-   quality mode.
-2. **Generate:** Invoke `LLMPort` to produce draft content, show notes, and
-   guest biographies and enrichments.
-3. **Quality branch:** Route `draft_without_qa` runs directly to draft
-   persistence with QA status recorded as skipped. Route QA-gated runs to the
-   evaluator branch.
-4. **Evaluate (parallel branch):** Execute Pedante, Bromide, Chiltern, Anthem,
-   and Caesura checks, plus Chrono runtime estimation, concurrently; aggregate
-   results.
-5. **Route:** Conditional edge based on evaluation outcome:
-   - If all evaluators pass thresholds, proceed to **Prepare for Approval**.
-   - If evaluators fail but iteration count is below limit, proceed to
-     **Refine**.
-   - If iteration limit exceeded, proceed to **Escalate**.
-6. **Refine:** Construct remediation prompts from QA findings; return to
-   **Generate**.
-7. **Persist Draft:** Write generated script content into canonical TEI with
-   the generation run id, quality mode, content hash, and QA status.
-8. **Prepare for Approval:** Package content for human review; create
-   checkpoint.
-9. **Escalate:** Create review tasks for human intervention; pause graph.
+The implemented topology gives each branch its own nodes and terminal; only
+`initialize` is shared:
 
-For screen readers: Diagram showing the episodic content generation workflow
-from Initialize through Generate, Quality Mode, Persist Draft, Evaluate,
-Aggregate, Route, Refine, Escalate, Prepare for Approval, and Human Review.
+1. **Initialize:** Claim and hydrate the run, then validate the requested
+   quality mode. A QA-gated run on a deployment with no evaluators fails here,
+   before any generation spend.
+2. **Quality branch:** Route `draft_without_qa` to
+   `generate_draft_without_qa`. Route `qa_gated` to `generate_qa_candidate`.
+3. **Generate:** Invoke `LLMPort` to produce the branch's draft, and validate
+   the result as TEI before evaluation or persistence.
+4. **Evaluate (QA-gated):** Run each configured evaluator under its timeout,
+   isolate errors and timeouts as inconclusive results, and aggregate with "all
+   must pass".
+5. **Route (QA-gated):** A pass proceeds to `persist_qa_passed_draft`. Any
+   other verdict proceeds to `escalate`.
+6. **Persist:** Write TEI with the run identifier, quality mode, content hash,
+   and QA status (`skipped` or `passed`). No TEI is written for an escalation.
+7. **Escalate:** Fail the run with `qa.escalation_required`, record the
+   provider cost, and emit `qa.escalated`. The candidate draft stays in the run
+   session's memory.
+
+Later roadmap items extend the evaluation branch without changing this shape:
+
+- `4.4.2` binds Chrono and other evaluators in-loop.
+- `4.4.3` adds refinement and iteration caps, re-entering
+  `generate_qa_candidate`.
+- `4.4.4` replaces the failing escalate terminal with a paused run and a
+  persisted escalation checkpoint.
+- `4.2.1` adds the approval state machine and `Prepare for Approval`.
+
+For screen readers: Diagram showing the implemented content generation graph.
+Initialize forks into two branches. The no-QA branch runs Generate Draft
+Without QA and then Persist Draft Without QA. The QA-gated branch runs Generate
+QA Candidate, then Evaluate, then routes to either Persist QA-Passed Draft when
+every evaluator passes, or Escalate otherwise. Every terminal ends the graph.
 
 ```mermaid
 flowchart TD
-    A[Initialize] --> B[Generate]
-    B --> C{Quality Mode}
-    C -->|draft_without_qa| P[Persist Draft]
-    C -->|qa_gated| Q{Evaluate}
-    Q -->|Parallel| D1[Pedante]
-    Q -->|Parallel| D2[Bromide]
-    Q -->|Parallel| D3[Chiltern]
-    Q -->|Parallel| D4[Anthem]
-    Q -->|Parallel| D5[Caesura]
-    Q -->|Parallel| D6[Chrono]
-    D1 --> E[Aggregate]
-    D2 --> E
-    D3 --> E
-    D4 --> E
-    D5 --> E
-    D6 --> E
-    E --> F{Route}
-    F -->|Pass| P
-    F -->|Fail, retries remain| H[Refine]
-    F -->|Fail, limit exceeded| I[Escalate]
-    H --> B
-    P --> G[Prepare for Approval]
-    G --> J((Checkpoint))
-    I --> K((Human Review))
+    A[Initialize] --> C{Quality Mode}
+    C -->|draft_without_qa| B1[Generate Draft Without QA]
+    B1 --> P1[Persist Draft Without QA]
+    P1 --> E1((End))
+    C -->|qa_gated| B2[Generate QA Candidate]
+    B2 --> Q[Evaluate]
+    Q --> F{Route}
+    F -->|Pass| P2[Persist QA-Passed Draft]
+    P2 --> E2((End))
+    F -->|Failed or inconclusive| I[Escalate]
+    I --> E3((End))
 ```
 
 ### Source-to-script vertical slice
@@ -1104,10 +1102,16 @@ the request uses `Accept: application/tei+xml`; this response uses the TEI
 media type registered by RFC 6129 and includes
 `Content-Disposition: attachment`.
 
-Generation creation accepts only `draft_without_qa`; the run and episode both
-record skipped-QA provenance and the supplied rationale. Recognized but
-unsupported QA-gated requests return `422`, malformed requests return `400`,
-and TEI retrieval returns `404` before generation has persisted a draft.
+Generation creation accepts `draft_without_qa` everywhere. It accepts
+`qa_gated` only where the deployment configures at least one QA evaluator; the
+accepted set comes from the launcher graph, so REST and execution cannot
+disagree. A no-QA run records `qa_status=skipped` and the supplied rationale. A
+QA-gated run records `qa_status=pending`, must not carry a rationale, and moves
+to `passed` or `failed` through evaluation. An unaccepted mode returns the
+unchanged `422 quality_mode_unsupported`, a gated request carrying
+`skip_qa_rationale` returns `400` with constraint
+`exclusive_with_quality_mode`, malformed requests return `400`, and TEI
+retrieval returns `404` before generation has persisted a draft.
 
 #### Episode TEI revision history
 
@@ -2551,14 +2555,19 @@ stateDiagram-v2
 3. The graph checks the requested quality mode. `draft_without_qa` runs skip
    evaluator nodes, record the bypass actor and rationale, and persist draft
    TEI with QA status set to skipped.
-4. For QA-gated runs, Pedante, Bromide, Chiltern, Anthem, and Caesura execute
-   in parallel as graph nodes, with Chrono supplying runtime estimates,
-   producing structured findings.
-5. Conditional edges route based on aggregated evaluation scores:
-   - Passing scores advance content to the approval checkpoint.
+4. For QA-gated runs, the implemented slice runs the configured evaluators one
+   at a time under a per-evaluator timeout and aggregates "all must pass".
+   Roadmap items `4.4.2` to `4.4.4` widen this: Pedante, Bromide, Chiltern,
+   Anthem, and Caesura execute in parallel as graph nodes, with Chrono
+   supplying runtime estimates, producing structured findings.
+5. Conditional edges route based on aggregated evaluation scores. The
+   implemented slice in `4.4.1` persists a passing draft or escalates a
+   non-passing one; the routing below is planned for `4.4.2` to `4.4.4`:
+   - Passing scores advance content to the approval checkpoint (planned).
    - Failing scores trigger refinement: the graph constructs targeted prompts
-     from QA findings and re-enters generation.
-   - Repeated failures escalate to human review with accumulated context.
+     from QA findings and re-enters generation (planned).
+   - Repeated failures escalate to human review with accumulated context
+     (planned; `4.4.1` escalates immediately on a non-passing verdict).
 6. Generated artefacts persist alongside confidence scores, iteration counts,
    and content hashes.
 7. Human-in-the-loop checkpoints pause the graph for editorial review; editors

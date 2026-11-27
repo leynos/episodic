@@ -1296,6 +1296,14 @@ Key expectations:
   any individual database test that approaches the limit repeatedly.
 - `EPISODIC_TEST_DB=sqlite` disables the py-pglite fixtures (tests that depend
   on them will be skipped).
+- The opt-in real-PostgreSQL tests run only when `EPISODIC_TEST_POSTGRES_DSN`
+  names a server. The DSN must select the psycopg async driver, and its base
+  database must end in `_test`. Each fixture invocation creates its own
+  uniquely named database and drops only that database at teardown, so the user
+  needs `CREATE DATABASE` (and `DROP DATABASE`) permission. See
+  `tests/canonical_storage/_postgres_claim_race_support.py` for the guard that
+  enforces the `_test` suffix, and
+  `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md` for the full procedure.
 - If a non-SQLite backend is requested while py-pglite is unavailable, the
   fixtures raise a clear error instead of silently skipping tests.
 - `make check-migrations` uses the same database technology, but a separate
@@ -1392,19 +1400,21 @@ The enforced groups are:
   Falcon API modules and worker topology.
 - `logging_internals`: private logger backend protocols used by the port. This
   group has no dependency on the femtologging backend.
-- `domain_ports`: canonical domain types, canonical ports, ingestion ports,
-  canonical constraint names, LLM ports, and the cost domain. The cost modules
-  belong here because each states a domain rule or a port rather than an
-  adapter: `episodic.cost.primitives` holds the value types,
-  `episodic.cost.ports` the ledger and usage contracts, `episodic.cost.engine`
-  the pricing arithmetic, `episodic.cost.pricing_snapshot` and its `_hash`,
-  `_ports`, and `_values` siblings the snapshot identity and integrity rules,
-  and `episodic.json_canonicalization` the shared canonical encoding those
-  hashes depend on. `tests/test_production_hecate_cost_config.py` is the
-  regression guard: it asserts each of those modules is still grouped as
-  `domain_ports`, that the group may depend only on itself and `logging_port`,
-  that it is matched before `outbound_adapter`, and that every cost module —
-  adapters and the catalogue included — keeps its intended group.
+- `domain_ports`: canonical domain types, canonical ports
+  (`episodic.canonical.generation_graph_ports`, `generation_routing` and
+  `generation_claim` among them), ingestion ports, canonical constraint names,
+  LLM ports, and the cost domain. The cost modules belong here because each
+  states a domain rule or a port rather than an adapter:
+  `episodic.cost.primitives` holds the value types, `episodic.cost.ports` the
+  ledger and usage contracts, `episodic.cost.engine` the pricing arithmetic,
+  `episodic.cost.pricing_snapshot` and its `_hash`, `_ports`, and `_values`
+  siblings the snapshot identity and integrity rules, and
+  `episodic.json_canonicalization` the shared canonical encoding those hashes
+  depend on. `tests/test_production_hecate_cost_config.py` is the regression
+  guard: it asserts each of those modules is still grouped as `domain_ports`,
+  that the group may depend only on itself and `logging_port`, that it is
+  matched before `outbound_adapter`, and that every cost module — adapters and
+  the catalogue included — keeps its intended group.
 - `application`: canonical services, profile/template workflows,
   reference-document workflows, generation services, and the QA evaluator
   runtimes (`episodic.qa.chrono` with its LangGraph adapters), which adapt
@@ -1416,9 +1426,12 @@ The enforced groups are:
   `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
 - `orchestration_nodes`: `episodic.orchestration._graph_nodes`,
   `episodic.orchestration._graph_protocols`,
-  `episodic.orchestration._graph_state`, and `episodic.orchestration._usage`.
-  This group may depend on the `orchestration_checkpoint` DTO group and
-  `domain_ports`, and must be ordered before the broader `orchestration` group.
+  `episodic.orchestration._graph_state`,
+  `episodic.orchestration._content_graph_nodes`,
+  `episodic.orchestration._content_graph_state`, and
+  `episodic.orchestration._usage`. This group may depend on the
+  `orchestration_checkpoint` DTO group and `domain_ports`, and must be ordered
+  before the broader `orchestration` group.
 - `orchestration_checkpoint`: `episodic.orchestration._dto`,
   `episodic.orchestration._action_result_dto`,
   `episodic.orchestration._result_dto`,
@@ -1427,10 +1440,11 @@ The enforced groups are:
   `episodic.orchestration._payload_dto`, the provider-neutral checkpoint
   payload DTO and serialization modules.
 - `orchestration`: LangGraph builders, planning orchestration, tool execution
-  policy, and `episodic.orchestration.langgraph_costs`, which records provider
-  costs for the direct generation path. This broad group excludes the dedicated
-  node group and may depend on `orchestration_nodes` because graph builders and
-  the public facade assemble and expose those nodes.
+  policy, `episodic.orchestration.content_generation` (the content-generation
+  graph runner), and `episodic.orchestration.langgraph_costs`, which records
+  provider costs for the direct generation path. This broad group excludes the
+  dedicated node group and may depend on `orchestration_nodes` because graph
+  builders and the public facade assemble and expose those nodes.
 - `orchestration_tasks`: Celery task entrypoints.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
@@ -2578,7 +2592,7 @@ serves the persisted episode TEI as JSON by default or raw
 `application/tei+xml` with content negotiation.
 
 `InProcessGenerationRunLauncher` (`episodic/generation/launcher.py`) is the
-orchestration boundary over three purpose-shaped components.
+orchestration boundary over four purpose-shaped components.
 `GenerationRunScheduler` (`launcher_scheduling.py`) owns the task set,
 admission limits, execution semaphore, cancellation bookkeeping, and the
 pending-depth and admission metrics. `GenerationRunClaimer`
@@ -2586,31 +2600,40 @@ pending-depth and admission metrics. `GenerationRunClaimer`
 limits, clock, draft generator, and metrics, and owns claim, hydration and
 draft generation. `GenerationRunPersistence` (`launcher_persistence.py`) takes
 the unit-of-work factory, clock, cost-recorder factory, provider metadata and
-metrics, and owns draft events, TEI persistence, costs and terminal status.
-Each component is a dataclass with explicit constructor collaborators, so unit
-tests construct it with fakes rather than a launcher. The launcher builds the
-long-lived scheduler in `__post_init__` and, for each run, builds the stateless
-claimer and persistence components over live views of its fields. It delegates
-`launch`, `drain`, `shutdown` and `scheduled_run_count` to the scheduler, and
-keeps the claim-generate-persist sequence plus failure classification in
-`_execute_run`.
+metrics, and owns draft events, TEI persistence, costs and successful terminal
+status. `GenerationRunFailurePersistence` (`launcher_failure.py`) owns failed
+terminal writes: it obtains authority from a claim token, a reconciled claim or
+a pending-to-running claim inside the same transaction as the write, appends
+the failure events including an escalation's `qa.result` and `qa.escalated`,
+records the supplied draft's costs, and emits the terminal metric and log only
+after the commit. Each component is a dataclass with explicit constructor
+collaborators, so unit tests construct it with fakes rather than a launcher.
+The launcher builds the long-lived scheduler in `__post_init__` and, for each
+run, builds the stateless claimer and persistence components over live views of
+its fields. It delegates `launch`, `drain`, `shutdown` and
+`scheduled_run_count` to the scheduler, and keeps the graph invocation plus
+failure classification in `_execute_run`: it reads the run's quality mode, runs
+the content-generation graph with a `_LauncherRunSession` step port, and
+reports the branch and terminal on the execution span. The runtime views live in
+`launcher_runtime_views.py`.
 
 Each component reads its collaborators through a narrow live view supplied by
-the launcher (`_LauncherClaimerRuntime`, `_LauncherPersistenceRuntime`,
-`_LauncherSourceLoadRuntime` and `_LauncherSchedulerRuntime`), and reads each
-one at the stage that uses it. That preserves the base's use-time behaviour:
-assigning `draft_generator`, `source_limits`, `metrics`, `tracer`,
-`cost_recorder_factory`, `clock` or another collaborator while a run is at any
-stage affects the later reads in that run, not only the next run.
-`source_from_document` is resolved when a run hydrates, so a patch applied to
-`launcher.py` at any point before hydration is observed. `BoundedSourceLoader`
-implements the `GenerationSourceLoader` seam and reads the object store and
-limits for each document it loads, so a change made while one document is
-loading applies to the next. The scheduler keeps its task registry and
-cancellation bookkeeping across view changes, and a changed `max_concurrency`
-affects admission but does not resize the semaphore created at construction, as
-before. Replacing the mixins with injected scheduling, claim and persistence
-components was tracked in [#350](https://github.com/leynos/episodic/issues/350).
+`episodic/generation/launcher_runtime_views.py` (`_LauncherClaimerRuntime`,
+`_LauncherPersistenceRuntime`, `_LauncherSourceLoadRuntime` and
+`_LauncherSchedulerRuntime`), and reads each one at the stage that uses it.
+That preserves the base's use-time behaviour: assigning `draft_generator`,
+`source_limits`, `metrics`, `tracer`, `cost_recorder_factory`, `clock` or
+another collaborator while a run is at any stage affects the later reads in
+that run, not only the next run. `source_from_document` is resolved when a run
+hydrates, so a patch applied to `launcher.py` at any point before hydration is
+observed. `BoundedSourceLoader` implements the `GenerationSourceLoader` seam
+and reads the object store and limits for each document it loads, so a change
+made while one document is loading applies to the next. The scheduler keeps its
+task registry and cancellation bookkeeping across view changes, and a changed
+`max_concurrency` affects admission but does not resize the semaphore created
+at construction, as before. Replacing the mixins with injected scheduling,
+claim and persistence components was tracked in
+[#350](https://github.com/leynos/episodic/issues/350).
 
 `episodic.canonical.episode_factory.build_draft_episode` owns the common
 initial field set for new draft episodes. Ingestion services call it after they
@@ -2714,11 +2737,128 @@ shutdown calls launcher shutdown, then closes the LLM provider, and only then
 disposes the database engine. After the drain, shutdown applies a fallback
 cancellation write for each task that was unfinished when cancellation began.
 This covers tasks cancelled before `_run_task` starts; terminal-state guards
-prevent duplicate failure events when the task handled cancellation itself. The
-launcher emits a `generation_run.execute` span and bounded terminal,
-draft-error, QA-bypass, and latency metrics; the API command span and stable
-failure categories provide the corresponding request and outcome trace without
-unbounded run identifiers in metric labels.
+prevent duplicate failure events when the task handled cancellation itself.
+Both shutdown waits are bounded: the scheduler by
+`cancellation_write_timeout_seconds` and the claimer by its own
+`reconcile_timeout_seconds`, each defaulting to 10 seconds and independently
+configurable. A shielded write that does not finish is abandoned rather than
+cancelled, and each miss increments
+`generation_run_cancellation_write_timeouts_total`. The failure component
+reconciles inside the caller's unit of work rather than opening a second one,
+and QA outcome metrics are published only after the terminal write succeeds. An
+unverified claim is never adopted, so recovery depends on the run's shape: a
+run whose earlier execution claim committed is running with that claim's lease
+and is recovered by expired-lease reclamation, while a failure-only claim
+commits with its terminal write and a stalled one leaves the run pending for
+the next launcher's compare-and-set. During shutdown, run tasks are bounded by
+the same deadline, because a unit of work's rollback or session close can stall
+after cancellation arrives; that case increments
+`generation_run_shutdown_task_timeouts_total`. A normal `drain()` remains
+unbounded, rechecking both registries until both are empty, and returns only
+once the work has finished. A transaction that stalls while holding the row
+lock is recovered by terminating its backend, which aborts the transaction and
+releases the row for the next claim. The launcher emits a
+`generation_run.execute` span and bounded terminal, draft-error, QA-bypass, and
+latency metrics; the API command span and stable failure categories provide the
+corresponding request and outcome trace without unbounded run identifiers in
+metric labels.
+
+### Content-generation graph and quality routing
+
+`episodic.orchestration.content_generation.LangGraphContentGenerationGraph`
+implements `ContentGenerationGraphPort`. Its `run` takes a
+`ContentGenerationRequest` (run id and quality mode) plus a
+`ContentGenerationSteps` implementation, and returns the terminal name. The
+graph owns topology only: every side effect arrives through the steps port, so
+the same graph can be driven by the launcher or by a test double.
+
+- **Ports.** `QualityEvaluatorPort` is the evaluator seam; a
+  `QualityEvaluatorSet` carries the configured evaluators and their timeout.
+  `ContentGenerationSteps` exposes `initialize`, `generate_draft`,
+  `begin_evaluation`, `evaluation_subject`, `complete_with_draft` and
+  `escalate`. The launcher's `_LauncherRunSession` implements that port over
+  the claim, persistence and failure components.
+- **Topology.** A shared `initialize` node runs once, then a conditional edge
+  routes on the quality mode. Both branches generate a draft:
+  `draft_without_qa` generates one and goes straight to the persist-without-QA
+  terminal, while `qa_gated` generates a candidate, records `begin_evaluation`,
+  evaluates, and reaches either the persisted or the escalated terminal. The
+  conditional edge's targets are exactly its declared `path_map`, and the
+  topology test pins that.
+- **Routing policy.** `episodic.canonical.generation_routing.route_quality_mode`
+  and `QualityVerdict` decide the branch. `aggregate_verdicts` is fail-closed:
+  any failed evaluation fails the gate, and an error-tagged pass is treated as
+  inconclusive rather than passing.
+- **Adding an evaluator.** Implement `QualityEvaluatorPort`, include it in the
+  `QualityEvaluatorSet` the composition root builds, and add it to the QA-gated
+  matrix test's expectations. No graph change is needed.
+- **Claims.** A `RunClaim` takes an optional `proof_factory`, defaulting to
+  `uuid.uuid4`, so a test can supply a deterministic per-attempt proof; the
+  launcher injects its `source_document_loader` the same way, defaulting to the
+  module's patchable seam. `episodic.canonical.generation_claim.ExecutionClaim`
+  is the pending-to-running command: the node it starts, the lease bounds, and
+  a per-attempt `claim_token`. `ClaimToken(run_id, proof)` is the launcher's
+  proof that this attempt won that transition. Every terminal write names it:
+  `GenerationRunStatusUpdate.claim_token` carries the proof, and both store
+  adapters compare it with the stored value under the row lock, raising
+  `RunClaimMismatch` for an absent or different token. A run with no stored
+  claim — a launch failure before any claim, or a reclamation candidate — has
+  no owner to check, so an internal path may still terminate it. A
+  launcher-side guard also refuses a token naming a different run.
+- **Capability gate.** `ContentGenerationGraphPort.accepted_quality_modes()`
+  feeds `ApiDependencies.accepted_quality_modes` and
+  `GenerationRunsResourceConfig`. The REST layer applies, in order: parser body
+  rules, then the capability `422`, the budget check and the gated-rationale
+  `400`. A keyless request, and a keyed `draft_without_qa` request, validate
+  and resolve the launcher **before** idempotency, so a body error or a removed
+  launcher is reported ahead of a reused key and a missing launcher is a `503`.
+  A keyed `qa_gated` request validates inside the idempotent work, so a
+  rejected request releases its key and a stored `202` still replays after the
+  capability is withdrawn; a conflict reports its `409` without a second
+  validation pass.
+- **Launcher components.** `GenerationRunClaimer` (`launcher_claim.py`)
+  claims and hydrates; `GenerationRunPersistence` (`launcher_persistence.py`)
+  owns the draft, evaluation-start and success writes;
+  `GenerationRunFailurePersistence` (`launcher_failure.py`) owns terminal
+  failure writes and observation. `launcher_scheduling.py` owns admission, the
+  execution semaphore, task retention and shutdown;
+  `launcher_cancellation_writes.py` holds `CancellationWrites`, which owns the
+  shielded cancellation writes, their pending and cancelled sets, the timeout
+  getter each wait applies, the timeout counter and the drain. The scheduler
+  delegates every write through `record_cancellation_owned`, which is the
+  single seam for cancellation bookkeeping. The timeout is read from the live
+  runtime view when each wait starts, so a changed deadline bounds the next
+  write and the shutdown drain alike.
+- **Run session seams.** `launcher_session.py` defines `_LauncherRunSession`
+  (the `ContentGenerationSteps` implementation) plus the narrow Protocols it
+  depends on — `ClaimerSteps`, `FailureSteps`, `SessionPersistenceSteps` — and
+  `RunNotClaimedError`, which tells the launcher the claim was lost:
+  `initialize` raises it before any inference is spent, and `escalate` raises
+  it when the store refuses the escalation write. `launcher_quality.py` holds
+  `QaOutcome`, `qa_result_payload` and `record_qa_metrics`; the session records
+  QA outcome metrics only after the terminal write commits.
+- **Terminal claim gate.** `generation_run_terminal_claim.py` holds
+  `require_terminal_claim`, the one rule both store adapters apply to a
+  terminal write: a stored claim token must equal the update's, and a run with
+  no stored claim may still be terminated by an internal path.
+  `generation_run_claim_store.py` holds `InMemoryClaimTokens`, the reference
+  adapter's token map. `RunClaimMismatch` is the refusal both adapters raise.
+- **QA failure categories.** `qa.unavailable` means a QA-gated run had no
+  evaluator to consult and fails closed before spending inference;
+  `qa.escalation_required` is the terminal for a gated run whose aggregated
+  verdict did not pass, and it keeps the provider cost of the draft it rejected.
+- **QA metrics.** `generation_run_qa_bypass_total` (label `quality_mode`)
+  counts claimed runs that skip QA; `generation_run_qa_gate_total` (label
+  `verdict`) counts the aggregate gate verdict recorded after the terminal
+  write commits; `generation_run_qa_evaluator_errors_total` (label `evaluator`)
+  counts evaluator faults that produced an inconclusive result.
+  `generation_run_qa_evaluation_latency_ms` (labels `evaluator` and `verdict`)
+  observes each evaluator once, whatever its outcome, so a slow or failing
+  evaluator is visible separately from the aggregate gate. Alert on its p95
+  against the configured `evaluator_timeout_seconds`: a p95 approaching that
+  timeout predicts inconclusive results and QA escalations, and a rising
+  `verdict="inconclusive"` share alongside it points at the evaluator rather
+  than at draft quality.
 
 ### Manual recovery of expired generation-run leases
 

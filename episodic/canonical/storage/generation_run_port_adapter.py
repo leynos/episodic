@@ -25,6 +25,7 @@ if typ.TYPE_CHECKING:
         GenerationRunStatus,
         JsonMapping,
     )
+    from episodic.canonical.generation_claim import ExecutionClaim
     from episodic.canonical.generation_run_ports import (
         EventSeq,
         GenerationRunStatusUpdate,
@@ -112,18 +113,14 @@ class SqlAlchemyGenerationRunPortAdapter:
     async def claim_run_for_execution(
         self,
         run_id: uuid.UUID,
-        *,
-        current_node: str | None,
-        started_at: dt.datetime,
-        lease_expires_at: dt.datetime | None,
+        claim: ExecutionClaim,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
-        return await self._runs.claim_run_for_execution(
-            run_id,
-            current_node=current_node,
-            started_at=started_at,
-            lease_expires_at=lease_expires_at,
-        )
+        return await self._runs.claim_run_for_execution(run_id, claim)
+
+    async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the token of the claim that owns a run, if any."""
+        return await self._runs.claim_token_for(run_id)
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def append_event(

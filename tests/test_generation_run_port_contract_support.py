@@ -17,6 +17,7 @@ if typ.TYPE_CHECKING:
         GenerationRunStatus,
         JsonMapping,
     )
+    from episodic.canonical.generation_claim import ExecutionClaim
     from episodic.canonical.generation_run_ports import (
         EventSeq,
         GenerationRunStatusUpdate,
@@ -92,10 +93,7 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
     async def claim_run_for_execution(
         self,
         run_id: uuid.UUID,
-        *,
-        current_node: str | None,
-        started_at: dt.datetime,
-        lease_expires_at: dt.datetime | None,
+        claim: ExecutionClaim,
     ) -> GenerationRun | None:
         """Reject every execution claim because no run is stored.
 
@@ -103,12 +101,8 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         ----------
         run_id
             Identifier of the run to claim.
-        current_node
-            Worker node that would own the claim.
-        started_at
-            Timestamp at which execution would start.
-        lease_expires_at
-            Optional timestamp at which the execution lease would expire.
+        claim
+            The claim attempt, ignored here.
 
         Raises
         ------
@@ -116,6 +110,11 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
             Always, because this implementation stores no runs.
         """
         raise RunNotFound(run_id)
+
+    async def claim_token_for(self, run_id: uuid.UUID) -> uuid.UUID | None:
+        """Report that no run holds a claim because none is stored."""
+        _ = run_id
+        return None
 
     async def fail_expired_leases(
         self,

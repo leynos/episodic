@@ -56,8 +56,27 @@ async def run_idempotent(
     *,
     context: IdempotencyContext,
     work: cabc.Callable[[], cabc.Awaitable[IdempotentResponse]],
+    precondition: cabc.Callable[[], None] | None = None,
 ) -> IdempotentResponse:
-    """Run HTTP work once or return a stored adapter-level replay outcome."""
+    """Run HTTP work once or return a stored adapter-level replay outcome.
+
+    ``precondition`` runs after a stored replay has been ruled out and before
+    a conflict or in-flight outcome is reported. Request-shape errors therefore
+    keep their precedence over a reused key, while a completed replay still
+    returns its stored response. It is not applied to a newly acquired record:
+    the work itself validates, so a rejection can release the record.
+
+    Returns
+    -------
+    IdempotentResponse
+        The stored replay or the response produced by ``work``.
+
+    Raises
+    ------
+    falcon.HTTPBadRequest
+        If the idempotency key is missing, or ``precondition`` rejects the
+        request.
+    """  # ruff: ignore[docstring-missing-exception, docstring-extraneous-exception]  # validation_error builds the Falcon error.
     key = context.req.get_header("Idempotency-Key")
     if key is None or not key.strip():
         raise validation_error(
@@ -76,6 +95,8 @@ async def run_idempotent(
             )
         )
         await uow.commit()
+    if precondition is not None and isinstance(outcome, Conflict | InFlight):
+        precondition()
     return await _idempotent_response(uow_factory, outcome, work)
 
 

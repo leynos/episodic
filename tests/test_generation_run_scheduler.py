@@ -12,6 +12,7 @@ from episodic.generation.launcher_scheduling import (
     GenerationRunAdmissionError,
     GenerationRunScheduler,
 )
+from episodic.generation.launcher_support import ClaimToken
 from episodic.observability import RecordingTracer
 
 if typ.TYPE_CHECKING:
@@ -58,6 +59,7 @@ class _SchedulerRuntime:
     tracer: RecordingTracer = dc.field(default_factory=RecordingTracer)
     max_concurrency: int = 4
     max_pending_runs: int = 16
+    cancellation_write_timeout_seconds: float = 10.0
 
 
 @dc.dataclass(slots=True)
@@ -69,21 +71,36 @@ class _RecordingExecutor:
     )
     run_ids: list[uuid.UUID] = dc.field(default_factory=list)
 
-    async def __call__(self, run_id: uuid.UUID) -> ExecutionOutcome:
+    async def __call__(
+        self,
+        run_id: uuid.UUID,
+        claim: object,
+    ) -> ExecutionOutcome:
         """Record the run and return the configured outcome."""
+        _ = claim
         self.run_ids.append(run_id)
         return self.outcome
 
 
 @dc.dataclass(slots=True)
 class _RecordingCancellation:
-    """Cancellation recorder fake that captures run identifiers."""
+    """Cancellation recorder fake that captures run identifiers.
+
+    It reports the authority a real recorder would: a token naming the run,
+    which the scheduler then adopts onto the claim it owns.
+    """
 
     run_ids: list[uuid.UUID] = dc.field(default_factory=list)
 
-    async def record(self, run_id: uuid.UUID) -> None:
-        """Record one cancellation."""
+    async def record(
+        self,
+        run_id: uuid.UUID,
+        claim: object,
+    ) -> ClaimToken:
+        """Record one cancellation and report its authority."""
+        _ = claim
         self.run_ids += [run_id]
+        return ClaimToken(run_id)
 
 
 class _BlockingExecutor:
@@ -93,17 +110,24 @@ class _BlockingExecutor:
         """Create the event that signals when execution has started."""
         self.started = asyncio.Event()
 
-    async def __call__(self, run_id: uuid.UUID) -> ExecutionOutcome:
+    async def __call__(
+        self,
+        run_id: uuid.UUID,
+        claim: object,
+    ) -> ExecutionOutcome:
         """Block until the scheduler cancels the task."""
-        _ = run_id
+        _ = (run_id, claim)
         self.started.set()
         await asyncio.Event().wait()
         raise AssertionError
 
 
 def _scheduler(
-    executor: cabc.Callable[[uuid.UUID], cabc.Awaitable[ExecutionOutcome]],
-    recorder: cabc.Callable[[uuid.UUID], cabc.Awaitable[None]],
+    executor: cabc.Callable[
+        [uuid.UUID, object],
+        cabc.Awaitable[ExecutionOutcome],
+    ],
+    recorder: cabc.Callable[[uuid.UUID, object], cabc.Awaitable[ClaimToken]],
 ) -> GenerationRunScheduler:
     """Build a scheduler around explicit executor and recorder seams.
 

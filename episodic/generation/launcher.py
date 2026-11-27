@@ -1,15 +1,17 @@
-"""Schedule and execute bounded no-QA generation runs in the API process.
+"""Schedule and execute bounded generation runs in the API process.
 
 The public :class:`GenerationRunLauncher` port and
 :class:`InProcessGenerationRunLauncher` service connect the generation-run API
-resource to canonical run persistence. The launcher claims a
-:class:`~episodic.canonical.domain.GenerationRun`, loads its episode, source
-documents, and resolved presenter bindings through fresh
-:class:`~episodic.canonical.unit_of_work_protocols.CanonicalUnitOfWork`
-instances, then delegates draft creation to :class:`DraftScriptGenerator`.
-It records ordered lifecycle events, persists the generated TEI through
-``persist_draft_script``, records optional provider costs, and applies the
-immutable ``GenerationRunStatusUpdate`` command for terminal state changes.
+resource to canonical run persistence. Every run executes through the injected
+:class:`~episodic.canonical.generation_graph_ports.ContentGenerationGraphPort`
+(``content_graph``): the graph's nodes drive draft generation, evaluation and
+the terminal branch, and they reach their side effects through the per-run
+session in :mod:`episodic.generation.launcher_session`, which owns TEI
+persistence (``persist_draft_script``) and the ordered lifecycle events.
+Terminal failures are written by
+:class:`~episodic.generation.launcher_failure.GenerationRunFailurePersistence`;
+successes by
+:class:`~episodic.generation.launcher_persistence.GenerationRunPersistence`.
 
 Admission is bounded before an asyncio task is allocated, and strong task
 references support draining or cancellation. The launcher exposes metrics and
@@ -22,24 +24,45 @@ background task.
 The launcher is the orchestration boundary. Task admission and lifecycle live
 in :class:`~episodic.generation.launcher_scheduling.GenerationRunScheduler`,
 claim-and-hydrate logic lives in
-:class:`~episodic.generation.launcher_claim.GenerationRunClaimer`, and outcome
-persistence lives in
-:class:`~episodic.generation.launcher_persistence.GenerationRunPersistence`.
+:class:`~episodic.generation.launcher_claim.GenerationRunClaimer`, success
+persistence in
+:class:`~episodic.generation.launcher_persistence.GenerationRunPersistence`,
+and terminal failure writes in
+:class:`~episodic.generation.launcher_failure.GenerationRunFailurePersistence`.
 Each component takes its collaborators as constructor arguments; the launcher
 composes them once in ``__post_init__`` and translates a classified failure
 into the persisted terminal record.
 """
 
+import asyncio
 import dataclasses as dc
 import datetime as dt
 import typing as typ
 
+from episodic.canonical.generation_graph_ports import (
+    ContentGenerationGraphPort,
+    ContentGenerationRequest,
+)
+from episodic.canonical.generation_routing import (
+    GenerationTerminal,
+    route_quality_mode,
+    terminal_outcome,
+)
 from episodic.generation.launcher_claim import (
     DEFAULT_LEASE_SECONDS,
+    DEFAULT_RECONCILE_TIMEOUT_SECONDS,
     GenerationRunClaimer,
 )
+from episodic.generation.launcher_failure import GenerationRunFailurePersistence
+from episodic.generation.launcher_observations import record_run_observations
 from episodic.generation.launcher_persistence import GenerationRunPersistence
+from episodic.generation.launcher_runtime_views import (
+    _LauncherClaimerRuntime,
+    _LauncherPersistenceRuntime,
+    _LauncherSchedulerRuntime,
+)
 from episodic.generation.launcher_scheduling import (
+    DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS,
     DEFAULT_MAX_CONCURRENCY,
     DEFAULT_MAX_PENDING_RUNS,
     ExecutionOutcome,
@@ -48,15 +71,20 @@ from episodic.generation.launcher_scheduling import (
 from episodic.generation.launcher_scheduling import (
     GenerationRunAdmissionError as GenerationRunAdmissionError,
 )
+from episodic.generation.launcher_session import (
+    RunNotClaimedError,
+    _LauncherRunSession,
+)
 from episodic.generation.launcher_support import (
-    BoundedSourceLoader,
+    ClaimToken,
     Clock,
     CostRecorderFactory,
     DraftIdFactoryFactory,
     Failure,
     GenerationSourceLimits,
-    GenerationSourceLoader,
+    RunClaim,
     SequentialDraftIds,
+    SourceDocumentLoader,
     classify_failure,
     source_from_document,
 )
@@ -74,13 +102,13 @@ if typ.TYPE_CHECKING:
     import uuid
 
     from episodic.canonical.domain import SourceDocument
+    from episodic.canonical.generation_quality import QualityMode
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import (
         DraftScriptGenerator,
         DraftScriptSource,
     )
-    from episodic.generation.launcher_support import SourceDocumentLoader
 
 __all__ = [
     "GenerationRunLauncher",
@@ -121,149 +149,6 @@ async def _load_source_document(
     )
 
 
-@dc.dataclass(frozen=True, slots=True)
-class _LauncherSchedulerRuntime:
-    """Live view of a launcher's scheduling observability and admission limits.
-
-    The scheduler owns the task registry and therefore outlives any single
-    run, so it cannot snapshot these launcher fields the way the per-run
-    components do.
-    """
-
-    launcher: InProcessGenerationRunLauncher
-
-    @property
-    def metrics(self) -> ValueMetricsPort:
-        """The launcher's current metrics sink."""
-        return self.launcher.metrics
-
-    @property
-    def tracer(self) -> TracerPort:
-        """The launcher's current tracer."""
-        return self.launcher.tracer
-
-    @property
-    def max_concurrency(self) -> int:
-        """The launcher's current execution capacity."""
-        return self.launcher.max_concurrency
-
-    @property
-    def max_pending_runs(self) -> int:
-        """The launcher's current pending-run capacity."""
-        return self.launcher.max_pending_runs
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _LauncherSourceLoadRuntime:
-    """Live view of the launcher's source-loading collaborators."""
-
-    launcher: InProcessGenerationRunLauncher
-
-    @property
-    def object_store(self) -> ObjectStorePort | None:
-        """The launcher's current object store."""
-        return self.launcher.object_store
-
-    @property
-    def source_limits(self) -> GenerationSourceLimits:
-        """The launcher's current source limits."""
-        return self.launcher.source_limits
-
-    @property
-    def load_document(self) -> SourceDocumentLoader:
-        """The module's patchable source-document loader."""
-        return _load_source_document
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _LauncherClaimerRuntime:
-    """Live view of the launcher's claim-stage collaborators."""
-
-    launcher: InProcessGenerationRunLauncher
-
-    @property
-    def uow_factory(self) -> cabc.Callable[[], CanonicalUnitOfWork]:
-        """The launcher's current unit-of-work factory."""
-        return self.launcher.uow_factory
-
-    @property
-    def draft_generator(self) -> DraftScriptGenerator:
-        """The launcher's current draft generator."""
-        return self.launcher.draft_generator
-
-    @property
-    def source_loader(self) -> GenerationSourceLoader:
-        """A loader over the launcher's current source-loading collaborators."""
-        return BoundedSourceLoader(runtime=_LauncherSourceLoadRuntime(self.launcher))
-
-    @property
-    def clock(self) -> Clock:
-        """The launcher's current clock."""
-        return self.launcher.clock
-
-    @property
-    def source_limits(self) -> GenerationSourceLimits:
-        """The launcher's current source limits."""
-        return self.launcher.source_limits
-
-    @property
-    def metrics(self) -> ValueMetricsPort:
-        """The launcher's current metrics sink."""
-        return self.launcher.metrics
-
-    @property
-    def monotonic_clock(self) -> MonotonicClockPort:
-        """The launcher's current monotonic clock."""
-        return self.launcher.monotonic_clock
-
-    @property
-    def draft_id_factory_factory(self) -> DraftIdFactoryFactory:
-        """The launcher's current draft-id factory factory."""
-        return self.launcher.draft_id_factory_factory
-
-    @property
-    def lease_seconds(self) -> int:
-        """The launcher's current lease duration."""
-        return self.launcher.lease_seconds
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _LauncherPersistenceRuntime:
-    """Live view of the launcher's persistence-stage collaborators."""
-
-    launcher: InProcessGenerationRunLauncher
-
-    @property
-    def uow_factory(self) -> cabc.Callable[[], CanonicalUnitOfWork]:
-        """The launcher's current unit-of-work factory."""
-        return self.launcher.uow_factory
-
-    @property
-    def clock(self) -> Clock:
-        """The launcher's current clock."""
-        return self.launcher.clock
-
-    @property
-    def cost_recorder_factory(self) -> CostRecorderFactory | None:
-        """The launcher's current cost-recorder factory."""
-        return self.launcher.cost_recorder_factory
-
-    @property
-    def provider_name(self) -> str:
-        """The launcher's current provider name."""
-        return self.launcher.provider_name
-
-    @property
-    def provider_operation(self) -> str:
-        """The launcher's current provider operation."""
-        return self.launcher.provider_operation
-
-    @property
-    def metrics(self) -> ValueMetricsPort:
-        """The launcher's current metrics sink."""
-        return self.launcher.metrics
-
-
 @dc.dataclass(slots=True)
 class InProcessGenerationRunLauncher(GenerationRunLauncher):
     """Schedule and execute no-QA draft generation in-process.
@@ -290,6 +175,15 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         Maximum runs allowed to execute concurrently.
     max_pending_runs : int
         Maximum runs allowed to wait beyond the execution capacity.
+    cancellation_write_timeout_seconds : float
+        Maximum time shutdown waits for one cancellation write. A missed wait
+        is abandoned and counted: a run whose earlier execution claim
+        committed falls back to lease reclamation, while an uncommitted
+        failure-only claim leaves the run pending until its transaction is
+        released.
+    reconcile_timeout_seconds : float
+        Maximum time a cancelled claim waits for its shielded reconciliation.
+        A missed wait leaves the claim unverified and therefore unadopted.
     lease_seconds : int
         Claim lease duration recorded with each started run.
     source_limits : GenerationSourceLimits
@@ -300,10 +194,16 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         Sink for the per-run execution span.
     monotonic_clock : MonotonicClockPort
         Clock used to measure draft-generation latency.
+    source_document_loader : SourceDocumentLoader
+        Loader the claim stage uses for each canonical document. It defaults
+        to this module's ``_load_source_document``, whose own body calls
+        ``source_from_document`` at request time, so the pre-split patch point
+        survives while the dependency itself is injected.
     """
 
     uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
     draft_generator: DraftScriptGenerator
+    content_graph: ContentGenerationGraphPort
     object_store: ObjectStorePort | None = None
     cost_recorder_factory: CostRecorderFactory | None = None
     clock: Clock = lambda: dt.datetime.now(dt.UTC)
@@ -312,6 +212,10 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     provider_operation: str = "chat_completions"
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY
     max_pending_runs: int = DEFAULT_MAX_PENDING_RUNS
+    cancellation_write_timeout_seconds: float = (
+        DEFAULT_CANCELLATION_WRITE_TIMEOUT_SECONDS
+    )
+    reconcile_timeout_seconds: float = DEFAULT_RECONCILE_TIMEOUT_SECONDS
     lease_seconds: int = DEFAULT_LEASE_SECONDS
     source_limits: GenerationSourceLimits = dc.field(
         default_factory=GenerationSourceLimits
@@ -319,10 +223,30 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
+    source_document_loader: SourceDocumentLoader = _load_source_document
+    #: Claim, success and failure components, composed once in __post_init__.
+    _components: tuple[
+        GenerationRunClaimer,
+        GenerationRunPersistence,
+        GenerationRunFailurePersistence,
+    ] = dc.field(init=False)
     _scheduler: GenerationRunScheduler = dc.field(init=False)
 
     def __post_init__(self) -> None:
-        """Compose the long-lived scheduler over the launcher's ports."""
+        """Compose the long-lived components over the launcher's ports."""
+        claimer = GenerationRunClaimer(runtime=_LauncherClaimerRuntime(self))
+        persistence = GenerationRunPersistence(
+            runtime=_LauncherPersistenceRuntime(self)
+        )
+        self._components = (
+            claimer,
+            persistence,
+            GenerationRunFailurePersistence(
+                runtime=_LauncherPersistenceRuntime(self),
+                claim_for_failure=claimer.claim_for_failure,
+                record_costs=persistence.record_costs,
+            ),
+        )
         self._scheduler = GenerationRunScheduler(
             execute_run=self._execute_run,
             record_cancellation=self._record_cancellation,
@@ -346,36 +270,89 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         """Cancel and drain all scheduled generation tasks."""
         await self._scheduler.shutdown()
 
-    async def _execute_run(self, run_id: uuid.UUID) -> ExecutionOutcome:
-        """Execute one generation run while its concurrency permit is held."""
-        claimer = GenerationRunClaimer(runtime=_LauncherClaimerRuntime(self))
-        persistence = GenerationRunPersistence(
-            runtime=_LauncherPersistenceRuntime(self)
+    async def _execute_run(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ExecutionOutcome:
+        """Execute one generation run through the content-generation graph."""
+        claimer, persistence, failures = self._components
+        session = _LauncherRunSession(
+            claimer=claimer,
+            persistence=persistence,
+            failures=failures,
+            uow_factory=self.uow_factory,
+            clock=self.clock,
+            run_id=run_id,
+            claim=claim,
         )
         try:
-            claimed = await claimer.claim(run_id)
-            if claimed is None:
+            quality_mode = await self._read_quality_mode(run_id)
+            if quality_mode is None:
                 return ExecutionOutcome(outcome="not_claimed")
-            result = await claimer.generate(claimed)
-            await persistence.record_draft_generated(claimed.run.id, result)
-            await persistence.persist_success(claimed, result)
-            return ExecutionOutcome(outcome="completed")
+            terminal = await self.content_graph.run(
+                ContentGenerationRequest(run_id=run_id, quality_mode=quality_mode),
+                steps=session,
+            )
+        except RunNotClaimedError:
+            return ExecutionOutcome(outcome="not_claimed")
+        except asyncio.CancelledError:
+            # The scheduling task owns the claim, and this runs inside it: if
+            # the session won authority before the cancellation landed, adopt
+            # it here so the cancellation write is recognised as a holder's
+            # write rather than a tokenless duplicate.
+            if session.token is not None:
+                claim.adopt(session.token)
+            await self._scheduler.record_cancellation_owned(run_id, claim)
+            raise
         except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
             failure = classify_failure(exc)
-            await persistence.record_failure(run_id, failure)
+            result = await failures.record_failure(run_id, failure, claim=claim)
+            if not result.written:
+                return ExecutionOutcome(outcome="not_claimed")
             return ExecutionOutcome(
                 outcome="failed",
                 failure_category=failure.category,
             )
+        else:
+            branch = route_quality_mode(quality_mode)
+            return ExecutionOutcome(
+                outcome=_terminal_outcome_name(terminal),
+                quality_branch=branch.value,
+                terminal=terminal.value,
+            )
+        finally:
+            # Every observation the session appended follows a committed
+            # write, whether the run then finished, failed or was cancelled.
+            # Recording here, not in the session, keeps metric names and the
+            # sink out of the step port.
+            record_run_observations(self.metrics, session.observations)
 
-    async def _record_cancellation(self, run_id: uuid.UUID) -> None:
-        """Record cancellation consistently before or during execution."""
-        await GenerationRunPersistence(
-            runtime=_LauncherPersistenceRuntime(self)
-        ).record_failure(
+    async def _read_quality_mode(self, run_id: uuid.UUID) -> QualityMode | None:
+        """Read a run's requested quality mode before the graph forks on it."""
+        async with self.uow_factory() as uow:
+            run = await uow.generation_runs.get_run(run_id)
+        return None if run is None else run.quality_mode
+
+    async def _record_cancellation(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
+        """Record cancellation and report the authority the write used."""
+        _claimer, _persistence, failures = self._components
+        result = await failures.record_failure(
             run_id,
             Failure(
                 message="Generation task cancelled during shutdown.",
                 category="launcher.shutdown",
             ),
+            claim=claim,
         )
+        return result.token if result.written else None
+
+
+def _terminal_outcome_name(terminal: GenerationTerminal) -> str:
+    """Name the span outcome a terminal records."""
+    outcome = terminal_outcome(terminal)
+    return "escalated" if outcome.error_category is not None else "completed"

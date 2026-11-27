@@ -12,8 +12,9 @@ import uuid
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy import event
 
-from episodic.api.episode_access import read_owned_episode
+from episodic.api.episode_access import read_owned_episode, read_owned_episode_and_run
 from episodic.canonical.domain import (
     EpisodeTeiUpdate,
     GenerationRun,
@@ -25,11 +26,16 @@ from episodic.canonical.storage.qa_artefact_mappers import evaluation_to_record
 from tests.canonical_storage._qa_artefact_support import (
     create_episode,
     create_ingestion_job,
+    episode_records,
     make_evaluation,
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 _ACTOR = "principal-a"
 
@@ -104,3 +110,231 @@ async def test_read_owned_episode_does_not_flush_staged_work(
         assert await session.scalar(sa.text("SELECT 1")) == 1, (
             "the session stopped working after the ownership reads"
         )
+
+
+@pytest.mark.asyncio
+async def test_read_owned_episode_and_run_returns_the_producing_run(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The producing run is returned only to its own actor."""
+    episode_id = await _episode_with_launcher_run(session_factory)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        owned = await read_owned_episode_and_run(uow, episode_id, _ACTOR)
+        other_actor = await read_owned_episode_and_run(uow, episode_id, "principal-b")
+        anonymous = await read_owned_episode_and_run(uow, episode_id, None)
+        missing = await read_owned_episode_and_run(uow, uuid.uuid7(), _ACTOR)
+
+    assert owned is not None, "the owning actor must resolve the episode and run"
+    episode, run = owned
+    assert episode.id == episode_id, episode.id
+    assert run.episode_id == episode_id, run.episode_id
+    assert run.actor == _ACTOR, run.actor
+    assert other_actor is None, "another actor must not resolve the run"
+    assert anonymous is None, "an unauthenticated request must not resolve the run"
+    assert missing is None, "an unknown episode must not resolve"
+
+
+_WRITE_NAMES = frozenset({"add", "update", "create_run", "flush", "commit", "rollback"})
+_READ_PREFIX = "get"
+
+
+class _RecordingProxy:
+    """Wrap a collaborator and record every non-read attribute call.
+
+    A repository is only read-only if *every* call it receives is a read, so
+    the proxy records anything whose name is a known write or does not start
+    with ``get``, not just a fixed allow-list of write methods. An optional
+    ``interleave`` hook runs inside a delegated read, so a test can model a
+    repository that writes while it reads.
+    """
+
+    def __init__(
+        self,
+        inner: object,
+        label: str,
+        calls: list[str],
+        *,
+        interleave: cabc.Callable[[], cabc.Awaitable[None]] | None = None,
+    ) -> None:
+        """Wrap ``inner``, recording attempts as ``label.name``."""
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "_label", label)
+        object.__setattr__(self, "_calls", calls)
+        object.__setattr__(self, "_interleave", interleave)
+
+    def __getattr__(self, name: str) -> object:
+        """Return a callable that records the call unless it is a read."""
+        inner = object.__getattribute__(self, "_inner")
+        label = object.__getattribute__(self, "_label")
+        calls = object.__getattribute__(self, "_calls")
+        interleave = object.__getattribute__(self, "_interleave")
+        target = getattr(inner, name)
+        if not callable(target):
+            return target
+        is_write = name in _WRITE_NAMES or not name.startswith(_READ_PREFIX)
+        stage_first = None if is_write else interleave
+
+        async def call(*args: object, **kwargs: object) -> object:
+            """Run the interleaved write, record a write, then delegate."""
+            if stage_first is not None:
+                await stage_first()
+            if is_write:
+                calls.append(f"{label}.{name}")
+            return await typ.cast("typ.Any", target)(*args, **kwargs)
+
+        return call
+
+
+class _RecordingReadOnlyUnitOfWork:
+    """Unit of work that records any write at the store or session level.
+
+    The proxy over the stores sees the calls a repository receives; it cannot
+    see a flush that a delegated read issues internally. Listening to the
+    session's own ``before_flush`` covers that gap, because every flush passes
+    through it however it was reached.
+    """
+
+    def __init__(
+        self,
+        inner: SqlAlchemyUnitOfWork,
+        session: AsyncSession,
+        *,
+        episodes_interleave: cabc.Callable[[], cabc.Awaitable[None]] | None = None,
+    ) -> None:
+        """Wrap the real unit of work and start the call log."""
+        self._inner = inner
+        self.calls: list[str] = []
+        self._episodes_interleave = episodes_interleave
+        event.listen(session.sync_session, "before_flush", self._on_flush)
+
+    def _on_flush(self, *_args: object) -> None:
+        """Record any flush of the wrapped session."""
+        self.calls.append("session.flush")
+
+    async def __aenter__(self) -> _RecordingReadOnlyUnitOfWork:
+        """Enter the wrapped unit of work."""
+        await self._inner.__aenter__()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object,
+    ) -> None:
+        """Leave the wrapped unit of work."""
+        await self._inner.__aexit__(
+            exc_type,
+            exc,
+            typ.cast("typ.Any", traceback),
+        )
+
+    def __getattr__(self, name: str) -> object:
+        """Delegate an attribute, wrapping stores and recording writes."""
+        if name in {"flush", "commit", "rollback", "add"}:
+            return self._recorder(name)
+        target = getattr(self._inner, name)
+        if name == "episodes":
+            return _RecordingProxy(
+                target,
+                name,
+                self.calls,
+                interleave=self._episodes_interleave,
+            )
+        if name == "generation_runs":
+            return _RecordingProxy(target, name, self.calls)
+        return target
+
+    def _recorder(self, name: str) -> object:
+        """Return a callable that records an attempted write-side call."""
+
+        def record(*args: object, **kwargs: object) -> object:
+            """Record the attempt, then delegate it."""
+            _ = (args, kwargs)
+            self.calls.append(name)
+            return getattr(self._inner, name)(*args, **kwargs)
+
+        return record
+
+
+@pytest.mark.asyncio
+async def test_read_owned_episode_and_run_issues_no_writes(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The ownership query performs reads only."""
+    episode_id = await _episode_with_launcher_run(session_factory)
+
+    session = session_factory()
+    inner = SqlAlchemyUnitOfWork(lambda: session)
+    async with inner:
+        recording = _RecordingReadOnlyUnitOfWork(inner, session)
+        owned = await read_owned_episode_and_run(
+            typ.cast("CanonicalUnitOfWork", recording),
+            episode_id,
+            _ACTOR,
+        )
+
+        assert owned is not None, "the owning actor must resolve the episode and run"
+        assert not recording.calls, f"the query wrote: {recording.calls}"
+        staged = (len(session.new), len(session.dirty), len(session.deleted))
+        assert staged == (0, 0, 0), f"the query staged instances: {staged}"
+
+
+class _WritableRepository:
+    """Stand-in repository that accepts a write without a database."""
+
+    async def update(self, *args: object, **kwargs: object) -> None:
+        """Accept one delegated write."""
+        _ = (args, kwargs)
+
+
+@pytest.mark.asyncio
+async def test_the_recording_proxy_detects_a_delegated_write() -> None:
+    """A delegated write reaches the call log, so the read-only check fails."""
+    calls: list[str] = []
+    proxy = _RecordingProxy(_WritableRepository(), "generation_runs", calls)
+
+    await typ.cast("typ.Any", proxy).update(uuid.uuid4(), update=object())
+
+    assert calls == ["generation_runs.update"], calls
+
+
+@pytest.mark.asyncio
+async def test_the_flush_listener_detects_a_flush_inside_a_delegated_read(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A flush hidden inside a read is recorded, so the check cannot pass.
+
+    The proxy over the stores cannot see work a repository does internally,
+    which is why the recording unit of work also listens to ``before_flush``.
+    The interleave hook stages a valid row and flushes it inside the delegated
+    ``episodes.get``, and the listener must record that flush even though the
+    session's collections are empty once it returns.
+    """
+    episode_id = await _episode_with_launcher_run(session_factory)
+    series = episode_records(episode_id=uuid.uuid7())[0]
+
+    session = session_factory()
+    inner = SqlAlchemyUnitOfWork(lambda: session)
+    async with inner:
+
+        async def stage_and_flush() -> None:
+            """Stage a valid row and flush it from inside the read."""
+            await inner.series_profiles.add(series)
+            await inner.flush()
+
+        recording = _RecordingReadOnlyUnitOfWork(
+            inner,
+            session,
+            episodes_interleave=stage_and_flush,
+        )
+        owned = await read_owned_episode_and_run(
+            typ.cast("CanonicalUnitOfWork", recording),
+            episode_id,
+            _ACTOR,
+        )
+
+        assert owned is not None, "the ownership read must still resolve"
+        assert not session.new, "the flush left nothing staged to detect"
+        assert "session.flush" in recording.calls, recording.calls

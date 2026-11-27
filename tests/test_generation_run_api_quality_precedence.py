@@ -1,0 +1,338 @@
+"""Request-error precedence for generation-run creation (INV-12).
+
+These cases pin the pre-4.4.1 ordering: request-shape and capability errors
+are reported before a reused idempotency key can turn them into a conflict,
+and before a missing-launcher 503.
+"""
+
+import dataclasses as dc
+import typing as typ
+
+import pytest
+
+from episodic.api.resources import generation_runs_create_support
+from episodic.api.resources.generation_runs_create_support import (
+    RequestRuleOrder,
+    _parse_create_request,
+    _request_rule_order,
+)
+from episodic.canonical.generation_quality import QualityMode
+from tests.fixtures.generation_run_api import create_ready_ingestion_job
+from tests.test_generation_run_api import _assert_error_envelope, _ExpectedError
+from tests.test_generation_run_api_quality_modes import (
+    _GATED_ENDPOINT,
+    _HEADERS,
+    _client,
+    _dependencies,
+    _gated_payload,
+)
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _RequestCase:
+    """One request-error precedence case."""
+
+    headers: dict[str, str]
+    payload: dict[str, object]
+    expected: _ExpectedError
+
+
+_ACCEPTING_MODES = frozenset({
+    QualityMode.DRAFT_WITHOUT_QA,
+    QualityMode.QA_GATED,
+})
+
+_REQUEST_CASES: dict[str, _RequestCase] = {
+    "unaccepted-mode-without-launcher": _RequestCase(
+        headers=_HEADERS,
+        payload=_gated_payload(),
+        expected=_ExpectedError(
+            status=422,
+            code="quality_mode_unsupported",
+            message="Unsupported quality_mode: qa_gated.",
+            details={"quality_mode": "qa_gated"},
+        ),
+    ),
+    "malformed-budget-without-launcher": _RequestCase(
+        headers=_HEADERS,
+        payload={
+            "quality_mode": "draft_without_qa",
+            "skip_qa_rationale": "Vertical slice.",
+            "budget_hints": ["not", "an", "object"],
+        },
+        expected=_ExpectedError(
+            status=400,
+            code="validation_error",
+            message="budget_hints must be a JSON object.",
+            details={"field": "budget_hints", "constraint": "object"},
+        ),
+    ),
+    "unknown-mode-without-launcher": _RequestCase(
+        headers=_HEADERS,
+        payload={"quality_mode": "advisory", "skip_qa_rationale": "Vertical slice."},
+        expected=_ExpectedError(
+            status=400,
+            code="validation_error",
+            message="Invalid quality_mode: 'advisory'.",
+            details={"field": "quality_mode", "constraint": "enum"},
+        ),
+    ),
+    "keyed-unaccepted-mode-without-launcher": _RequestCase(
+        headers={**_HEADERS, "Idempotency-Key": "no-launcher-precedence"},
+        payload=_gated_payload(),
+        expected=_ExpectedError(
+            status=422,
+            code="quality_mode_unsupported",
+            message="Unsupported quality_mode: qa_gated.",
+            details={"quality_mode": "qa_gated"},
+        ),
+    ),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "case",
+    _REQUEST_CASES.values(),
+    ids=tuple(_REQUEST_CASES),
+)
+async def test_request_errors_outrank_a_missing_launcher(
+    session_factory: async_sessionmaker[AsyncSession],
+    case: _RequestCase,
+) -> None:
+    """A request error is reported before the missing-launcher 503."""
+    dependencies = dc.replace(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA})),
+        launcher=None,
+    )
+    async with _client(dependencies) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers=case.headers,
+            json=case.payload,
+        )
+
+    _assert_error_envelope(response, case.expected)
+
+
+@pytest.mark.parametrize(
+    ("idempotency_key", "payload", "expected"),
+    [
+        (
+            None,
+            {"quality_mode": "draft_without_qa", "skip_qa_rationale": "x"},
+            RequestRuleOrder.BEFORE_IDEMPOTENCY,
+        ),
+        (
+            None,
+            {"quality_mode": "qa_gated"},
+            RequestRuleOrder.BEFORE_IDEMPOTENCY,
+        ),
+        (
+            "row-keyed-no-qa",
+            {"quality_mode": "draft_without_qa", "skip_qa_rationale": "x"},
+            RequestRuleOrder.BEFORE_IDEMPOTENCY,
+        ),
+        (
+            "row-keyed-gated",
+            {"quality_mode": "qa_gated"},
+            RequestRuleOrder.IN_IDEMPOTENT_WORK,
+        ),
+    ],
+    ids=["keyless-any", "keyless-gated", "keyed-no-qa", "keyed-gated"],
+)
+def test_request_rule_order_matches_the_module_table(
+    idempotency_key: str | None,
+    payload: dict[str, object],
+    expected: RequestRuleOrder,
+) -> None:
+    """Each row of the ordering table routes the request to its named path."""
+    order = _request_rule_order(_parse_create_request(payload), idempotency_key)
+    assert order is expected, order
+
+
+@pytest.mark.asyncio
+async def test_reused_key_still_reports_the_body_error(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A reused key does not pre-empt a malformed-body error."""
+    headers = {**_HEADERS, "Idempotency-Key": "reused-malformed-budget"}
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        endpoint = _GATED_ENDPOINT.format(job=job)
+        first = await client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "quality_mode": "draft_without_qa",
+                "skip_qa_rationale": "First attempt.",
+            },
+        )
+        second = await client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "quality_mode": "draft_without_qa",
+                "skip_qa_rationale": "Second attempt.",
+                "budget_hints": ["not", "an", "object"],
+            },
+        )
+
+    assert first.status_code == 202, first.text
+    _assert_error_envelope(
+        second,
+        _ExpectedError(
+            status=400,
+            code="validation_error",
+            message="budget_hints must be a JSON object.",
+            details={"field": "budget_hints", "constraint": "object"},
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_keyed_conflict_validates_the_request_once(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A keyed conflict applies the request rules once per submission."""
+    calls: list[object] = []
+    original = typ.cast(
+        "cabc.Callable[..., object]",
+        generation_runs_create_support._validate_quality_request,
+    )
+
+    def counting(*args: object, **kwargs: object) -> object:
+        """Record one validation and delegate to the real rule set."""
+        calls.append(args)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        generation_runs_create_support,
+        "_validate_quality_request",
+        counting,
+    )
+    headers = {**_HEADERS, "Idempotency-Key": "single-validation"}
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        endpoint = _GATED_ENDPOINT.format(job=job)
+        first = await client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "quality_mode": "draft_without_qa",
+                "skip_qa_rationale": "First attempt.",
+            },
+        )
+        second = await client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "quality_mode": "draft_without_qa",
+                "skip_qa_rationale": "Second attempt.",
+            },
+        )
+
+    assert first.status_code == 202, first.text
+    assert second.status_code == 409, second.text
+    # One call per HTTP request: the before-idempotency path prepares the
+    # request exactly once, and a conflict no longer re-validates it.
+    assert len(calls) == 2, calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed_body", [False, True], ids=["replay", "conflict"])
+async def test_no_qa_missing_launcher_outranks_idempotency(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    changed_body: bool,
+) -> None:
+    """A removed launcher is a 503 before replay or conflict, as in the base."""
+    headers = {**_HEADERS, "Idempotency-Key": "launcher-removed"}
+    body: dict[str, object] = {
+        "quality_mode": "draft_without_qa",
+        "skip_qa_rationale": "First attempt.",
+    }
+    async with _client(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
+    ) as client:
+        job = await create_ready_ingestion_job(client, _HEADERS)
+        endpoint = _GATED_ENDPOINT.format(job=job)
+        first = await client.post(endpoint, headers=headers, json=body)
+    assert first.status_code == 202, first.text
+
+    without_launcher = dc.replace(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA})),
+        launcher=None,
+    )
+    if changed_body:
+        body = {**body, "skip_qa_rationale": "Second attempt."}
+    async with _client(without_launcher) as client:
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers=headers,
+            json=body,
+        )
+
+    _assert_error_envelope(
+        response,
+        _ExpectedError(
+            status=503,
+            code="service_unavailable",
+            message="Generation launcher is not configured.",
+            details={},
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_error_envelopes_match_the_snapshot(
+    session_factory: async_sessionmaker[AsyncSession],
+    snapshot: object,
+) -> None:
+    """The precedence and gated-rationale error envelopes are stable."""
+    bodies: dict[str, object] = {}
+    no_launcher = dc.replace(
+        _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA})),
+        launcher=None,
+    )
+    async with _client(no_launcher) as client:
+        job = await create_ready_ingestion_job(
+            client,
+            _HEADERS,
+            key_prefix="snapshot-no-launcher",
+        )
+        endpoint = _GATED_ENDPOINT.format(job=job)
+        for name, case in _REQUEST_CASES.items():
+            response = await client.post(
+                endpoint,
+                headers=case.headers,
+                json=case.payload,
+            )
+            bodies[name] = response.json()
+
+    accepting = _dependencies(session_factory, _ACCEPTING_MODES)
+    async with _client(accepting) as client:
+        job = await create_ready_ingestion_job(
+            client,
+            _HEADERS,
+            key_prefix="snapshot-gated-rationale",
+        )
+        response = await client.post(
+            _GATED_ENDPOINT.format(job=job),
+            headers={**_HEADERS, "Idempotency-Key": "gated-rationale-snapshot"},
+            json=_gated_payload(skip_qa_rationale="Not allowed."),
+        )
+        bodies["gated-rationale"] = response.json()
+
+    assert bodies == snapshot, bodies

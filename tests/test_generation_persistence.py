@@ -336,6 +336,7 @@ async def test_persist_draft_script_records_no_qa_revision_metadata(
                 generation_run_id=run.id,
                 result=_draft_result(draft_xml),
                 expected_revision=episode.tei_revision,
+                qa_status=QaStatus.SKIPPED,
                 clock=_clock,
             ),
         )
@@ -385,6 +386,7 @@ async def test_persist_draft_script_rejects_invalid_tei(
                     generation_run_id=run.id,
                     result=_draft_result("<TEI>broken"),
                     expected_revision=episode.tei_revision,
+                    qa_status=QaStatus.SKIPPED,
                     clock=_clock,
                 ),
             )

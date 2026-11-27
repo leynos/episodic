@@ -288,3 +288,25 @@ async def test_reclamation_rejects_non_positive_limit(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(ValueError, match="limit must be a positive integer"):
             await uow.generation_runs.fail_expired_leases(now=NOW, limit=limit)
+
+
+@pytest.mark.asyncio
+async def test_a_token_bearing_expired_run_is_reclaimed(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A run claimed with a proof can still be reclaimed when its lease expires."""
+    run = await claimed_expired_run(session_factory)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        proof = await uow.generation_runs.claim_token_for(run.id)
+    assert proof is not None, "the seeded claim must carry a proof"
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        reclaimed = await uow.generation_runs.fail_expired_leases(now=NOW)
+        await uow.commit()
+
+    assert [item.id for item in reclaimed] == [run.id], reclaimed
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        stored = await uow.generation_runs.get_run(run.id)
+    assert stored is not None, "the reclaimed run must remain readable"
+    assert stored.status is GenerationRunStatus.FAILED, stored.status
+    assert stored.error_category == LEASE_ERROR_CATEGORY, stored.error_category

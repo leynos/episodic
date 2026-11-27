@@ -16,7 +16,17 @@ from episodic.canonical.episode_errors import (
     EpisodeNotFoundError,
     EpisodeRevisionConflictError,
 )
+from episodic.canonical.generation_graph_ports import (
+    ContentGenerationGraphError,
+    QualityEvaluation,
+    QualityEvaluationUnavailableError,
+)
 from episodic.canonical.generation_persistence import InvalidDraftTeiError
+from episodic.canonical.generation_quality import QaStatus
+from episodic.canonical.generation_routing import (
+    QualityVerdict,  # ruff: ignore[typing-only-first-party-import]  # EscalationEvent annotations are evaluated at construction.
+)
+from episodic.canonical.generation_run_ports import UNCHANGED, Unchanged
 from episodic.cost.ports import (
     BillingPeriodKey,
     IdempotencyKey,
@@ -44,12 +54,57 @@ if typ.TYPE_CHECKING:
 
 
 @dc.dataclass(frozen=True, slots=True)
+class EscalationEvent:
+    """QA escalation details recorded alongside a failed terminal.
+
+    Attributes
+    ----------
+    verdict : QualityVerdict
+        Aggregate verdict that ended the run.
+    evaluations : tuple[QualityEvaluation, ...]
+        Per-evaluator results.
+    content_hash : str
+        Content hash of the escalated candidate draft.
+    """
+
+    verdict: QualityVerdict
+    evaluations: tuple[QualityEvaluation, ...]
+    content_hash: str
+
+
+@dc.dataclass(frozen=True, slots=True)
 class Failure:
     """Stable failure details recorded on a terminal run."""
 
     message: str
     category: str
     should_emit_invalid_tei: bool = False
+    qa_status: QaStatus | Unchanged = UNCHANGED
+    is_draft_error: bool = True
+    escalation: EscalationEvent | None = None
+
+    @classmethod
+    def escalation_failure(
+        cls,
+        *,
+        verdict: QualityVerdict,
+        evaluations: tuple[QualityEvaluation, ...],
+        content_hash: str,
+    ) -> Failure:
+        """Build the terminal failure an escalated QA-gated run records."""
+        return cls(
+            message=(
+                "QA evaluation did not pass; the candidate draft was not persisted."
+            ),
+            category="qa.escalation_required",
+            qa_status=QaStatus.FAILED,
+            is_draft_error=False,
+            escalation=EscalationEvent(
+                verdict=verdict,
+                evaluations=evaluations,
+                content_hash=content_hash,
+            ),
+        )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -115,29 +170,32 @@ def provider_call_record(request: ProviderCallRecordRequest) -> ProviderCallReco
 
 
 _FAILURE_CATEGORIES: tuple[
-    tuple[type[Exception] | tuple[type[Exception], ...], str, bool],
+    tuple[type[Exception] | tuple[type[Exception], ...], str, bool, bool],
     ...,
 ] = (
-    (EpisodeRevisionConflictError, "episode.persistence_conflict", False),
-    (EpisodeNotFoundError, "episode.not_found", False),
-    (GenerationSourceLimitError, "generation.source_limit", False),
-    ((InvalidDraftTeiError, DraftScriptTeiError), "tei.invalid", True),
-    (DraftScriptTransientProviderError, "provider.transient", False),
-    (DraftScriptProviderResponseError, "provider.response", False),
-    (DraftScriptTokenBudgetError, "provider.token_budget", False),
-    (DraftScriptResponseFormatError, "draft.response_format", False),
-    (DraftScriptGenerationError, "draft.generation", False),
-    (PricingSnapshotError, "cost.pricing_snapshot", False),
+    (QualityEvaluationUnavailableError, "qa.unavailable", False, False),
+    (ContentGenerationGraphError, "orchestration.incomplete", False, False),
+    (EpisodeRevisionConflictError, "episode.persistence_conflict", False, True),
+    (EpisodeNotFoundError, "episode.not_found", False, True),
+    (GenerationSourceLimitError, "generation.source_limit", False, True),
+    ((InvalidDraftTeiError, DraftScriptTeiError), "tei.invalid", True, True),
+    (DraftScriptTransientProviderError, "provider.transient", False, True),
+    (DraftScriptProviderResponseError, "provider.response", False, True),
+    (DraftScriptTokenBudgetError, "provider.token_budget", False, True),
+    (DraftScriptResponseFormatError, "draft.response_format", False, True),
+    (DraftScriptGenerationError, "draft.generation", False, True),
+    (PricingSnapshotError, "cost.pricing_snapshot", False, True),
 )
 
 
 def classify_failure(exc: Exception) -> Failure:
     """Map launcher failures to stable public error categories."""
-    for error_type, category, should_emit_invalid_tei in _FAILURE_CATEGORIES:
+    for error_type, category, emit_tei, is_draft_error in _FAILURE_CATEGORIES:
         if isinstance(exc, error_type):
             return Failure(
                 str(exc),
                 category,
-                should_emit_invalid_tei=should_emit_invalid_tei,
+                should_emit_invalid_tei=emit_tei,
+                is_draft_error=is_draft_error,
             )
     return Failure(str(exc), "unexpected")

@@ -8,8 +8,6 @@ artefacts.
 import typing as typ
 import uuid  # ruff: ignore[typing-only-standard-library-import]  # This type remains available at runtime for annotation introspection.
 
-from episodic.canonical.generation_quality import QualityMode
-
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         CanonicalEpisode,
@@ -24,6 +22,7 @@ if typ.TYPE_CHECKING:
         SeriesProfile,
         SeriesProfileHistoryEntry,
     )
+    from episodic.canonical.generation_quality import QualityMode
     from episodic.canonical.ingestion_sources import IngestionJobSource
     from episodic.canonical.qa_artefacts import (
         QaEvaluation,
@@ -256,7 +255,11 @@ def serialize_generation_event(event: GenerationEvent) -> dict[str, typ.Any]:
     }
 
 
-def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
+def serialize_tei_envelope(
+    episode: CanonicalEpisode,
+    *,
+    quality_mode: QualityMode,
+) -> dict[str, typ.Any]:
     """Serialize a canonical episode's generated TEI into public JSON fields.
 
     Parameters
@@ -264,6 +267,10 @@ def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
     episode : CanonicalEpisode
         Episode containing the generated XML, revision metadata, QA status,
         and generation provenance.
+    quality_mode : QualityMode
+        Quality mode of the generation run that produced the TEI. The run is
+        authoritative: deriving the mode from ``qa_status`` would break once a
+        human-override or advisory QA mode exists.
 
     Returns
     -------
@@ -272,9 +279,9 @@ def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
         ``tei_header_id`` to ``episode.tei_header_id``, ``tei_xml`` to the
         generated XML, ``content_hash`` to its hash, and ``version`` to
         ``episode.tei_revision``. ``last_generation_run_id`` is the optional
-        generation-run UUID as a string; ``quality_mode`` is the public
-        ``draft_without_qa`` value; ``qa_status`` is its optional public value;
-        and ``updated_at`` is the episode timestamp in ISO 8601 form.
+        generation-run UUID as a string; ``quality_mode`` is the producing
+        run's public value; ``qa_status`` is its optional public value; and
+        ``updated_at`` is the episode timestamp in ISO 8601 form.
     """
     return {
         "episode_id": str(episode.id),
@@ -283,7 +290,7 @@ def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
         "content_hash": episode.tei_content_hash,
         "version": episode.tei_revision,
         "last_generation_run_id": _optional_uuid_str(episode.last_generation_run_id),
-        "quality_mode": QualityMode.DRAFT_WITHOUT_QA.value,
+        "quality_mode": quality_mode.value,
         "qa_status": None if episode.qa_status is None else episode.qa_status.value,
         "updated_at": episode.updated_at.isoformat(),
     }

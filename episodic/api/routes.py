@@ -190,6 +190,7 @@ def _register_generation_run_routes(
                     else dependencies.generation_source_limits.max_source_count
                 ),
                 tracer=dependencies.tracer,
+                accepted_quality_modes=dependencies.accepted_quality_modes,
             ),
         ),
     )

@@ -17,21 +17,24 @@ from episodic.canonical.generation_persistence import (
     persist_draft_script,
 )
 from episodic.canonical.generation_quality import QaStatus
-from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
+from episodic.canonical.generation_routing import QualityVerdict
+from episodic.canonical.generation_run_ports import (
+    UNCHANGED,
+    GenerationRunStatusUpdate,
+)
 from episodic.cost.ports import BillingPeriodKey
 from episodic.cost.pricing_snapshot import PricedService
 from episodic.cost.recorder import CostProviderOperation
+from episodic.generation.launcher_quality import QaOutcome, qa_result_payload
 from episodic.generation.launcher_support import (
     Clock,
     CostRecorderFactory,
-    Failure,
     PersistedTei,
     ProviderCallRecordRequest,
     draft_generated_payload,
     provider_call_record,
 )
-from episodic.logging import get_logger, log_error, log_info
+from episodic.logging import get_logger, log_info
 from episodic.observability import NoopValueMetrics, ValueMetricsPort
 
 if typ.TYPE_CHECKING:
@@ -43,9 +46,17 @@ if typ.TYPE_CHECKING:
     from episodic.generation.launcher_support import ClaimedRun
 
 _METRIC_TERMINAL_STATES = "generation_run_terminal_total"
-_METRIC_DRAFT_ERRORS = "generation_run_draft_errors_total"
 
 logger = get_logger(__name__)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _SuccessOutcome:
+    """The artefacts and QA status one successful transition records."""
+
+    result: DraftScriptResult
+    persisted_tei: PersistedTei
+    qa: QaOutcome
 
 
 class PersistenceRuntime(typ.Protocol):
@@ -150,10 +161,54 @@ class GenerationRunPersistence:
             )
             await uow.commit()
 
+    async def record_evaluation_started(
+        self,
+        run_id: uuid.UUID,
+        *,
+        evaluator_names: tuple[str, ...],
+        content_hash: str,
+    ) -> None:
+        """Record that evaluation started and the run moved to its node.
+
+        Opening the unit of work here keeps every run-state write behind this
+        component, so the per-run session has a single write path.
+
+        Parameters
+        ----------
+        run_id : uuid.UUID
+            Identifier of the run entering evaluation.
+        evaluator_names : tuple[str, ...]
+            Evaluators about to run, in the order the graph will call them.
+        content_hash : str
+            Content hash of the draft under evaluation.
+        """
+        async with self.runtime.uow_factory() as uow:
+            await uow.generation_runs.append_event(
+                run_id,
+                kind="qa.evaluation_started",
+                payload={
+                    "current_node": "evaluate",
+                    "evaluators": list(evaluator_names),
+                    "content_hash": content_hash,
+                },
+                occurred_at=self.runtime.clock(),
+            )
+            await uow.generation_runs.update_run_status(
+                run_id,
+                update=GenerationRunStatusUpdate(
+                    status=GenerationRunStatus.RUNNING,
+                    current_node="evaluate",
+                    ended_at=None,
+                ),
+            )
+            await uow.commit()
+
     async def persist_success(
         self,
         claimed: ClaimedRun,
         result: DraftScriptResult,
+        *,
+        qa: QaOutcome | None = None,
     ) -> None:
         """Persist generated TEI, cost records, and terminal success.
 
@@ -170,7 +225,11 @@ class GenerationRunPersistence:
             Claimed run and the pre-persistence episode revision.
         result : DraftScriptResult
             Generated draft to persist and record as the run's outcome.
+        qa : QaOutcome | None
+            QA status and evaluations to record; ``None`` records a skipped
+            no-QA draft.
         """
+        outcome = qa or QaOutcome(QaStatus.SKIPPED, ())
         async with self.runtime.uow_factory() as uow:
             updated_episode = await persist_draft_script(
                 uow,
@@ -179,16 +238,20 @@ class GenerationRunPersistence:
                     generation_run_id=claimed.run.id,
                     result=result,
                     expected_revision=claimed.episode.tei_revision,
+                    qa_status=outcome.status,
                     clock=self.runtime.clock,
                 ),
             )
             await self._record_success_transition(
                 uow,
                 claimed,
-                result,
-                PersistedTei(
-                    revision=updated_episode.tei_revision,
-                    content_hash=updated_episode.tei_content_hash,
+                _SuccessOutcome(
+                    result=result,
+                    persisted_tei=PersistedTei(
+                        revision=updated_episode.tei_revision,
+                        content_hash=updated_episode.tei_content_hash,
+                    ),
+                    qa=outcome,
                 ),
             )
             await uow.commit()
@@ -199,71 +262,34 @@ class GenerationRunPersistence:
             claimed.run.id,
         )
 
-    async def record_failure(self, run_id: uuid.UUID, failure: Failure) -> None:
-        """Record a terminal failed run state.
-
-        The method opens its own unit of work, appends the failure-side
-        events, applies the failed status, and commits. If the run is already
-        terminal or no longer exists, the unit of work is rolled back and the
-        method returns without recording a metric or logging a failure. Any
-        other unit-of-work, repository, or commit failure propagates to the
-        caller.
-
-        Parameters
-        ----------
-        run_id : uuid.UUID
-            Identifier of the run to mark failed.
-        failure : Failure
-            Stable failure message, category, and invalid-TEI flag.
-        """
-        async with self.runtime.uow_factory() as uow:
-            try:
-                await self._append_failure_events(uow, run_id, failure)
-                await uow.generation_runs.update_run_status(
-                    run_id,
-                    update=GenerationRunStatusUpdate(
-                        status=GenerationRunStatus.FAILED,
-                        current_node=None,
-                        ended_at=self.runtime.clock(),
-                        error_message=failure.message,
-                        error_category=failure.category,
-                    ),
-                )
-                await uow.commit()
-            except RunAlreadyTerminal, RunNotFound:
-                await uow.rollback()
-                return
-        self._record_terminal_metric(GenerationRunStatus.FAILED, failure.category)
-        self.runtime.metrics.increment_counter(
-            _METRIC_DRAFT_ERRORS,
-            labels={"error_category": failure.category},
-        )
-        log_error(
-            logger,
-            "generation_run_launcher.failed run_id=%s category=%s",
-            run_id,
-            failure.category,
-        )
-
     async def _record_success_transition(
         self,
         uow: CanonicalUnitOfWork,
         claimed: ClaimedRun,
-        result: DraftScriptResult,
-        persisted_tei: PersistedTei,
+        outcome: _SuccessOutcome,
     ) -> None:
         """Record success-side events, costs, and terminal status."""
+        result = outcome.result
+        qa = outcome.qa
+        persisted_tei = outcome.persisted_tei
+        if qa.status is QaStatus.PASSED:
+            await uow.generation_runs.append_event(
+                claimed.run.id,
+                kind="qa.result",
+                payload=qa_result_payload(QualityVerdict.PASSED, qa.evaluations),
+                occurred_at=self.runtime.clock(),
+            )
         await uow.generation_runs.append_event(
             claimed.run.id,
             kind="tei.persisted",
             payload={
                 "tei_revision": persisted_tei.revision,
                 "content_hash": persisted_tei.content_hash,
-                "qa_status": QaStatus.SKIPPED.value,
+                "qa_status": qa.status.value,
             },
             occurred_at=self.runtime.clock(),
         )
-        await self._record_costs(uow, claimed.run.id, result)
+        await self.record_costs(uow, claimed.run.id, result)
         await uow.generation_runs.append_event(
             claimed.run.id,
             kind="run.succeeded",
@@ -276,10 +302,12 @@ class GenerationRunPersistence:
                 status=GenerationRunStatus.SUCCEEDED,
                 current_node=None,
                 ended_at=self.runtime.clock(),
+                qa_status=(UNCHANGED if qa.status is QaStatus.SKIPPED else qa.status),
+                claim_token=claimed.token.proof,
             ),
         )
 
-    async def _record_costs(
+    async def record_costs(
         self,
         uow: CanonicalUnitOfWork,
         run_id: uuid.UUID,
@@ -317,30 +345,6 @@ class GenerationRunPersistence:
             )
         )
         await recorder.finalize_run(str(run_id), "draft")
-
-    async def _append_failure_events(
-        self,
-        uow: CanonicalUnitOfWork,
-        run_id: uuid.UUID,
-        failure: Failure,
-    ) -> None:
-        """Append failure-related events before terminal status mutation."""
-        if failure.should_emit_invalid_tei:
-            await uow.generation_runs.append_event(
-                run_id,
-                kind="tei.invalid",
-                payload={"error_category": failure.category},
-                occurred_at=self.runtime.clock(),
-            )
-        await uow.generation_runs.append_event(
-            run_id,
-            kind="run.failed",
-            payload={
-                "error_message": failure.message,
-                "error_category": failure.category,
-            },
-            occurred_at=self.runtime.clock(),
-        )
 
     def _record_terminal_metric(
         self,

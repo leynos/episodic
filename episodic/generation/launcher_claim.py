@@ -9,16 +9,22 @@ and generates the draft script. Its collaborators arrive through a narrow
 and each collaborator is read at its use site rather than snapshotted.
 """
 
+import asyncio
+import contextlib
 import dataclasses as dc
 import datetime as dt
 import typing as typ
 
+from episodic.canonical.generation_claim import ExecutionClaim
 from episodic.canonical.reference_documents import resolve_bindings
 from episodic.generation.launcher_support import (
     ClaimedRun,
+    ClaimedRunResult,
+    ClaimToken,
     Clock,
     GenerationSourceLimitError,
     GenerationSourceLimits,
+    RunClaim,
     SequentialDraftIds,
     draft_request,
     project_presenter_profiles,
@@ -35,7 +41,6 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from episodic.canonical.domain import GenerationRun
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import (
         DraftScriptGenerator,
@@ -47,7 +52,10 @@ if typ.TYPE_CHECKING:
     )
 
 DEFAULT_LEASE_SECONDS = 900
-_METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
+#: How long a cancelled claim commit waits for its shielded reconciliation.
+#: Shutdown must not hang on a stalled read, and an unverified claim is not
+#: adopted: the durable row either carries this attempt's proof or it does not.
+DEFAULT_RECONCILE_TIMEOUT_SECONDS = 10.0
 _METRIC_DRAFT_LATENCY = "generation_run_draft_latency_ms"
 
 
@@ -94,6 +102,10 @@ class ClaimerRuntime(typ.Protocol):
     def lease_seconds(self) -> int:
         """Claim lease duration recorded with the started run."""
 
+    @property
+    def reconcile_timeout_seconds(self) -> float:
+        """Maximum time a cancelled claim waits for reconciliation."""
+
 
 @dc.dataclass(frozen=True, slots=True)
 class ClaimerContext:
@@ -132,6 +144,7 @@ class ClaimerContext:
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     draft_id_factory_factory: DraftIdFactoryFactory = SequentialDraftIds
     lease_seconds: int = DEFAULT_LEASE_SECONDS
+    reconcile_timeout_seconds: float = DEFAULT_RECONCILE_TIMEOUT_SECONDS
 
 
 @dc.dataclass(slots=True)
@@ -146,7 +159,11 @@ class GenerationRunClaimer:
 
     runtime: ClaimerRuntime
 
-    async def claim(self, run_id: uuid.UUID) -> ClaimedRun | None:
+    async def claim(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim | None = None,
+    ) -> ClaimedRun | None:
         """Claim a pending run, then load its input outside the claim transaction.
 
         The claim and its ``run.started`` event are committed before hydration
@@ -158,6 +175,10 @@ class GenerationRunClaimer:
         ----------
         run_id : uuid.UUID
             Identifier of the pending generation run to claim.
+        claim : RunClaim | None
+            Per-invocation claim record. Its token is set as soon as the claim
+            commits, which also carries authority out of a cancelled claim;
+            ``_claim_and_start`` reports the same token in its result.
 
         Returns
         -------
@@ -170,9 +191,11 @@ class GenerationRunClaimer:
         GenerationSourceLimitError.source_count
             If the run's source bundle exceeds the configured source count.
         """
-        run = await self._claim_and_start(run_id)
-        if run is None:
+        claim = claim or RunClaim()
+        result = await self._claim_and_start(run_id, claim)
+        if result is None:
             return None
+        run = result.run
         async with self.runtime.uow_factory() as uow:
             episode = await require_episode(uow, run.episode_id)
             documents = await uow.source_documents.list_for_job(run.source_bundle_id)
@@ -186,15 +209,12 @@ class GenerationRunClaimer:
                 )
             )
         sources = await self.runtime.source_loader.load(documents)
-        self.runtime.metrics.increment_counter(
-            _METRIC_QA_BYPASS,
-            labels={"quality_mode": run.quality_mode.value},
-        )
         return ClaimedRun(
             run=run,
             episode=episode,
             sources=sources,
             presenter_profiles=presenter_profiles,
+            token=result.token,
         )
 
     async def generate(self, claimed: ClaimedRun) -> DraftScriptResult:
@@ -235,16 +255,39 @@ class GenerationRunClaimer:
                 labels={"quality_mode": claimed.run.quality_mode.value},
             )
 
-    async def _claim_and_start(self, run_id: uuid.UUID) -> GenerationRun | None:
-        """Linearize a claim and make its started event durable before hydration."""
+    async def _claim_and_start(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimedRunResult | None:
+        """Linearize a claim and make its started event durable before hydration.
+
+        Returns
+        -------
+        ClaimedRunResult | None
+            The claimed run and the token that authorizes later writes, or
+            ``None`` when another invocation owns it.
+
+        Raises
+        ------
+        asyncio.CancelledError
+            If cancelled; the claim is reconciled against the durable row
+            first so a committed claim keeps an owner. This is the one path
+            that must adopt the token in place, because the record has to
+            carry authority out of a call that never returns; the claim's
+            token is therefore also set here.
+        """
         async with self.runtime.uow_factory() as uow:
             started_at = self.runtime.clock()
             run = await uow.generation_runs.claim_run_for_execution(
                 run_id,
-                current_node="draft",
-                started_at=started_at,
-                lease_expires_at=started_at
-                + dt.timedelta(seconds=self.runtime.lease_seconds),
+                ExecutionClaim(
+                    current_node="draft",
+                    started_at=started_at,
+                    lease_expires_at=started_at
+                    + dt.timedelta(seconds=self.runtime.lease_seconds),
+                    claim_token=claim.proof,
+                ),
             )
             if run is None:
                 await uow.rollback()
@@ -255,8 +298,72 @@ class GenerationRunClaimer:
                 payload={"current_node": "draft"},
                 occurred_at=started_at,
             )
-            await uow.commit()
-        return run
+            try:
+                await uow.commit()
+            except asyncio.CancelledError:
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(
+                        asyncio.shield(self.reconcile(run_id, claim)),
+                        timeout=self.runtime.reconcile_timeout_seconds,
+                    )
+                raise
+            token = ClaimToken(run.id, proof=claim.proof)
+        return ClaimedRunResult(run=run, token=token)
+
+    # A claimer never writes the caller's claim. Each method reports the token
+    # it won; a later failure write that holds none re-derives authority from
+    # the durable proof, which is the same comparison the store enforces.
+
+    async def claim_for_failure(
+        self,
+        uow: CanonicalUnitOfWork,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
+        """Claim a still-pending run so only its owner can fail it.
+
+        The compare-and-set runs inside the caller's transaction, so a won
+        claim commits or rolls back with the failure write it authorizes.
+
+        Returns
+        -------
+        ClaimToken | None
+            This invocation's token, or ``None`` when another owns the run.
+        """
+        started_at = self.runtime.clock()
+        run = await uow.generation_runs.claim_run_for_execution(
+            run_id,
+            ExecutionClaim(
+                current_node=None,
+                started_at=started_at,
+                # No lease: this claim and the terminal write that authorizes
+                # it commit in one transaction, so a lease would never become
+                # durable without the failure that already ends the run.
+                lease_expires_at=None,
+                claim_token=claim.proof,
+            ),
+        )
+        return None if run is None else ClaimToken(run_id, proof=claim.proof)
+
+    async def reconcile(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
+        """Re-adopt a durable claim whose commit acknowledgement was lost.
+
+        Returns
+        -------
+        ClaimToken | None
+            The token when the stored claim carries this attempt's proof.
+        """
+        if claim.token is not None:
+            return claim.token
+        async with self.runtime.uow_factory() as uow:
+            stored = await uow.generation_runs.claim_token_for(run_id)
+        if stored != claim.proof:
+            return None
+        return ClaimToken(run_id, proof=claim.proof)
 
 
 __all__ = ["ClaimerContext", "ClaimerRuntime", "GenerationRunClaimer"]

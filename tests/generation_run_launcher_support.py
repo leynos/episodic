@@ -11,23 +11,13 @@ from episodic.canonical.domain import (
     GenerationEvent,
     GenerationRun,
     GenerationRunStatus,
-    IngestionJob,
-    IngestionStatus,
-    IntakeState,
-    ReferenceBinding,
-    ReferenceBindingTargetKind,
-    ReferenceDocument,
-    ReferenceDocumentKind,
-    ReferenceDocumentLifecycleState,
-    ReferenceDocumentRevision,
-    SeriesProfile,
 )
+from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.generation_persistence import (
     EpisodeMaterialisationRequest,
     materialise_episode_from_ingestion,
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
-from episodic.canonical.ingestion_sources import AttachmentKind, IngestionJobSource
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.cost.ports import BillingPeriodKey, CostLedgerEntryId, UsageSource
 from episodic.generation.draft_script import (
@@ -37,8 +27,18 @@ from episodic.generation.draft_script import (
 )
 from episodic.generation.launcher import InProcessGenerationRunLauncher
 from episodic.llm import LLMUsage, ProviderCallUsage
+from episodic.orchestration import LangGraphContentGenerationGraph
+from tests.generation_run_launcher_seed_support import (
+    _clock,
+    _ingestion_job,
+    _presenter_sets,
+    _series_profile,
+    _source,
+)
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
@@ -48,10 +48,24 @@ NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
 
 @dc.dataclass(frozen=True, slots=True)
 class LauncherOptions:
-    """Execution and admission capacities for a test launcher."""
+    """Construction options for a test launcher.
+
+    Attributes
+    ----------
+    max_concurrency : int
+        Execution permits.
+    max_pending_runs : int
+        Additional admitted runs beyond the execution permits.
+    evaluator_set : QualityEvaluatorSet
+        Evaluators the injected content-generation graph uses. The default
+        empty set accepts only no-QA runs, like production until 4.4.2.
+    """
 
     max_concurrency: int = 4
     max_pending_runs: int = 16
+    evaluator_set: QualityEvaluatorSet = dc.field(
+        default_factory=lambda: QualityEvaluatorSet(())
+    )
 
 
 @dc.dataclass(slots=True)
@@ -145,98 +159,6 @@ class RecordingCostRecorder:
         return CostLedgerEntryId("entry:rollup")
 
 
-def _clock() -> dt.datetime:
-    """Return the frozen launcher timestamp."""
-    return NOW
-
-
-def _series_profile() -> SeriesProfile:
-    """Return a series profile fixture."""
-    return SeriesProfile(
-        id=uuid.UUID("00000000-0000-0000-0000-000000000201"),
-        slug="bridgewater",
-        title="Bridgewater",
-        description=None,
-        configuration={},
-        guardrails={},
-        created_at=NOW,
-        updated_at=NOW,
-    )
-
-
-def _ingestion_job(series_profile_id: uuid.UUID) -> IngestionJob:
-    """Return a ready intake job fixture."""
-    return IngestionJob(
-        id=uuid.UUID("00000000-0000-0000-0000-000000000301"),
-        series_profile_id=series_profile_id,
-        target_episode_id=None,
-        status=IngestionStatus.PENDING,
-        requested_at=NOW,
-        started_at=None,
-        completed_at=None,
-        error_message=None,
-        created_at=NOW,
-        updated_at=NOW,
-        intake_state=IntakeState.READY_FOR_GENERATION,
-    )
-
-
-def _source(job_id: uuid.UUID) -> IngestionJobSource:
-    """Return one source attachment carrying text for generation."""
-    return IngestionJobSource(
-        id=uuid.UUID("00000000-0000-0000-0000-000000000401"),
-        ingestion_job_id=job_id,
-        attachment_kind=AttachmentKind.SOURCE_URI,
-        upload_id=None,
-        source_uri="https://example.test/source.md",
-        source_type="research_brief",
-        weight=1.0,
-        metadata={"content": "Bridgewater launch source text."},
-        created_at=NOW,
-    )
-
-
-def _presenter_sets(
-    series_profile_id: uuid.UUID,
-) -> tuple[tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding], ...]:
-    """Return host and guest profiles bound to the series."""
-    sets = []
-    for offset, kind, name, summary in (
-        (1, ReferenceDocumentKind.HOST_PROFILE, "Host One", "Host profile."),
-        (2, ReferenceDocumentKind.GUEST_PROFILE, "Guest One", "Guest profile."),
-    ):
-        document = ReferenceDocument(
-            id=uuid.UUID(f"00000000-0000-0000-0000-{600 + offset:012d}"),
-            owner_series_profile_id=series_profile_id,
-            kind=kind,
-            lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
-            metadata={"name": name},
-            created_at=NOW,
-            updated_at=NOW,
-        )
-        revision = ReferenceDocumentRevision(
-            id=uuid.UUID(f"00000000-0000-0000-0000-{700 + offset:012d}"),
-            reference_document_id=document.id,
-            content={"summary": summary},
-            content_hash=f"presenter-{offset}",
-            author="editor@example.test",
-            change_note="Create presenter profile.",
-            created_at=NOW,
-        )
-        binding = ReferenceBinding(
-            id=uuid.UUID(f"00000000-0000-0000-0000-{800 + offset:012d}"),
-            reference_document_revision_id=revision.id,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=series_profile_id,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=NOW,
-        )
-        sets.append((document, revision, binding))
-    return tuple(sets)
-
-
 def draft_result(tei_xml: str) -> DraftScriptResult:
     """Return a generated draft result with provider usage."""
     return DraftScriptResult(
@@ -326,10 +248,24 @@ async def launch_and_load_run(
     return run, events
 
 
-async def prepare_pending_run(
+async def _prepare_pending_run(
     factory: async_sessionmaker[AsyncSession],
+    build_run: cabc.Callable[[uuid.UUID, uuid.UUID], GenerationRun],
 ) -> tuple[uuid.UUID, uuid.UUID]:
-    """Persist a ready episode and pending generation run."""
+    """Persist a ready episode and a pending run built by ``build_run``.
+
+    Parameters
+    ----------
+    factory : async_sessionmaker[AsyncSession]
+        Session factory bound to the test database.
+    build_run : collections.abc.Callable[[uuid.UUID, uuid.UUID], GenerationRun]
+        Builder that receives the materialised episode and source-bundle ids.
+
+    Returns
+    -------
+    tuple[uuid.UUID, uuid.UUID]
+        The persisted run id and episode id.
+    """
     series = _series_profile()
     job = _ingestion_job(series.id)
     async with SqlAlchemyUnitOfWork(factory) as uow:
@@ -350,10 +286,17 @@ async def prepare_pending_run(
                 clock=_clock,
             ),
         )
-        run = _run(episode.id, job.id)
+        run = build_run(episode.id, job.id)
         await uow.generation_runs.create_run(run)
         await uow.commit()
     return run.id, episode.id
+
+
+async def prepare_pending_run(
+    factory: async_sessionmaker[AsyncSession],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """Persist a ready episode and a pending no-QA generation run."""
+    return await _prepare_pending_run(factory, _run)
 
 
 def launcher(
@@ -365,9 +308,11 @@ def launcher(
 ) -> InProcessGenerationRunLauncher:
     """Build a launcher for tests."""
     effective_options = LauncherOptions() if options is None else options
+    graph = LangGraphContentGenerationGraph(effective_options.evaluator_set)
     return InProcessGenerationRunLauncher(
         uow_factory=lambda: SqlAlchemyUnitOfWork(factory),
         draft_generator=generator,
+        content_graph=graph,
         cost_recorder_factory=(
             None if cost_recorder is None else lambda uow: cost_recorder
         ),

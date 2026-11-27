@@ -3,6 +3,10 @@
 from episodic.orchestration._checkpoint_resume import resume_generation_orchestration
 from episodic.orchestration._graph_state import GenerationGraphState
 from episodic.orchestration.checkpoints import InMemoryCheckpointStore
+from episodic.orchestration.content_generation import (
+    LangGraphContentGenerationGraph,
+    build_content_generation_graph,
+)
 from episodic.orchestration.generation import (
     ActionExecutionResult,
     ActionKind,
@@ -49,6 +53,7 @@ __all__ = [
     "GuestBiosFormatError",
     "GuestBiosToolExecutor",
     "InMemoryCheckpointStore",
+    "LangGraphContentGenerationGraph",
     "ModelTier",
     "PlannedAction",
     "PlannerPort",
@@ -66,6 +71,7 @@ __all__ = [
     "UnsupportedActionError",
     "WorkflowCheckpoint",
     "WorkflowStepIdentity",
+    "build_content_generation_graph",
     "build_generation_orchestration_graph",
     "build_generation_result",
     "build_workflow_step_idempotency_key",
