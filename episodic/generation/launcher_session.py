@@ -22,7 +22,8 @@ from episodic.canonical.generation_persistence import InvalidDraftTeiError
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_routing import QualityVerdict
 from episodic.canonical.tei import parse_tei_header
-from episodic.generation.launcher_quality import QaOutcome, record_qa_metrics
+from episodic.generation.launcher_observations import QaBypassed, QaConcluded
+from episodic.generation.launcher_quality import QaOutcome
 from episodic.generation.launcher_support import (
     ClaimedRun,
     ClaimToken,
@@ -31,15 +32,13 @@ from episodic.generation.launcher_support import (
     RunClaim,
 )
 
-_METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
-
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import DraftScriptResult
-    from episodic.observability import ValueMetricsPort
+    from episodic.generation.launcher_observations import RunObservation
     from episodic.runtime_providers import Clock
 
 
@@ -126,14 +125,18 @@ class _LauncherRunSession:
         Factory for the session's own short units of work.
     clock : Clock
         Clock for lifecycle timestamps.
-    metrics : ValueMetricsPort
-        Metrics sink for QA gate observations.
+    observations : list[RunObservation]
+        QA observations to record once the run's writes have committed. The
+        session reports what happened; the launcher records the metrics.
     run_id : uuid.UUID
         The run this session serves.
     claim : RunClaim
         Per-invocation claim record shared with the scheduling task.
     claimed : ClaimedRun | None
         Hydrated run input, set by :meth:`initialize`.
+    token : ClaimToken | None
+        Authority this session adopted from the claim, set by
+        :meth:`initialize`. The session never writes the caller's claim.
     draft : DraftScriptResult | None
         Generated draft, set by :meth:`generate_draft`.
     """
@@ -143,11 +146,12 @@ class _LauncherRunSession:
     failures: FailureSteps
     uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
     clock: Clock
-    metrics: ValueMetricsPort
     run_id: uuid.UUID
     claim: RunClaim
     claimed: ClaimedRun | None = None
     draft: DraftScriptResult | None = None
+    token: ClaimToken | None = None
+    observations: list[RunObservation] = dc.field(default_factory=list)
 
     async def initialize(self) -> None:
         """Claim and hydrate the run.
@@ -163,12 +167,11 @@ class _LauncherRunSession:
             msg = f"generation run {self.run_id} was not claimed"
             raise RunNotClaimedError(msg)
         self.claimed = claimed
+        self.token = claimed.token
         if claimed.run.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
-            # The bypass counter is a per-run observation, not a claim rule.
-            self.metrics.increment_counter(
-                _METRIC_QA_BYPASS,
-                labels={"quality_mode": claimed.run.quality_mode.value},
-            )
+            # Reported, not recorded: the launcher records the metric once the
+            # run has finished, so the session holds no metrics sink.
+            self.observations.append(QaBypassed(claimed.run.quality_mode))
 
     async def generate_draft(self) -> None:
         """Generate one draft, record it, and validate it as TEI.
@@ -221,14 +224,10 @@ class _LauncherRunSession:
             draft,
             qa=QaOutcome(qa_status, evaluations),
         )
-        # Record the QA outcome only after the terminal write commits, so a
+        # Report the QA outcome only after the terminal write commits, so a
         # failed persistence cannot emit a passing verdict.
         if qa_status is QaStatus.PASSED:
-            record_qa_metrics(
-                self.metrics,
-                QualityVerdict.PASSED,
-                evaluations,
-            )
+            self.observations.append(QaConcluded(QualityVerdict.PASSED, evaluations))
 
     async def escalate(
         self,
@@ -254,16 +253,16 @@ class _LauncherRunSession:
             raise RunNotClaimedError(msg)
         if result.token is not None:
             # The escalation committed; keep the authority it returned.
-            self.claim.token = result.token
+            self.token = result.token
         # The escalation is durable now, so its QA outcome metrics are real.
-        record_qa_metrics(self.metrics, verdict, evaluations)
+        self.observations.append(QaConcluded(verdict, evaluations))
 
     def _require_token(self) -> ClaimToken:
         """Return this session's claim token, or fail loudly without one."""
-        if self.claim.token is None:
+        if self.token is None:
             msg = "run session has no claim token"
             raise RuntimeError(msg)
-        return self.claim.token
+        return self.token
 
     def _require_claimed(self) -> ClaimedRun:
         """Return the hydrated run or fail loudly if a node skipped hydration."""

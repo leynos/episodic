@@ -48,27 +48,45 @@ type ClaimAuthority = cabc.Callable[
     [CanonicalUnitOfWork, uuid.UUID, RunClaim],
     cabc.Awaitable[ClaimToken | None],
 ]
-type FailureObserver = cabc.Callable[[uuid.UUID, Failure], None]
 type RecordCostsAuthority = cabc.Callable[
     [CanonicalUnitOfWork, uuid.UUID, DraftScriptResult],
     cabc.Awaitable[None],
 ]
 
 
+@dc.dataclass(frozen=True, slots=True)
+class CommittedFailure:
+    """A failure write that committed, handed to post-commit observation.
+
+    Attributes
+    ----------
+    run_id : uuid.UUID
+        The run that is now terminal.
+    failure : Failure
+        The classified failure that was written.
+    token : ClaimToken
+        The authority the write used, for a caller that must adopt it.
+    """
+
+    run_id: uuid.UUID
+    failure: Failure
+    token: ClaimToken
+
+
 @dc.dataclass(slots=True)
 class GenerationRunFailurePersistence:
     """Write a run's terminal failure, then report the committed result.
 
-    Persistence decides authority and performs one transaction. Metrics and
-    logging stay here as the default observation, and an injected
-    ``observe`` callback receives the committed result so a caller can react
-    without this component reaching into hidden state.
+    Persistence decides authority and performs one transaction; that command
+    resolves the claim and writes the failure and its events together.
+    Observation is a separate notifier, :func:`notify_committed_failure`,
+    which runs only on the committed result, so metrics and logging can never
+    describe a rolled-back write.
     """
 
     runtime: PersistenceRuntime
     claim_for_failure: ClaimAuthority | None = None
     record_costs: RecordCostsAuthority | None = None
-    observe: FailureObserver | None = None
 
     async def record_failure(
         self,
@@ -106,10 +124,10 @@ class GenerationRunFailurePersistence:
         token = await self._write_failure(run_id, failure, claim=claim, draft=draft)
         if token is None:
             return FailureWriteResult(written=False)
-        record_failure_observation(self.runtime.metrics, run_id, failure)
-        # The write is durable; hand the committed result to any observer.
-        if self.observe is not None:
-            self.observe(run_id, failure)
+        notify_committed_failure(
+            self.runtime.metrics,
+            CommittedFailure(run_id=run_id, failure=failure, token=token),
+        )
         return FailureWriteResult(written=True, token=token)
 
     async def _write_failure(
@@ -253,16 +271,17 @@ class GenerationRunFailurePersistence:
         )
 
 
-def record_failure_observation(
+def notify_committed_failure(
     metrics: ValueMetricsPort,
-    run_id: uuid.UUID,
-    failure: Failure,
+    committed: CommittedFailure,
 ) -> None:
     """Record the terminal metric and log line for a committed failure.
 
     Observation is a separate step from the transactional write: it runs only
     after the commit, so a rolled-back write emits nothing.
     """
+    run_id = committed.run_id
+    failure = committed.failure
     metrics.increment_counter(
         _METRIC_TERMINAL_STATES,
         labels={

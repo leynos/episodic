@@ -292,6 +292,14 @@ inference budget on a branch that cannot pass.
   private reconciliation deadline, an injectable source loader, narrow
   per-stage runtime protocols, an explicit claim-token return, and a split
   failure command.
+- [x] (2026-11-27) Tenth round: the 2026-11-27 CodeRabbit findings. The
+  cancellation-write timeout is read live; the run session reports QA
+  observations and the launcher records them after the run; failure
+  notification is a post-commit unit; every token is returned rather than
+  written into the caller's claim; `_submit` has two named, single-validation
+  paths with the ordering table in the module docstring; the graph observes
+  per-evaluator QA latency and names the run in every evaluator log line; and
+  the plan's gate blocks fail as a block. D26 records the one snapshot change.
 - [x] (2026-11-26) Ninth round: the 2026-11-26 CodeRabbit findings. The
   keyed-conflict precondition now reuses the submission's prepared validation
   (`GenerationRunsResource._submit` memoizes it); the recording-unit-of-work
@@ -871,6 +879,16 @@ accepted in EP-M6. D13 records the review itself.
     write; only `_cancelled_run_ids` (recorded writes) deduplicates
     unconditionally.
   - Date/Author: 2026-11-23, implementation agent.
+- **Decision D26: record QA observations after the run, from the launcher.**
+  - `_LauncherRunSession` reports `QaBypassed` and `QaConcluded` observations;
+    it holds no metrics sink and names no metric. The launcher records them
+    from a `finally` once the graph has finished, so every observation follows
+    the committed write it describes. The cost is that
+    `generation_run_qa_bypass_total` now follows the terminal counter in the
+    no-QA characterization snapshot instead of preceding the draft-latency
+    observation. Names, labels and values are unchanged, and the snapshot diff
+    is a pure reorder of five entries.
+  - Date/Author: 2026-11-27, implementation agent.
 - **Decision D25: reconcile inside the failure transaction and publish QA
   metrics only after the write.**
   - `GenerationRunFailurePersistence` no longer takes a separate
@@ -1628,7 +1646,7 @@ These are trusted, not verified.
   follows. `_LauncherRunSession.begin_evaluation` now calls
   `GenerationRunPersistence.record_evaluation_started`, so every run-state
   write goes through one persistence path. Metrics and logging moved out of the
-  failure component into the module-level `record_failure_observation`, which
+  failure component into the module-level `notify_committed_failure`, which
   runs only after the commit. `GenerationRunsResource._submit` validates a
   request once per submission: its memoized `validate()` serves the work
   directly and the keyed-conflict precondition reuses the same prepared result,
@@ -1686,14 +1704,19 @@ These are trusted, not verified.
      rather than the whole launcher, so a stage's dependency is explicit in
      the type while reads still go through the host at use time, which keeps
      the live-replacement contract.
-  4. `_claim_and_start` returns a `ClaimedRunResult` carrying the token;
-     `ClaimedRun` also carries it, so the success and failure paths name their
-     authority instead of relying on hidden state. The one documented
-     exception is the cancelled-commit path, which cannot return a value and
-     therefore still adopts the token in place.
-  5. `GenerationRunFailurePersistence.record_failure` is split into
-     authority-plus-transaction (`_write_failure`) and post-commit
-     observation (`_observe_written_failure`).
+  4. Every component reports the token it won; none writes the caller's
+     claim. `RunClaim.adopt` is the one adoption point, and only the
+     scheduling task calls it: once from `_run_task` with the token a
+     cancellation write returned, and once from the launcher's cancellation
+     arm with the token the session had already won. A path that holds no
+     token reconciles against the durable proof, which is the same value the
+     store compares, so removing the writes loses no authority.
+  5. `GenerationRunFailurePersistence.record_failure` keeps one
+     authority-plus-transaction command (`_write_failure`) and hands its
+     committed result to `notify_committed_failure`, a post-commit notifier
+     that owns the metrics and log line. The tests replace that notifier and
+     prove it runs once, only after the commit, and never for a refused or
+     rolled-back write.
 
 ## Plan of work
 
@@ -2116,16 +2139,21 @@ with `tee` to `/tmp/$ACTION-episodic-4-4-1-qa-gated-mode-branching.out`. Run
 gates sequentially, never in parallel. Prefer delegating full gate runs to the
 `scrutineer` agent.
 
-At each milestone, run. `set -o pipefail` is required: without it a pipeline
-reports `tee`'s status, so a failing `make` would still record a passing gate.
+At each milestone, run. Each gate block is a single `set -e` subshell: `-e`
+stops at the first failing `make`, `pipefail` makes `make ... | tee` report
+`make`'s status rather than `tee`'s, and the subshell scopes both so the
+caller's shell is unaffected. Without them the block would run on to its last
+command and could exit `0` after an earlier gate failed.
 
 ```shell
-set -o pipefail
-make fmt
-make check-fmt 2>&1 | tee /tmp/check-fmt-episodic-4-4-1-qa-gated-mode-branching.out
-make typecheck 2>&1 | tee /tmp/typecheck-episodic-4-4-1-qa-gated-mode-branching.out
-make lint 2>&1 | tee /tmp/lint-episodic-4-4-1-qa-gated-mode-branching.out
-make test 2>&1 | tee /tmp/test-episodic-4-4-1-qa-gated-mode-branching.out
+(
+  set -eo pipefail
+  make fmt
+  make check-fmt 2>&1 | tee /tmp/check-fmt-episodic-4-4-1-qa-gated-mode-branching.out
+  make typecheck 2>&1 | tee /tmp/typecheck-episodic-4-4-1-qa-gated-mode-branching.out
+  make lint 2>&1 | tee /tmp/lint-episodic-4-4-1-qa-gated-mode-branching.out
+  make test 2>&1 | tee /tmp/test-episodic-4-4-1-qa-gated-mode-branching.out
+)
 ```
 
 For focused loops during development:
@@ -2153,14 +2181,15 @@ qa_escalated_timeout, qa_unavailable, fault@initialize, fault@generate, fault@be
 fault@complete_with_draft, fault@escalate
 ```
 
-For the documentation milestone, run in the same shell session, so the
-`pipefail` set above still applies:
+For the documentation milestone, run the same guarded subshell:
 
 ```shell
-set -o pipefail
-make fmt
-make markdownlint 2>&1 | tee /tmp/markdownlint-episodic-4-4-1-qa-gated-mode-branching.out
-make nixie 2>&1 | tee /tmp/nixie-episodic-4-4-1-qa-gated-mode-branching.out
+(
+  set -eo pipefail
+  make fmt
+  make markdownlint 2>&1 | tee /tmp/markdownlint-episodic-4-4-1-qa-gated-mode-branching.out
+  make nixie 2>&1 | tee /tmp/nixie-episodic-4-4-1-qa-gated-mode-branching.out
+)
 ```
 
 Run `make check-migrations` after EP-M2. Commit after each green step, and gate

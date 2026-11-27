@@ -8,7 +8,6 @@ write, and the cancellation ordering that depends on both.
 
 import asyncio
 import dataclasses as dc
-import types
 import typing as typ
 import uuid
 
@@ -57,7 +56,9 @@ async def test_lost_commit_acknowledgement_is_reconciled(
     with pytest.raises(asyncio.CancelledError):
         await run_launcher._components[0].claim(run_id, claim)
 
-    assert claim.token is not None, "the durable claim must be re-adopted"
+    # The claimer reports authority; it never writes the caller's claim. The
+    # durable proof is what a later write reconciles against.
+    assert claim.token is None, claim.token
     result = await run_launcher._components[2].record_failure(
         run_id,
         Failure("after lost ack", "unexpected"),
@@ -159,13 +160,10 @@ async def test_escalation_propagates_a_refused_write() -> None:
         failures=typ.cast("typ.Any", _RefusingFailures()),
         uow_factory=typ.cast("typ.Any", lambda: None),
         clock=typ.cast("typ.Any", lambda: None),
-        metrics=typ.cast(
-            "typ.Any",
-            types.SimpleNamespace(increment_counter=lambda *a, **k: None),
-        ),
         run_id=uuid.uuid4(),
         claim=RunClaim(token=ClaimToken(uuid.uuid4())),
     )
+    session.token = session.claim.token
     session.draft = draft_result(valid_tei())
 
     with pytest.raises(RunNotClaimedError, match="refused the escalation"):
@@ -200,7 +198,10 @@ async def test_pending_tokenless_marker_does_not_suppress_a_token_holder(
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
     claim = RunClaim()
-    await run_launcher._components[0].claim(run_id, claim)
+    claimed = await run_launcher._components[0].claim(run_id, claim)
+    assert claimed is not None, "the run must be claimed"
+    # The scheduling task adopts the authority the claimer reported.
+    claim.adopt(claimed.token)
 
     # Simulate a tokenless duplicate that registered a marker and then could
     # not write. The claimant's token must still be honoured.

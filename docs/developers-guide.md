@@ -1292,6 +1292,14 @@ Key expectations:
   any individual database test that approaches the limit repeatedly.
 - `EPISODIC_TEST_DB=sqlite` disables the py-pglite fixtures (tests that depend
   on them will be skipped).
+- The opt-in real-PostgreSQL tests run only when `EPISODIC_TEST_POSTGRES_DSN`
+  names a server. The DSN must select the psycopg async driver, and its base
+  database must end in `_test`. Each fixture invocation creates its own
+  uniquely named database and drops only that database at teardown, so the user
+  needs `CREATE DATABASE` (and `DROP DATABASE`) permission. See
+  `tests/canonical_storage/_postgres_claim_race_support.py` for the guard that
+  enforces the `_test` suffix, and
+  `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md` for the full procedure.
 - If a non-SQLite backend is requested while py-pglite is unavailable, the
   fixtures raise a clear error instead of silently skipping tests.
 - `make check-migrations` uses the same database technology, but a separate
@@ -2797,11 +2805,49 @@ the same graph can be driven by the launcher or by a test double.
   feeds `ApiDependencies.accepted_quality_modes` and
   `GenerationRunsResourceConfig`. The REST layer applies, in order: parser body
   rules, then the capability `422`, the budget check and the gated-rationale
-  `400`. A no-QA request validates and resolves its launcher **before**
-  idempotency, with or without a key, so a removed launcher is a `503`. For a
-  QA-gated request, acquired work validates the request; a conflict or
-  in-flight outcome also runs the check as a precondition, while a stored
-  replay skips it and returns the recorded `202`.
+  `400`. A keyless request, and a keyed `draft_without_qa` request, validate
+  and resolve the launcher **before** idempotency, so a body error or a removed
+  launcher is reported ahead of a reused key and a missing launcher is a `503`.
+  A keyed `qa_gated` request validates inside the idempotent work, so a
+  rejected request releases its key and a stored `202` still replays after the
+  capability is withdrawn; a conflict reports its `409` without a second
+  validation pass.
+- **Launcher components.** `GenerationRunClaimer` (`launcher_claim.py`)
+  claims and hydrates; `GenerationRunPersistence` (`launcher_persistence.py`)
+  owns the draft, evaluation-start and success writes;
+  `GenerationRunFailurePersistence` (`launcher_failure.py`) owns terminal
+  failure writes and observation. `launcher_scheduling.py` owns admission, the
+  execution semaphore, task retention and shutdown;
+  `launcher_cancellation_writes.py` holds `CancellationWrites`, which owns the
+  shielded cancellation writes, their pending and cancelled sets, the timeout
+  getter each wait applies, the timeout counter and the drain. The scheduler
+  delegates every write through `record_cancellation_owned`, which is the
+  single seam for cancellation bookkeeping. The timeout is read from the live
+  runtime view when each wait starts, so a changed deadline bounds the next
+  write and the shutdown drain alike.
+- **Run session seams.** `launcher_session.py` defines `_LauncherRunSession`
+  (the `ContentGenerationSteps` implementation) plus the narrow Protocols it
+  depends on — `ClaimerSteps`, `FailureSteps`, `SessionPersistenceSteps` — and
+  `RunNotClaimedError`, which tells the launcher the claim was lost:
+  `initialize` raises it before any inference is spent, and `escalate` raises
+  it when the store refuses the escalation write. `launcher_quality.py` holds
+  `QaOutcome`, `qa_result_payload` and `record_qa_metrics`; the session records
+  QA outcome metrics only after the terminal write commits.
+- **Terminal claim gate.** `generation_run_terminal_claim.py` holds
+  `require_terminal_claim`, the one rule both store adapters apply to a
+  terminal write: a stored claim token must equal the update's, and a run with
+  no stored claim may still be terminated by an internal path.
+  `generation_run_claim_store.py` holds `InMemoryClaimTokens`, the reference
+  adapter's token map. `RunClaimMismatch` is the refusal both adapters raise.
+- **QA failure categories.** `qa.unavailable` means a QA-gated run had no
+  evaluator to consult and fails closed before spending inference;
+  `qa.escalation_required` is the terminal for a gated run whose aggregated
+  verdict did not pass, and it keeps the provider cost of the draft it rejected.
+- **QA metrics.** `generation_run_qa_bypass_total` (label `quality_mode`)
+  counts claimed runs that skip QA; `generation_run_qa_gate_total` (label
+  `verdict`) counts the aggregate gate verdict recorded after the terminal
+  write commits; `generation_run_qa_evaluator_errors_total` (label `evaluator`)
+  counts evaluator faults that produced an inconclusive result.
 
 ### Manual recovery of expired generation-run leases
 

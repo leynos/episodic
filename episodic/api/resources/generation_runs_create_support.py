@@ -17,9 +17,11 @@ from episodic.api.source_intake_support import require_str
 from episodic.canonical.generation_quality import QualityMode, is_blank_text
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from episodic.api.types import JsonPayload
+    from episodic.generation.launcher import GenerationRunLauncher
 
 _GATED_RATIONALE_MESSAGE = (
     "skip_qa_rationale is not accepted with quality_mode qa_gated."
@@ -214,3 +216,76 @@ def _request_rule_order(
     if request.quality_mode is QualityMode.DRAFT_WITHOUT_QA:
         return RequestRuleOrder.BEFORE_IDEMPOTENCY
     return RequestRuleOrder.IN_IDEMPOTENT_WORK
+
+
+@dc.dataclass(frozen=True, slots=True)
+class PreparedRequest:
+    """One submission's request rules, applied at most once.
+
+    Attributes
+    ----------
+    request : _CreateGenerationRun
+        The parsed request with its rationale and budget hint resolved.
+    launcher : GenerationRunLauncher | None
+        The launcher the request was checked against, or ``None`` when the
+        launcher is resolved later, inside the idempotent work.
+    """
+
+    request: _CreateGenerationRun
+    launcher: GenerationRunLauncher | None = None
+
+
+def prepare_request(
+    submission: _Submission,
+    *,
+    accepted_quality_modes: frozenset[QualityMode],
+    resolve_launcher: cabc.Callable[[], GenerationRunLauncher],
+) -> PreparedRequest:
+    """Apply the request rules once and resolve the launcher when required.
+
+    This is the only place a create request's rules run. The caller decides
+    when: before idempotency for the paths that must report a body or
+    capability error ahead of a reused key, or inside the work and the
+    conflict precondition for the paths that must let a stored replay through
+    and release a rejected key.
+
+    Parameters
+    ----------
+    submission : _Submission
+        The parsed request and its context.
+    accepted_quality_modes : frozenset[QualityMode]
+        Modes this deployment can execute.
+    resolve_launcher : cabc.Callable[[], GenerationRunLauncher]
+        Returns the configured launcher, or raises its 503 error.
+
+    Returns
+    -------
+    PreparedRequest
+        The validated request, and the launcher when this path resolves it.
+
+    Raises
+    ------
+    falcon.HTTPUnprocessableEntity
+        If the deployment does not accept the requested mode.
+    falcon.HTTPBadRequest
+        If the budget hint or rationale rule is broken.
+    falcon.HTTPServiceUnavailable
+        If this path resolves the launcher and none is configured.
+    """  # ruff: ignore[docstring-extraneous-exception]  # Delegated helpers raise the concrete Falcon exceptions.
+    prepared = _validate_quality_request(
+        submission.request,
+        submission.payload,
+        accepted_quality_modes,
+    )
+    if _request_rule_order(submission.request, _idempotency_key(submission)) is (
+        RequestRuleOrder.IN_IDEMPOTENT_WORK
+    ):
+        # A keyed gated request validates inside the idempotent work, so a
+        # stored 202 can still replay after the capability is withdrawn.
+        return PreparedRequest(prepared)
+    return PreparedRequest(prepared, resolve_launcher())
+
+
+def _idempotency_key(submission: _Submission) -> str | None:
+    """Return the submission's idempotency key, if any."""
+    return submission.req.get_header("Idempotency-Key")

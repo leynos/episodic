@@ -12,6 +12,7 @@ verdict and can never pass a draft. A genuine cancellation is re-raised.
 """
 
 import asyncio
+import dataclasses as dc
 
 from episodic.canonical.generation_graph_ports import (
     EvaluationSubject,
@@ -30,6 +31,10 @@ from episodic.canonical.generation_routing import (
     route_quality_mode,
 )
 from episodic.logging import get_logger, log_error
+from episodic.observability import (  # ruff: ignore[typing-only-first-party-import]  # Dataclass annotations are evaluated at runtime.
+    MonotonicClockPort,
+    ValueMetricsPort,
+)
 from episodic.orchestration._content_graph_state import (  # ruff: ignore[typing-only-first-party-import]  # Node signatures are evaluated at import time.
     ContentGenerationContext,
     ContentGenerationGraphState,
@@ -39,8 +44,37 @@ type NodeResult = dict[str, object]
 
 logger = get_logger(__name__)
 
+_METRIC_QA_EVALUATION_LATENCY = "generation_run_qa_evaluation_latency_ms"
 _TIMEOUT_ERROR = "timeout"
 _CANCELLED_ERROR = "cancelled"
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _EvaluationObservation:
+    """Observation collaborators one evaluation pass reports through."""
+
+    run_id: str
+    metrics: ValueMetricsPort
+    monotonic_clock: MonotonicClockPort
+
+
+def _observe_evaluation(
+    observation: _EvaluationObservation,
+    evaluator: str,
+    verdict: QualityVerdict,
+    elapsed_ms: float,
+) -> None:
+    """Record one evaluator's latency, labelled by evaluator and verdict."""
+    observation.metrics.observe_latency_ms(
+        _METRIC_QA_EVALUATION_LATENCY,
+        elapsed_ms,
+        labels={"evaluator": evaluator, "verdict": verdict.value},
+    )
+
+
+def _elapsed_ms(clock: MonotonicClockPort, started_at: float) -> float:
+    """Return the elapsed milliseconds between *started_at* and now."""
+    return (clock.monotonic_seconds() - started_at) * 1000.0
 
 
 def _require_verdict(state: ContentGenerationGraphState) -> QualityVerdict:
@@ -109,11 +143,13 @@ def _is_external_cancellation() -> bool:
 
 def _timeout_after_late_result(
     evaluator: QualityEvaluatorPort,
+    run_id: str,
 ) -> QualityEvaluation:
     """Return the inconclusive result a deadline-expired evaluation records."""
     log_error(
         logger,
-        "content_generation.evaluator_timeout evaluator=%s late_result=true",
+        "content_generation.evaluator_timeout run_id=%s evaluator=%s late_result=true",
+        run_id,
         evaluator.name,
     )
     return QualityEvaluation(
@@ -126,11 +162,16 @@ def _timeout_after_late_result(
 def _inconsistent_evaluation(
     evaluator: QualityEvaluatorPort,
     evaluation: QualityEvaluation,
+    run_id: str,
 ) -> QualityEvaluation:
     """Normalize an error-tagged verdict to inconclusive."""
     log_error(
         logger,
-        "content_generation.evaluator_inconsistent evaluator=%s error_type=%s",
+        (
+            "content_generation.evaluator_inconsistent "
+            "run_id=%s evaluator=%s error_type=%s"
+        ),
+        run_id,
         evaluator.name,
         evaluation.error_type,
     )
@@ -142,19 +183,21 @@ def _inconsistent_evaluation(
     )
 
 
-async def _evaluate_one(
+async def _invoke_evaluator(
     evaluator: QualityEvaluatorPort,
     subject: EvaluationSubject,
     timeout_seconds: float,
 ) -> QualityEvaluation:
-    """Run one evaluator, converting every failure into an inconclusive verdict."""
+    """Invoke one evaluator, converting every failure into an inconclusive verdict."""
+    run_id = str(subject.run_id)
     try:
         async with asyncio.timeout(timeout_seconds) as scope:
             evaluation = await evaluator.evaluate(subject)
     except TimeoutError as exc:
         log_error(
             logger,
-            "content_generation.evaluator_timeout evaluator=%s",
+            "content_generation.evaluator_timeout run_id=%s evaluator=%s",
+            run_id,
             evaluator.name,
             exc_info=exc,
         )
@@ -168,7 +211,8 @@ async def _evaluate_one(
             raise
         log_error(
             logger,
-            "content_generation.evaluator_cancelled evaluator=%s",
+            "content_generation.evaluator_cancelled run_id=%s evaluator=%s",
+            run_id,
             evaluator.name,
             exc_info=exc,
         )
@@ -180,7 +224,8 @@ async def _evaluate_one(
     except Exception as exc:  # ruff: ignore[blind-except]  # An adapter fault must not fail the generator path.
         log_error(
             logger,
-            "content_generation.evaluator_error evaluator=%s error_type=%s",
+            ("content_generation.evaluator_error run_id=%s evaluator=%s error_type=%s"),
+            run_id,
             evaluator.name,
             type(exc).__name__,
             exc_info=exc,
@@ -193,14 +238,32 @@ async def _evaluate_one(
     if scope.expired():
         # An adapter can swallow the cancellation and return a verdict. The
         # deadline still governs, so a late result never counts as a pass.
-        return _timeout_after_late_result(evaluator)
+        return _timeout_after_late_result(evaluator, run_id)
     if evaluation.error_type is not None:
-        return _inconsistent_evaluation(evaluator, evaluation)
+        return _inconsistent_evaluation(evaluator, evaluation, run_id)
     return QualityEvaluation(
         evaluator=evaluator.name,
         verdict=evaluation.verdict,
         summary=evaluation.summary,
     )
+
+
+async def _evaluate_one(
+    evaluator: QualityEvaluatorPort,
+    subject: EvaluationSubject,
+    timeout_seconds: float,
+    observation: _EvaluationObservation,
+) -> QualityEvaluation:
+    """Run one evaluator and record its latency whatever the outcome."""
+    started_at = observation.monotonic_clock.monotonic_seconds()
+    evaluation = await _invoke_evaluator(evaluator, subject, timeout_seconds)
+    _observe_evaluation(
+        observation,
+        evaluator.name,
+        evaluation.verdict,
+        _elapsed_ms(observation.monotonic_clock, started_at),
+    )
+    return evaluation
 
 
 async def evaluate(
@@ -213,11 +276,17 @@ async def evaluate(
     names = tuple(evaluator.name for evaluator in evaluators)
     await context.steps.begin_evaluation(names)
     subject = context.steps.evaluation_subject()
+    observation = _EvaluationObservation(
+        run_id=str(subject.run_id),
+        metrics=context.metrics,
+        monotonic_clock=context.monotonic_clock,
+    )
     results = [
         await _evaluate_one(
             evaluator,
             subject,
             context.evaluator_set.evaluator_timeout_seconds,
+            observation,
         )
         for evaluator in evaluators
     ]

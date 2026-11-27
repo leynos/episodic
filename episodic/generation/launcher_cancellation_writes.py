@@ -17,14 +17,17 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from episodic.generation.launcher_support import RunClaim
+    from episodic.generation.launcher_support import ClaimToken, RunClaim
     from episodic.observability import ValueMetricsPort
 
 _METRIC_CANCELLATION_TIMEOUT = "generation_run_cancellation_write_timeouts_total"
 
 logger = get_logger(__name__)
 
-type CancellationRecorder = cabc.Callable[[uuid.UUID, RunClaim], cabc.Awaitable[bool]]
+type CancellationRecorder = cabc.Callable[
+    [uuid.UUID, RunClaim],
+    cabc.Awaitable[ClaimToken | None],
+]
 
 
 @dc.dataclass(slots=True)
@@ -37,9 +40,11 @@ class CancellationWrites:
         Persists one cancellation and reports whether it landed.
     metrics : ValueMetricsPort
         Sink for the timeout counter.
-    timeout_seconds : float
-        Deadline each wait applies to a shielded write.
-    tasks : set[asyncio.Task[bool]]
+    timeout_seconds : cabc.Callable[[], float]
+        Reads the deadline each wait applies to a shielded write. A getter,
+        not a value, so a timeout changed after construction still bounds the
+        next write; ``drain`` already reads the runtime value.
+    tasks : set[asyncio.Task[ClaimToken | None]]
         Writes still in flight, retained so shutdown can await them.
     cancelled_run_ids : set[uuid.UUID]
         Runs whose cancellation write actually landed.
@@ -49,21 +54,32 @@ class CancellationWrites:
 
     record_cancellation: CancellationRecorder
     metrics: ValueMetricsPort
-    timeout_seconds: float
-    tasks: set[asyncio.Task[bool]] = dc.field(default_factory=set)
+    timeout_seconds: cabc.Callable[[], float]
+    tasks: set[asyncio.Task[ClaimToken | None]] = dc.field(default_factory=set)
     cancelled_run_ids: set[uuid.UUID] = dc.field(default_factory=set)
     pending_run_ids: set[uuid.UUID] = dc.field(default_factory=set)
 
-    async def record_owned(self, run_id: uuid.UUID, claim: RunClaim) -> None:
-        """Record a cancellation from a task named for the run (INV-9)."""
+    async def record_owned(
+        self,
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
+        """Record a cancellation from a task named for the run (INV-9).
+
+        Returns
+        -------
+        ClaimToken | None
+            The authority a committed write used, or ``None`` when the write
+            was already recorded, did not land, or missed its deadline.
+        """
         if run_id in self.cancelled_run_ids:
-            return
+            return None
         if claim.token is None and run_id in self.pending_run_ids:
-            return
+            return None
         self.pending_run_ids.add(run_id)
 
-        async def perform() -> bool:
-            """Await the configured recorder and report whether it landed."""
+        async def perform() -> ClaimToken | None:
+            """Await the configured recorder and report the token it used."""
             return await self.record_cancellation(run_id, claim)
 
         write = asyncio.create_task(
@@ -73,17 +89,22 @@ class CancellationWrites:
         self.tasks.add(write)
         write.add_done_callback(lambda task: self._clear(run_id, task))
         try:
-            landed = await asyncio.wait_for(
+            token = await asyncio.wait_for(
                 asyncio.shield(write),
-                timeout=self.timeout_seconds,
+                timeout=self.timeout_seconds(),
             )
         except TimeoutError:
             self.report_timeout(run_id)
-            return
-        if landed:
+            return None
+        if token is not None:
             self.cancelled_run_ids.add(run_id)
+        return token
 
-    def _clear(self, run_id: uuid.UUID, task: asyncio.Task[bool]) -> None:
+    def _clear(
+        self,
+        run_id: uuid.UUID,
+        task: asyncio.Task[ClaimToken | None],
+    ) -> None:
         """Forget a finished cancellation write."""
         self.tasks.discard(task)
         self.pending_run_ids.discard(run_id)

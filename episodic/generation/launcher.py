@@ -54,6 +54,7 @@ from episodic.generation.launcher_claim import (
     GenerationRunClaimer,
 )
 from episodic.generation.launcher_failure import GenerationRunFailurePersistence
+from episodic.generation.launcher_observations import record_run_observations
 from episodic.generation.launcher_persistence import GenerationRunPersistence
 from episodic.generation.launcher_runtime_views import (
     _LauncherClaimerRuntime,
@@ -75,6 +76,7 @@ from episodic.generation.launcher_session import (
     _LauncherRunSession,
 )
 from episodic.generation.launcher_support import (
+    ClaimToken,
     Clock,
     CostRecorderFactory,
     DraftIdFactoryFactory,
@@ -281,7 +283,6 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             failures=failures,
             uow_factory=self.uow_factory,
             clock=self.clock,
-            metrics=self.metrics,
             run_id=run_id,
             claim=claim,
         )
@@ -296,6 +297,12 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         except RunNotClaimedError:
             return ExecutionOutcome(outcome="not_claimed")
         except asyncio.CancelledError:
+            # The scheduling task owns the claim, and this runs inside it: if
+            # the session won authority before the cancellation landed, adopt
+            # it here so the cancellation write is recognised as a holder's
+            # write rather than a tokenless duplicate.
+            if session.token is not None:
+                claim.adopt(session.token)
             await self._scheduler.record_cancellation_owned(run_id, claim)
             raise
         except Exception as exc:  # ruff: ignore[blind-except]  # Task boundary must persist unexpected failures.
@@ -307,12 +314,19 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
                 outcome="failed",
                 failure_category=failure.category,
             )
-        branch = route_quality_mode(quality_mode)
-        return ExecutionOutcome(
-            outcome=_terminal_outcome_name(terminal),
-            quality_branch=branch.value,
-            terminal=terminal.value,
-        )
+        else:
+            branch = route_quality_mode(quality_mode)
+            return ExecutionOutcome(
+                outcome=_terminal_outcome_name(terminal),
+                quality_branch=branch.value,
+                terminal=terminal.value,
+            )
+        finally:
+            # Every observation the session appended follows a committed
+            # write, whether the run then finished, failed or was cancelled.
+            # Recording here, not in the session, keeps metric names and the
+            # sink out of the step port.
+            record_run_observations(self.metrics, session.observations)
 
     async def _read_quality_mode(self, run_id: uuid.UUID) -> QualityMode | None:
         """Read a run's requested quality mode before the graph forks on it."""
@@ -324,8 +338,8 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         self,
         run_id: uuid.UUID,
         claim: RunClaim,
-    ) -> bool:
-        """Record cancellation consistently before or during execution."""
+    ) -> ClaimToken | None:
+        """Record cancellation and report the authority the write used."""
         _claimer, _persistence, failures = self._components
         result = await failures.record_failure(
             run_id,
@@ -335,10 +349,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             ),
             claim=claim,
         )
-        if result.written and result.token is not None:
-            # The write committed; adopt its authority for any later path.
-            claim.token = result.token
-        return result.written
+        return result.token if result.written else None
 
 
 def _terminal_outcome_name(terminal: GenerationTerminal) -> str:

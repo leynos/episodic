@@ -16,6 +16,7 @@ from episodic.generation.launcher_scheduling import (
     ExecutionOutcome,
     GenerationRunScheduler,
 )
+from episodic.generation.launcher_support import ClaimToken
 from tests.test_generation_run_scheduler import (
     _BlockingExecutor,
     _RecordingCancellation,
@@ -33,13 +34,13 @@ class _StalledCancellation:
     release: asyncio.Event = dc.field(default_factory=asyncio.Event)
     calls: int = 0
 
-    async def record(self, run_id: uuid.UUID, claim: object) -> bool:
+    async def record(self, run_id: uuid.UUID, claim: object) -> ClaimToken:
         """Signal entry, then block until the test releases the write."""
-        _ = (run_id, claim)
+        _ = claim
         self.calls += 1
         self.started.set()
         await self.release.wait()
-        return True
+        return ClaimToken(run_id)
 
 
 @pytest.mark.asyncio

@@ -529,11 +529,18 @@ full_name = [
 reason = "GenerationRunFailurePersistence.record_failure is called by InProcessGenerationRunLauncher._execute_run and _record_cancellation, and it delegates to _write_failure. Skylos does not follow calls made from a class entrypoint. The launcher methods are called from _execute_run on the same class."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "class"
+full_name = [
+    "episodic.generation.launcher_failure.CommittedFailure",
+]
+reason = "CommittedFailure is constructed by GenerationRunFailurePersistence.record_failure and handed to notify_committed_failure; Skylos does not follow calls made from a class entrypoint."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
-    "episodic.generation.launcher_failure.record_failure_observation",
+    "episodic.generation.launcher_failure.notify_committed_failure",
 ]
-reason = "record_failure_observation is called by GenerationRunFailurePersistence.record_failure; Skylos does not follow calls made from a class entrypoint."
+reason = "notify_committed_failure is called by GenerationRunFailurePersistence.record_failure; Skylos does not follow calls made from a class entrypoint."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "parameter"
@@ -979,6 +986,10 @@ top = 0
 [tool.duplication_gate]
 
 [[tool.duplication_gate.allow]]
+members = ["episodic/generation/launcher_claim.py", "episodic/orchestration/_content_graph_state.py", "episodic/orchestration/content_generation.py"]
+reason = "Each module imports the observability names its own signatures forward: the claimer measures latency, and the graph runner and its context both pass the metrics sink and monotonic clock to the evaluation node. A shared import module would hide which layer owns the dependency."
+
+[[tool.duplication_gate.allow]]
 unit = "episodic/api/resources/*.py::__init__"
 reason = "Two-line resource constructors that store the injected unit-of-work factory; the repetition is the dependency-injection seam Falcon resources need."
 
@@ -1351,7 +1362,7 @@ reason = "Each branch must own its generate node so the topology states branch o
 members = ["episodic/canonical/generation_quality.py", "episodic/canonical/generation_routing.py"]
 reason = "A one-line docstring terminator coincidence in two pure policy modules; their contents are unrelated."
 [[tool.duplication_gate.allow]]
-members = ["episodic/canonical/unit_of_work_protocols.py", "episodic/api/serializers.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/storage/generation_runs.py", "episodic/orchestration/_planning_orchestrator.py", "episodic/generation/launcher_claim.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/canonical/upload_protocols.py", "episodic/api/handlers.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/api/resources/qa_artefacts.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/operation_observation.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/profile_templates/types.py", "episodic/cost/storage/metering.py", "episodic/generation/launcher_failure.py", "episodic/generation/launcher_session.py", "episodic/api/resources/episode_tei.py", "episodic/canonical/qa_artefact_service.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/history_repositories.py", "episodic/canonical/storage/uow.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/orchestration/langgraph_costs.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/profile_templates/helpers.py", "episodic/generation/launcher_quality.py", "episodic/generation/launcher_runtime_views.py"]
+members = ["episodic/canonical/unit_of_work_protocols.py", "episodic/api/serializers.py", "episodic/canonical/storage/generation_run_port_adapter.py", "episodic/canonical/entity_protocols.py", "episodic/canonical/generation_run_ports.py", "episodic/canonical/storage/generation_runs.py", "episodic/orchestration/_planning_orchestrator.py", "episodic/generation/launcher_claim.py", "episodic/canonical/adapters/generation_checkpoints.py", "episodic/canonical/profile_templates/_brief_loaders.py", "episodic/canonical/storage/qa_artefacts.py", "episodic/canonical/upload_protocols.py", "episodic/api/handlers.py", "episodic/canonical/reference_documents/resolution.py", "episodic/canonical/reference_protocols.py", "episodic/canonical/qa_artefact_ports.py", "episodic/canonical/storage/ingestion_job_repositories.py", "episodic/api/resources/qa_artefacts.py", "episodic/api/resources/generation_runs_scheduling.py", "episodic/canonical/generation_persistence_types.py", "episodic/canonical/profile_templates/_brief_reference_documents.py", "episodic/canonical/profile_templates/_brief_serializers.py", "episodic/operation_observation.py", "episodic/canonical/ingestion_ports.py", "episodic/canonical/profile_templates/types.py", "episodic/cost/storage/metering.py", "episodic/generation/launcher_failure.py", "episodic/generation/launcher_session.py", "episodic/generation/launcher_cancellation_writes.py", "episodic/api/resources/episode_tei.py", "episodic/canonical/qa_artefact_service.py", "episodic/canonical/reference_documents/revisions.py", "episodic/canonical/source_intake_types.py", "episodic/canonical/storage/episode_repository.py", "episodic/canonical/storage/history_repositories.py", "episodic/canonical/storage/uow.py", "episodic/orchestration/_graph_protocols.py", "episodic/orchestration/_protocols.py", "episodic/canonical/generation_persistence_projection.py", "episodic/canonical/storage/qa_artefact_outcomes.py", "episodic/orchestration/langgraph_costs.py", "episodic/canonical/domain_episodes.py", "episodic/canonical/profile_templates/helpers.py", "episodic/generation/launcher_quality.py", "episodic/generation/launcher_runtime_views.py"]
 reason = "Annotation-only TYPE_CHECKING import blocks: each module imports the domain, port and observability names its own signatures use. An import list cannot be factored into a helper, and a re-export facade would add a hop every reader must follow."
 [tool.hecate]
 root_packages = ["episodic"]

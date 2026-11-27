@@ -31,14 +31,6 @@
         'value': 0.0,
       }),
       dict({
-        'kind': 'counter',
-        'labels': dict({
-          'quality_mode': 'draft_without_qa',
-        }),
-        'name': 'generation_run_qa_bypass_total',
-        'value': 1.0,
-      }),
-      dict({
         'kind': 'latency_ms',
         'labels': dict({
           'quality_mode': 'draft_without_qa',
@@ -61,6 +53,14 @@
           'error_category': 'launcher.shutdown',
         }),
         'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
         'value': 1.0,
       }),
       dict({
@@ -148,14 +148,6 @@
         'value': 0.0,
       }),
       dict({
-        'kind': 'counter',
-        'labels': dict({
-          'quality_mode': 'draft_without_qa',
-        }),
-        'name': 'generation_run_qa_bypass_total',
-        'value': 1.0,
-      }),
-      dict({
         'kind': 'latency_ms',
         'labels': dict({
           'quality_mode': 'draft_without_qa',
@@ -178,6 +170,14 @@
           'error_category': 'tei.invalid',
         }),
         'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
         'value': 1.0,
       }),
       dict({
@@ -326,14 +326,6 @@
         'value': 0.0,
       }),
       dict({
-        'kind': 'counter',
-        'labels': dict({
-          'quality_mode': 'draft_without_qa',
-        }),
-        'name': 'generation_run_qa_bypass_total',
-        'value': 1.0,
-      }),
-      dict({
         'kind': 'latency_ms',
         'labels': dict({
           'quality_mode': 'draft_without_qa',
@@ -356,6 +348,14 @@
           'error_category': 'provider.transient',
         }),
         'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
         'value': 1.0,
       }),
       dict({
@@ -423,14 +423,6 @@
         'value': 0.0,
       }),
       dict({
-        'kind': 'counter',
-        'labels': dict({
-          'quality_mode': 'draft_without_qa',
-        }),
-        'name': 'generation_run_qa_bypass_total',
-        'value': 1.0,
-      }),
-      dict({
         'kind': 'latency_ms',
         'labels': dict({
           'quality_mode': 'draft_without_qa',
@@ -453,6 +445,14 @@
           'error_category': 'launcher.shutdown',
         }),
         'name': 'generation_run_draft_errors_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
         'value': 1.0,
       }),
       dict({
@@ -622,14 +622,6 @@
         'value': 0.0,
       }),
       dict({
-        'kind': 'counter',
-        'labels': dict({
-          'quality_mode': 'draft_without_qa',
-        }),
-        'name': 'generation_run_qa_bypass_total',
-        'value': 1.0,
-      }),
-      dict({
         'kind': 'latency_ms',
         'labels': dict({
           'quality_mode': 'draft_without_qa',
@@ -644,6 +636,14 @@
           'status': 'succeeded',
         }),
         'name': 'generation_run_terminal_total',
+        'value': 1.0,
+      }),
+      dict({
+        'kind': 'counter',
+        'labels': dict({
+          'quality_mode': 'draft_without_qa',
+        }),
+        'name': 'generation_run_qa_bypass_total',
         'value': 1.0,
       }),
       dict({

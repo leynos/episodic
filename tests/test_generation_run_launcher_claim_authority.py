@@ -14,6 +14,7 @@ import pytest
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
 from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.generation import launcher_failure
 from episodic.generation.launcher_support import ClaimToken, Failure, RunClaim
 from tests.generation_run_launcher_observation_support import RecordingMetrics
 from tests.generation_run_launcher_read_fault_support import (
@@ -33,6 +34,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.generation.launcher import InProcessGenerationRunLauncher
+    from episodic.generation.launcher_failure import CommittedFailure
 
 
 async def _load(
@@ -83,8 +85,9 @@ async def test_failure_write_authority_comes_from_the_claim(
     )
 
     holder = RunClaim()
-    await run_launcher._components[0].claim(run_id, holder)
-    assert holder.token is not None, "a won claim must produce a token"
+    claimed = await run_launcher._components[0].claim(run_id, holder)
+    assert claimed is not None, "the run must be claimed"
+    assert claimed.token.run_id == run_id, claimed.token
 
     refused = await run_launcher._components[2].record_failure(
         run_id,
@@ -238,13 +241,38 @@ class _RaisingCommitUnitOfWork(SqlAlchemyUnitOfWork):
         self._watch.committed = True
 
 
-@pytest.mark.asyncio
-async def test_the_observer_runs_once_after_a_committed_failure(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """The observer runs once, and only after the commit has returned.
+def _capture_notifications(
+    monkeypatch: pytest.MonkeyPatch,
+    watch: _CommitWatch | None,
+) -> list[tuple[uuid.UUID, Failure, bool]]:
+    """Replace the post-commit notifier and record each committed result.
 
-    The callback records the commit watch at the moment it runs, so moving the
+    Returns
+    -------
+    list[tuple[uuid.UUID, Failure, bool]]
+        One entry per notification: the run, the failure, and whether the
+        commit had returned when the notifier ran.
+    """
+    seen: list[tuple[uuid.UUID, Failure, bool]] = []
+
+    def capture(metrics: object, committed: object) -> None:
+        """Record one notification and the commit state it observed."""
+        _ = metrics
+        entry = typ.cast("CommittedFailure", committed)
+        seen.append((entry.run_id, entry.failure, watch is None or watch.committed))
+
+    monkeypatch.setattr(launcher_failure, "notify_committed_failure", capture)
+    return seen
+
+
+@pytest.mark.asyncio
+async def test_the_notifier_runs_once_after_a_committed_failure(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The notifier runs once, and only after the commit has returned.
+
+    The notifier records the commit watch at the moment it runs, so moving the
     call before the commit fails this test.
     """
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
@@ -254,11 +282,8 @@ async def test_the_observer_runs_once_after_a_committed_failure(
         uow_factory=lambda: _WatchingUnitOfWork(session_factory, watch),
     )
     failures = run_launcher._components[2]
-    seen: list[tuple[uuid.UUID, Failure, bool]] = []
+    seen = _capture_notifications(monkeypatch, watch)
     failure = Failure("observed", "unexpected")
-    failures.observe = lambda observed_id, observed_failure: seen.append(
-        (observed_id, observed_failure, watch.committed),
-    )
 
     result = await failures.record_failure(run_id, failure, claim=RunClaim())
 
@@ -267,15 +292,15 @@ async def test_the_observer_runs_once_after_a_committed_failure(
 
 
 @pytest.mark.asyncio
-async def test_the_observer_does_not_run_for_a_refused_write(
+async def test_the_notifier_does_not_run_for_a_refused_write(
     session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A refused write commits nothing, so the observer never runs."""
+    """A refused write commits nothing, so the notifier never runs."""
     this_run, _ = await prepare_pending_qa_gated_run(session_factory)
     run_launcher = _launcher(session_factory)
     failures = run_launcher._components[2]
-    seen: list[uuid.UUID] = []
-    failures.observe = lambda observed_id, _failure: seen.append(observed_id)
+    seen = _capture_notifications(monkeypatch, None)
 
     result = await failures.record_failure(
         this_run,
@@ -288,10 +313,11 @@ async def test_the_observer_does_not_run_for_a_refused_write(
 
 
 @pytest.mark.asyncio
-async def test_the_observer_never_runs_when_the_commit_raises(
+async def test_the_notifier_never_runs_when_the_commit_raises(
     session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A write that raises before committing calls no observer and persists nothing."""
+    """A write that raises before committing notifies nothing and persists nothing."""
     run_id, _ = await prepare_pending_qa_gated_run(session_factory)
     watch = _CommitWatch()
     run_launcher = dc.replace(
@@ -299,8 +325,7 @@ async def test_the_observer_never_runs_when_the_commit_raises(
         uow_factory=lambda: _RaisingCommitUnitOfWork(session_factory, watch),
     )
     failures = run_launcher._components[2]
-    seen: list[uuid.UUID] = []
-    failures.observe = lambda observed_id, _failure: seen.append(observed_id)
+    seen = _capture_notifications(monkeypatch, watch)
 
     with pytest.raises(RuntimeError, match="commit fault"):
         await failures.record_failure(

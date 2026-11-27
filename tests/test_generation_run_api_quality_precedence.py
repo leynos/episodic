@@ -10,7 +10,12 @@ import typing as typ
 
 import pytest
 
-from episodic.api.resources import generation_runs
+from episodic.api.resources import generation_runs_create_support
+from episodic.api.resources.generation_runs_create_support import (
+    RequestRuleOrder,
+    _parse_create_request,
+    _request_rule_order,
+)
 from episodic.canonical.generation_quality import QualityMode
 from tests.fixtures.generation_run_api import create_ready_ingestion_job
 from tests.test_generation_run_api import _assert_error_envelope, _ExpectedError
@@ -116,6 +121,42 @@ async def test_request_errors_outrank_a_missing_launcher(
     _assert_error_envelope(response, case.expected)
 
 
+@pytest.mark.parametrize(
+    ("idempotency_key", "payload", "expected"),
+    [
+        (
+            None,
+            {"quality_mode": "draft_without_qa", "skip_qa_rationale": "x"},
+            RequestRuleOrder.BEFORE_IDEMPOTENCY,
+        ),
+        (
+            None,
+            {"quality_mode": "qa_gated"},
+            RequestRuleOrder.BEFORE_IDEMPOTENCY,
+        ),
+        (
+            "row-keyed-no-qa",
+            {"quality_mode": "draft_without_qa", "skip_qa_rationale": "x"},
+            RequestRuleOrder.BEFORE_IDEMPOTENCY,
+        ),
+        (
+            "row-keyed-gated",
+            {"quality_mode": "qa_gated"},
+            RequestRuleOrder.IN_IDEMPOTENT_WORK,
+        ),
+    ],
+    ids=["keyless-any", "keyless-gated", "keyed-no-qa", "keyed-gated"],
+)
+def test_request_rule_order_matches_the_module_table(
+    idempotency_key: str | None,
+    payload: dict[str, object],
+    expected: RequestRuleOrder,
+) -> None:
+    """Each row of the ordering table routes the request to its named path."""
+    order = _request_rule_order(_parse_create_request(payload), idempotency_key)
+    assert order is expected, order
+
+
 @pytest.mark.asyncio
 async def test_reused_key_still_reports_the_body_error(
     session_factory: async_sessionmaker[AsyncSession],
@@ -162,11 +203,11 @@ async def test_a_keyed_conflict_validates_the_request_once(
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The conflict precondition reuses the submission's prepared validation."""
+    """A keyed conflict applies the request rules once per submission."""
     calls: list[object] = []
     original = typ.cast(
         "cabc.Callable[..., object]",
-        generation_runs._validate_quality_request,
+        generation_runs_create_support._validate_quality_request,
     )
 
     def counting(*args: object, **kwargs: object) -> object:
@@ -174,7 +215,11 @@ async def test_a_keyed_conflict_validates_the_request_once(
         calls.append(args)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(generation_runs, "_validate_quality_request", counting)
+    monkeypatch.setattr(
+        generation_runs_create_support,
+        "_validate_quality_request",
+        counting,
+    )
     headers = {**_HEADERS, "Idempotency-Key": "single-validation"}
     async with _client(
         _dependencies(session_factory, frozenset({QualityMode.DRAFT_WITHOUT_QA}))
@@ -200,8 +245,8 @@ async def test_a_keyed_conflict_validates_the_request_once(
 
     assert first.status_code == 202, first.text
     assert second.status_code == 409, second.text
-    # One call per HTTP request: the conflict's precondition reuses the
-    # prepared result rather than applying the rules a second time.
+    # One call per HTTP request: the before-idempotency path prepares the
+    # request exactly once, and a conflict no longer re-validates it.
     assert len(calls) == 2, calls
 
 

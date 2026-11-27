@@ -35,6 +35,12 @@ from episodic.canonical.generation_routing import (
     branch_for_terminal,
     route_quality_mode,
 )
+from episodic.observability import (
+    MonotonicClockPort,
+    NoopValueMetrics,
+    PerfCounterClock,
+    ValueMetricsPort,
+)
 from episodic.orchestration._content_graph_nodes import (
     escalate,
     evaluate,
@@ -170,9 +176,15 @@ class LangGraphContentGenerationGraph:
     ----------
     evaluator_set : QualityEvaluatorSet
         Evaluators every QA-gated run uses, and their timeout.
+    metrics : ValueMetricsPort
+        Sink for the per-evaluator QA latency observation.
+    monotonic_clock : MonotonicClockPort
+        Clock used to measure each evaluator's latency.
     """
 
     evaluator_set: QualityEvaluatorSet
+    metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
+    monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     _compiled: CompiledStateGraph[
         ContentGenerationGraphState,
         ContentGenerationContext,
@@ -238,6 +250,8 @@ class LangGraphContentGenerationGraph:
                     steps=steps,
                     evaluator_set=self.evaluator_set,
                     task_registry=task_registry,
+                    metrics=self.metrics,
+                    monotonic_clock=self.monotonic_clock,
                 ),
             ),
             name=f"generation-run-{request.run_id}",

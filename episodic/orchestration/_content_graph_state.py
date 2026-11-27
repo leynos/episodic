@@ -20,6 +20,12 @@ from episodic.canonical.generation_routing import (
     QualityBranch,
     QualityVerdict,
 )
+from episodic.observability import (
+    MonotonicClockPort,
+    NoopValueMetrics,
+    PerfCounterClock,
+    ValueMetricsPort,
+)
 
 if typ.TYPE_CHECKING:
     import asyncio
@@ -72,11 +78,17 @@ class ContentGenerationContext:
         Configured evaluators and their timeout.
     task_registry : RunTaskRegistry
         Node tasks owned by this invocation, cancelled at shutdown.
+    metrics : ValueMetricsPort
+        Sink for the per-evaluator QA latency observation.
+    monotonic_clock : MonotonicClockPort
+        Clock used to measure each evaluator's latency.
     """
 
     steps: ContentGenerationSteps
     evaluator_set: QualityEvaluatorSet
     task_registry: RunTaskRegistry = dc.field(default_factory=RunTaskRegistry)
+    metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
+    monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
 
 
 NODE_OWNERSHIP: cabc.Mapping[str, QualityBranch | None] = {

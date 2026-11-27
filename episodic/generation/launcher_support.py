@@ -176,6 +176,17 @@ class RunClaim:
         if self.proof is None:
             self.proof = self.proof_factory()
 
+    def adopt(self, token: ClaimToken) -> None:
+        """Record the authority this invocation won.
+
+        The scheduling task is the only caller: it is the one owner of the
+        claim, so a component reports the token it adopted and the scheduler
+        decides whether to keep it. Every other path reads the proof instead,
+        which the store compares, so a lost adoption can never grant authority
+        this attempt did not win.
+        """
+        self.token = token
+
 
 @dc.dataclass(frozen=True, slots=True)
 class FailureWrite:

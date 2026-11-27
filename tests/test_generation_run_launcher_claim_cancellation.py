@@ -18,6 +18,7 @@ import pytest
 from episodic.canonical.domain import GenerationRunStatus
 from episodic.canonical.generation_graph_ports import QualityEvaluatorSet
 from episodic.canonical.generation_routing import QualityVerdict
+from episodic.generation.launcher_observations import QaConcluded
 from episodic.generation.launcher_session import (
     RunNotClaimedError,
     _LauncherRunSession,
@@ -27,7 +28,6 @@ from episodic.generation.launcher_support import (
     FailureWriteResult,
     RunClaim,
 )
-from tests.generation_run_launcher_observation_support import RecordingMetrics
 from tests.generation_run_launcher_read_fault_support import (
     CommitFault,
     CommitFaultUnitOfWork,
@@ -141,7 +141,6 @@ async def test_blocked_authority_then_second_cancellation(
     run, kinds = await _load(session_factory, run_id)
     assert kinds.count("run.failed") == 1, kinds
     assert run.status is GenerationRunStatus.FAILED, run.status
-    assert claim.token is not None, claim
 
 
 @pytest.mark.asyncio
@@ -206,8 +205,9 @@ async def test_claim_task_cancellation_recovers_its_claim(
 
     control.release.set()
     await asyncio.wait_for(control.settled.wait(), timeout=5)
-    assert claim.token is not None, "the shielded reconcile must restore authority"
 
+    # The claimer reports authority but does not write the caller's claim;
+    # the durable proof is what authorizes the cancellation write below.
     await run_launcher._scheduler.record_cancellation_owned(run_id, claim)
     await asyncio.wait_for(run_launcher._scheduler.drain(), timeout=5)
 
@@ -282,11 +282,14 @@ async def test_a_timed_out_cancellation_leaves_the_run_claimable(
     ), "the two deadlines must be independent settings"
     stalled = asyncio.Event()
 
-    async def never_writes(run_id: uuid.UUID, claim: RunClaim) -> bool:
+    async def never_writes(
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
         """Never finish the write, recording that it was called."""
         _ = (run_id, claim)
         await stalled.wait()
-        return False
+        return None
 
     run_launcher._scheduler._writes.record_cancellation = never_writes
     await asyncio.wait_for(
@@ -304,10 +307,52 @@ async def test_a_timed_out_cancellation_leaves_the_run_claimable(
 
 
 @pytest.mark.asyncio
+async def test_a_cancellation_write_reads_the_live_timeout(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A timeout changed after construction bounds the next write."""
+    run_id, _ = await prepare_pending_qa_gated_run(session_factory)
+    run_launcher = dc.replace(
+        launcher(
+            session_factory,
+            RecordingDraftGenerator(draft_result(valid_tei())),
+            options=LauncherOptions(evaluator_set=QualityEvaluatorSet(())),
+        ),
+        cancellation_write_timeout_seconds=30.0,
+    )
+    stalled = asyncio.Event()
+    seen_timeouts: list[float] = []
+
+    async def never_writes(
+        run_id: uuid.UUID,
+        claim: RunClaim,
+    ) -> ClaimToken | None:
+        """Stall the write and record the deadline the wait used."""
+        _ = (run_id, claim)
+        seen_timeouts.append(run_launcher.cancellation_write_timeout_seconds)
+        await stalled.wait()
+        return None
+
+    run_launcher._scheduler._writes.record_cancellation = never_writes
+    # Lower the live timeout after construction. The write must use this
+    # value; a scheduler that copied the original 30 seconds would hold the
+    # pass far past this test's own wait.
+    run_launcher.cancellation_write_timeout_seconds = 0.05
+    await asyncio.wait_for(
+        run_launcher._scheduler.record_cancellation_owned(run_id, RunClaim()),
+        timeout=5,
+    )
+
+    assert seen_timeouts == [0.05], seen_timeouts
+    assert not run_launcher._scheduler._cancelled_run_ids, (
+        "the stalled write must not be recorded as landed"
+    )
+
+
+@pytest.mark.asyncio
 async def test_refused_escalation_records_no_qa_metrics() -> None:
     """A refused escalation write leaves no QA outcome metrics behind."""
     run_id = uuid.uuid4()
-    metrics = RecordingMetrics()
 
     class _Refusing:
         """Failure component whose writes are always refused."""
@@ -323,19 +368,22 @@ async def test_refused_escalation_records_no_qa_metrics() -> None:
         failures=typ.cast("typ.Any", _Refusing()),
         uow_factory=typ.cast("typ.Any", lambda: None),
         clock=typ.cast("typ.Any", lambda: None),
-        metrics=metrics,
         run_id=run_id,
         claim=RunClaim(token=ClaimToken(uuid.uuid4())),
     )
+    session.token = session.claim.token
     session.draft = draft_result(valid_tei())
 
     with pytest.raises(RunNotClaimedError, match="refused the escalation"):
         await session.escalate(QualityVerdict.FAILED, ())
 
-    qa_metrics = [
-        observation.name
-        for observation in metrics.observations
-        if observation.kind == "counter"
-        and observation.name.startswith("generation_run_qa_")
+    # The session reports a QA outcome only after its write commits, so a
+    # refused escalation leaves nothing for the launcher to record.
+    qa_observations = [
+        observation
+        for observation in session.observations
+        if isinstance(observation, QaConcluded)
     ]
-    assert not qa_metrics, f"a refused write must not emit QA metrics: {qa_metrics}"
+    assert not qa_observations, (
+        f"a refused write must report no QA outcome: {qa_observations}"
+    )

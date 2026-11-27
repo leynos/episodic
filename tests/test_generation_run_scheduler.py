@@ -12,6 +12,7 @@ from episodic.generation.launcher_scheduling import (
     GenerationRunAdmissionError,
     GenerationRunScheduler,
 )
+from episodic.generation.launcher_support import ClaimToken
 from episodic.observability import RecordingTracer
 
 if typ.TYPE_CHECKING:
@@ -83,15 +84,23 @@ class _RecordingExecutor:
 
 @dc.dataclass(slots=True)
 class _RecordingCancellation:
-    """Cancellation recorder fake that captures run identifiers."""
+    """Cancellation recorder fake that captures run identifiers.
+
+    It reports the authority a real recorder would: a token naming the run,
+    which the scheduler then adopts onto the claim it owns.
+    """
 
     run_ids: list[uuid.UUID] = dc.field(default_factory=list)
 
-    async def record(self, run_id: uuid.UUID, claim: object) -> bool:
-        """Record one cancellation."""
+    async def record(
+        self,
+        run_id: uuid.UUID,
+        claim: object,
+    ) -> ClaimToken:
+        """Record one cancellation and report its authority."""
         _ = claim
         self.run_ids += [run_id]
-        return True
+        return ClaimToken(run_id)
 
 
 class _BlockingExecutor:
@@ -118,7 +127,7 @@ def _scheduler(
         [uuid.UUID, object],
         cabc.Awaitable[ExecutionOutcome],
     ],
-    recorder: cabc.Callable[[uuid.UUID, object], cabc.Awaitable[bool]],
+    recorder: cabc.Callable[[uuid.UUID, object], cabc.Awaitable[ClaimToken]],
 ) -> GenerationRunScheduler:
     """Build a scheduler around explicit executor and recorder seams.
 

@@ -196,7 +196,6 @@ class GenerationRunClaimer:
         if result is None:
             return None
         run = result.run
-        claim.token = result.token
         async with self.runtime.uow_factory() as uow:
             episode = await require_episode(uow, run.episode_id)
             documents = await uow.source_documents.list_for_job(run.source_bundle_id)
@@ -309,16 +308,11 @@ class GenerationRunClaimer:
                     )
                 raise
             token = ClaimToken(run.id, proof=claim.proof)
-            # Cancellation cannot return a value, so the claim carries the
-            # token out of this call; every returning path also reports it.
-            claim.token = token
         return ClaimedRunResult(run=run, token=token)
 
-    # Two paths write the caller's claim. The cancelled-commit path above must
-    # do so in place: cancellation cannot return a value, so the claim is the
-    # only way to carry authority out of the call. `claim()` also copies the
-    # returned token onto the caller-supplied claim, so a later failure write
-    # on the same claim already holds authority instead of reconciling.
+    # A claimer never writes the caller's claim. Each method reports the token
+    # it won; a later failure write that holds none re-derives authority from
+    # the durable proof, which is the same comparison the store enforces.
 
     async def claim_for_failure(
         self,
@@ -369,9 +363,7 @@ class GenerationRunClaimer:
             stored = await uow.generation_runs.claim_token_for(run_id)
         if stored != claim.proof:
             return None
-        token = ClaimToken(run_id, proof=claim.proof)
-        claim.token = token
-        return token
+        return ClaimToken(run_id, proof=claim.proof)
 
 
 __all__ = ["ClaimerContext", "ClaimerRuntime", "GenerationRunClaimer"]
