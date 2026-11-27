@@ -12,6 +12,7 @@ import uuid
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy import event
 
 from episodic.api.episode_access import read_owned_episode, read_owned_episode_and_run
 from episodic.canonical.domain import (
@@ -25,6 +26,7 @@ from episodic.canonical.storage.qa_artefact_mappers import evaluation_to_record
 from tests.canonical_storage._qa_artefact_support import (
     create_episode,
     create_ingestion_job,
+    episode_records,
     make_evaluation,
 )
 
@@ -169,12 +171,23 @@ class _RecordingProxy:
 
 
 class _RecordingReadOnlyUnitOfWork:
-    """Unit of work that records any write at the store or session level."""
+    """Unit of work that records any write at the store or session level.
 
-    def __init__(self, inner: SqlAlchemyUnitOfWork) -> None:
+    The proxy over the stores sees the calls a repository receives; it cannot
+    see a flush that a delegated read issues internally. Listening to the
+    session's own ``before_flush`` covers that gap, because every flush passes
+    through it however it was reached.
+    """
+
+    def __init__(self, inner: SqlAlchemyUnitOfWork, session: AsyncSession) -> None:
         """Wrap the real unit of work and start the call log."""
         self._inner = inner
         self.calls: list[str] = []
+        event.listen(session.sync_session, "before_flush", self._on_flush)
+
+    def _on_flush(self, *_args: object) -> None:
+        """Record any flush of the wrapped session."""
+        self.calls.append("session.flush")
 
     async def __aenter__(self) -> _RecordingReadOnlyUnitOfWork:
         """Enter the wrapped unit of work."""
@@ -225,7 +238,7 @@ async def test_read_owned_episode_and_run_issues_no_writes(
     session = session_factory()
     inner = SqlAlchemyUnitOfWork(lambda: session)
     async with inner:
-        recording = _RecordingReadOnlyUnitOfWork(inner)
+        recording = _RecordingReadOnlyUnitOfWork(inner, session)
         owned = await read_owned_episode_and_run(
             typ.cast("CanonicalUnitOfWork", recording),
             episode_id,
@@ -255,3 +268,40 @@ async def test_the_recording_proxy_detects_a_delegated_write() -> None:
     await typ.cast("typ.Any", proxy).update(uuid.uuid4(), update=object())
 
     assert calls == ["generation_runs.update"], calls
+
+
+@pytest.mark.asyncio
+async def test_the_flush_listener_detects_a_flush_inside_a_delegated_read(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A flush hidden inside a read is recorded, so the check cannot pass.
+
+    The proxy over the stores cannot see work a repository does internally,
+    which is why the recording unit of work also listens to ``before_flush``.
+    This stages a valid row, flushes it from inside a delegated ``get``, and
+    requires the listener to have recorded the flush even though the session's
+    collections end up empty.
+    """
+    episode_id = await _episode_with_launcher_run(session_factory)
+    series = episode_records(episode_id=uuid.uuid7())[0]
+
+    session = session_factory()
+    inner = SqlAlchemyUnitOfWork(lambda: session)
+    async with inner:
+        recording = _RecordingReadOnlyUnitOfWork(inner, session)
+
+        async def read_after_staging_flush() -> object:
+            """Stage a valid row, flush it, and then perform the real read."""
+            await inner.series_profiles.add(series)
+            await inner.flush()
+            return await read_owned_episode_and_run(
+                typ.cast("CanonicalUnitOfWork", recording),
+                episode_id,
+                _ACTOR,
+            )
+
+        owned = await read_after_staging_flush()
+
+        assert owned is not None, "the ownership read must still resolve"
+        assert not session.new, "the flush left nothing staged to detect"
+        assert "session.flush" in recording.calls, recording.calls

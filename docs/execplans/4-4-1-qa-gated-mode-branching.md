@@ -294,10 +294,10 @@ inference budget on a branch that cannot pass.
   failure command.
 - [x] (2026-11-26) Ninth round: the 2026-11-26 CodeRabbit findings. The
   keyed-conflict precondition now reuses the submission's prepared validation
-  (`GenerationRunsResource._submit` memoizes it), the recording-unit-of-work
-  test gained a delegated-write negative control that proves the call log
-  detects it, and the plan's gate blocks state `set -o pipefail` for both the
-  correctness and documentation milestones.
+  (`GenerationRunsResource._submit` memoizes it); the recording-unit-of-work
+  test gained a delegated-write negative control and a session `before_flush`
+  listener, each proven to fail when removed; and the plan's gate blocks state
+  `set -o pipefail` for both the correctness and documentation milestones.
 - [x] (2026-11-24) Seventh round, from CodeRabbit's pre-merge rows at
   `788119cf`..`bfd4aa78`: bounded shutdown (D24) with a normal-drain contract,
   in-transaction failure reconciliation and post-write QA metrics (D25), the
@@ -1617,9 +1617,12 @@ These are trusted, not verified.
   the scheduler delegates to (the scheduler also exposes read-only properties
   with the old attribute names, so the tests that inspect them still work). The
   QA-bypass counter moved from the claimer to the per-run session's
-  `initialize`, where per-run observations belong. A negative control writes
-  through a wrapped repository and shows the proxy records it, so the read-only
-  assertion cannot pass while a delegated write goes unseen.
+  `initialize`, where per-run observations belong. Two negative controls guard
+  the recording boundary: one writes through a wrapped repository and requires
+  the proxy to record it, and one stages a valid row and flushes it from inside
+  a delegated read, which the unit of work's `before_flush` listener must
+  record even though the session's collections are empty afterwards. Both fail
+  when their instrumentation is removed.
 - The Unit Architecture row's five items were implemented at `HEAD` as
   follows. `_LauncherRunSession.begin_evaluation` now calls
   `GenerationRunPersistence.record_evaluation_started`, so every run-state
